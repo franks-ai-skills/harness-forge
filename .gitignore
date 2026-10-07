@@ -1,0 +1,5 @@
+__pycache__/
+*.py[cod]
+.superpowers/
+evals/canaries/results/private/
+.DS_Store
