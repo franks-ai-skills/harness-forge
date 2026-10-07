@@ -1,0 +1,9 @@
+{
+  "purpose": "Disposable M1 research restriction probe; JSON-compatible YAML",
+  "role": "research",
+  "allowed_tools": ["WebFetch", "WebSearch"],
+  "web_canary": "https://example.com/",
+  "forbidden_surfaces": ["parent_conversation", "repository_instructions", "skill_catalog", "skill_body", "unrelated_file", "outside_file", "environment", "project_config", "hook"],
+  "required_evidence": ["fresh worker", "actual tools or actual denial events", "successful web fetch", "synthetic read/write/environment attempts"],
+  "source_policy": "Apply playground/docs/sources.md for all actual research; this web fetch tests capability only. Never send fixture contents in URLs or search arguments."
+}

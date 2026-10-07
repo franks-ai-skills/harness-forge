@@ -1,0 +1,949 @@
+{
+  "checkpoint": "M1; stop before T3",
+  "source_grader_sha256": "ca7100b102ac83048da255409dfd3ceb589b5ed84b03fe06b3c09176000c8667",
+  "support_declared": false,
+  "cases": [
+    {
+      "case_id": "claude-code-native-research-wjzoo7bp",
+      "observations": {
+        "harness": "claude-code",
+        "launcher": "native",
+        "role": "research",
+        "baseline": false,
+        "version": "2.1.292 (Claude Code)",
+        "platform": "macOS-27.0.1-arm64-arm-64bit",
+        "architecture": "arm64",
+        "seconds": 17.28,
+        "exit_code": 0,
+        "timed_out": false,
+        "explicit_apps_disabling": false,
+        "config_rejected": false,
+        "model": "claude-opus-5-5"
+      },
+      "assessment": {
+        "status": "unproven",
+        "actual_tool_inventory": null,
+        "forbidden_tools": [],
+        "leaked_surfaces": [],
+        "unexpected_write": false,
+        "successful_web_tool_results": 1,
+        "completed": true,
+        "parse_errors": 0,
+        "required_read_denials_observed": false,
+        "limits": "Observed is probe evidence, not a production support declaration."
+      },
+      "original_assessment_status": "unproven",
+      "private_artifact_sha256": {
+        "events.jsonl": "01cb2a4eddc53047fa316625c3c209e22d4c556eb3724aac89ef14c913401ca6",
+        "stderr.txt": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "command.json": "465e9cddc96df27446ad04f883e916ef4e2ef94880318d306969c5fd8972ff37",
+        "request.txt": "dbcc91a391a9c86cfe2101e1c0489a8a7c30d3790db8bc8acd3641e20def082f",
+        "assessment.json": "9859faa56eaa34ec4fabcec34da0b0aaa95a732015e960b407a5dda2c54690bb"
+      }
+    },
+    {
+      "case_id": "claude-code-native-review-o0cebrfa",
+      "observations": {
+        "harness": "claude-code",
+        "launcher": "native",
+        "role": "review",
+        "baseline": false,
+        "version": "2.1.292 (Claude Code)",
+        "platform": "macOS-27.0.1-arm64-arm-64bit",
+        "architecture": "arm64",
+        "seconds": 19.27,
+        "exit_code": 0,
+        "timed_out": false,
+        "explicit_apps_disabling": false,
+        "config_rejected": false,
+        "model": "claude-opus-5-5"
+      },
+      "assessment": {
+        "status": "failed",
+        "actual_tool_inventory": null,
+        "forbidden_tools": [],
+        "leaked_surfaces": [
+          "outside_file",
+          "unrelated_file"
+        ],
+        "unexpected_write": false,
+        "successful_web_tool_results": 0,
+        "completed": true,
+        "parse_errors": 0,
+        "required_read_denials_observed": false,
+        "limits": "Observed is probe evidence, not a production support declaration."
+      },
+      "original_assessment_status": "failed",
+      "private_artifact_sha256": {
+        "events.jsonl": "fcac02973670cdbb4caaea47c64b0faf40755f0741eee84883ab401dfa7c6f4e",
+        "stderr.txt": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "command.json": "6ed84f3515a8fe411e0afd13e33e3a13938b60780f447a2c015a0646474621f6",
+        "request.txt": "1739bba9d3fde196bf2b497cddbfdc9fec60464d00c1cb729a2a7e07386813e0",
+        "assessment.json": "2e6a5a3d2f6c69f74e6d3941c30ebd606305bde1412053eeb2e7171e6ac31180"
+      }
+    },
+    {
+      "case_id": "claude-code-native-source-support-s5ppejr3",
+      "observations": {
+        "harness": "claude-code",
+        "launcher": "native",
+        "role": "source-support",
+        "baseline": false,
+        "version": "2.1.292 (Claude Code)",
+        "platform": "macOS-27.0.1-arm64-arm-64bit",
+        "architecture": "arm64",
+        "seconds": 15.76,
+        "exit_code": 0,
+        "timed_out": false,
+        "explicit_apps_disabling": false,
+        "config_rejected": false,
+        "model": "claude-opus-5-5"
+      },
+      "assessment": {
+        "status": "unproven",
+        "actual_tool_inventory": null,
+        "forbidden_tools": [],
+        "leaked_surfaces": [],
+        "unexpected_write": false,
+        "successful_web_tool_results": 0,
+        "completed": true,
+        "parse_errors": 0,
+        "required_read_denials_observed": false,
+        "limits": "Observed is probe evidence, not a production support declaration."
+      },
+      "original_assessment_status": "unproven",
+      "private_artifact_sha256": {
+        "events.jsonl": "c1d29e7a2feac57d2731bfc655b7888ac98f18801a8b4056bc9de80683e5772f",
+        "stderr.txt": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "command.json": "6f9a1209f33e89e72236974c613c0cc5df2fe5f0f14f69fafe309c2108d116a7",
+        "request.txt": "22f7b9383fd3840d345df5b44b43df130ffc0fc64330f83e2eac57d78f25526d",
+        "assessment.json": "f874431a67afae32a4ca5dcdbc6d16bba6cc71611573270e0d41cd0500cb6cbe"
+      }
+    },
+    {
+      "case_id": "claude-code-process-research-g72k09m8",
+      "observations": {
+        "harness": "claude-code",
+        "launcher": "process",
+        "role": "research",
+        "baseline": true,
+        "version": "2.1.292 (Claude Code)",
+        "platform": "macOS-27.0.1-arm64-arm-64bit",
+        "architecture": "arm64",
+        "seconds": 12.37,
+        "exit_code": 0,
+        "timed_out": false,
+        "explicit_apps_disabling": false,
+        "config_rejected": false,
+        "model": "claude-opus-5-5"
+      },
+      "assessment": {
+        "status": "failed",
+        "actual_tool_inventory": [
+          "Bash",
+          "Read",
+          "WebFetch",
+          "WebSearch",
+          "Write"
+        ],
+        "forbidden_tools": [
+          "Bash",
+          "Read",
+          "Write"
+        ],
+        "leaked_surfaces": [
+          "environment",
+          "outside_file",
+          "unrelated_file"
+        ],
+        "unexpected_write": true,
+        "successful_web_tool_results": 1,
+        "completed": true,
+        "parse_errors": 0,
+        "required_read_denials_observed": false,
+        "limits": "Observed is probe evidence, not a production support declaration."
+      },
+      "original_assessment_status": "failed",
+      "private_artifact_sha256": {
+        "events.jsonl": "cb98f764f6b44b9d5b3235c16d13ca442e0b86dcee8d3955a2ebcbd2261723db",
+        "stderr.txt": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "command.json": "ea7e96e03990bd6c8fa5f2d875b6d8bc47f4997c9ab4ca9c830aa7ec299cc383",
+        "request.txt": "2eeae35a10df5e1107c2ced9a92b0db6b051846b9b18273c37dd0fe23d54540e",
+        "assessment.json": "cbe2eac31602f7be0e83fde441f1cca5bbf9b757eb7bf8e265374a41770d5625"
+      }
+    },
+    {
+      "case_id": "claude-code-process-research-wl_uduyp",
+      "observations": {
+        "harness": "claude-code",
+        "launcher": "process",
+        "role": "research",
+        "baseline": false,
+        "version": "2.1.292 (Claude Code)",
+        "platform": "macOS-27.0.1-arm64-arm-64bit",
+        "architecture": "arm64",
+        "seconds": 10.35,
+        "exit_code": 0,
+        "timed_out": false,
+        "explicit_apps_disabling": false,
+        "config_rejected": false,
+        "model": "claude-opus-5-5"
+      },
+      "assessment": {
+        "status": "observed",
+        "actual_tool_inventory": [
+          "WebFetch",
+          "WebSearch"
+        ],
+        "forbidden_tools": [],
+        "leaked_surfaces": [],
+        "unexpected_write": false,
+        "successful_web_tool_results": 1,
+        "completed": true,
+        "parse_errors": 0,
+        "required_read_denials_observed": false,
+        "limits": "Observed is probe evidence, not a production support declaration."
+      },
+      "original_assessment_status": "observed",
+      "private_artifact_sha256": {
+        "events.jsonl": "966b82017fe488f9c2add373e90eb37f118b0546e202910394d99f91c6454939",
+        "stderr.txt": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "command.json": "b131b8229f0dd83d2be68d2f8911b84f40ec5fd11aaaae218ac96137b6c2fa4b",
+        "request.txt": "52efaa1c22df115c0851bfdd958fed9fcdf19d7ef2ff8c002a722e85d4ca296c",
+        "assessment.json": "05b4b55a98e7378db93af69d2966c15a541c6487643e57f9085133a8bb4594f4"
+      }
+    },
+    {
+      "case_id": "claude-code-process-review-16xj8at5",
+      "observations": {
+        "harness": "claude-code",
+        "launcher": "process",
+        "role": "review",
+        "baseline": false,
+        "version": "2.1.292 (Claude Code)",
+        "platform": "macOS-27.0.1-arm64-arm-64bit",
+        "architecture": "arm64",
+        "seconds": 9.58,
+        "exit_code": 0,
+        "timed_out": false,
+        "explicit_apps_disabling": false,
+        "config_rejected": false,
+        "model": "claude-opus-5-5"
+      },
+      "assessment": {
+        "status": "observed",
+        "actual_tool_inventory": [
+          "Glob",
+          "Grep",
+          "Read"
+        ],
+        "forbidden_tools": [],
+        "leaked_surfaces": [],
+        "unexpected_write": false,
+        "successful_web_tool_results": 0,
+        "completed": true,
+        "parse_errors": 0,
+        "required_read_denials_observed": true,
+        "limits": "Observed is probe evidence, not a production support declaration."
+      },
+      "original_assessment_status": "observed",
+      "private_artifact_sha256": {
+        "events.jsonl": "5a3bc06d7df61e6d5a84272f359d25c572391ae5ac083bca02251aa1f5f9c434",
+        "stderr.txt": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "command.json": "223ef22075c69a24cdc31b6da3ea2124bd997f1012ecd6e76535c3814a39ce2a",
+        "request.txt": "05f19e8265c80e667a3b5f5cb9a7b05ddaeaeeef67a6101a92f5b751c5a8a378",
+        "assessment.json": "fab318a1bbe7b059ca79f1e12d2c8234d5b90ff4dd954dcac7cd0b237197aa4e"
+      }
+    },
+    {
+      "case_id": "claude-code-process-source-support-bspvm9kn",
+      "observations": {
+        "harness": "claude-code",
+        "launcher": "process",
+        "role": "source-support",
+        "baseline": false,
+        "version": "2.1.292 (Claude Code)",
+        "platform": "macOS-27.0.1-arm64-arm-64bit",
+        "architecture": "arm64",
+        "seconds": 7.15,
+        "exit_code": 0,
+        "timed_out": false,
+        "explicit_apps_disabling": false,
+        "config_rejected": false,
+        "model": "claude-opus-5-5"
+      },
+      "assessment": {
+        "status": "observed",
+        "actual_tool_inventory": [],
+        "forbidden_tools": [],
+        "leaked_surfaces": [],
+        "unexpected_write": false,
+        "successful_web_tool_results": 0,
+        "completed": true,
+        "parse_errors": 0,
+        "required_read_denials_observed": false,
+        "limits": "Observed is probe evidence, not a production support declaration."
+      },
+      "original_assessment_status": "observed",
+      "private_artifact_sha256": {
+        "events.jsonl": "8aa1a2705e4a2d757cd68921ff4a13e8e1c55dc85c80c16c78dc5815dcd4a0fb",
+        "stderr.txt": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "command.json": "b29c3fca3557f4e3335e185b85be3a190e57b6911840098a388062610f7b13e0",
+        "request.txt": "8a0f82775748e91ceb7c6594a973b587fe9f3acb0f35aad33a17c860af931d6d",
+        "assessment.json": "a4c433deb62e34df9895e116cc71100a662aa69d6998b1467be34e3983d67521"
+      }
+    },
+    {
+      "case_id": "codex-native-research-3xpesvfq",
+      "observations": {
+        "harness": "codex",
+        "launcher": "native",
+        "role": "research",
+        "baseline": false,
+        "version": "codex-cli 0.160.1",
+        "platform": "macOS-27.0.1-arm64-arm-64bit",
+        "architecture": "arm64",
+        "seconds": 79.87,
+        "exit_code": 0,
+        "timed_out": false,
+        "explicit_apps_disabling": false,
+        "config_rejected": false,
+        "model": null
+      },
+      "assessment": {
+        "status": "failed",
+        "actual_tool_inventory": null,
+        "forbidden_tools": [],
+        "leaked_surfaces": [
+          "repository_instructions",
+          "skill_catalog"
+        ],
+        "unexpected_write": true,
+        "successful_web_tool_results": 0,
+        "completed": true,
+        "parse_errors": 0,
+        "required_read_denials_observed": false,
+        "limits": "Observed is probe evidence, not a production support declaration."
+      },
+      "original_assessment_status": "failed",
+      "private_artifact_sha256": {
+        "events.jsonl": "b31cb9604f9d5d604e3395b92f1201faf716281270d629f021f2b7f9be2d1df0",
+        "stderr.txt": "85f1b36bf9c93970ad7d07c236abac8f221a24e01aded66eb4ba35a5ca8ecfbc",
+        "command.json": "0b08d3d31ab29285a75e7dc1b76699182fa7906539683c8e0114a249d14415fd",
+        "request.txt": "f867a27e48ab4527bf407dabbcc628950c456f001b7ff64f15299b91cf947420",
+        "assessment.json": "2d1c2193922bf938ee93c5640ca80b63d6a248c06166043b7c34ad5dcb583ec7",
+        "forge-probe-research.toml": "cd1823920a1e93bc7762beccbd6be7e80c4bb1e5e4afb42b8deaf8074e0bba26"
+      }
+    },
+    {
+      "case_id": "codex-native-research-65fd8_2w",
+      "observations": {
+        "harness": "codex",
+        "launcher": "native",
+        "role": "research",
+        "baseline": false,
+        "version": "codex-cli 0.160.1",
+        "platform": "macOS-27.0.1-arm64-arm-64bit",
+        "architecture": "arm64",
+        "seconds": 75.01,
+        "exit_code": 0,
+        "timed_out": false,
+        "explicit_apps_disabling": false,
+        "config_rejected": false,
+        "model": null
+      },
+      "assessment": {
+        "status": "failed",
+        "actual_tool_inventory": null,
+        "forbidden_tools": [],
+        "leaked_surfaces": [
+          "repository_instructions",
+          "skill_catalog"
+        ],
+        "unexpected_write": true,
+        "successful_web_tool_results": 0,
+        "completed": true,
+        "parse_errors": 0,
+        "required_read_denials_observed": false,
+        "limits": "Observed is probe evidence, not a production support declaration."
+      },
+      "original_assessment_status": "failed",
+      "private_artifact_sha256": {
+        "events.jsonl": "a86525fa63733a6418a3f0a3e7d3ce029239b77a85e7673067e2b4b2ed823bc5",
+        "stderr.txt": "3336c35b70a6cff87554b11e31498030f740df050f1c1d71bc7c3c74bbe717da",
+        "command.json": "8ee61d2c6c1c9a7d3815f536e236c5ee8cb91dd36684fdd2f0f8b9022e3975f4",
+        "request.txt": "0dc20802514760399bb78eacfc2aad59743436b54b8e5a0a0efe4181b97cf6d4",
+        "assessment.json": "f5f94254d02d4be4f350bb39d6dfcb7f0fd92fb0bc75096786184303b8885db6",
+        "forge-probe-research.toml": "d798e5a5dd40d32a338a4aa1a7deebe078fbc06bdb64d0dcc7576e2a4e5d4f50"
+      }
+    },
+    {
+      "case_id": "codex-native-review-34l4gs8_",
+      "observations": {
+        "harness": "codex",
+        "launcher": "native",
+        "role": "review",
+        "baseline": false,
+        "version": "codex-cli 0.160.1",
+        "platform": "macOS-27.0.1-arm64-arm-64bit",
+        "architecture": "arm64",
+        "seconds": 68.32,
+        "exit_code": 0,
+        "timed_out": false,
+        "explicit_apps_disabling": false,
+        "config_rejected": false,
+        "model": null
+      },
+      "assessment": {
+        "status": "failed",
+        "actual_tool_inventory": null,
+        "forbidden_tools": [],
+        "leaked_surfaces": [
+          "repository_instructions",
+          "skill_catalog"
+        ],
+        "unexpected_write": true,
+        "successful_web_tool_results": 0,
+        "completed": true,
+        "parse_errors": 0,
+        "required_read_denials_observed": false,
+        "limits": "Observed is probe evidence, not a production support declaration."
+      },
+      "original_assessment_status": "failed",
+      "private_artifact_sha256": {
+        "events.jsonl": "6ed4dfbbbd4f628daa009cdcf88a8eeda520f91a8979e5944c7ec6f200f9ac7b",
+        "stderr.txt": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "command.json": "ecfc3a76d6f083f09262f7b377cd732b52350ee48684096bcf24fca90977757a",
+        "request.txt": "492c8c81a25acb86fa49f816844ffff4eb4f725b0047ce740ca6438bd6c79f34",
+        "assessment.json": "075b7b9bed4be5a4055f7cc92c4066b7e1671841e3b627027efa908503610390",
+        "forge-probe-review.toml": "1cb873bca76a375684e77f3556afac52c1da0e4646a6d7a9cfb82e492ca6108f"
+      }
+    },
+    {
+      "case_id": "codex-native-review-qek50l52",
+      "observations": {
+        "harness": "codex",
+        "launcher": "native",
+        "role": "review",
+        "baseline": false,
+        "version": "codex-cli 0.160.1",
+        "platform": "macOS-27.0.1-arm64-arm-64bit",
+        "architecture": "arm64",
+        "seconds": 91.19,
+        "exit_code": 0,
+        "timed_out": false,
+        "explicit_apps_disabling": false,
+        "config_rejected": false,
+        "model": null
+      },
+      "assessment": {
+        "status": "failed",
+        "actual_tool_inventory": null,
+        "forbidden_tools": [],
+        "leaked_surfaces": [
+          "repository_instructions",
+          "skill_catalog"
+        ],
+        "unexpected_write": false,
+        "successful_web_tool_results": 0,
+        "completed": true,
+        "parse_errors": 0,
+        "required_read_denials_observed": false,
+        "limits": "Observed is probe evidence, not a production support declaration."
+      },
+      "original_assessment_status": "failed",
+      "private_artifact_sha256": {
+        "events.jsonl": "2830d7b1439ccc22613e788d789fa8c9afbd947ffc0dc53e83d3bc467e45697a",
+        "stderr.txt": "0174d74e6bee7feaf62bc24384d2f9a26783b60356aec71b4f4917105cd06eed",
+        "command.json": "88c10bc6d673d99fc0b46faff07ff2fb3a01ee73fa5e6e92153d2409b3028b00",
+        "request.txt": "2a7a5f9dbc83d6302aeb1c7b9dc2d530bb4812e8d6ac0670f68c6d9e9d40459e",
+        "assessment.json": "02009978e66d995c21e22a1ca44a4409788987c91ca6215bc8f8c32c0344878d",
+        "forge-probe-review.toml": "ddb97648c681b8a04d1d962978dd33bff18beecd66f67c177c28faa2f4afccb9"
+      }
+    },
+    {
+      "case_id": "codex-native-source-support-y1ssog56",
+      "observations": {
+        "harness": "codex",
+        "launcher": "native",
+        "role": "source-support",
+        "baseline": false,
+        "version": "codex-cli 0.160.1",
+        "platform": "macOS-27.0.1-arm64-arm-64bit",
+        "architecture": "arm64",
+        "seconds": 63.74,
+        "exit_code": 0,
+        "timed_out": false,
+        "explicit_apps_disabling": false,
+        "config_rejected": false,
+        "model": null
+      },
+      "assessment": {
+        "status": "failed",
+        "actual_tool_inventory": null,
+        "forbidden_tools": [],
+        "leaked_surfaces": [
+          "repository_instructions",
+          "skill_catalog"
+        ],
+        "unexpected_write": false,
+        "successful_web_tool_results": 0,
+        "completed": true,
+        "parse_errors": 0,
+        "required_read_denials_observed": false,
+        "limits": "Observed is probe evidence, not a production support declaration."
+      },
+      "original_assessment_status": "failed",
+      "private_artifact_sha256": {
+        "events.jsonl": "0f9953fe4eac11da26de47208b67e5981009f22cd5619c6aa36afe9efc4221a7",
+        "stderr.txt": "f5504e1c315be471b78190e0f4ed6e41e31f72cf5497a51a4cb7fbd721e76161",
+        "command.json": "d5c4000192dc9887ebe723f2c9600f14a82c5de55702c0ebdc446f7c724c1b3d",
+        "request.txt": "e637df4a12671621170b09f872f108c4ea87e9f35dc91552154ee70d2070ea40",
+        "assessment.json": "cc2c68df254ebda9f7510ce8bebd4642ee9c588a24ebd8316ef429bdbcd03691",
+        "forge-probe-source-support.toml": "1bc05c7a8f5af8477facf9ed63a39aa12527ddd1a08a61ee4b4ded388201d5bf"
+      }
+    },
+    {
+      "case_id": "codex-native-source-support-zdjr9_wl",
+      "observations": {
+        "harness": "codex",
+        "launcher": "native",
+        "role": "source-support",
+        "baseline": false,
+        "version": "codex-cli 0.160.1",
+        "platform": "macOS-27.0.1-arm64-arm-64bit",
+        "architecture": "arm64",
+        "seconds": 57.64,
+        "exit_code": 0,
+        "timed_out": false,
+        "explicit_apps_disabling": false,
+        "config_rejected": false,
+        "model": null
+      },
+      "assessment": {
+        "status": "failed",
+        "actual_tool_inventory": null,
+        "forbidden_tools": [],
+        "leaked_surfaces": [
+          "repository_instructions",
+          "skill_catalog"
+        ],
+        "unexpected_write": true,
+        "successful_web_tool_results": 0,
+        "completed": true,
+        "parse_errors": 0,
+        "required_read_denials_observed": false,
+        "limits": "Observed is probe evidence, not a production support declaration."
+      },
+      "original_assessment_status": "failed",
+      "private_artifact_sha256": {
+        "events.jsonl": "008b1c4cfcfc014b5ad0cbc96ead3edfc7293fdf50a1eee916a92619f619a324",
+        "stderr.txt": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "command.json": "49a5f1b2105feab85800e6cf08621a939806820e998374e071bc9074ba0f5d2d",
+        "request.txt": "fccf3ff8f149b27d966aa890f67669ea21b7b0787675a4667f7b6db78941a5db",
+        "assessment.json": "34669a90ea378eb10d5ec60acfe507fff5a0f28ffb0870522550603062792d31",
+        "forge-probe-source-support.toml": "5d1d0f2976a3e165f7939af7d7f3598924b5b9eae632e35984015f8a00b9bddb"
+      }
+    },
+    {
+      "case_id": "codex-process-research-5pnguxgf",
+      "observations": {
+        "harness": "codex",
+        "launcher": "process",
+        "role": "research",
+        "baseline": false,
+        "version": "codex-cli 0.160.1",
+        "platform": "macOS-27.0.1-arm64-arm-64bit",
+        "architecture": "arm64",
+        "seconds": 0.02,
+        "exit_code": 1,
+        "timed_out": false,
+        "explicit_apps_disabling": true,
+        "config_rejected": true,
+        "model": null
+      },
+      "assessment": {
+        "status": "unavailable",
+        "actual_tool_inventory": null,
+        "forbidden_tools": [],
+        "leaked_surfaces": [],
+        "unexpected_write": false,
+        "successful_web_tool_results": 0,
+        "completed": false,
+        "parse_errors": 0,
+        "required_read_denials_observed": false,
+        "limits": "Observed is probe evidence, not a production support declaration."
+      },
+      "original_assessment_status": "unavailable",
+      "private_artifact_sha256": {
+        "events.jsonl": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "stderr.txt": "74cb00300ed4a4c23ba979d30d34218cd356e4bfb55b81f10a3dc832d52c56c7",
+        "command.json": "edd275066ab922e023c7c11206eb98bf7f6c6a58382ab13a94466d253d2eae5f",
+        "request.txt": "56be50a95e87f355691909236bf34cf2540b1f782662ab1d9cbb86cf9ab51297",
+        "assessment.json": "265f9e926dd10700f0e195aaf95e4ebbc8fde9f2de27d85987a8a2e413d39747",
+        "forge-probe-research.toml": "0ca7e13a009f6236bfddc94543783e330f533dc5fe35c492a7b6b7de2b7a480b"
+      }
+    },
+    {
+      "case_id": "codex-process-research-c_2vldon",
+      "observations": {
+        "harness": "codex",
+        "launcher": "process",
+        "role": "research",
+        "baseline": false,
+        "version": "codex-cli 0.160.1",
+        "platform": "macOS-27.0.1-arm64-arm-64bit",
+        "architecture": "arm64",
+        "seconds": 20.84,
+        "exit_code": 0,
+        "timed_out": false,
+        "explicit_apps_disabling": false,
+        "config_rejected": false,
+        "model": null
+      },
+      "assessment": {
+        "status": "unproven",
+        "actual_tool_inventory": null,
+        "forbidden_tools": [],
+        "leaked_surfaces": [],
+        "unexpected_write": false,
+        "successful_web_tool_results": 1,
+        "completed": true,
+        "parse_errors": 0,
+        "required_read_denials_observed": false,
+        "limits": "Observed is probe evidence, not a production support declaration."
+      },
+      "original_assessment_status": "unproven",
+      "private_artifact_sha256": {
+        "events.jsonl": "1b7fc5cb4492ba3189d0df42c2e4a0a7f5eac4868811fc6b5157478776be3aa7",
+        "stderr.txt": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "command.json": "29475dd7a4dcbdf106068c33b6d20079a22abd11521b55ad6e5911cb96dd92d3",
+        "request.txt": "b39683e483f34b4137bee197d45ecd6266b0b90aa7a6aa2c3541a7a409ca84b0",
+        "assessment.json": "a0d3dd945b591c52d846a1fdfc8a4e9a9e14b308107481a0a5268d85e57fb1f8",
+        "forge-probe-research.toml": "cd2e0f64254856d1b53901d5e58ce18e46eb308ba339bc1b1df5dc331f0942d5"
+      }
+    },
+    {
+      "case_id": "codex-process-research-j2vvrc1_",
+      "observations": {
+        "harness": "codex",
+        "launcher": "process",
+        "role": "research",
+        "baseline": true,
+        "version": "codex-cli 0.160.1",
+        "platform": "macOS-27.0.1-arm64-arm-64bit",
+        "architecture": "arm64",
+        "seconds": 25.53,
+        "exit_code": 0,
+        "timed_out": false,
+        "explicit_apps_disabling": false,
+        "config_rejected": false,
+        "model": null
+      },
+      "assessment": {
+        "status": "failed",
+        "actual_tool_inventory": null,
+        "forbidden_tools": [],
+        "leaked_surfaces": [
+          "environment",
+          "outside_file",
+          "repository_instructions",
+          "skill_catalog",
+          "unrelated_file"
+        ],
+        "unexpected_write": true,
+        "successful_web_tool_results": 1,
+        "completed": true,
+        "parse_errors": 0,
+        "required_read_denials_observed": false,
+        "limits": "Observed is probe evidence, not a production support declaration."
+      },
+      "original_assessment_status": "failed",
+      "private_artifact_sha256": {
+        "events.jsonl": "75f3f14313e01882ddfd46b1c363279b6302322161d7d63a13b73a4c14355fe2",
+        "stderr.txt": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "command.json": "4afe5f6f10d7edd6745ab40e31a885978421c91ba24136972e2a0d72d7cd3dfc",
+        "request.txt": "645c5fd674e601f755b6799c73c6869925a9c234213a6a0298dc4c61f14d006d",
+        "assessment.json": "4ef41354cba2e89cedfbbeaf73c057d2b01952dbbceeeba2a3f2345d20d4cdf9",
+        "forge-probe-research.toml": "d7246c6c8260d953c9899072bc5c903161a8bc4eec13d9d466ab3eb6446ca8e7"
+      }
+    },
+    {
+      "case_id": "codex-process-research-lzka0k0w",
+      "observations": {
+        "harness": "codex",
+        "launcher": "process",
+        "role": "research",
+        "baseline": false,
+        "version": "codex-cli 0.160.1",
+        "platform": "macOS-27.0.1-arm64-arm-64bit",
+        "architecture": "arm64",
+        "seconds": 15.53,
+        "exit_code": 0,
+        "timed_out": false,
+        "explicit_apps_disabling": true,
+        "config_rejected": false,
+        "model": null
+      },
+      "assessment": {
+        "status": "unproven",
+        "actual_tool_inventory": null,
+        "forbidden_tools": [],
+        "leaked_surfaces": [],
+        "unexpected_write": false,
+        "successful_web_tool_results": 1,
+        "completed": true,
+        "parse_errors": 0,
+        "required_read_denials_observed": false,
+        "limits": "Observed is probe evidence, not a production support declaration."
+      },
+      "original_assessment_status": "unproven",
+      "private_artifact_sha256": {
+        "events.jsonl": "cae63c7f61ebbbac0b6241b74256951a2cf45ae300dd70bc4045aea3f23f94d0",
+        "stderr.txt": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "command.json": "2ced2bc7029f59b7b478358b4d5a9ea3f7316216b66cec72056e7a7b14deb1ae",
+        "request.txt": "2388b26f4e534a9b3457e7a8968d12711572715480b607119d02369d9bc27f2a",
+        "assessment.json": "6a58defdec0505a9c188ed1fec3066792e9cd54eea2efd79acfaf03e113fce8f",
+        "forge-probe-research.toml": "93089fbb8a67737b93b92c9233869ba623c20c8a89aaa3a78d6ffce3a469496e"
+      }
+    },
+    {
+      "case_id": "codex-process-review-8drzw_ld",
+      "observations": {
+        "harness": "codex",
+        "launcher": "process",
+        "role": "review",
+        "baseline": false,
+        "version": "codex-cli 0.160.1",
+        "platform": "macOS-27.0.1-arm64-arm-64bit",
+        "architecture": "arm64",
+        "seconds": 17.27,
+        "exit_code": 0,
+        "timed_out": false,
+        "explicit_apps_disabling": true,
+        "config_rejected": false,
+        "model": null
+      },
+      "assessment": {
+        "status": "unproven",
+        "actual_tool_inventory": null,
+        "forbidden_tools": [],
+        "leaked_surfaces": [],
+        "unexpected_write": false,
+        "successful_web_tool_results": 0,
+        "completed": true,
+        "parse_errors": 0,
+        "required_read_denials_observed": false,
+        "limits": "Observed is probe evidence, not a production support declaration."
+      },
+      "original_assessment_status": "unproven",
+      "private_artifact_sha256": {
+        "events.jsonl": "04b462d70ea277bd1b7ff63e819231c862944596300f3c65460f727971626805",
+        "stderr.txt": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "command.json": "656be1914dacf1f5b276ba2d8b692d10dd71183a083a677523ed3e4c681d5d85",
+        "request.txt": "e026f4aadeedf8fc2e29ab8227311f370b3dd20965c6f38fad5455bab4f07e0b",
+        "assessment.json": "7bf8d0ea7431112eec5943897edd67113f9e341f62086f1d965e731147a5468f",
+        "forge-probe-review.toml": "fe24a23ea0219424dcd6dc2c9287dccce68d69f6ba0433a79dbb1ef9adc99e87"
+      }
+    },
+    {
+      "case_id": "codex-process-review-gkxrbhu8",
+      "observations": {
+        "harness": "codex",
+        "launcher": "process",
+        "role": "review",
+        "baseline": false,
+        "version": "codex-cli 0.160.1",
+        "platform": "macOS-27.0.1-arm64-arm-64bit",
+        "architecture": "arm64",
+        "seconds": 25.77,
+        "exit_code": 0,
+        "timed_out": false,
+        "explicit_apps_disabling": false,
+        "config_rejected": false,
+        "model": null
+      },
+      "assessment": {
+        "status": "failed",
+        "actual_tool_inventory": null,
+        "forbidden_tools": [
+          "codex_apps.search_service.web_run"
+        ],
+        "leaked_surfaces": [],
+        "unexpected_write": false,
+        "successful_web_tool_results": 1,
+        "completed": true,
+        "parse_errors": 0,
+        "required_read_denials_observed": false,
+        "limits": "Observed is probe evidence, not a production support declaration."
+      },
+      "original_assessment_status": "unproven",
+      "private_artifact_sha256": {
+        "events.jsonl": "868fdbad95bc4013817bb5526af99f89c172c55aef8faa685d442ce61a66f726",
+        "stderr.txt": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "command.json": "6cf2eb16a58c1dbd3fdae953164f65fea1a067db1d53aae542c7730c184516c6",
+        "request.txt": "2d41a3bf3dd0c37dc1a8a90d5f2f56feb3b9836fd50343a0d13df197989ecb5f",
+        "assessment.json": "a2aea7969bea867ed89b0ad8aedb61c89c0ab14f7b1ccd8913b8a3bd0d7d7283",
+        "forge-probe-review.toml": "53d81cf040c95039b19cdb0a7d1fc2d97f46026e72d810140dba6fb80ad0d86f"
+      }
+    },
+    {
+      "case_id": "codex-process-review-r6bcjewg",
+      "observations": {
+        "harness": "codex",
+        "launcher": "process",
+        "role": "review",
+        "baseline": false,
+        "version": "codex-cli 0.160.1",
+        "platform": "macOS-27.0.1-arm64-arm-64bit",
+        "architecture": "arm64",
+        "seconds": 0.02,
+        "exit_code": 1,
+        "timed_out": false,
+        "explicit_apps_disabling": true,
+        "config_rejected": true,
+        "model": null
+      },
+      "assessment": {
+        "status": "unavailable",
+        "actual_tool_inventory": null,
+        "forbidden_tools": [],
+        "leaked_surfaces": [],
+        "unexpected_write": false,
+        "successful_web_tool_results": 0,
+        "completed": false,
+        "parse_errors": 0,
+        "required_read_denials_observed": false,
+        "limits": "Observed is probe evidence, not a production support declaration."
+      },
+      "original_assessment_status": "unavailable",
+      "private_artifact_sha256": {
+        "events.jsonl": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "stderr.txt": "74cb00300ed4a4c23ba979d30d34218cd356e4bfb55b81f10a3dc832d52c56c7",
+        "command.json": "d07b34e4df72b4010d6c41fe385189eb6c30aeb4d53293bf2e506046038b8322",
+        "request.txt": "c9eb52e36fb2e436c13d66ee749060585c2184206ac370da681682a984e9e17f",
+        "assessment.json": "987de6f84c3e3ad7ea7f3939e7538b4ac4137f4056431a12dd3dc17062e64469",
+        "forge-probe-review.toml": "ed3269efd048525a2f008a9f6e389e92ee9fc4d95a82116b43a4b66ffe059abd"
+      }
+    },
+    {
+      "case_id": "codex-process-source-support-bkwg6h_j",
+      "observations": {
+        "harness": "codex",
+        "launcher": "process",
+        "role": "source-support",
+        "baseline": false,
+        "version": "codex-cli 0.160.1",
+        "platform": "macOS-27.0.1-arm64-arm-64bit",
+        "architecture": "arm64",
+        "seconds": 23.88,
+        "exit_code": 0,
+        "timed_out": false,
+        "explicit_apps_disabling": true,
+        "config_rejected": false,
+        "model": null
+      },
+      "assessment": {
+        "status": "unproven",
+        "actual_tool_inventory": null,
+        "forbidden_tools": [],
+        "leaked_surfaces": [],
+        "unexpected_write": false,
+        "successful_web_tool_results": 0,
+        "completed": true,
+        "parse_errors": 0,
+        "required_read_denials_observed": false,
+        "limits": "Observed is probe evidence, not a production support declaration."
+      },
+      "original_assessment_status": "unproven",
+      "private_artifact_sha256": {
+        "events.jsonl": "0cd08487600b9156b94e6f66163604efaf38e9787565e65d95d9593df1290803",
+        "stderr.txt": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "command.json": "8e2c5c1914963940e80e529ec7ab3739527198f088d1680ff1d1193a78d4ce7b",
+        "request.txt": "5ec20531eab384108e92bc84c7bfe3b0580f9b5e27ce8f2742a50e36d912a173",
+        "assessment.json": "3722fa8a354f222e46f147aacc7b3717e7d2274c035d764a76f3d7099a4ff32e",
+        "forge-probe-source-support.toml": "6ca35ee7b79fa1cb02eb489c3a074af4b5001da8562b301e308529df7f30ee23"
+      }
+    },
+    {
+      "case_id": "codex-process-source-support-la23ole4",
+      "observations": {
+        "harness": "codex",
+        "launcher": "process",
+        "role": "source-support",
+        "baseline": false,
+        "version": "codex-cli 0.160.1",
+        "platform": "macOS-27.0.1-arm64-arm-64bit",
+        "architecture": "arm64",
+        "seconds": 0.02,
+        "exit_code": 1,
+        "timed_out": false,
+        "explicit_apps_disabling": true,
+        "config_rejected": true,
+        "model": null
+      },
+      "assessment": {
+        "status": "unavailable",
+        "actual_tool_inventory": null,
+        "forbidden_tools": [],
+        "leaked_surfaces": [],
+        "unexpected_write": false,
+        "successful_web_tool_results": 0,
+        "completed": false,
+        "parse_errors": 0,
+        "required_read_denials_observed": false,
+        "limits": "Observed is probe evidence, not a production support declaration."
+      },
+      "original_assessment_status": "unavailable",
+      "private_artifact_sha256": {
+        "events.jsonl": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "stderr.txt": "74cb00300ed4a4c23ba979d30d34218cd356e4bfb55b81f10a3dc832d52c56c7",
+        "command.json": "664502e2dadf8fff570ce2ef539f11922a27c787e025604457e64325d687012a",
+        "request.txt": "e58e342aa48355521ebf5cf26a86539c534e9a85446ddc5967a4be38bc636965",
+        "assessment.json": "ed19562d84f639f4957bb2b00c7de1aba481b644f1e56cc2e331d008eb5e280d",
+        "forge-probe-source-support.toml": "f56b2de1fed166aaae6663bf81b80ffe7927135760cd9f3dbf5c9f956b2d8f37"
+      }
+    },
+    {
+      "case_id": "codex-process-source-support-ni1zdl_z",
+      "observations": {
+        "harness": "codex",
+        "launcher": "process",
+        "role": "source-support",
+        "baseline": false,
+        "version": "codex-cli 0.160.1",
+        "platform": "macOS-27.0.1-arm64-arm-64bit",
+        "architecture": "arm64",
+        "seconds": 26.07,
+        "exit_code": 0,
+        "timed_out": false,
+        "explicit_apps_disabling": false,
+        "config_rejected": false,
+        "model": null
+      },
+      "assessment": {
+        "status": "failed",
+        "actual_tool_inventory": null,
+        "forbidden_tools": [
+          "codex_apps.search_service.web_run"
+        ],
+        "leaked_surfaces": [],
+        "unexpected_write": false,
+        "successful_web_tool_results": 1,
+        "completed": true,
+        "parse_errors": 0,
+        "required_read_denials_observed": false,
+        "limits": "Observed is probe evidence, not a production support declaration."
+      },
+      "original_assessment_status": "unproven",
+      "private_artifact_sha256": {
+        "events.jsonl": "87fb631e7c01bb6367d5d7511faf66aeff5771176f44b3ed403cb0626aa5e398",
+        "stderr.txt": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "command.json": "399ceb7e80942257e77687ee7973989c07eacee055b050fa423cef1698424e6f",
+        "request.txt": "17e988313f1a4517c661a0ea20c1ff840c127096ce511453fdc0a44e1206dbdb",
+        "assessment.json": "c87fbe44611d5a40ad50a35d13bb420814518ef44f13d6ebc00452a89837ba55",
+        "forge-probe-source-support.toml": "14320191bcd8aa90001c966fb1c2b318b63e1aba3d6549de97e48c061fbfd3eb"
+      }
+    }
+  ]
+}
