@@ -1,0 +1,122 @@
+{
+  "diagnostic": "offline-init-2026-10-08",
+  "status": "host_startup_inventory_observed",
+  "support_declared": false,
+  "authorized_constraint": "subscription-only, no API keys/tokens or credits, no extra cost",
+  "requested_model": "claude-opus-5-5",
+  "binary_sha256": "97a01e5bc74a199e67189435d0331ea3a24eac2e07db4b76d9148c5b0386138f",
+  "platform": "Darwin arm64",
+  "launcher": "team-profile guarded zsh wrapper; diagnostic-only exception",
+  "default_launcher_after_diagnostic": "personal-profile",
+  "started_utc": "2026-10-08T18:14:01Z",
+  "probes_complete_by_utc": "2026-10-08T18:20:06Z",
+  "prompt_bearing_invocations_charged_total": 2,
+  "invocations_remaining": 28,
+  "configuration_corrections_used_total": 2,
+  "configuration_corrections_remaining": 0,
+  "live_qualification_runs": 0,
+  "model_responses_observed": 0,
+  "internal_retry_events_total": 12,
+  "reported_usage_or_cost": null,
+  "container_setup_started": false,
+  "guest_qualified": false,
+  "grader_sha256": null,
+  "assessment_method": "Explicit host init inventory with positive Read control, independent OS denial controls, no assistant events; not M1 full-run grader.",
+  "artifacts": [
+    {
+      "path": "evals/canaries/results/private/offline-init-2026-10-08/network_controls.py",
+      "bytes": 4478,
+      "sha256": "8738dc3bfbee03035d596f6c7e11c5334eabc866aa01e02f5b5ea40365973371"
+    },
+    {
+      "path": "evals/canaries/results/private/offline-init-2026-10-08/network-fixture.json",
+      "bytes": 1076,
+      "sha256": "c1be07b4e1cf4cc6d41be0bfd6f08b5b43c22a9d6dac6f02be0c1842e58c229d"
+    },
+    {
+      "path": "evals/canaries/results/private/offline-init-2026-10-08/network-results.json",
+      "bytes": 4251,
+      "sha256": "02328604f92a80f471b0344c0a0da14af3f48ec69d2b84be31682908142784bf"
+    },
+    {
+      "path": "evals/canaries/results/private/offline-init-2026-10-08/prepare_launcher.py",
+      "bytes": 2893,
+      "sha256": "82c1b7f67432f5637a14e4af58874d9d7b51ed1a3905bd820e686257d899562d"
+    },
+    {
+      "path": "evals/canaries/results/private/offline-init-2026-10-08/team-profile-guarded.zsh",
+      "bytes": 1679,
+      "sha256": "40044d26ec93d0cf2b07020a3837bfd237a6d238a87a22b70a77304226b84cae"
+    },
+    {
+      "path": "evals/canaries/results/private/offline-init-2026-10-08/launcher-preflight.json",
+      "bytes": 813,
+      "sha256": "9db3698cf359b5a47d7d659ed1ecd668ce5b978fd0f908f9a624457c7694c205"
+    },
+    {
+      "path": "evals/canaries/results/private/offline-init-2026-10-08/run_startup.py",
+      "bytes": 5464,
+      "sha256": "a57e61bdbec1662ec661b50e0a199169e6a90e2a520c62224ce3570cc0e84247"
+    },
+    {
+      "path": "evals/canaries/results/private/offline-init-2026-10-08/attempts.json",
+      "bytes": 202,
+      "sha256": "b262c6befd443e4fcb7cf5854db6143e63259df935a407d4e521bff8b86bbfea"
+    },
+    {
+      "path": "evals/canaries/results/private/offline-init-2026-10-08/assessment.json",
+      "bytes": 1201,
+      "sha256": "6d480b9dc8afd415b894d91c23cad51f8204d920ddb81253e658e94dc99f5473"
+    },
+    {
+      "path": "evals/canaries/results/private/offline-init-2026-10-08/control/command.json",
+      "bytes": 757,
+      "sha256": "678a4ddd13a0703864c83012a1cff0ed7b72ec8106cf767a5bb5d1608728366c"
+    },
+    {
+      "path": "evals/canaries/results/private/offline-init-2026-10-08/control/request.txt",
+      "bytes": 72,
+      "sha256": "c447e2d2041b06d0212a35c510ed6c0afab7f6908d2c47d109085700cf3e066d"
+    },
+    {
+      "path": "evals/canaries/results/private/offline-init-2026-10-08/control/events.jsonl",
+      "bytes": 3619,
+      "sha256": "059a64572f2bcb433845d1e7d52be9117b3bd5f303541a6f2f94d5d09331196e"
+    },
+    {
+      "path": "evals/canaries/results/private/offline-init-2026-10-08/control/stderr.txt",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "evals/canaries/results/private/offline-init-2026-10-08/control/result.json",
+      "bytes": 685,
+      "sha256": "83b750916df17ae3618b66158d317501d3787ce310a6ab1a5e37d82b6e28a517"
+    },
+    {
+      "path": "evals/canaries/results/private/offline-init-2026-10-08/restricted/command.json",
+      "bytes": 749,
+      "sha256": "6f2d95528a2cd1234d899a24ba48d61f33b741fbec7e402b1e043084cd82b58f"
+    },
+    {
+      "path": "evals/canaries/results/private/offline-init-2026-10-08/restricted/request.txt",
+      "bytes": 72,
+      "sha256": "c447e2d2041b06d0212a35c510ed6c0afab7f6908d2c47d109085700cf3e066d"
+    },
+    {
+      "path": "evals/canaries/results/private/offline-init-2026-10-08/restricted/events.jsonl",
+      "bytes": 3616,
+      "sha256": "a9aab4d3d69372ae801b349509d3ff3b9df71e463878f78e9c595b7ea6707f0d"
+    },
+    {
+      "path": "evals/canaries/results/private/offline-init-2026-10-08/restricted/stderr.txt",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "evals/canaries/results/private/offline-init-2026-10-08/restricted/result.json",
+      "bytes": 666,
+      "sha256": "566642243511c6957c5159ff4ad500b5570b8ee3699aa7b25af62d747cefbd41"
+    }
+  ]
+}

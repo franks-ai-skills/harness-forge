@@ -60,7 +60,9 @@ and MCP catalogs are not the complete registry. The separate
 the generated schemas and command. No model turn or thread was started.
 
 Playground's `plans/2026-10-08-harness-forge-offline-init-follow-up.md`
-proposes a bounded Claude `system/init` check with network-blocked,
-prompt-bearing launches. It is not yet authorized: blocked request
-attempts change the previous no-model-request condition and invocation
-accounting. No prior index, capability result or T3 status is changed.
+records the separately authorized Claude `system/init` check with
+network-blocked, prompt-bearing launches and subscription-only access.
+The [follow-up observed an empty host startup inventory](offline-init-2026-10-08.md)
+with a valid `Read` control. This resolves the previous host observation
+gap only; prior indexes remain historical and unchanged. No guest,
+Codex capability or T3 status is promoted.
