@@ -133,10 +133,22 @@ explicit app disabling for its separate-process roles.
 
 ## Decision at the M1 checkpoint
 
-Recommend a further, bounded Codex diagnostic before the offline core:
-obtain an authoritative tool inventory, prove the actual selected child
-profile, and exercise harmless read/write denials while retaining live
-web for research and zero tools for source support. A clean externally
-controlled harness environment or a more observable launcher can be
-tested without weakening the design. Selecting one requires the next
-execution handoff; no change to harness parity has been approved.
+Follow-up proposal revised on 2026-10-08 after Claude Opus 5.5's review:
+prioritize independent processes in a disposable external environment
+for both harnesses. Both tested native configurations have failures;
+Claude's native reviewer also returned unrelated/outside file canaries.
+This does not rule out all native configurations.
+
+The bounded proposal is recorded in playground at
+`plans/2026-10-08-harness-forge-worker-diagnostic.md`: explicit models,
+common role/input/discovery/authentication criteria, independent boundary
+evidence, four hours and at most 30 harness invocations. Container
+isolation does not establish an empty source-support tool inventory or
+read-only reviewer tools. Credentials and supplied inputs can still be
+exposed inside it. A mandatory production container/VM dependency needs
+a design decision about ownership of outside controls.
+
+The current grader must be extended and tested for supervisor evidence
+before evaluating that new launcher. These M1 streams and their recorded
+grader hash remain unchanged. No diagnostic execution or parity change
+is authorized by this proposal; stop before T3.
