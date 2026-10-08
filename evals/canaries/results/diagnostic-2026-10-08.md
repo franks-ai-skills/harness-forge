@@ -49,3 +49,18 @@ The M1 code, grader, streams and `evidence-index.json` are unchanged.
 No production support, public distribution, design amendment or parity
 exception is declared. Further diagnostic work requires a bounded handoff;
 the detailed report lists the alternatives and their costs.
+
+## Subsequent review
+
+The suggested Codex protocol-schema search was completed under OS
+network denial, including experimental methods. No declared method
+returning a thread's complete effective tool inventory was found; app
+and MCP catalogs are not the complete registry. The separate
+[review evidence index](diagnostic-2026-10-08-review-index.json) records
+the generated schemas and command. No model turn or thread was started.
+
+Playground's `plans/2026-10-08-harness-forge-offline-init-follow-up.md`
+proposes a bounded Claude `system/init` check with network-blocked,
+prompt-bearing launches. It is not yet authorized: blocked request
+attempts change the previous no-model-request condition and invocation
+accounting. No prior index, capability result or T3 status is changed.
