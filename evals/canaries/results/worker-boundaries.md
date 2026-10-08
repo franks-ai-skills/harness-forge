@@ -157,5 +157,6 @@ proposal's concrete design choices before spending live calls.
 
 The current grader must be extended and tested for supervisor evidence
 before evaluating that new launcher. These M1 streams and their recorded
-grader hash remain unchanged. No diagnostic execution or parity change
-is authorized by this proposal; stop before T3.
+grader hash remain unchanged. The user authorized the diagnostic on
+2026-10-08; its [no-model gate stopped unproven](diagnostic-2026-10-08.md)
+with zero live calls. No parity change is authorized; stop before T3.
