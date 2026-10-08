@@ -148,6 +148,13 @@ read-only reviewer tools. Credentials and supplied inputs can still be
 exposed inside it. A mandatory production container/VM dependency needs
 a design decision about ownership of outside controls.
 
+A no-model capability gate now precedes environment setup and live
+calls. Configuration acceptance alone does not prove tool removal. The
+budgeted order is six controls, up to six diagnostic attempts, a freeze,
+then eighteen qualifying runs without mid-run revisions. An unsupported
+or unobservable tool-free source-support configuration triggers the
+proposal's concrete design choices before spending live calls.
+
 The current grader must be extended and tested for supervisor evidence
 before evaluating that new launcher. These M1 streams and their recorded
 grader hash remain unchanged. No diagnostic execution or parity change
