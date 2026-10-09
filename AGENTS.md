@@ -2,7 +2,8 @@
 
 All agents must preserve the public account contract in
 [README.md](README.md#model-access): standard vendor CLIs, vendor-default
-account locations and an existing subscription login. Do not introduce
+account locations and the user's existing login, with a cost warning and
+a continue/stop question for an API-key or unknown login. Do not introduce
 the project owner's aliases, profile paths, plugins or shell setup into
 product code, fixtures or installation requirements. Personal setup is
 a temporary local-development exception only; in the current sibling

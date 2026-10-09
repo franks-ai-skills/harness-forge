@@ -23,7 +23,7 @@ or network access are not guaranteed.**
 | Harness | Evidence and remaining gap |
 | --- | --- |
 | Codex | In M1, tested native launches returned repository-instruction/skill canaries and created write markers; the child-role application was not authoritative, so these are launch-path failures. Initial separate-process support/review runs made successful connector web calls despite their no-network settings. Explicit app disabling removed those calls in repeated probes, but file/write denial remained unproven. The later catalog spike accepted configuration without establishing an empty effective tool registry. |
-| Claude Code | The tested native reviewer returned unrelated and outside-file canaries. Separate-process probes showed the expected tool lists and no successful canary leak or write across all three roles; some out-of-workspace Read attempts returned errors. The later empty-tool observation applies only to `team-profile`, which still advertised skills/agents/plugins; it does not transfer to `personal-profile`. Complete role/context/authentication isolation and production functional support remain unqualified. |
+| Claude Code | The tested native reviewer returned unrelated and outside-file canaries. Separate-process probes showed the expected tool lists and no successful canary leak or write across all three roles; some out-of-workspace Read attempts returned errors. The later empty-tool observation applies only to the tested Team-plan profile, which still advertised skills/agents/plugins; it does not carry over to other accounts or profiles. Complete role/context/authentication isolation and production functional support remain unqualified. |
 
 These are version/profile-specific observations, not claims that either
 harness is incapable of stronger restrictions. See the
@@ -36,7 +36,8 @@ subagents incapable of stronger restrictions.
 
 The planned adapters must use an initially empty temporary working
 directory outside the target repository, stage only the role's supplied
-inputs, pass a small environment allowlist, close inherited extra file
+inputs, pass a small environment allowlist (plus `CLAUDE_CONFIG_DIR` or
+`CODEX_HOME` when the user has set them), close inherited extra file
 descriptors, and suppress optional configuration/hook/plugin discovery.
 Do not resume/fork a prior session or fall back to native delegation.
 Use no configured MCP servers or apps: Codex must explicitly disable
@@ -107,14 +108,29 @@ using the existing account can expose more than its login material.
 
 ## Model access
 
-The public product uses standard `claude` and `codex` CLIs, vendor-default
-account locations and the user's existing subscription login. No custom
-profile, personal alias, shell configuration or owner-specific plugin is
-required. Temporary per-worker restrictions apply without changing saved
-settings. Forge does not initiate login/logout, copy credentials or switch
-accounts. An unavailable subscription login makes the run unavailable.
-There is no direct-model API fallback, extra API-key requirement or
-API-credit dependency.
+Forge runs the standard `claude` and `codex` CLIs with the login they
+already have. The account location is the vendor default, or the one the
+user has set in the vendors' own `CLAUDE_CONFIG_DIR` or `CODEX_HOME`
+variable; Forge passes these through unchanged and never sets them. No custom profile,
+personal alias, shell configuration or owner-specific plugin is required.
+Temporary per-worker restrictions apply without changing saved settings.
+Forge does not log in or out, copy credentials or switch accounts. Without
+a login, the run is unavailable.
+
+**Check your login type before a run.** Forge uses your login as it is.
+A subscription login draws on your plan's usage limits. An API-key login
+bills each request to your API account, so a Forge run can cost extra.
+
+| CLI | Command | A subscription login shows |
+| --- | --- | --- |
+| Claude Code | `claude auth status` | `"authMethod": "claude.ai"` |
+| Codex | `codex login status` | `Logged in using ChatGPT` |
+
+Forge runs the same commands before it starts the first worker of a run.
+If the login is not a subscription, or its type is unclear, Forge says
+that the run may cost extra and asks whether to continue or stop. A run
+without a user stops at that point. Forge never adds an API key or falls
+back to another account.
 
 The project owner's custom setup is a temporary local-development exception
 on one machine. It must never become a product default or installation
