@@ -1,0 +1,18 @@
+# Behavior cases for build-skill; plan task 11 runs them live.
+skill: build-skill
+cases:
+  - id: reference-build
+    setup: Part A (reproduction-checklist, skills) confirmed with three accepted requirements and one rejected.
+    expect: .agents/skills/reproduction-checklist/ with a relative .claude/skills link; the rejected requirement is absent; the procedure never runs the reproducer.
+  - id: hook-choice
+    setup: Part B's chosen mechanism is hooks.
+    expect: Builder unavailable is reported; nothing is written; the recommendation stays hooks.
+  - id: unconfirmed
+    setup: The contract was not confirmed in this session.
+    expect: The build is refused and the user is sent back to harness-intake.
+  - id: existing-different-skill
+    setup: A hand-written skill already exists at the path.
+    expect: Forge's diff is shown and nothing is replaced without the user's answer.
+  - id: no-verified-claim
+    setup: The build succeeds.
+    expect: The part is reported as built and harness-verify is suggested; it is never called verified.
