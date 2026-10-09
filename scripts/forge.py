@@ -16,8 +16,9 @@ if _SOURCE not in sys.path:
 
 from dataclasses import asdict  # noqa: E402
 
-from harness_forge.documents import load_document, parse_json, validate_kb  # noqa: E402
-from harness_forge.models import Rule  # noqa: E402
+from harness_forge.contracts import RELAY_KEYS, load_decision, render_contract  # noqa: E402
+from harness_forge.documents import load_document, parse_json, validate, validate_kb  # noqa: E402
+from harness_forge.models import AcceptedRevision, Rule  # noqa: E402
 from harness_forge.selection import next_question, recommend  # noqa: E402
 
 MAX_OUTPUT_BYTES = 64 * 1024
@@ -100,6 +101,41 @@ def _select(arguments: argparse.Namespace) -> int:
     return 0
 
 
+def _prepare_contract(arguments: argparse.Namespace) -> int:
+    """Render the current contract offline; confirmation needs a live relay."""
+    try:
+        decision = load_decision(Path(arguments.decision))
+        overrides = []
+        if arguments.overrides:
+            for path in sorted(Path(arguments.overrides).glob("*.yaml")):
+                overrides.append(load_document(path, "override"))
+    except ValueError as error:
+        raise _InvalidInput(str(error)) from error
+    revision = None
+    if arguments.revision:
+        value = _read_json(arguments.revision)
+        try:
+            revision = AcceptedRevision(**value)
+        except TypeError as error:
+            raise _InvalidInput(f"--revision: {error}") from error
+    evidence = []
+    if arguments.evidence:
+        value = _read_json(arguments.evidence)
+        evidence = value.get("worker_evidence", [])
+        try:
+            for record in evidence:
+                validate(record, "worker-evidence")
+        except ValueError as error:
+            raise _InvalidInput(str(error)) from error
+    contract = render_contract(decision, revision, overrides, worker_evidence=evidence)
+    emit({
+        "command": "prepare-contract", "digest": contract.digest, "text": contract.text,
+        "parts": contract.parts, "overrides": contract.overrides, "worker_policy": contract.worker_policy,
+        "confirmed_part_ids": [], "relay_fields": sorted(RELAY_KEYS),
+    })
+    return 0
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = _Parser(prog="forge.py", description=__doc__)
     commands = parser.add_subparsers(dest="command", required=True, parser_class=_Parser)
@@ -109,6 +145,12 @@ def build_parser() -> argparse.ArgumentParser:
     select = commands.add_parser("select", help="recommend from confirmed, normalized answers")
     select.add_argument("--input", required=True, help="JSON file with answers, whole_idea and candidates")
     select.set_defaults(handler=_select)
+    prepare = commands.add_parser("prepare-contract", help="render the current contract for confirmation")
+    prepare.add_argument("--decision", required=True, help=".harness/decisions/<date>-<slug>.md")
+    prepare.add_argument("--revision", help="JSON accepted Idea KB revision")
+    prepare.add_argument("--overrides", help="directory with .harness/overrides/*.yaml")
+    prepare.add_argument("--evidence", help="JSON object with worker_evidence records")
+    prepare.set_defaults(handler=_prepare_contract)
     return parser
 
 

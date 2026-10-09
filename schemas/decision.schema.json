@@ -425,6 +425,52 @@
           "type": "null"
         }
       ]
+    },
+    "survey_findings_used": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "pattern": "^F[0-9]+$"
+      },
+      "uniqueItems": true
+    },
+    "split_confirmed": {
+      "type": "boolean"
+    },
+    "confirmations_history": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "run_id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "contract_digest": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$"
+          },
+          "part_ids": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "pattern": "^[A-Z][0-9]*$"
+            },
+            "minItems": 1
+          },
+          "date": {
+            "type": "string",
+            "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$"
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "run_id",
+          "contract_digest",
+          "part_ids",
+          "date"
+        ]
+      }
     }
   },
   "additionalProperties": false,

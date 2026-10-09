@@ -144,7 +144,10 @@ class AcceptedRevision:
 
 @dataclass(frozen=True)
 class Contract:
+    """The full current contract shown for confirmation; ``digest`` binds it."""
+
     parts: list[dict]
+    overrides: list[dict]
     worker_policy: dict
     text: str
     digest: str

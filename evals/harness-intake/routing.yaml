@@ -1,0 +1,11 @@
+# Routing cases for harness-intake: should the skill load for the prompt?
+# Run per harness at least three times; plan task 11 runs the smoke subset.
+skill: harness-intake
+cases:
+  - {id: explicit, prompt: "I want a skill that writes reproduction checklists", expect: trigger, mode: explicit}  # the runner prefixes /harness-intake or $harness-intake
+  - {id: build-skill-idea, prompt: "I want a skill that turns approved bug reports into reproduction checklists.", expect: trigger, mode: implicit}
+  - {id: which-mechanism, prompt: "Should blocking pushes to main be a hook or something else?", expect: trigger, mode: implicit}
+  - {id: automation-idea, prompt: "Help me set up an agent that reviews every pull request in CI.", expect: trigger, mode: implicit}
+  - {id: near-miss-verify, prompt: "Verify the skill I already built in .agents/skills/repro-checklist.", expect: no-trigger, mode: implicit}
+  - {id: near-miss-coding, prompt: "Fix the failing test in src/parser.py.", expect: no-trigger, mode: implicit}
+  - {id: near-miss-question, prompt: "What does the description field of SKILL.md do in Codex?", expect: no-trigger, mode: implicit}
