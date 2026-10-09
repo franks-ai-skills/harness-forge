@@ -1,8 +1,9 @@
 # Harness Forge
 
-Harness Forge is being built as a subscription-only workflow for Claude
-Code and Codex: intake, research, mechanism selection, accepted requirements,
-portable builds and verification against a pinned knowledge base.
+Harness Forge is being built as a workflow for Claude Code and Codex,
+run through their CLIs with your existing login: intake, research,
+mechanism selection, accepted requirements, portable builds and
+verification against a pinned knowledge base.
 
 This checkout currently contains the local bootstrap, feasibility probes
 and their evidence. The installable pipeline and live functional support
