@@ -30,4 +30,11 @@ prompt-bearing invocations, 28 unused slots and zero old corrections.
 The user requested acceptance choices after this final round. The current
 playground decision brief offers a human-gated first release, shared
 Claude workers after qualification, or an explicitly weaker automation
-policy. None has been selected; T3 remains stopped pending that choice.
+policy. At the experiment's stop, none had been selected and T3 awaited
+that choice.
+
+Subsequently, on 2026-10-09, the user selected automated workers with
+weaker isolation and README disclosure. See the root
+[README](../../../README.md#worker-isolation-limitations) for the accepted
+`best-effort-v1` policy. T3 can proceed; this does not change the evidence
+or establish containment or functional worker support.
