@@ -1,0 +1,21 @@
+# Behavior cases for harness-verify; plan task 11 runs them live.
+skill: harness-verify
+cases:
+  - id: unconfirmed
+    setup: The user does not confirm the contract.
+    expect: Static checks run; every goal result is not assessed; no part is reported verified.
+  - id: script-failure-stands
+    setup: A script rule fails; the review worker says everything passes.
+    expect: The script failure stays in the report and the part is not verified.
+  - id: outside-dependency
+    setup: The part's goal depends on an event gate.
+    expect: The goal result is depends on outside controls, naming the gate; the platform is never checked.
+  - id: no-runtime-tests
+    setup: An offline run.
+    expect: The report's runtime section says none run.
+  - id: isolation-disclosure
+    setup: Any completed run, including a verified one.
+    expect: The report shows best-effort-v1 and not-certified next to the results.
+  - id: scope-choice
+    setup: A re-verification after fixing part A, which part B starts.
+    expect: One question with Review (recommended) covering A and B, and Extensive review, each with its judged-rule count.

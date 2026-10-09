@@ -1,0 +1,274 @@
+"""Contract-bound verification: applicability, checks, verdicts and results.
+
+prepare_run decides applicability for every rule before any review,
+runs the applicable script rules and freezes every bound input.
+finish_run combines script results, the review worker's verdicts and
+runtime results into each part's harness result and goal result, in the
+design's exact precedence. A model verdict never reverses a script
+failure, and nothing here certifies worker containment.
+"""
+
+from __future__ import annotations
+
+import hashlib
+
+from harness_forge.checks import REGISTRY
+from harness_forge.checks.runner import evaluate_applicability, run_check
+from harness_forge.documents import canonical_digest, validate
+from harness_forge.models import (
+    AcceptedRevision, CheckResult, Confirmation, Decision, PartResult, ReviewResponse, Rule, RuntimeResult, VerificationRun,
+)
+from harness_forge.predicates import UnknownFact
+from harness_forge.scope import affected_parts
+
+BUILDABLE = ("skills", "commands")
+README = "README.md"
+_BLOCKING = ("missing", "error", "unresolved")
+
+
+def part_kind(part: dict) -> str:
+    """build, local-reuse, remote-reuse, outside-only, nothing-fits or unavailable."""
+    if part["outcome"] == "reuse":
+        return "local-reuse" if (part.get("reuse") or {}).get("path") else "remote-reuse"
+    if part["outcome"] == "outside-instead":
+        return "outside-only"
+    if part["outcome"] == "nothing-fits":
+        return "nothing-fits"
+    return "build" if part["chosen"] in BUILDABLE else "unavailable"
+
+
+def _skill_dir(part: dict) -> str | None:
+    kind = part_kind(part)
+    if kind == "build":
+        return f".agents/skills/{part['slug']}"
+    if kind == "local-reuse":
+        return part["reuse"]["path"].rstrip("/")
+    return None
+
+
+def _idea_rules(revision: AcceptedRevision | None) -> dict[str, list[Rule]]:
+    rules: dict[str, list[Rule]] = {}
+    for entry in revision.rules if revision else []:
+        rules.setdefault(entry["part_id"], []).append(Rule.from_dict(entry["rule"]))
+    return rules
+
+
+def _rules_for(part: dict, rules: list[Rule], idea: dict[str, list[Rule]]) -> list[Rule]:
+    kind = part_kind(part)
+    selected = []
+    if kind in ("build", "local-reuse"):
+        selected += [rule for rule in rules if rule.concept in ("skills", "security")]
+        selected += idea.get(part["id"], [])
+    if part["outside_controls"]:
+        selected += [rule for rule in rules if rule.concept == "outside"]
+    return selected
+
+
+def bound_inputs(
+    decision: Decision, files: dict[str, bytes], rules: list[Rule], *, symlinks: dict[str, str] | None = None,
+    revision: AcceptedRevision | None = None, overrides: list[dict] | tuple = (), kb_version: str = "",
+    worker_evidence: list[dict] | tuple = (),
+) -> dict:
+    """Digests of every input a result is bound to."""
+    return {
+        "files": {path: hashlib.sha256(data).hexdigest() for path, data in sorted(files.items())},
+        "symlinks": dict(sorted((symlinks or {}).items())),
+        "kb_version": kb_version,
+        "rules": canonical_digest(sorted((rule.to_dict() for rule in rules), key=lambda r: r["id"])),
+        "overrides": canonical_digest(list(overrides)),
+        "revision": revision.digest if revision else None,
+        "parts": {part["id"]: canonical_digest(part) for part in decision.record["parts"]},
+        "checkers": canonical_digest({checker_id: version for checker_id, (version, _) in sorted(REGISTRY.items())}),
+        "worker": canonical_digest(list(worker_evidence)),
+    }
+
+
+def prepare_run(
+    decision: Decision, files: dict[str, bytes], rules: list[Rule], confirmation: Confirmation | None, *,
+    symlinks: dict[str, str] | None = None, revision: AcceptedRevision | None = None,
+    overrides: list[dict] | tuple = (), kb_version: str = "", worker_evidence: list[dict] | tuple = (),
+    scope: set[str] | None = None, scope_label: str = "Extensive review (rarely needed)",
+) -> VerificationRun:
+    """Decide applicability, run script rules and freeze the bound inputs."""
+    if overrides:
+        raise ValueError("rule overrides block verification until their adoption flow exists")
+    for evidence in worker_evidence:
+        validate(evidence, "worker-evidence")
+    symlinks = dict(symlinks or {})
+    record = decision.record
+    inputs = bound_inputs(decision, files, rules, symlinks=symlinks, revision=revision, overrides=overrides,
+                          kb_version=kb_version, worker_evidence=worker_evidence)
+    run_id = confirmation.run_id if confirmation else "unattended-" + canonical_digest(inputs)[:12]
+    run = VerificationRun(
+        run_id=run_id, decision_digest=canonical_digest(record),
+        contract_digest=confirmation.contract_digest if confirmation else "",
+        applicable_rules={}, frozen_inputs=inputs, confirmed_parts=sorted(confirmation.part_ids) if confirmation else [],
+        parts=[dict(part) for part in record["parts"]], worker_evidence=list(worker_evidence), kb_version=kb_version,
+        scope=scope_label, tool_versions={"harness-forge-checkers": inputs["checkers"]},
+    )
+    idea = _idea_rules(revision)
+    run.requirement_parts = sorted(idea)
+    for part in record["parts"]:
+        part_id = part["id"]
+        run.not_applicable[part_id] = {}
+        run.applicable_rules[part_id] = []
+        directory = _skill_dir(part)
+        owned = sorted(path for path in files if directory and path.startswith(directory + "/"))
+        if part["outside_controls"] and README in files:
+            owned.append(README)
+        run.part_files[part_id] = owned
+        if directory:
+            run.part_dirs[part_id] = directory
+            name = directory.rsplit("/", 1)[-1]
+            run.part_links[part_id] = [link for link in symlinks if link == f".claude/skills/{name}"]
+        if scope is not None and part_id not in scope:
+            continue
+        facts = {
+            **record["facts"], **part["answers"], "targets": record["targets"], "outcome": part["outcome"],
+            "part_id": part_id, "symlinks": {k: v for k, v in symlinks.items() if k in run.part_links.get(part_id, [])},
+            "outside_controls": [{"part_id": part_id, "control": c["control"]} for c in part["outside_controls"]],
+            "readme_path": README,
+        }
+        part_files = {path: files[path] for path in owned}
+        if part_kind(part) == "remote-reuse":
+            continue
+        for rule in _rules_for(part, rules, idea):
+            run.rule_index[rule.id] = {"severity": rule.severity, "check": rule.check, "statement": rule.statement,
+                                       "applicability": rule.applicability, "sources": list(rule.sources),
+                                       "positions": rule.positions or []}
+            if rule.check == "script":
+                result = run_check(rule, part_files, facts)
+                if result.status == "not-applicable":
+                    run.not_applicable[part_id][rule.id] = result.reason
+                else:
+                    run.applicable_rules[part_id].append(rule.id)
+                    run.static_results.append(result)
+                continue
+            try:
+                applies, reason = evaluate_applicability(rule, facts)
+            except UnknownFact as error:
+                run.applicable_rules[part_id].append(rule.id)
+                run.static_results.append(CheckResult(part_id, rule.id, "error", rule.severity,
+                                                      f"applicability needs the unconfirmed fact {error.args[0]!r}", list(rule.sources)))
+                continue
+            if not applies:
+                run.not_applicable[part_id][rule.id] = reason
+                continue
+            run.applicable_rules[part_id].append(rule.id)
+            run.judged_requests.append({"kind": "rule", "part_id": part_id, "rule_id": rule.id, "statement": rule.statement,
+                                        "applicability": rule.applicability, "severity": rule.severity})
+        if part_kind(part) in ("build", "local-reuse"):
+            run.judged_requests.append({"kind": "goal", "part_id": part_id, "goal": part["goal"],
+                                        "requirement_ids": [rule.id for rule in idea.get(part_id, [])]})
+    return run
+
+
+def validate_review(run: VerificationRun, response: dict) -> ReviewResponse:
+    """Check the review worker's response: one verdict per request, nothing else."""
+    validate(response, "review")
+    if response["run_id"] != run.run_id:
+        raise ValueError("the review answers another run")
+    expected = {(r["part_id"], r["rule_id"]) for r in run.judged_requests if r["kind"] == "rule"}
+    goals = {r["part_id"] for r in run.judged_requests if r["kind"] == "goal"}
+    seen = set()
+    for verdict in response["verdicts"]:
+        key = (verdict["part_id"], verdict["rule_id"])
+        if key in seen:
+            raise ValueError(f"duplicate verdict for {key}")
+        if key not in expected:
+            raise ValueError(f"verdict for a rule that was not requested: {key}")
+        seen.add(key)
+    seen_goals = set()
+    for verdict in response["goal_verdicts"]:
+        if verdict["part_id"] in seen_goals or verdict["part_id"] not in goals:
+            raise ValueError(f"unexpected or duplicate goal verdict for part {verdict['part_id']}")
+        seen_goals.add(verdict["part_id"])
+    return ReviewResponse(run_id=response["run_id"], verdicts=response["verdicts"], goal_verdicts=response["goal_verdicts"])
+
+
+def _check_runtime(run: VerificationRun, results: list[RuntimeResult]) -> None:
+    for result in results:
+        if result.run_id != run.run_id:
+            raise ValueError(f"runtime result {result.case_id} belongs to another run")
+        if result.part_id not in run.part_files:
+            raise ValueError(f"runtime result {result.case_id} names an unknown part")
+        for path, digest in result.file_hashes.items():
+            if run.frozen_inputs["files"].get(path) != digest:
+                raise ValueError(f"runtime result {result.case_id} tested a different {path}")
+        if result.result not in ("pass", "fail", "error", "not-run") or not result.reason:
+            raise ValueError(f"runtime result {result.case_id} needs a valid outcome and a reason")
+
+
+def _goal_result(kind: str, status: str, harness: str, dependencies: list[str]) -> str:
+    if status == "blocked" or harness == "not checked":
+        return "not assessed"
+    if harness == "not verified" or kind == "nothing-fits":
+        return "not met"
+    if dependencies or kind == "outside-only":
+        return "depends on outside controls" if dependencies else "not met"
+    return "met by the verified build"
+
+
+def finish_run(
+    run: VerificationRun, review: ReviewResponse, runtime_results: list[RuntimeResult], current_inputs: dict, *,
+    confirmed_exclusions: set[tuple[str, str]] | frozenset = frozenset(),
+) -> list[PartResult]:
+    """Each part's harness and goal result. confirmed_exclusions are live user confirmations."""
+    _check_runtime(run, runtime_results)
+    run.runtime_results = list(runtime_results)
+    changed = affected_parts(run, current_inputs)
+    verdicts = {} if run.worker_violations else {(v["part_id"], v["rule_id"]): v for v in review.verdicts}
+    goal_verdicts = {} if run.worker_violations else {v["part_id"]: v for v in review.goal_verdicts}
+    statics = {(r.part_id, r.rule_id): r for r in run.static_results}
+    results = []
+    for part in run.parts:
+        part_id, kind = part["id"], part_kind(part)
+        dependencies = [c["control"] for c in part["outside_controls"] if c["required_for_goal"]]
+        confirmed = part_id in run.confirmed_parts
+        rule_results = []
+        for rule_id in run.applicable_rules.get(part_id, []):
+            info = run.rule_index[rule_id]
+            if info["check"] == "script" or (part_id, rule_id) in statics:
+                static = statics[(part_id, rule_id)]
+                rule_results.append({"rule_id": rule_id, "check": "script", "result": static.status, "reason": static.reason})
+                continue
+            verdict = verdicts.get((part_id, rule_id))
+            if verdict is None:
+                entry = {"result": "missing", "reason": "no valid verdict"}
+            elif verdict["verdict"] == "not-applicable":
+                if info["applicability"] != "judged":
+                    entry = {"result": "error", "reason": "not applicable is allowed only for judged applicability"}
+                elif info["severity"] == "error" and (part_id, rule_id) not in confirmed_exclusions:
+                    entry = {"result": "unresolved", "reason": verdict["reason"] + " (needs the user's confirmation)"}
+                else:
+                    entry = {"result": "not-applicable", "reason": verdict["reason"]}
+            else:
+                entry = {"result": verdict["verdict"], "reason": verdict["reason"]}
+            rule_results.append({"rule_id": rule_id, "check": "judged", **entry})
+        for rule_id, reason in sorted(run.not_applicable.get(part_id, {}).items()):
+            rule_results.append({"rule_id": rule_id, "check": run.rule_index[rule_id]["check"], "result": "not-applicable", "reason": reason})
+
+        goal_verdict = goal_verdicts.get(part_id)
+        goal = {"verdict": goal_verdict["verdict"], "reason": goal_verdict["reason"]} if goal_verdict else None
+        if kind in ("build", "local-reuse"):
+            failures = [
+                r for r in rule_results
+                if r["result"] in _BLOCKING or (r["result"] == "fail" and run.rule_index[r["rule_id"]]["severity"] == "error")
+            ]
+            runtime_failed = any(r.part_id == part_id and r.result in ("fail", "error") for r in runtime_results)
+            ok = confirmed and not failures and not runtime_failed and goal is not None and goal["verdict"] == "met" \
+                and part_id not in changed and not run.worker_violations
+            harness = "verified" if ok else "not verified"
+            status = "verified" if ok else ("built" if confirmed else "blocked")
+        else:
+            harness = "not checked" if kind == "remote-reuse" else "not applicable"
+            status = "blocked" if (not confirmed or kind == "unavailable") else part["status"]
+        if part_id in changed:
+            rule_results.append({"rule_id": "inputs.bound", "check": "script", "result": "fail",
+                                 "reason": "a bound input changed after the run was prepared"})
+        results.append(PartResult(
+            part_id=part_id, status=status, harness_result=harness,
+            goal_result=_goal_result(kind, status, harness, dependencies),
+            outside_dependencies=dependencies, rule_results=rule_results, goal_verdict=goal,
+        ))
+    return results

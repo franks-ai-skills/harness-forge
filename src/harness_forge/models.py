@@ -195,14 +195,29 @@ class ReviewResponse:
 
 @dataclass
 class VerificationRun:
+    """Everything one verification run decided before any worker ran."""
+
     run_id: str
     decision_digest: str
     contract_digest: str
     applicable_rules: dict[str, list[str]]
-    frozen_inputs: dict[str, str]
+    frozen_inputs: dict
     static_results: list[CheckResult] = field(default_factory=list)
     judged_requests: list[dict] = field(default_factory=list)
     runtime_results: list["RuntimeResult"] = field(default_factory=list)
+    confirmed_parts: list[str] = field(default_factory=list)
+    parts: list[dict] = field(default_factory=list)
+    not_applicable: dict[str, dict[str, str]] = field(default_factory=dict)
+    part_files: dict[str, list[str]] = field(default_factory=dict)
+    part_dirs: dict[str, str] = field(default_factory=dict)
+    part_links: dict[str, list[str]] = field(default_factory=dict)
+    requirement_parts: list[str] = field(default_factory=list)
+    rule_index: dict[str, dict] = field(default_factory=dict)
+    worker_evidence: list[dict] = field(default_factory=list)
+    worker_violations: list[str] = field(default_factory=list)
+    kb_version: str = ""
+    scope: str = "Extensive review (rarely needed)"
+    tool_versions: dict[str, str] = field(default_factory=dict)
 
 
 @dataclass(frozen=True)

@@ -19,7 +19,11 @@ from dataclasses import asdict  # noqa: E402
 from harness_forge.contracts import RELAY_KEYS, load_decision, render_contract  # noqa: E402
 from harness_forge.documents import load_document, parse_json, validate, validate_kb  # noqa: E402
 from harness_forge.models import AcceptedRevision, Finding, Rule  # noqa: E402
-from harness_forge.research import finding_problem  # noqa: E402
+from harness_forge.report import render_report, write_report  # noqa: E402
+from harness_forge.research import finding_problem, load_revision  # noqa: E402
+from harness_forge.scope import scope_options  # noqa: E402
+from harness_forge.verify import finish_run, part_kind, prepare_run  # noqa: E402
+from harness_forge.models import ReviewResponse  # noqa: E402
 from harness_forge.selection import next_question, recommend  # noqa: E402
 
 MAX_OUTPUT_BYTES = 64 * 1024
@@ -167,6 +171,97 @@ def _research_check(arguments: argparse.Namespace) -> int:
     return 0 if not dropped and not unknown else 1
 
 
+MAX_COLLECTED_FILES = 2000
+
+
+def collect_target(root: Path, decision) -> tuple[dict[str, bytes], dict[str, str]]:
+    """Read the checked files of a target repository without following links."""
+    files: dict[str, bytes] = {}
+    symlinks: dict[str, str] = {}
+    readme = root / "README.md"
+    if readme.is_file() and not readme.is_symlink():
+        files["README.md"] = readme.read_bytes()
+    for part in decision.record["parts"]:
+        kind = part_kind(part)
+        directory = f".agents/skills/{part['slug']}" if kind == "build" else (part.get("reuse") or {}).get("path")
+        if not directory or kind not in ("build", "local-reuse"):
+            continue
+        link = root / ".claude" / "skills" / directory.rsplit("/", 1)[-1]
+        if link.is_symlink():
+            symlinks[link.relative_to(root).as_posix()] = str(link.readlink())
+        base = root / directory
+        if base.is_symlink() or not base.is_dir():
+            continue
+        for path in sorted(base.rglob("*")):
+            relative = path.relative_to(root).as_posix()
+            if path.is_symlink():
+                symlinks[relative] = str(path.readlink())
+            elif path.is_file():
+                if path.stat().st_size > 1024 * 1024 or len(files) >= MAX_COLLECTED_FILES:
+                    raise _InvalidInput(f"{relative}: too large, or too many files")
+                files[relative] = path.read_bytes()
+    return files, symlinks
+
+
+def _unattended(arguments: argparse.Namespace):
+    root = Path(arguments.root).resolve()
+    try:
+        decision = load_decision(Path(arguments.decision), root=root)
+        revision = load_revision(Path(arguments.revision), root=root) if arguments.revision else None
+    except ValueError as error:
+        raise _InvalidInput(str(error)) from error
+    rules = []
+    for name in ("skills", "security", "outside-controls"):
+        rules += [Rule.from_dict(rule) for rule in load_document(SNAPSHOT / "rules" / f"{name}.yaml", "rules")]
+    manifest = parse_json((SNAPSHOT / "kb-manifest.json").read_text(encoding="utf-8"))
+    files, symlinks = collect_target(root, decision)
+    run = prepare_run(decision, files, rules, None, symlinks=symlinks, revision=revision, kb_version=manifest["kb_version"])
+    results = finish_run(run, ReviewResponse(run_id=run.run_id, verdicts=[], goal_verdicts=[]), [], run.frozen_inputs)
+    return root, run, results
+
+
+def _check(arguments: argparse.Namespace) -> int:
+    """Unattended static checks: no live confirmation, so no goal is assessed."""
+    _, run, results = _unattended(arguments)
+    parts = []
+    failed_any = False
+    for result in results:
+        failed = [r["rule_id"] for r in result.rule_results if r["check"] == "script"
+                  and (r["result"] == "error" or (r["result"] == "fail" and run.rule_index.get(r["rule_id"], {}).get("severity") == "error"))]
+        failed_any = failed_any or bool(failed)
+        parts.append({"part_id": result.part_id, "harness_result": result.harness_result, "goal_result": result.goal_result,
+                      "failed_script_rules": failed})
+    emit({"command": "check", "run_id": run.run_id, "confirmed": False, "parts": parts})
+    return 1 if failed_any else 0
+
+
+def _report(arguments: argparse.Namespace) -> int:
+    root, run, results = _unattended(arguments)
+    rendered = render_report(run, results)
+    path = None
+    if arguments.write:
+        try:
+            path = write_report(root, arguments.slug, rendered)
+        except ValueError as error:
+            raise _InvalidInput(str(error)) from error
+    emit({"command": "report", "run_id": run.run_id, "written": str(path) if path else None,
+          "bytes": len(rendered.encode("utf-8"))})
+    return 0
+
+
+def _scope(arguments: argparse.Namespace) -> int:
+    try:
+        decision = load_decision(Path(arguments.decision))
+        fixed = {item for item in (arguments.fixed or "").split(",") if item}
+        changed = {item for item in (arguments.changed or "").split(",") if item}
+        counts = _read_json(arguments.counts) if arguments.counts else {}
+        options = scope_options(decision, fixed, changed, counts)
+    except ValueError as error:
+        raise _InvalidInput(str(error)) from error
+    emit({"command": "scope", "options": options})
+    return 0
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = _Parser(prog="forge.py", description=__doc__)
     commands = parser.add_subparsers(dest="command", required=True, parser_class=_Parser)
@@ -185,6 +280,22 @@ def build_parser() -> argparse.ArgumentParser:
     research = commands.add_parser("research-check", help="check findings' sources, quotes and support verdicts")
     research.add_argument("--input", required=True, help="JSON with findings, fetched texts by finding id and support verdicts")
     research.set_defaults(handler=_research_check)
+    for name, handler, helptext in (("check", _check, "run static checks on a target repository (no goals assessed)"),
+                                    ("report", _report, "render the verification report (no goals assessed)")):
+        command = commands.add_parser(name, help=helptext)
+        command.add_argument("--decision", required=True)
+        command.add_argument("--root", required=True, help="target repository root")
+        command.add_argument("--revision", help=".harness/research/<slug>.rules.yaml")
+        if name == "report":
+            command.add_argument("--slug", required=True)
+            command.add_argument("--write", action="store_true", help="write .harness/reports/<slug>.md")
+        command.set_defaults(handler=handler)
+    scope = commands.add_parser("scope", help="show the review choices with exact parts and judged counts")
+    scope.add_argument("--decision", required=True)
+    scope.add_argument("--fixed", help="comma-separated fixed part ids")
+    scope.add_argument("--changed", help="comma-separated part ids with changed inputs")
+    scope.add_argument("--counts", help="JSON object of judged-rule counts per part")
+    scope.set_defaults(handler=_scope)
     return parser
 
 

@@ -1,0 +1,273 @@
+"""Verification: applicability, verdicts, runtime results and result precedence."""
+
+import copy
+import unittest
+from pathlib import Path
+
+from harness_forge.build_skill import plan_skill
+from harness_forge.contracts import confirm_contract, render_contract
+from harness_forge.documents import canonical_digest
+from harness_forge.documents import load_document
+from harness_forge.models import Confirmation, RuntimeResult, Rule
+from harness_forge.verify import bound_inputs, finish_run, prepare_run, validate_review
+from tests.builders import EVIDENCE, decision, part
+from tests.test_build_skill import DESCRIPTION, NAME, PROCEDURE, REVISION
+
+SNAPSHOT = Path(__file__).resolve().parents[1] / "snapshot"
+RULES = []
+for name in ("skills", "security", "outside-controls"):
+    RULES += [Rule.from_dict(r) for r in load_document(SNAPSHOT / "rules" / f"{name}.yaml", "rules")]
+FACTS = {"target_set": "both", "reach": "repository", "plan_controls": "available", "opens_prs": False,
+         "bypass_mode": False, "untrusted_repo": False, "lethal_trifecta": False}
+README_CONTROL = {"control": "codeowners-agent-config", "prerequisites": ["outside.codeowners.agent-config"],
+                  "availability": "available", "required_for_goal": False}
+GATE = {"control": "event-gate", "prerequisites": ["outside.merge.no-agent-bypass"], "availability": "unknown",
+        "required_for_goal": True}
+
+
+def build_files(record, part_id="A"):
+    contract = render_contract(record, REVISION, [], worker_evidence=EVIDENCE)
+    relay = {"choice": "confirm", "displayed_digest": contract.digest, "part_ids": [part_id], "run_id": "run-1"}
+    planned = plan_skill(record, part_id, REVISION, RULES, contract=contract,
+                         confirmation=confirm_contract(contract, relay, run_id="run-1"),
+                         description=DESCRIPTION, procedure=PROCEDURE)
+    files = {key: value.encode() for key, value in planned.items() if not key.startswith(".claude/")}
+    symlinks = {key: str(value) for key, value in planned.items() if key.startswith(".claude/")}
+    return files, symlinks
+
+
+def readme(record):
+    from harness_forge.contracts import update_outside_section
+    return update_outside_section("# Repo\n", record).encode()
+
+
+def skill_decision(*extra_parts, **part_changes):
+    record = decision(part("A", "Write a reproduction checklist when asked", slug=NAME, status="built", **part_changes),
+                      *extra_parts, facts=FACTS)
+    record.record["accepted_revision"] = {"digest": REVISION.digest, "rule_ids": REVISION.rule_ids}
+    return record
+
+
+def passing_review(run):
+    return {"run_id": run.run_id,
+            "verdicts": [{"part_id": r["part_id"], "rule_id": r["rule_id"], "verdict": "pass", "reason": "Meets it.",
+                          "citation": "SKILL.md"} for r in run.judged_requests if r["kind"] == "rule"],
+            "goal_verdicts": [{"part_id": r["part_id"], "verdict": "met", "reason": "The procedure produces the checklist."}
+                              for r in run.judged_requests if r["kind"] == "goal"]}
+
+
+_PREPARED: dict = {}
+
+
+class Scenario:
+    def __init__(self, record, confirmed=("A",), files=None, symlinks=None):
+        self.record = record
+        built_files, built_links = build_files(record) if record.part("A")["chosen"] in ("skills", "commands") else ({}, {})
+        self.files = {**built_files, "README.md": readme(record), **(files or {})}
+        self.symlinks = symlinks if symlinks is not None else built_links
+        self.confirmation = Confirmation(run_id="run-1", contract_digest="d" * 64, part_ids=list(confirmed)) if confirmed else None
+        key = canonical_digest({"record": record.record, "files": {k: v.decode("latin-1") for k, v in self.files.items()},
+                                "symlinks": self.symlinks, "confirmed": list(confirmed)})
+        if key not in _PREPARED:
+            _PREPARED[key] = prepare_run(record, self.files, RULES, self.confirmation, symlinks=self.symlinks,
+                                         revision=REVISION, kb_version="0.1.0", worker_evidence=EVIDENCE)
+        self.run = copy.deepcopy(_PREPARED[key])
+
+    def current(self, **changes):
+        arguments = dict(files=self.files, symlinks=self.symlinks, revision=REVISION, kb_version="0.1.0", worker_evidence=EVIDENCE)
+        arguments.update(changes)
+        return bound_inputs(self.record, arguments.pop("files"), RULES, **arguments)
+
+    def finish(self, review=None, runtime=(), current=None):
+        review = validate_review(self.run, review if review is not None else passing_review(self.run))
+        return {r.part_id: r for r in finish_run(self.run, review, list(runtime), current or self.current())}
+
+
+def assert_result(test, result, harness_expected, goal_expected):
+    test.assertEqual(result.harness_result, harness_expected, result.rule_results)
+    test.assertEqual(result.goal_result, goal_expected)
+
+
+class PrecedenceTest(unittest.TestCase):
+    def test_verified_build_without_goal_dependencies_is_met(self):
+        result = Scenario(skill_decision()).finish()["A"]
+        assert_result(self, result, "verified", "met by the verified build")
+        self.assertEqual(result.status, "verified")
+        self.assertEqual(result.outside_dependencies, [])
+
+    def test_precautionary_control_does_not_become_a_goal_dependency(self):
+        result = Scenario(skill_decision(outside_controls=[README_CONTROL])).finish()["A"]
+        assert_result(self, result, "verified", "met by the verified build")
+
+    def test_unconfirmed_part_is_not_assessed(self):
+        result = Scenario(skill_decision(), confirmed=()).finish()["A"]
+        assert_result(self, result, "not verified", "not assessed")
+        self.assertEqual(result.status, "blocked")
+
+    def test_failed_build_is_not_met_even_with_outside_dependencies(self):
+        scenario = Scenario(skill_decision(outside_controls=[README_CONTROL, GATE]),
+                            files={f".agents/skills/{NAME}/SKILL.md": b"---\nname: Bad_Name\ndescription: d\n---\nx\n"})
+        result = scenario.finish()["A"]
+        assert_result(self, result, "not verified", "not met")
+        self.assertEqual(result.outside_dependencies, ["event-gate"])
+
+    def test_outside_only_part(self):
+        outside = part("B", "Never merge without review", outcome="outside-instead", recommended=None, chosen=None,
+                       outside_controls=[GATE])
+        result = Scenario(skill_decision(outside), confirmed=("A", "B")).finish()["B"]
+        assert_result(self, result, "not applicable", "depends on outside controls")
+
+    def test_confirmed_nothing_fits(self):
+        nothing = part("B", "One-step task", outcome="nothing-fits", recommended=None, chosen=None, outside_controls=[])
+        result = Scenario(skill_decision(nothing), confirmed=("A", "B")).finish()["B"]
+        assert_result(self, result, "not applicable", "not met")
+
+    def test_remote_reuse_is_not_checked(self):
+        reuse = part("B", "Reuse a checklist skill", outcome="reuse", recommended="skills", chosen="skills",
+                     reuse={"name": "repro-steps", "source": "https://example.com/repro", "license": "MIT", "maintenance": "maintained"})
+        result = Scenario(skill_decision(reuse), confirmed=("A", "B")).finish()["B"]
+        assert_result(self, result, "not checked", "not assessed")
+
+    def test_local_reuse_is_checked_read_only_like_a_build(self):
+        record = skill_decision(outcome="reuse", reuse={"name": NAME, "source": "https://example.com/repro", "license": "MIT",
+                                                        "maintenance": "maintained", "path": f".agents/skills/{NAME}"})
+        files, symlinks = build_files(skill_decision())
+        scenario = Scenario.__new__(Scenario)
+        scenario.record, scenario.files, scenario.symlinks = record, {**files, "README.md": readme(record)}, symlinks
+        scenario.confirmation = Confirmation(run_id="run-1", contract_digest="d" * 64, part_ids=["A"])
+        scenario.run = prepare_run(record, scenario.files, RULES, scenario.confirmation, symlinks=symlinks,
+                                   revision=REVISION, kb_version="0.1.0", worker_evidence=EVIDENCE)
+        assert_result(self, scenario.finish()["A"], "verified", "met by the verified build")
+
+    def test_builder_unavailable_part_is_blocked(self):
+        hook = part("B", "Block force pushes", recommended="hooks", chosen="hooks", outside_controls=[])
+        result = Scenario(skill_decision(hook), confirmed=("A", "B")).finish()["B"]
+        assert_result(self, result, "not applicable", "not assessed")
+        self.assertEqual(result.status, "blocked")
+
+
+class VerdictTest(unittest.TestCase):
+    def setUp(self):
+        self.scenario = Scenario(skill_decision())
+        self.review = passing_review(self.scenario.run)
+
+    def test_judged_requests_cover_exactly_the_applicable_judged_rules_and_the_goal(self):
+        requests = self.scenario.run.judged_requests
+        rule_ids = [r["rule_id"] for r in requests if r["kind"] == "rule"]
+        self.assertEqual(len(rule_ids), len(set(rule_ids)))
+        self.assertIn("skills.description.no-workflow-steps", rule_ids)
+        self.assertNotIn("skills.description.length", rule_ids)
+        self.assertNotIn("skills.reuse.reviewed-and-pinned", rule_ids)
+        self.assertIn("skills.reuse.reviewed-and-pinned", self.scenario.run.not_applicable["A"])
+        goals = [r for r in requests if r["kind"] == "goal"]
+        self.assertEqual(goals[0]["requirement_ids"], REVISION.rule_ids)
+        self.assertIn("idea.repro.a.environment", rule_ids)
+
+    def test_missing_verdict_prevents_verified(self):
+        self.review["verdicts"].pop()
+        assert_result(self, self.scenario.finish(self.review)["A"], "not verified", "not met")
+
+    def test_duplicate_and_unknown_verdicts_are_rejected(self):
+        duplicate = copy.deepcopy(self.review)
+        duplicate["verdicts"].append(duplicate["verdicts"][0])
+        unknown = copy.deepcopy(self.review)
+        unknown["verdicts"].append({**unknown["verdicts"][0], "rule_id": "skills.not-a-rule"})
+        other_run = {**copy.deepcopy(self.review), "run_id": "run-2"}
+        for response in (duplicate, unknown, other_run, {"run_id": "run-1"}):
+            with self.assertRaises(ValueError):
+                validate_review(self.scenario.run, response)
+
+    def test_not_applicable_only_for_judged_applicability(self):
+        review = copy.deepcopy(self.review)
+        for verdict in review["verdicts"]:
+            if verdict["rule_id"] == "skills.description.no-workflow-steps":
+                verdict["verdict"] = "not-applicable"
+        assert_result(self, self.scenario.finish(review)["A"], "not verified", "not met")
+
+    def test_error_rule_excluded_by_judgment_stays_unresolved(self):
+        review = copy.deepcopy(self.review)
+        for verdict in review["verdicts"]:
+            if verdict["rule_id"] == "skills.invocation.side-effects-user-invoked":
+                verdict["verdict"] = "not-applicable"
+        result = self.scenario.finish(review)["A"]
+        assert_result(self, result, "not verified", "not met")
+        self.assertIn("unresolved", [r["result"] for r in result.rule_results])
+
+    def test_failed_judged_error_rule_and_false_goal_verdict_prevent_verified(self):
+        failed = copy.deepcopy(self.review)
+        for verdict in failed["verdicts"]:
+            if verdict["rule_id"] == "skills.security.no-surprising-content":
+                verdict["verdict"] = "fail"
+        assert_result(self, self.scenario.finish(failed)["A"], "not verified", "not met")
+        not_met = copy.deepcopy(self.review)
+        not_met["goal_verdicts"][0]["verdict"] = "not-met"
+        assert_result(self, self.scenario.finish(not_met)["A"], "not verified", "not met")
+
+    def test_failed_warning_rule_does_not_block(self):
+        review = copy.deepcopy(self.review)
+        for verdict in review["verdicts"]:
+            if verdict["rule_id"] == "skills.description.boundary":
+                verdict["verdict"] = "fail"
+        assert_result(self, self.scenario.finish(review)["A"], "verified", "met by the verified build")
+
+    def test_model_cannot_reverse_a_script_failure(self):
+        scenario = Scenario(skill_decision(), files={f".agents/skills/{NAME}/SKILL.md": b"no frontmatter\n"})
+        review = passing_review(scenario.run)
+        self.assertNotIn("skills.frontmatter.valid", [v["rule_id"] for v in review["verdicts"]])
+        assert_result(self, scenario.finish(review)["A"], "not verified", "not met")
+
+
+class RuntimeAndInputsTest(unittest.TestCase):
+    def setUp(self):
+        self.scenario = Scenario(skill_decision())
+
+    def runtime(self, **changes):
+        part_files = {path: self.scenario.run.frozen_inputs["files"][path] for path in self.scenario.run.part_files["A"]}
+        value = dict(run_id="run-1", part_id="A", case_id="explicit", prompt="/reproduction-checklist bug 12",
+                     expected="The skill activates", observed_activation="Skill tool use", result="pass",
+                     reason="Activated once.", file_hashes=part_files, harness="claude-code", harness_version="2.1.292",
+                     environment="throwaway workspace")
+        value.update(changes)
+        return RuntimeResult(**value)
+
+    def test_failed_or_errored_runtime_test_prevents_verified(self):
+        for outcome in ("fail", "error"):
+            with self.subTest(outcome=outcome):
+                result = self.scenario.finish(runtime=[self.runtime(result=outcome)])["A"]
+                assert_result(self, result, "not verified", "not met")
+
+    def test_not_run_never_counts_as_a_pass_but_does_not_block(self):
+        result = self.scenario.finish(runtime=[self.runtime(result="not-run", observed_activation=None,
+                                                            reason="No observable activation signal.")])["A"]
+        assert_result(self, result, "verified", "met by the verified build")
+
+    def test_runtime_results_for_another_run_or_changed_files_are_rejected(self):
+        for bad in (self.runtime(run_id="run-2"), self.runtime(file_hashes={f".agents/skills/{NAME}/SKILL.md": "0" * 64})):
+            with self.subTest(result=bad):
+                with self.assertRaises(ValueError):
+                    self.scenario.finish(runtime=[bad])
+
+    def test_changed_bound_inputs_return_the_part_to_built(self):
+        changes = [
+            {"kb_version": "0.2.0"},
+            {"revision": None},
+            {"worker_evidence": [{**EVIDENCE[0], "configuration_digest": "1" * 64}]},
+            {"files": {**self.scenario.files, f".agents/skills/{NAME}/references/requirements.md": b"edited"}},
+        ]
+        for change in changes:
+            with self.subTest(change=list(change)):
+                result = self.scenario.finish(current=self.scenario.current(**change))["A"]
+                assert_result(self, result, "not verified", "not met")
+                self.assertEqual(result.status, "built")
+
+    def test_unproven_containment_alone_does_not_block(self):
+        self.assertEqual({e["isolation_status"] for e in self.scenario.run.worker_evidence}, {"not-certified"})
+        assert_result(self, self.scenario.finish()["A"], "verified", "met by the verified build")
+
+    def test_observed_worker_scope_violation_cannot_become_success(self):
+        self.scenario.run.worker_violations.append("review worker wrote a file outside its input")
+        assert_result(self, self.scenario.finish()["A"], "not verified", "not met")
+
+
+if __name__ == "__main__":
+    unittest.main()

@@ -5,9 +5,13 @@ run through their CLIs with your existing login: intake, research,
 mechanism selection, accepted requirements, portable builds and
 verification against a pinned knowledge base.
 
-This checkout currently contains the local bootstrap, feasibility probes
-and their evidence. The installable pipeline and live functional support
-are not complete. Implementation follows the sibling playground's
+Status: the offline workflow is implemented and tested with stubbed
+research and review workers: selection, contract confirmation, sourced
+research checks, skill builds and verification reports against a pinned
+KB snapshot. Live runs in Claude Code and Codex, the worker launchers and
+installation are not done yet, so no harness is supported yet. The
+feasibility probes and their evidence remain in `evals/canaries/`.
+Implementation follows the sibling playground's
 [design](../playground/specs/2026-10-06-harness-forge-design.md) and
 [plan](../playground/plans/2026-10-07-harness-forge-thin-slice.md).
 
