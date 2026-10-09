@@ -4,8 +4,10 @@ On 2026-10-08, the authorized subscription-only follow-up observed
 `system/init.tools: ["Read"]` in the positive control and
 `system/init.tools: []` in the restricted candidate. Both reported
 `claude-opus-5-5` and API-key source `none`. The guarded `team-profile`
-wrapper confirmed subscription authentication; the default afterward
-remains `personal-profile`.
+wrapper confirmed subscription authentication; the owner's temporary
+local-development selection afterward remains `personal-profile` on this
+machine only. These historical profile names are not public adapter
+defaults; see [Model access](../../../README.md#model-access).
 This observation does not transfer to `personal-profile` or another account;
 account/managed-policy equivalence was not tested.
 

@@ -47,6 +47,14 @@ An empty Codex table alone is not proof that lower-layer servers vanished.
 Known failure to apply a required baseline control blocks launch;
 unobserved runtime containment remains disclosed rather than invented.
 
+Per-role launch restrictions are also required: Claude research gets only
+web tools, source support an empty tool list, and review only read tools.
+Codex uses a no-write filesystem policy, web search only for research,
+and disabled shell/local-image tools for source support. Configure input
+read limits and additional tool removal wherever supported. These settings
+are checked against supported CLI versions; they do not prove all remaining
+tools, reads or outbound channels are blocked.
+
 Use this mode only for trusted projects and operator-approved inputs.
 Do not rely on it to protect secrets, unrelated files or login credentials
 from a worker, prevent their transmission, or contain hostile content.
@@ -77,9 +85,13 @@ separate disposable environments required for candidate runtime tests.
 fetches untrusted web content even when the project is trusted. Run it in
 an operator-provided disposable environment with only the approved brief
 and source policy, no target-repository mount, and no project secrets or
-unrelated account credentials. Restrict network/DNS access to the intended
-model service and research needs where practical. Forge does not provision
-or verify these outside controls.
+unrelated account credentials. Where the operator controls fetching, block
+private, loopback, link-local and cloud metadata destinations, covering
+IPv4/IPv6, resolved addresses and redirects. This applies
+[OWASP's external-request guidance](https://cheatsheetseries.owasp.org/cheatsheets/Server_Side_Request_Forgery_Prevention_Cheat_Sheet.html)
+to the research environment. Public-web research still permits outbound
+transmission to public sites; this is not an exfiltration guarantee.
+Forge does not provision or verify these outside controls.
 
 The harness still needs its subscription authentication. Keep it separate
 from supplied worker data where the platform permits; `best-effort-v1`
@@ -88,13 +100,26 @@ therefore does not promise a credential-free environment or remove the
 accepted authentication/egress gap. It does not mandate Docker or add a
 new API credential requirement.
 
+An operator may choose a separate worker profile to reduce unrelated
+history/configuration exposure. Forge does not require or provision one.
+A fresh directory alone does not prove credential or keychain isolation;
+using the existing account can expose more than its login material.
+
 ## Model access
 
-Use subscription-authenticated harness CLIs only. There is no direct-model
-API fallback, extra API-key requirement or API-credit dependency.
-`personal-profile` is the owner's default Claude profile; `team-profile` was a
-one-time diagnostic exception, not a required public-user setup. Public
-installation must work with users' own subscription profiles.
+The public product uses standard `claude` and `codex` CLIs, vendor-default
+account locations and the user's existing subscription login. No custom
+profile, personal alias, shell configuration or owner-specific plugin is
+required. Temporary per-worker restrictions apply without changing saved
+settings. Forge does not initiate login/logout, copy credentials or switch
+accounts. An unavailable subscription login makes the run unavailable.
+There is no direct-model API fallback, extra API-key requirement or
+API-credit dependency.
+
+The project owner's custom setup is a temporary local-development exception
+on one machine. It must never become a product default or installation
+step. Personal profile names in diagnostic evidence identify historical
+observations only; they do not specify public account behavior.
 
 ## License
 

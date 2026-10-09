@@ -35,7 +35,9 @@ diagnostic only. Its actual zsh function definitions ran with network
 denial and a guard against account login/logout changes. Its account/help
 check succeeded; initialization with the pinned model and debug logging
 still exposed no effective tool inventory. `personal-profile` remains the
-later default. Neither authentication isolation nor a guest environment
+later local-development selection on this machine only. These historical
+profile names are not public defaults; see [Model access](../../../README.md#model-access).
+Neither authentication isolation nor a guest environment
 was certified.
 
 The first stop incorrectly counted the rate-limit interruption against
