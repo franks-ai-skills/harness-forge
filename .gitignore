@@ -3,3 +3,4 @@ __pycache__/
 .superpowers/
 evals/canaries/results/private/
 .DS_Store
+.venv/

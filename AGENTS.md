@@ -18,3 +18,9 @@ new implementation checks need their own evidence.
 
 Use Conventional Commits and record AI attribution as final-paragraph
 `Assisted-by: <model> (code generation)` or `(code review)` trailers.
+
+Run tests with the locked dependencies, as in
+[packaging/assessment.md](packaging/assessment.md#reproduce):
+`python3 -m venv .venv`, install `requirements.lock` with
+`--require-hashes --only-binary :all:`, then
+`.venv/bin/python -m unittest discover -s tests -v`.

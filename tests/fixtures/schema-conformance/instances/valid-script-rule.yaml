@@ -1,0 +1,8 @@
+id: skills.description-length
+applicability: script
+severity: error
+since: "2.1.0"
+check:
+  checker: skills.body-size
+  params:
+    max_lines: 500

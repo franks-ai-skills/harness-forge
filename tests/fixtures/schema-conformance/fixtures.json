@@ -1,0 +1,13 @@
+{
+  "valid-script-rule": "rule-like",
+  "valid-judged-rule": "rule-like",
+  "unknown-checker": "rule-like",
+  "unknown-top-level-key": "rule-like",
+  "unknown-param": "rule-like",
+  "ref-pattern-violation": "rule-like",
+  "judged-rule-with-check": "rule-like",
+  "script-rule-without-check": "rule-like",
+  "wrong-integer-type": "rule-like",
+  "float-version": "rule-like",
+  "remote-ref": "remote-ref"
+}

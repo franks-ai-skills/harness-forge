@@ -1,0 +1,38 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:harness-forge:conformance:rule-like",
+  "title": "Rule-like conformance fixture (not the production rule schema)",
+  "type": "object",
+  "properties": {
+    "id": {"$ref": "#/$defs/ruleId"},
+    "applicability": {"enum": ["script", "judged"]},
+    "severity": {"enum": ["error", "warning", "info"]},
+    "since": {"type": "string"},
+    "check": {"$ref": "#/$defs/check"}
+  },
+  "required": ["id", "applicability", "severity"],
+  "allOf": [
+    {
+      "if": {"properties": {"applicability": {"const": "script"}}},
+      "then": {"required": ["check"]},
+      "else": {"not": {"required": ["check"]}}
+    }
+  ],
+  "unevaluatedProperties": false,
+  "$defs": {
+    "ruleId": {"type": "string", "pattern": "^[a-z][a-z0-9-]*(\\.[a-z0-9-]+)+$"},
+    "check": {
+      "type": "object",
+      "properties": {
+        "checker": {"enum": ["skills.frontmatter-name", "skills.body-size"]},
+        "params": {
+          "type": "object",
+          "properties": {"max_lines": {"type": "integer", "minimum": 1}},
+          "additionalProperties": false
+        }
+      },
+      "required": ["checker"],
+      "additionalProperties": false
+    }
+  }
+}

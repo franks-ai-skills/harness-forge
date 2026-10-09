@@ -1,0 +1,4 @@
+id: skills.clear-trigger
+applicability: judged
+severity: warning
+since: 2.10

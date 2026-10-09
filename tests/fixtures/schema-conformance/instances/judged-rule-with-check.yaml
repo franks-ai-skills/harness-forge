@@ -1,0 +1,5 @@
+id: skills.clear-trigger
+applicability: judged
+severity: warning
+check:
+  checker: skills.body-size
