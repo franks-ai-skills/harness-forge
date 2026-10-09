@@ -1,0 +1,94 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:harness-forge:schema:selection",
+  "title": "Selection questions, facts and ordered selection rules",
+  "type": "object",
+  "properties": {
+    "facts": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9_]*$",
+            "maxLength": 100
+          },
+          "scope": {
+            "enum": [
+              "idea",
+              "part"
+            ]
+          },
+          "values": {
+            "type": "array",
+            "items": {
+              "type": [
+                "string",
+                "boolean",
+                "integer"
+              ]
+            },
+            "minItems": 1,
+            "uniqueItems": true
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "scope",
+          "values"
+        ]
+      },
+      "minItems": 1
+    },
+    "questions": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9_]*$",
+            "maxLength": 100
+          },
+          "text": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 500
+          },
+          "choices": {
+            "type": "array",
+            "items": {
+              "type": [
+                "string",
+                "boolean",
+                "integer"
+              ]
+            },
+            "minItems": 2,
+            "uniqueItems": true
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "text",
+          "choices"
+        ]
+      }
+    },
+    "rules": {
+      "type": "array",
+      "items": {
+        "$ref": "urn:harness-forge:schema:rule"
+      }
+    }
+  },
+  "additionalProperties": false,
+  "required": [
+    "facts",
+    "questions",
+    "rules"
+  ]
+}

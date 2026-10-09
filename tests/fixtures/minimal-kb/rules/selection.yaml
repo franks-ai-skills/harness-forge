@@ -1,0 +1,29 @@
+facts:
+  - id: every_time
+    scope: part
+    values: [always, usually]
+  - id: trigger
+    scope: part
+    values: [user, model, event]
+questions:
+  - id: every_time
+    text: Must it hold every time, or may the agent occasionally skip it?
+    choices: [always, usually]
+  - id: trigger
+    text: Who starts it?
+    choices: [user, model, event]
+rules:
+  - id: selection.user-trigger.skill
+    concept: selection
+    kind: should
+    severity: warning
+    check: script
+    checker: selection.match
+    params:
+      when: {all: [{eq: [trigger, user]}, {eq: [every_time, usually]}]}
+      implies: {outcome: harness-only, concept: skills}
+    statement: A user-started procedure that may occasionally be skipped is a skill
+    applies_to: {harnesses: [claude-code, codex]}
+    evidence: Vendor
+    sources: [docs/guide/skills.md#practices]
+    contested: false

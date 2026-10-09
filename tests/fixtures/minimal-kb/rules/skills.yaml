@@ -1,0 +1,28 @@
+- id: skills.description.no-workflow-steps
+  concept: skills
+  kind: must-not
+  severity: warning
+  check: judged
+  statement: The description lists the skill's workflow steps
+  applies_to:
+    harnesses: [claude-code, codex, opencode]
+    versions: {claude-code: ">=2.1.289", codex: ">=0.159.2"}
+    when: []
+  evidence: Practitioner
+  sources:
+    - docs/guide/skills.md#practices
+    - https://raw.githubusercontent.com/obra/superpowers/main/skills/writing-skills/SKILL.md
+  contested: false
+
+- id: skills.description.length
+  concept: skills
+  kind: must
+  severity: error
+  check: script
+  checker: skills.description-length
+  params: {max_chars: 1024}
+  statement: The description is present and within the harness limit
+  applies_to: {harnesses: [claude-code, codex, opencode]}
+  evidence: Vendor
+  sources: [docs/vendors.md]
+  contested: false

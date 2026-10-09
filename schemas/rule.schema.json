@@ -1,0 +1,242 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:harness-forge:schema:rule",
+  "title": "Harness KB or idea rule",
+  "type": "object",
+  "properties": {
+    "id": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9-]*(\\.[a-z0-9-]+)+$",
+      "maxLength": 200
+    },
+    "concept": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9-]*$",
+      "maxLength": 50
+    },
+    "kind": {
+      "enum": [
+        "must",
+        "must-not",
+        "should",
+        "should-not"
+      ]
+    },
+    "severity": {
+      "enum": [
+        "error",
+        "warning"
+      ]
+    },
+    "severity_rationale": {
+      "type": "string",
+      "minLength": 10,
+      "maxLength": 2000
+    },
+    "check": {
+      "enum": [
+        "script",
+        "judged"
+      ]
+    },
+    "checker": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9-]*(\\.[a-z0-9-]+)+$",
+      "maxLength": 200
+    },
+    "params": {
+      "type": "object"
+    },
+    "statement": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2000
+    },
+    "applies_to": {
+      "type": "object",
+      "properties": {
+        "harnesses": {
+          "type": "array",
+          "items": {
+            "enum": [
+              "claude-code",
+              "codex",
+              "opencode"
+            ]
+          },
+          "minItems": 1,
+          "uniqueItems": true
+        },
+        "versions": {
+          "type": "object",
+          "propertyNames": {
+            "enum": [
+              "claude-code",
+              "codex",
+              "opencode"
+            ]
+          },
+          "additionalProperties": {
+            "type": "string",
+            "pattern": "^(>=|<=|>|<|==)[0-9][0-9A-Za-z.+-]*(,\\s*(>=|<=|>|<|==)[0-9][0-9A-Za-z.+-]*)*$"
+          }
+        },
+        "when": {
+          "type": "array",
+          "items": {
+            "$ref": "urn:harness-forge:schema:predicate"
+          }
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "harnesses"
+      ]
+    },
+    "applicability": {
+      "enum": [
+        "script",
+        "judged"
+      ]
+    },
+    "evidence": {
+      "enum": [
+        "Vendor",
+        "Specification",
+        "Research",
+        "Practitioner",
+        "Inference"
+      ]
+    },
+    "sources": {
+      "type": "array",
+      "items": {
+        "anyOf": [
+          {
+            "type": "string",
+            "pattern": "^(?!.*\\.\\.)docs/[A-Za-z0-9._/-]+\\.md(#[a-z0-9-]+)?$",
+            "maxLength": 300
+          },
+          {
+            "type": "string",
+            "pattern": "^https://[^\\s]+$",
+            "maxLength": 2000
+          }
+        ]
+      },
+      "minItems": 1,
+      "uniqueItems": true
+    },
+    "contested": {
+      "type": "boolean"
+    },
+    "positions": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "position": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 20000
+          },
+          "sources": {
+            "type": "array",
+            "items": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "pattern": "^(?!.*\\.\\.)docs/[A-Za-z0-9._/-]+\\.md(#[a-z0-9-]+)?$",
+                  "maxLength": 300
+                },
+                {
+                  "type": "string",
+                  "pattern": "^https://[^\\s]+$",
+                  "maxLength": 2000
+                }
+              ]
+            },
+            "minItems": 1
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "position",
+          "sources"
+        ]
+      },
+      "minItems": 2
+    }
+  },
+  "additionalProperties": false,
+  "required": [
+    "id",
+    "concept",
+    "kind",
+    "severity",
+    "check",
+    "statement",
+    "applies_to",
+    "evidence",
+    "sources",
+    "contested"
+  ],
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "check": {
+            "const": "script"
+          }
+        }
+      },
+      "then": {
+        "required": [
+          "checker"
+        ]
+      },
+      "else": {
+        "not": {
+          "anyOf": [
+            {
+              "required": [
+                "checker"
+              ]
+            },
+            {
+              "required": [
+                "params"
+              ]
+            }
+          ]
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "contested": {
+            "const": true
+          }
+        }
+      },
+      "then": {
+        "required": [
+          "positions"
+        ],
+        "properties": {
+          "severity": {
+            "const": "warning"
+          }
+        }
+      },
+      "else": {
+        "not": {
+          "required": [
+            "positions"
+          ]
+        }
+      }
+    }
+  ]
+}

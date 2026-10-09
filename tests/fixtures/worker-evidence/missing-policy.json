@@ -1,0 +1,26 @@
+{
+  "isolation_status": "not-certified",
+  "role": "source-support",
+  "harness": "claude-code",
+  "harness_version": "2.1.292",
+  "model": "claude-opus-5-5",
+  "launcher": "independent-process",
+  "configuration_digest": "0000000000000000000000000000000000000000000000000000000000000000",
+  "configured_controls": [
+    "tools: none",
+    "strict empty MCP configuration"
+  ],
+  "observed_tools": {
+    "status": "unknown"
+  },
+  "observed_behavior": [
+    "no tool calls observed"
+  ],
+  "unknowns": [
+    "complete tool absence",
+    "context isolation"
+  ],
+  "evidence_refs": [
+    "evals/canaries/results/example.md"
+  ]
+}

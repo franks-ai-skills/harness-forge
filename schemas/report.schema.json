@@ -1,0 +1,300 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:harness-forge:schema:report",
+  "title": "Verification report data",
+  "type": "object",
+  "properties": {
+    "run_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "decision_digest": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "contract_digest": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "kb_version": {
+      "type": "string",
+      "minLength": 1
+    },
+    "overrides": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "rule_id": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9-]*(\\.[a-z0-9-]+)+$",
+            "maxLength": 200
+          },
+          "digest": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$"
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "rule_id",
+          "digest"
+        ]
+      }
+    },
+    "parts": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/part_result"
+      }
+    },
+    "runtime_results": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/runtime_result"
+      }
+    },
+    "worker_evidence": {
+      "type": "array",
+      "items": {
+        "$ref": "urn:harness-forge:schema:worker-evidence"
+      }
+    },
+    "tool_versions": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "string",
+        "minLength": 1
+      }
+    },
+    "file_hashes": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "string",
+        "pattern": "^[0-9a-f]{64}$"
+      }
+    }
+  },
+  "additionalProperties": false,
+  "required": [
+    "run_id",
+    "decision_digest",
+    "contract_digest",
+    "kb_version",
+    "overrides",
+    "parts",
+    "runtime_results",
+    "worker_evidence",
+    "tool_versions",
+    "file_hashes"
+  ],
+  "$defs": {
+    "part_result": {
+      "type": "object",
+      "properties": {
+        "part_id": {
+          "type": "string",
+          "pattern": "^[A-Z][0-9]*$"
+        },
+        "status": {
+          "enum": [
+            "decided",
+            "built",
+            "verified",
+            "blocked"
+          ]
+        },
+        "harness_result": {
+          "enum": [
+            "verified",
+            "not verified",
+            "not applicable",
+            "not checked"
+          ]
+        },
+        "goal_result": {
+          "enum": [
+            "not assessed",
+            "not met",
+            "depends on outside controls",
+            "met by the verified build"
+          ]
+        },
+        "outside_dependencies": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "rule_results": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "rule_id": {
+                "type": "string",
+                "pattern": "^[a-z][a-z0-9-]*(\\.[a-z0-9-]+)+$",
+                "maxLength": 200
+              },
+              "check": {
+                "enum": [
+                  "script",
+                  "judged"
+                ]
+              },
+              "result": {
+                "enum": [
+                  "pass",
+                  "fail",
+                  "not-applicable",
+                  "unresolved",
+                  "error",
+                  "missing"
+                ]
+              },
+              "reason": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 20000
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "rule_id",
+              "check",
+              "result"
+            ]
+          }
+        },
+        "goal_verdict": {
+          "oneOf": [
+            {
+              "type": "object",
+              "properties": {
+                "verdict": {
+                  "enum": [
+                    "met",
+                    "not-met"
+                  ]
+                },
+                "reason": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 20000
+                }
+              },
+              "additionalProperties": false,
+              "required": [
+                "verdict",
+                "reason"
+              ]
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "part_id",
+        "status",
+        "harness_result",
+        "goal_result",
+        "outside_dependencies",
+        "rule_results",
+        "goal_verdict"
+      ]
+    },
+    "runtime_result": {
+      "type": "object",
+      "properties": {
+        "run_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "part_id": {
+          "type": "string",
+          "pattern": "^[A-Z][0-9]*$"
+        },
+        "case_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "prompt": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 20000
+        },
+        "expected": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 20000
+        },
+        "observed_activation": {
+          "oneOf": [
+            {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 20000
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "result": {
+          "enum": [
+            "pass",
+            "fail",
+            "error",
+            "not-run"
+          ]
+        },
+        "reason": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 20000
+        },
+        "file_hashes": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$"
+          }
+        },
+        "harness": {
+          "enum": [
+            "claude-code",
+            "codex"
+          ]
+        },
+        "harness_version": {
+          "type": "string",
+          "minLength": 1
+        },
+        "environment": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 20000
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "run_id",
+        "part_id",
+        "case_id",
+        "prompt",
+        "expected",
+        "observed_activation",
+        "result",
+        "reason",
+        "file_hashes",
+        "harness",
+        "harness_version",
+        "environment"
+      ]
+    }
+  }
+}

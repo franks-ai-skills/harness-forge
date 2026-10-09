@@ -23,4 +23,4 @@ Run tests with the locked dependencies, as in
 [packaging/assessment.md](packaging/assessment.md#reproduce):
 `python3 -m venv .venv`, install `requirements.lock` with
 `--require-hashes --only-binary :all:`, then
-`.venv/bin/python -m unittest discover -s tests -v`.
+`.venv/bin/python -m unittest discover -s tests -t . -v`.

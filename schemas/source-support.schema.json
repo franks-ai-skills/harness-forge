@@ -1,0 +1,70 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:harness-forge:schema:source-support",
+  "title": "Source-support verdicts, one per finding",
+  "type": "object",
+  "properties": {
+    "verdicts": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "finding_id": {
+            "type": "string",
+            "pattern": "^F[0-9]+$"
+          },
+          "verdict": {
+            "enum": [
+              "supported",
+              "unsupported"
+            ]
+          },
+          "reasoning": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 20000
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "finding_id",
+          "verdict",
+          "reasoning"
+        ]
+      },
+      "minItems": 1
+    }
+  },
+  "additionalProperties": false,
+  "required": [
+    "verdicts"
+  ],
+  "$defs": {
+    "verdict": {
+      "type": "object",
+      "properties": {
+        "finding_id": {
+          "type": "string",
+          "pattern": "^F[0-9]+$"
+        },
+        "verdict": {
+          "enum": [
+            "supported",
+            "unsupported"
+          ]
+        },
+        "reasoning": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 20000
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "finding_id",
+        "verdict",
+        "reasoning"
+      ]
+    }
+  }
+}

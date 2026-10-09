@@ -1,0 +1,88 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:harness-forge:schema:review",
+  "title": "Review worker response",
+  "type": "object",
+  "properties": {
+    "run_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "verdicts": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "part_id": {
+            "type": "string",
+            "pattern": "^[A-Z][0-9]*$"
+          },
+          "rule_id": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9-]*(\\.[a-z0-9-]+)+$",
+            "maxLength": 200
+          },
+          "verdict": {
+            "enum": [
+              "pass",
+              "fail",
+              "not-applicable"
+            ]
+          },
+          "reason": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 20000
+          },
+          "citation": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "part_id",
+          "rule_id",
+          "verdict",
+          "reason",
+          "citation"
+        ]
+      }
+    },
+    "goal_verdicts": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "part_id": {
+            "type": "string",
+            "pattern": "^[A-Z][0-9]*$"
+          },
+          "verdict": {
+            "enum": [
+              "met",
+              "not-met"
+            ]
+          },
+          "reason": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 20000
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "part_id",
+          "verdict",
+          "reason"
+        ]
+      }
+    }
+  },
+  "additionalProperties": false,
+  "required": [
+    "run_id",
+    "verdicts",
+    "goal_verdicts"
+  ]
+}

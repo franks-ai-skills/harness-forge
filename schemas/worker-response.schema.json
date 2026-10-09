@@ -1,0 +1,135 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:harness-forge:schema:worker-response",
+  "title": "Structured worker output with its evidence",
+  "type": "object",
+  "properties": {
+    "role": {
+      "enum": [
+        "research",
+        "source-support",
+        "review"
+      ]
+    },
+    "run_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "request_digest": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "status": {
+      "enum": [
+        "completed",
+        "failed",
+        "unavailable"
+      ]
+    },
+    "output": {
+      "type": "object"
+    },
+    "reason": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 20000
+    },
+    "evidence": {
+      "$ref": "urn:harness-forge:schema:worker-evidence"
+    }
+  },
+  "additionalProperties": false,
+  "required": [
+    "role",
+    "run_id",
+    "request_digest",
+    "status",
+    "evidence"
+  ],
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "status": {
+            "const": "completed"
+          }
+        }
+      },
+      "then": {
+        "required": [
+          "output"
+        ]
+      },
+      "else": {
+        "required": [
+          "reason"
+        ],
+        "not": {
+          "required": [
+            "output"
+          ]
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "role": {
+            "const": "research"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "output": {
+            "type": "object",
+            "properties": {
+              "findings": {
+                "type": "array",
+                "items": {
+                  "$ref": "urn:harness-forge:schema:research#/$defs/finding"
+                }
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "findings"
+            ]
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "role": {
+            "const": "source-support"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "output": {
+            "$ref": "urn:harness-forge:schema:source-support"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "role": {
+            "const": "review"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "output": {
+            "$ref": "urn:harness-forge:schema:review"
+          }
+        }
+      }
+    }
+  ]
+}
