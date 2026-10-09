@@ -193,14 +193,17 @@ def load_document(path: Path, schema: str, *, root: Path | None = None) -> Any:
         raise ValueError(f"unknown schema {schema!r}")
     text = _read_bounded(path, root)
     suffix = path.suffix.lower()
-    if suffix in (".yaml", ".yml"):
-        value = parse_yaml(text)
-    elif suffix == ".json":
-        value = parse_json(text)
-    elif suffix == ".md":
-        value = parse_yaml(split_frontmatter(text)[0])
-    else:
-        raise ValueError(f"{path}: unsupported document type {suffix!r}")
+    try:
+        if suffix in (".yaml", ".yml"):
+            value = parse_yaml(text)
+        elif suffix == ".json":
+            value = parse_json(text)
+        elif suffix == ".md":
+            value = parse_yaml(split_frontmatter(text)[0])
+        else:
+            raise ValueError(f"unsupported document type {suffix!r}")
+    except ValueError as error:
+        raise ValueError(f"{path}: {error}") from error
     try:
         validate(value, schema)
     except ValueError as error:
@@ -345,6 +348,7 @@ def validate_kb(root: Path) -> list[str]:
         rule_files[relative] = check.load(relative, "rules") or []
 
     seen: dict[str, str] = {}
+    prerequisites: list[tuple[str, str]] = []
     for relative, rules in rule_files.items():
         for rule in rules:
             rule_id = rule["id"]
@@ -370,6 +374,9 @@ def validate_kb(root: Path) -> list[str]:
                         check.error(f"{owner}: invalid params for {rule['checker']}: {'; '.join(messages)}")
                     elif is_selection:
                         check.check_predicates(owner, [params["when"]], facts)
+                        control = params["implies"].get("control")
+                        if isinstance(control, dict):
+                            prerequisites.extend((owner, rule_id) for rule_id in control.get("prerequisites", []))
             elif is_selection:
                 check.error(f"{owner}: selection rules must use checker selection.match")
             check.check_predicates(owner, rule["applies_to"].get("when", []), facts)
@@ -378,6 +385,10 @@ def validate_kb(root: Path) -> list[str]:
             for position in rule.get("positions", []):
                 for source in position["sources"]:
                     check.check_source(owner, source)
+
+    for owner, rule_id in prerequisites:
+        if rule_id not in seen:
+            check.error(f"{owner}: control prerequisite {rule_id} is not a rule")
 
     coverage = check.load("rules/coverage.yaml", "coverage") or {"pages": []}
     covered_rules = set()

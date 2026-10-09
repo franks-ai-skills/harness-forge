@@ -1,0 +1,33 @@
+# Selection case outcome-reuse (synthetic answers).
+whole_idea:
+  target_set: both
+  reach: repository
+  plan_controls: available
+  opens_prs: false
+  bypass_mode: false
+  untrusted_repo: false
+  lethal_trifecta: false
+answers:
+  event_without_agent: false
+  must_survive_compromise: not-required
+  who_disables: contributor
+  every_time: usually
+  irreversible: false
+  early_feedback: false
+  trigger: model
+  own_context: false
+  external_system: none
+  script_checkable: false
+  job: procedure
+candidates:
+- name: repro-steps
+  source: https://example.com/repro-steps
+  license: MIT
+  maintenance: maintained
+  fit: confirmed
+  concept: skills
+expected:
+  outcome: reuse
+  mechanism: skills
+  controls:
+  - codeowners-agent-config

@@ -137,6 +137,17 @@ class ClosedRulesTest(unittest.TestCase):
             replace_in(root / "rules/selection.yaml", "{eq: [trigger, user]}", "{matches: [trigger, \"u.*\"]}")
             self.assertTrue(validate_kb(root))
 
+    def test_control_prerequisites_must_be_existing_rules(self):
+        with KbCopy() as root:
+            catalog = root / "checks" / "catalog.yaml"
+            replace_in(catalog, "            concept: {type: string, pattern: \"^[a-z][a-z0-9-]*$\"}\n",
+                       "            concept: {type: string, pattern: \"^[a-z][a-z0-9-]*$\"}\n"
+                       "            control:\n              type: object\n              additionalProperties: true\n")
+            replace_in(root / "rules/selection.yaml", "implies: {outcome: harness-only, concept: skills}",
+                       "implies: {control: {id: gate, family: merge rules, prerequisites: [outside.absent.rule], required_for_goal: true}}")
+            errors = validate_kb(root)
+            self.assertTrue(any("outside.absent.rule" in error for error in errors), errors)
+
     def test_coverage_must_reference_existing_rules(self):
         with KbCopy() as root:
             replace_in(root / "rules/coverage.yaml", "rules: [skills.description.length]", "rules: [skills.description.gone]")

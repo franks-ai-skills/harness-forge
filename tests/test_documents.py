@@ -105,6 +105,11 @@ class DocumentLimitsTest(TemporaryFiles):
         with self.assertRaises(ValueError):
             load_document(bad_path, "rule")
 
+    def test_parse_errors_name_the_document(self):
+        path = self.write("rules/anchored.yaml", "- &a {id: x}\n- *a\n")
+        with self.assertRaisesRegex(ValueError, "anchored.yaml"):
+            load_document(path, "rules")
+
     def test_symlinked_documents_are_rejected(self):
         target = self.write("outside.yaml", "[]\n")
         link = self.root / "rules" / "link.yaml"

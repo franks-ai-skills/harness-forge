@@ -85,11 +85,17 @@ class WorkerEvidence:
 
 @dataclass(frozen=True)
 class Recommendation:
-    part_id: str
-    outcome: str
-    concept: str | None
+    """A part's computed recommendation, or the fact that still decides it."""
+
+    outcome: str | None
+    mechanism: str | None
     rule_ids: list[str]
+    pages: list[str]
     alternatives: list[dict] = field(default_factory=list)
+    controls: list[dict] = field(default_factory=list)
+    pros: list[str] = field(default_factory=list)
+    cons: list[str] = field(default_factory=list)
+    reuse: dict | None = None
     pending_question: str | None = None
 
 

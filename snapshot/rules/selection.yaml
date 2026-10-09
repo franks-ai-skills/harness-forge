@@ -1,12 +1,1078 @@
-# Selection facts, questions and rules. Plan task 6 adds the questions and
-# the ordered selection rules; task 5 declares the facts that rules in
-# other files use in applies_to.when.
+# Selection data: declared facts, the questions that confirm them, and
+# ordered selection rules. Within each kind (outcome, concept, control)
+# rules apply in file order; for outcomes and concepts the first match
+# wins, every matching control applies. reuse_confirmed is derived from
+# researched candidates, never asked. Encodes docs/overview.md and the
+# outside-gates intake questions (2026-10-09).
 facts:
-  - id: target_set
-    scope: idea
-    values: [claude-code, codex, both]
-  - id: outcome
-    scope: part
-    values: [harness-only, outside-alongside, outside-instead, reuse, nothing-fits]
-questions: []
-rules: []
+- id: target_set
+  scope: idea
+  values:
+  - claude-code
+  - codex
+  - both
+- id: reach
+  scope: idea
+  values:
+  - repository
+  - user
+  - public
+- id: plan_controls
+  scope: idea
+  values:
+  - available
+  - unavailable
+  - unknown
+- id: opens_prs
+  scope: idea
+  values:
+  - true
+  - false
+- id: bypass_mode
+  scope: idea
+  values:
+  - true
+  - false
+- id: untrusted_repo
+  scope: idea
+  values:
+  - true
+  - false
+- id: lethal_trifecta
+  scope: idea
+  values:
+  - true
+  - false
+- id: job
+  scope: part
+  values:
+  - guidance
+  - procedure
+  - setting
+  - access-control
+  - integration
+  - check
+  - delegate
+  - bundle
+  - run-unattended
+  - one-step
+- id: event_without_agent
+  scope: part
+  values:
+  - true
+  - false
+- id: must_survive_compromise
+  scope: part
+  values:
+  - required
+  - not-required
+- id: who_disables
+  scope: part
+  values:
+  - agent
+  - contributor
+  - admin
+- id: every_time
+  scope: part
+  values:
+  - always
+  - usually
+- id: irreversible
+  scope: part
+  values:
+  - true
+  - false
+- id: early_feedback
+  scope: part
+  values:
+  - true
+  - false
+- id: trigger
+  scope: part
+  values:
+  - user
+  - model
+  - event
+- id: own_context
+  scope: part
+  values:
+  - true
+  - false
+- id: external_system
+  scope: part
+  values:
+  - none
+  - cli
+  - no-cli
+- id: script_checkable
+  scope: part
+  values:
+  - true
+  - false
+- id: reuse_confirmed
+  scope: part
+  values:
+  - true
+  - false
+- id: outcome
+  scope: part
+  values:
+  - harness-only
+  - outside-alongside
+  - outside-instead
+  - reuse
+  - nothing-fits
+questions:
+- id: target_set
+  text: 'Which harnesses should run the result: Claude Code, Codex or both?'
+  choices:
+  - claude-code
+  - codex
+  - both
+- id: reach
+  text: 'Who uses it: this repository, all of your repositories, or the public?'
+  choices:
+  - repository
+  - user
+  - public
+- id: plan_controls
+  text: Are merge rules and required checks available on your hosting plan for this repository's visibility?
+  choices:
+  - available
+  - unavailable
+  - unknown
+- id: opens_prs
+  text: Will an agent open pull requests as part of this idea?
+  choices:
+  - true
+  - false
+- id: bypass_mode
+  text: Will the agent run in a bypass or no-prompt mode?
+  choices:
+  - true
+  - false
+- id: untrusted_repo
+  text: Will the agent work in repositories you do not trust?
+  choices:
+  - true
+  - false
+- id: lethal_trifecta
+  text: Does the agent combine untrusted input with access to secrets and outbound network access?
+  choices:
+  - true
+  - false
+- id: job
+  text: 'What is this part''s one job: standing guidance, a procedure, a harness setting, allowing or refusing actions, access to an external system, a check at an event, delegating a task, bundling a setup
+    for others, running without a person, or a one-step task?'
+  choices:
+  - guidance
+  - procedure
+  - setting
+  - access-control
+  - integration
+  - check
+  - delegate
+  - bundle
+  - run-unattended
+  - one-step
+- id: event_without_agent
+  text: Does the event happen without an agent, such as a merge, deploy, publish or credential scope?
+  choices:
+  - true
+  - false
+- id: must_survive_compromise
+  text: Must it still hold if the agent is prompt-injected or its configuration is changed by a pull request?
+  choices:
+  - required
+  - not-required
+- id: who_disables
+  text: 'Who may turn it off: the agent, any contributor, or only an admin?'
+  choices:
+  - agent
+  - contributor
+  - admin
+- id: every_time
+  text: Must it hold every time, or may the agent occasionally skip it?
+  choices:
+  - always
+  - usually
+- id: irreversible
+  text: Is the action irreversible, about money, or does it publish or disclose data?
+  choices:
+  - true
+  - false
+- id: early_feedback
+  text: Do you want earlier feedback than an outside gate gives?
+  choices:
+  - true
+  - false
+- id: trigger
+  text: 'Who starts it: the user, the model, or an event?'
+  choices:
+  - user
+  - model
+  - event
+- id: own_context
+  text: Does it need its own context, other tools or another model?
+  choices:
+  - true
+  - false
+- id: external_system
+  text: Does it reach an external system, and does a CLI exist for it?
+  choices:
+  - none
+  - cli
+  - no-cli
+- id: script_checkable
+  text: Can a script decide it without judgment?
+  choices:
+  - true
+  - false
+rules:
+- id: selection.outcome.reuse
+  concept: selection
+  kind: should
+  severity: warning
+  check: script
+  checker: selection.match
+  params:
+    when:
+      eq:
+      - reuse_confirmed
+      - true
+    implies:
+      outcome: reuse
+  statement: A researched existing solution with confirmed fit, license and maintenance is reused instead of built
+  applies_to:
+    harnesses:
+    - claude-code
+    - codex
+  evidence: Inference
+  sources:
+  - docs/guide/skills.md#security
+  - docs/best-practices/skills.md#security
+  contested: false
+- id: selection.outcome.one-step
+  concept: selection
+  kind: should
+  severity: warning
+  check: script
+  checker: selection.match
+  params:
+    when:
+      eq:
+      - job
+      - one-step
+    implies:
+      outcome: nothing-fits
+  statement: A one-step task the model handles alone needs no mechanism
+  applies_to:
+    harnesses:
+    - claude-code
+    - codex
+  evidence: Vendor
+  sources:
+  - docs/overview.md#skills
+  - docs/guide/skills.md#when-to-use-it-and-when-not
+  contested: false
+- id: selection.outcome.guarantee-unavailable
+  concept: selection
+  kind: should
+  severity: warning
+  check: script
+  checker: selection.match
+  params:
+    when:
+      all:
+      - any:
+        - eq:
+          - must_survive_compromise
+          - required
+        - eq:
+          - who_disables
+          - admin
+        - eq:
+          - event_without_agent
+          - true
+      - eq:
+        - plan_controls
+        - unavailable
+    implies:
+      outcome: nothing-fits
+  statement: A guarantee that needs an outside control unavailable on the user's plan is reported as nothing fits
+  applies_to:
+    harnesses:
+    - claude-code
+    - codex
+  evidence: Inference
+  sources:
+  - docs/guide/outside-gates.md#four-outcomes-from-six-intake-questions
+  - docs/guide/outside-gates.md#seven-conditions-turn-a-control-into-a-gate
+  contested: false
+- id: selection.outcome.event-with-feedback
+  concept: selection
+  kind: should
+  severity: warning
+  check: script
+  checker: selection.match
+  params:
+    when:
+      all:
+      - eq:
+        - event_without_agent
+        - true
+      - eq:
+        - early_feedback
+        - true
+    implies:
+      outcome: outside-alongside
+  statement: An event that happens without an agent needs an outside gate; wanted earlier feedback adds an advisory harness mirror
+  applies_to:
+    harnesses:
+    - claude-code
+    - codex
+  evidence: Inference
+  sources:
+  - docs/guide/outside-gates.md#four-outcomes-from-six-intake-questions
+  contested: false
+- id: selection.outcome.event-without-agent
+  concept: selection
+  kind: should
+  severity: warning
+  check: script
+  checker: selection.match
+  params:
+    when:
+      eq:
+      - event_without_agent
+      - true
+    implies:
+      outcome: outside-instead
+  statement: An event that happens without an agent is enforced by an outside gate; a harness build adds no enforcement
+  applies_to:
+    harnesses:
+    - claude-code
+    - codex
+  evidence: Inference
+  sources:
+  - docs/guide/outside-gates.md#four-outcomes-from-six-intake-questions
+  contested: false
+- id: selection.outcome.guarantee
+  concept: selection
+  kind: should
+  severity: warning
+  check: script
+  checker: selection.match
+  params:
+    when:
+      any:
+      - eq:
+        - must_survive_compromise
+        - required
+      - eq:
+        - who_disables
+        - admin
+      - eq:
+        - irreversible
+        - true
+    implies:
+      outcome: outside-alongside
+  statement: A rule that must survive a compromised agent, that only an admin may turn off, or that guards an irreversible action needs an outside control alongside the harness mechanism
+  applies_to:
+    harnesses:
+    - claude-code
+    - codex
+  evidence: Inference
+  sources:
+  - docs/guide/outside-gates.md#four-outcomes-from-six-intake-questions
+  contested: false
+- id: selection.outcome.must-hold-judgment
+  concept: selection
+  kind: should
+  severity: warning
+  check: script
+  checker: selection.match
+  params:
+    when:
+      all:
+      - eq:
+        - every_time
+        - always
+      - eq:
+        - script_checkable
+        - false
+      - in:
+        - job
+        - - guidance
+          - procedure
+    implies:
+      outcome: nothing-fits
+  statement: A rule that must hold every time but needs judgment has no enforcing harness mechanism
+  applies_to:
+    harnesses:
+    - claude-code
+    - codex
+  evidence: Vendor
+  sources:
+  - docs/overview.md#how-the-concepts-fit-together
+  - docs/overview.md#hooks
+  contested: false
+- id: selection.outcome.harness-only
+  concept: selection
+  kind: should
+  severity: warning
+  check: script
+  checker: selection.match
+  params:
+    when:
+      in:
+      - job
+      - - guidance
+        - procedure
+        - setting
+        - access-control
+        - integration
+        - check
+        - delegate
+        - bundle
+        - run-unattended
+    implies:
+      outcome: harness-only
+  statement: Otherwise a harness mechanism alone fits
+  applies_to:
+    harnesses:
+    - claude-code
+    - codex
+  evidence: Inference
+  sources:
+  - docs/guide/outside-gates.md#four-outcomes-from-six-intake-questions
+  contested: false
+- id: selection.mechanism.early-feedback-mirror
+  concept: selection
+  kind: should
+  severity: warning
+  check: script
+  checker: selection.match
+  params:
+    when:
+      all:
+      - eq:
+        - event_without_agent
+        - true
+      - eq:
+        - early_feedback
+        - true
+    implies:
+      concept: hooks
+    pros:
+    - Runs every time, whatever the model decides
+    - Gives feedback before the gate
+    cons:
+    - 'Advisory: the agent or a pull request can change it'
+  statement: An advisory hook mirrors the outside gate's check for earlier feedback
+  applies_to:
+    harnesses:
+    - claude-code
+    - codex
+  evidence: Vendor
+  sources:
+  - docs/overview.md#hooks
+  - docs/guide/hooks.md#when-to-use-it-and-when-not
+  contested: false
+- id: selection.mechanism.must-hold-access
+  concept: selection
+  kind: should
+  severity: warning
+  check: script
+  checker: selection.match
+  params:
+    when:
+      all:
+      - eq:
+        - every_time
+        - always
+      - eq:
+        - job
+        - access-control
+    implies:
+      concept: permissions-and-sandbox
+    pros:
+    - A deny in any scope wins in both leads
+    - The sandbox limits executed commands
+    cons:
+    - Confines shell commands only, not MCP servers or hooks
+  statement: A capability that must never be used, or must be approved first, is a permission rule
+  applies_to:
+    harnesses:
+    - claude-code
+    - codex
+  evidence: Vendor
+  sources:
+  - docs/overview.md#permissions-and-sandbox
+  - docs/guide/permissions-and-sandbox.md#when-to-use-it-and-when-not
+  contested: false
+- id: selection.mechanism.must-hold-check
+  concept: selection
+  kind: should
+  severity: warning
+  check: script
+  checker: selection.match
+  params:
+    when:
+      all:
+      - eq:
+        - every_time
+        - always
+      - eq:
+        - script_checkable
+        - true
+    implies:
+      concept: hooks
+    pros:
+    - Runs every time, whatever the model decides
+    cons:
+    - Not a hard security limit
+    - A slow hook delays every turn
+  statement: A rule that must hold every time and that a script can check is a hook
+  applies_to:
+    harnesses:
+    - claude-code
+    - codex
+  evidence: Vendor
+  sources:
+  - docs/overview.md#hooks
+  - docs/guide/hooks.md#when-to-use-it-and-when-not
+  contested: false
+- id: selection.mechanism.fresh-context
+  concept: selection
+  kind: should
+  severity: warning
+  check: script
+  checker: selection.match
+  params:
+    when:
+      eq:
+      - own_context
+      - true
+    implies:
+      concept: subagents
+    pros:
+    - Own context window; returns one result
+    - Narrower tools or another model
+    cons:
+    - Costs more tokens
+    - Each hand-off loses detail
+  statement: Work that needs its own context, other tools or another model, such as a fresh-context review, is a subagent
+  applies_to:
+    harnesses:
+    - claude-code
+    - codex
+  evidence: Vendor
+  sources:
+  - docs/overview.md#subagents
+  - docs/guide/subagents.md#when-to-use-it-and-when-not
+  contested: false
+- id: selection.mechanism.guidance
+  concept: selection
+  kind: should
+  severity: warning
+  check: script
+  checker: selection.match
+  params:
+    when:
+      eq:
+      - job
+      - guidance
+    implies:
+      concept: instructions
+    pros:
+    - Loaded into every session
+    cons:
+    - Costs context every session
+    - Advisory, not enforcement
+  statement: Short, stable guidance every session needs is an instruction file
+  applies_to:
+    harnesses:
+    - claude-code
+    - codex
+  evidence: Vendor
+  sources:
+  - docs/overview.md#instructions
+  - docs/guide/instructions.md#when-to-use-it-and-when-not
+  contested: false
+- id: selection.mechanism.user-procedure
+  concept: selection
+  kind: should
+  severity: warning
+  check: script
+  checker: selection.match
+  params:
+    when:
+      all:
+      - eq:
+        - job
+        - procedure
+      - any:
+        - eq:
+          - trigger
+          - user
+        - eq:
+          - irreversible
+          - true
+    implies:
+      concept: commands
+    pros:
+    - Only the user starts it
+    - No catalog cost
+    cons:
+    - Not applied on the model's own initiative
+  statement: A procedure with side effects or timing the model must not decide is a user-invoked skill
+  applies_to:
+    harnesses:
+    - claude-code
+    - codex
+  evidence: Vendor
+  sources:
+  - docs/overview.md#commands
+  - docs/guide/commands.md#when-to-use-it-and-when-not
+  contested: false
+- id: selection.mechanism.procedure
+  concept: selection
+  kind: should
+  severity: warning
+  check: script
+  checker: selection.match
+  params:
+    when:
+      eq:
+      - job
+      - procedure
+    implies:
+      concept: skills
+    pros:
+    - Loaded only when needed
+    - Can bundle tested scripts
+    cons:
+    - Occasional missed activation
+    - Advisory, not enforcement
+  statement: A recurring procedure or knowledge needed only sometimes is a skill
+  applies_to:
+    harnesses:
+    - claude-code
+    - codex
+  evidence: Vendor
+  sources:
+  - docs/overview.md#skills
+  - docs/guide/skills.md#when-to-use-it-and-when-not
+  contested: false
+- id: selection.mechanism.setting
+  concept: selection
+  kind: should
+  severity: warning
+  check: script
+  checker: selection.match
+  params:
+    when:
+      eq:
+      - job
+      - setting
+    implies:
+      concept: configuration
+    pros:
+    - Fixed precedence; stricter safety values win
+    cons:
+    - Settings files are not shared between harnesses
+    - A pull request can change committed config
+  statement: A harness setting goes into the configuration layer that owns it
+  applies_to:
+    harnesses:
+    - claude-code
+    - codex
+  evidence: Vendor
+  sources:
+  - docs/overview.md#configuration
+  - docs/guide/configuration.md#when-to-use-it-and-when-not
+  contested: false
+- id: selection.mechanism.access-control
+  concept: selection
+  kind: should
+  severity: warning
+  check: script
+  checker: selection.match
+  params:
+    when:
+      eq:
+      - job
+      - access-control
+    implies:
+      concept: permissions-and-sandbox
+    pros:
+    - A deny in any scope wins in both leads
+    cons:
+    - Command patterns alone do not stop exfiltration
+  statement: Allowing, asking or refusing actions is a permission rule
+  applies_to:
+    harnesses:
+    - claude-code
+    - codex
+  evidence: Vendor
+  sources:
+  - docs/overview.md#permissions-and-sandbox
+  - docs/guide/permissions-and-sandbox.md#when-to-use-it-and-when-not
+  contested: false
+- id: selection.mechanism.integration-cli
+  concept: selection
+  kind: should
+  severity: warning
+  check: script
+  checker: selection.match
+  params:
+    when:
+      all:
+      - eq:
+        - job
+        - integration
+      - eq:
+        - external_system
+        - cli
+    implies:
+      concept: skills
+    pros:
+    - The CLI stays inside the sandbox
+    - Output can be filtered
+    cons:
+    - Needs a sandboxed shell
+  statement: Access to a system with a known CLI is the CLI plus a skill
+  applies_to:
+    harnesses:
+    - claude-code
+    - codex
+  evidence: Vendor
+  sources:
+  - docs/overview.md#skills
+  - docs/guide/skills.md#when-to-use-it-and-when-not
+  - docs/overview.md#mcp
+  contested: false
+- id: selection.mechanism.integration
+  concept: selection
+  kind: should
+  severity: warning
+  check: script
+  checker: selection.match
+  params:
+    when:
+      eq:
+      - job
+      - integration
+    implies:
+      concept: mcp
+    pros:
+    - Per-user OAuth and stateful integrations
+    cons:
+    - Runs outside the command sandbox
+    - Every result passes through the context
+  statement: Access to an external system without a usable CLI is an MCP server
+  applies_to:
+    harnesses:
+    - claude-code
+    - codex
+  evidence: Vendor
+  sources:
+  - docs/overview.md#mcp
+  - docs/guide/mcp.md#when-to-use-it-and-when-not
+  contested: false
+- id: selection.mechanism.check
+  concept: selection
+  kind: should
+  severity: warning
+  check: script
+  checker: selection.match
+  params:
+    when:
+      eq:
+      - job
+      - check
+    implies:
+      concept: hooks
+    pros:
+    - Runs every time at the event
+    cons:
+    - Not a hard security limit
+  statement: A check at a lifecycle event is a hook
+  applies_to:
+    harnesses:
+    - claude-code
+    - codex
+  evidence: Vendor
+  sources:
+  - docs/overview.md#hooks
+  - docs/guide/hooks.md#when-to-use-it-and-when-not
+  contested: false
+- id: selection.mechanism.delegate
+  concept: selection
+  kind: should
+  severity: warning
+  check: script
+  checker: selection.match
+  params:
+    when:
+      eq:
+      - job
+      - delegate
+    implies:
+      concept: subagents
+    pros:
+    - Own context window
+    cons:
+    - Costs more tokens
+  statement: Delegating a task to a separate context is a subagent
+  applies_to:
+    harnesses:
+    - claude-code
+    - codex
+  evidence: Vendor
+  sources:
+  - docs/overview.md#subagents
+  - docs/guide/subagents.md#when-to-use-it-and-when-not
+  contested: false
+- id: selection.mechanism.bundle
+  concept: selection
+  kind: should
+  severity: warning
+  check: script
+  checker: selection.match
+  params:
+    when:
+      eq:
+      - job
+      - bundle
+    implies:
+      concept: plugins
+    pros:
+    - Versioned and installable in many places
+    cons:
+    - Release overhead
+    - Decouples the setup from the code
+  statement: A setup that a second repository or team needs is a plugin
+  applies_to:
+    harnesses:
+    - claude-code
+    - codex
+  evidence: Vendor
+  sources:
+  - docs/overview.md#plugins
+  - docs/guide/plugins.md#when-to-use-it-and-when-not
+  contested: false
+- id: selection.mechanism.unattended
+  concept: selection
+  kind: should
+  severity: warning
+  check: script
+  checker: selection.match
+  params:
+    when:
+      eq:
+      - job
+      - run-unattended
+    implies:
+      concept: automation
+    pros:
+    - Headless, CI, schedules and parallel worktrees
+    cons:
+    - Every unattended run needs explicit permissions and limits
+  statement: Running the agent without a person in the session is automation
+  applies_to:
+    harnesses:
+    - claude-code
+    - codex
+  evidence: Vendor
+  sources:
+  - docs/overview.md#automation
+  - docs/guide/automation.md#when-to-use-it-and-when-not
+  contested: false
+- id: selection.control.configuration-protection
+  concept: selection
+  kind: should
+  severity: warning
+  check: script
+  checker: selection.match
+  params:
+    when:
+      all:
+      - not:
+          eq:
+          - job
+          - one-step
+      - not:
+          all:
+          - eq:
+            - event_without_agent
+            - true
+          - eq:
+            - early_feedback
+            - false
+    implies:
+      control:
+        id: codeowners-agent-config
+        family: merge rules
+        prerequisites:
+        - outside.codeowners.agent-config
+        - outside.ci.workflow-protected
+        required_for_goal: false
+  statement: Every built harness setup recommends code owners for the agent's own configuration files with required code-owner review
+  applies_to:
+    harnesses:
+    - claude-code
+    - codex
+  evidence: Inference
+  sources:
+  - docs/guide/outside-gates.md#branch-protection-and-merge-rules-the-gate-is-separation-of-identities
+  contested: false
+- id: selection.control.merge-rule-for-agent-prs
+  concept: selection
+  kind: should
+  severity: warning
+  check: script
+  checker: selection.match
+  params:
+    when:
+      eq:
+      - opens_prs
+      - true
+    implies:
+      control:
+        id: merge-rules
+        family: merge rules
+        prerequisites:
+        - outside.merge.no-agent-bypass
+        - outside.merge.requester-cannot-approve
+        - outside.gate.real-refs
+        - outside.gate.plan-enforced
+        - outside.gate.periodic-verification
+        required_for_goal: false
+  statement: A recommendation in which an agent opens pull requests includes a merge rule
+  applies_to:
+    harnesses:
+    - claude-code
+    - codex
+  evidence: Inference
+  sources:
+  - docs/guide/outside-gates.md#four-outcomes-from-six-intake-questions
+  contested: false
+- id: selection.control.event-gate
+  concept: selection
+  kind: should
+  severity: warning
+  check: script
+  checker: selection.match
+  params:
+    when:
+      all:
+      - not:
+          eq:
+          - job
+          - one-step
+      - eq:
+        - event_without_agent
+        - true
+    implies:
+      control:
+        id: event-gate
+        family: merge rules or required checks
+        prerequisites:
+        - outside.gate.real-refs
+        - outside.merge.no-agent-bypass
+        - outside.merge.requester-cannot-approve
+        - outside.ci.required-on-ref
+        - outside.gate.plan-enforced
+        - outside.gate.periodic-verification
+        required_for_goal: true
+  statement: An event that happens without an agent is gated outside the harness
+  applies_to:
+    harnesses:
+    - claude-code
+    - codex
+  evidence: Inference
+  sources:
+  - docs/guide/outside-gates.md#four-outcomes-from-six-intake-questions
+  - docs/guide/outside-gates.md#seven-conditions-turn-a-control-into-a-gate
+  contested: false
+- id: selection.control.guarantee-gate
+  concept: selection
+  kind: should
+  severity: warning
+  check: script
+  checker: selection.match
+  params:
+    when:
+      all:
+      - not:
+          eq:
+          - job
+          - one-step
+      - any:
+        - eq:
+          - must_survive_compromise
+          - required
+        - eq:
+          - who_disables
+          - admin
+        - eq:
+          - irreversible
+          - true
+    implies:
+      control:
+        id: compromise-resistant-gate
+        family: outside gate
+        prerequisites:
+        - outside.gate.real-refs
+        - outside.merge.no-agent-bypass
+        - outside.gate.no-broader-bypass
+        - outside.ci.workflow-protected
+        - outside.gate.plan-enforced
+        - outside.gate.periodic-verification
+        required_for_goal: true
+  statement: A guarantee that must survive a compromised agent is enforced by a control the agent's identity cannot reach
+  applies_to:
+    harnesses:
+    - claude-code
+    - codex
+  evidence: Inference
+  sources:
+  - docs/guide/outside-gates.md#four-outcomes-from-six-intake-questions
+  - docs/guide/outside-gates.md#seven-conditions-turn-a-control-into-a-gate
+  contested: false
+- id: selection.control.isolation
+  concept: selection
+  kind: should
+  severity: warning
+  check: script
+  checker: selection.match
+  params:
+    when:
+      any:
+      - eq:
+        - bypass_mode
+        - true
+      - eq:
+        - untrusted_repo
+        - true
+      - eq:
+        - lethal_trifecta
+        - true
+    implies:
+      control:
+        id: outer-isolation
+        family: isolation
+        prerequisites:
+        - outside.gate.no-broader-bypass
+        required_for_goal: false
+  statement: Bypass modes, untrusted repositories, or untrusted input with secrets and egress add an isolation recommendation
+  applies_to:
+    harnesses:
+    - claude-code
+    - codex
+  evidence: Inference
+  sources:
+  - docs/guide/outside-gates.md#four-outcomes-from-six-intake-questions
+  contested: false

@@ -23,3 +23,21 @@ def evaluate(predicate: dict, facts: dict) -> bool:
     if operator == "in":
         return facts[fact] in value
     raise ValueError(f"unknown predicate operator {operator!r}")
+
+
+def evaluate_partial(predicate: dict, facts: dict) -> bool | None:
+    """Three-valued evaluation: None when unconfirmed facts decide the result."""
+    (operator, operand), = predicate.items()
+    if operator in ("all", "any"):
+        results = [evaluate_partial(item, facts) for item in operand]
+        decisive = operator == "any"
+        if decisive in results:
+            return decisive
+        return None if None in results else not decisive
+    if operator == "not":
+        result = evaluate_partial(operand, facts)
+        return None if result is None else not result
+    fact, value = operand
+    if fact not in facts:
+        return None
+    return facts[fact] == value if operator == "eq" else facts[fact] in value

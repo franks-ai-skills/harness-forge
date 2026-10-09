@@ -78,8 +78,8 @@ checkers:
       required: [heading, status]
       additionalProperties: false
   - id: selection.match
-    version: 1.0.0
-    summary: Selection rule; its predicate over confirmed answers implies an outcome or concept.
+    version: 1.1.0
+    summary: Selection rule. Its predicate over confirmed answers implies an outcome, a mechanism concept or an outside control; pros and cons explain the choice. Rules apply in file order within each kind; the first match wins.
     params:
       type: object
       properties:
@@ -88,8 +88,20 @@ checkers:
           type: object
           properties:
             outcome: {enum: [harness-only, outside-alongside, outside-instead, reuse, nothing-fits]}
-            concept: {type: string, pattern: "^[a-z][a-z0-9-]*$"}
+            concept: {enum: [instructions, configuration, permissions-and-sandbox, mcp, skills, commands, subagents, hooks, plugins, automation]}
+            control:
+              type: object
+              properties:
+                id: {type: string, pattern: "^[a-z0-9][a-z0-9-]*$"}
+                family: {type: string, minLength: 1}
+                prerequisites: {type: array, items: {type: string, pattern: "^outside\\.[a-z0-9-]+(\\.[a-z0-9-]+)+$"}, minItems: 1}
+                required_for_goal: {type: boolean}
+              required: [id, family, prerequisites, required_for_goal]
+              additionalProperties: false
           minProperties: 1
+          maxProperties: 1
           additionalProperties: false
+        pros: {type: array, items: {type: string, minLength: 1}}
+        cons: {type: array, items: {type: string, minLength: 1}}
       required: [when, implies]
       additionalProperties: false
