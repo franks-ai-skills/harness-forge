@@ -61,10 +61,10 @@
   severity: warning
   check: judged
   applicability: judged
-  statement: A procedure that sends data to an external service, a search or a tool names the allowed destinations and passes only the fields the task needs, never private data or text taken from fetched or untrusted content
+  statement: A procedure that sends data to an external service, a search or a tool limits each call to the destinations and fields the task authorizes, and fetched or other untrusted content cannot add destinations, fields or actions
   applies_to: {harnesses: [claude-code, codex, opencode]}
-  evidence: Vendor
+  evidence: Inference
   sources:
     - docs/guide/security.md#data-access-and-outbound-channels
-    - https://developers.openai.com/api/docs/guides/deep-research
+    - https://developers.openai.com/api/docs/guides/deep-research#prompt-injection-and-exfiltration
   contested: false

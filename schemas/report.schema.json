@@ -54,6 +54,77 @@
       },
       "uniqueItems": true
     },
+    "whole_idea": {
+      "type": "object",
+      "properties": {
+        "targets": {
+          "type": "array",
+          "items": {
+            "enum": [
+              "claude-code",
+              "codex"
+            ]
+          },
+          "minItems": 1,
+          "uniqueItems": true
+        },
+        "reach": {
+          "enum": [
+            "repository",
+            "user",
+            "public"
+          ]
+        },
+        "hosting": {
+          "type": "object",
+          "properties": {
+            "platform": {
+              "type": "string",
+              "minLength": 1
+            },
+            "plan": {
+              "type": "string",
+              "minLength": 1
+            },
+            "visibility": {
+              "enum": [
+                "public",
+                "private",
+                "unknown"
+              ]
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "platform",
+            "plan",
+            "visibility"
+          ]
+        },
+        "facts": {
+          "type": "object",
+          "propertyNames": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9_]*$",
+            "maxLength": 100
+          },
+          "additionalProperties": {
+            "type": [
+              "string",
+              "boolean",
+              "integer"
+            ]
+          }
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "targets",
+        "reach",
+        "hosting",
+        "facts"
+      ]
+    },
     "answers": {
       "type": "object",
       "propertyNames": {
@@ -160,6 +231,7 @@
     "rules_digest",
     "revision_digest",
     "confirmed_parts",
+    "whole_idea",
     "answers",
     "scope",
     "overrides",

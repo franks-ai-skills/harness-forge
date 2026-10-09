@@ -28,7 +28,7 @@ GATE = {"control": "event-gate", "prerequisites": ["outside.merge.no-agent-bypas
 def build_files(record, part_id="A"):
     contract = render_contract(record, REVISION, [], worker_evidence=EVIDENCE)
     relay = {"choice": "confirm", "displayed_digest": contract.digest, "part_ids": [part_id], "run_id": "run-1"}
-    planned = plan_skill(record, part_id, REVISION, RULES, contract=contract,
+    planned = plan_skill(record, part_id, REVISION, RULES, worker_evidence=EVIDENCE,
                          confirmation=confirm_contract(contract, relay, run_id="run-1"),
                          description=DESCRIPTION, procedure=PROCEDURE)
     files = {key: value.encode() for key, value in planned.items() if not key.startswith(".claude/")}
@@ -71,7 +71,7 @@ class Scenario:
         key = canonical_digest({"record": record.record, "files": {k: v.decode("latin-1") for k, v in self.files.items()},
                                 "symlinks": self.symlinks, "confirmed": list(confirmed)})
         if key not in _PREPARED:
-            _PREPARED[key] = prepare_run(record, self.files, RULES, self.confirmation, contract=self.contract,
+            _PREPARED[key] = prepare_run(record, self.files, RULES, self.confirmation,
                                          symlinks=self.symlinks, revision=REVISION, kb_version="0.1.0",
                                          worker_evidence=EVIDENCE)
         self.run = copy.deepcopy(_PREPARED[key])
@@ -140,7 +140,7 @@ class PrecedenceTest(unittest.TestCase):
         contract = render_contract(record, REVISION, [], worker_evidence=EVIDENCE)
         relay = {"choice": "confirm", "displayed_digest": contract.digest, "part_ids": ["A"], "run_id": "run-1"}
         scenario.confirmation = confirm_contract(contract, relay, run_id="run-1")
-        scenario.run = prepare_run(record, scenario.files, RULES, scenario.confirmation, contract=contract, symlinks=symlinks,
+        scenario.run = prepare_run(record, scenario.files, RULES, scenario.confirmation, symlinks=symlinks,
                                    revision=REVISION, kb_version="0.1.0", worker_evidence=EVIDENCE)
         assert_result(self, scenario.finish()["A"], "verified", "met by the verified build")
 

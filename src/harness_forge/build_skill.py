@@ -15,8 +15,8 @@ from pathlib import Path
 import yaml
 
 from harness_forge.checks.skills import NAME, PLACEHOLDER
-from harness_forge.contracts import KIND_LABELS, contract_parts
-from harness_forge.models import AcceptedRevision, Confirmation, Contract, Decision, PartResult, Rule
+from harness_forge.contracts import KIND_LABELS, confirmation_problem
+from harness_forge.models import AcceptedRevision, Confirmation, Decision, PartResult, Rule
 
 TEMPLATES = Path(__file__).resolve().parents[2] / "templates" / "skill"
 BUILDABLE = ("skills", "commands")
@@ -68,18 +68,15 @@ def _rule_line(rule: dict) -> str:
 
 
 def _check_bindings(decision: Decision, part_id: str, revision: AcceptedRevision,
-                    contract: Contract | None, confirmation: Confirmation | None) -> None:
-    if confirmation is None or contract is None:
-        raise ValueError("building needs the contract confirmed in this session")
+                    confirmation: Confirmation | None, worker_evidence: list[dict] | tuple) -> None:
+    problem = confirmation_problem(confirmation, decision, revision, [], worker_evidence)
+    if problem:
+        raise ValueError(f"building needs the current contract confirmed in this session: {problem}")
     if part_id not in confirmation.part_ids:
         raise ValueError(f"part {part_id} is not confirmed in this session")
-    if confirmation.contract_digest != contract.digest:
-        raise ValueError("the confirmation is for another contract")
     recorded = decision.record.get("accepted_revision") or {}
     if recorded.get("digest") != revision.digest:
         raise ValueError("the decision record names another accepted revision")
-    if contract.parts != contract_parts(decision, revision) or contract.overrides:
-        raise ValueError("the confirmed contract no longer describes the current decision and revision")
 
 
 def plan_skill(
@@ -88,8 +85,8 @@ def plan_skill(
     revision: AcceptedRevision,
     rules: list[Rule],
     *,
-    contract: Contract | None = None,
     confirmation: Confirmation | None = None,
+    worker_evidence: list[dict] | tuple = (),
     description: str = "",
     procedure: str = "",
 ) -> dict[str, str]:
@@ -99,7 +96,7 @@ def plan_skill(
         raise BuilderUnavailable("a reused artifact stays read-only; it is checked once installed, never built")
     if part["outcome"] not in ("harness-only", "outside-alongside") or part["chosen"] not in BUILDABLE:
         raise BuilderUnavailable(f"builder unavailable for {part['chosen'] or part['outcome']} in this release")
-    _check_bindings(decision, part_id, revision, contract, confirmation)
+    _check_bindings(decision, part_id, revision, confirmation, worker_evidence)
 
     name = part["slug"]
     if not NAME.match(name) or len(name) > _limit(rules, "skills.name.format", "max_chars", 64):

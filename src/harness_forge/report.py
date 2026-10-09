@@ -18,7 +18,7 @@ def report_data(run: VerificationRun, results: list[PartResult]) -> dict:
     data = {
         "run_id": run.run_id, "decision_digest": run.decision_digest, "contract_digest": run.contract_digest or None,
         "kb_version": run.kb_version or "unknown", "idea_digest": frozen["idea"], "rules_digest": frozen["rules"],
-        "revision_digest": frozen["revision"], "confirmed_parts": list(run.confirmed_parts),
+        "revision_digest": frozen["revision"], "confirmed_parts": list(run.confirmed_parts), "whole_idea": run.whole_idea,
         "answers": {part["id"]: part["answers"] for part in run.parts}, "scope": run.scope, "overrides": [],
         "parts": [result.to_dict() for result in results],
         "runtime_results": [asdict(result) for result in run.runtime_results],
@@ -39,7 +39,7 @@ def render_report(run: VerificationRun, results: list[PartResult]) -> str:
         f"- Contract digest: {run.contract_digest or 'none (' + (run.unconfirmed_reason or 'no live confirmation') + ')'}",
         f"- Confirmed parts: {', '.join(run.confirmed_parts) or 'none'}",
         f"- Decision record digest: {run.decision_digest}",
-        f"- Whole-idea facts digest: {frozen['idea']}",
+        f"- Whole-idea answers and targets: `{json.dumps(run.whole_idea, sort_keys=True)}` (digest {frozen['idea']})",
         f"- Rule content digest: {frozen['rules']}",
         f"- Accepted Idea KB revision: {frozen['revision'] or 'none'}",
         f"- Review scope: {run.scope}",

@@ -15,10 +15,10 @@ from dataclasses import asdict
 
 from harness_forge.checks import REGISTRY
 from harness_forge.checks.runner import evaluate_applicability, run_check
-from harness_forge.contracts import contract_parts
+from harness_forge.contracts import confirmation_problem
 from harness_forge.documents import canonical_digest, validate
 from harness_forge.models import (
-    AcceptedRevision, CheckResult, Confirmation, Contract, Decision, PartResult, ReviewResponse, Rule, RuntimeResult,
+    AcceptedRevision, CheckResult, Confirmation, Decision, PartResult, ReviewResponse, Rule, RuntimeResult,
     VerificationRun,
 )
 from harness_forge.predicates import UnknownFact
@@ -88,21 +88,8 @@ def bound_inputs(
     }
 
 
-def _confirmed_parts(decision: Decision, revision: AcceptedRevision | None, confirmation: Confirmation | None,
-                     contract: Contract | None) -> tuple[list[str], str]:
-    """Parts a live confirmation covers, only if its contract still describes the decision."""
-    if confirmation is None:
-        return [], "no live confirmation in this session"
-    if contract is None or confirmation.contract_digest != contract.digest:
-        return [], "the confirmation does not match a displayed contract"
-    if contract.overrides or contract.parts != contract_parts(decision, revision):
-        return [], "the confirmed contract no longer describes the current decision"
-    return sorted(confirmation.part_ids), ""
-
-
 def prepare_run(
     decision: Decision, files: dict[str, bytes], rules: list[Rule], confirmation: Confirmation | None, *,
-    contract: Contract | None = None,
     symlinks: dict[str, str] | None = None, revision: AcceptedRevision | None = None,
     overrides: list[dict] | tuple = (), kb_version: str = "", worker_evidence: list[dict] | tuple = (),
     scope: set[str] | None = None, scope_label: str = "Extensive review (rarely needed)",
@@ -116,13 +103,16 @@ def prepare_run(
     record = decision.record
     inputs = bound_inputs(decision, files, rules, symlinks=symlinks, revision=revision, overrides=overrides,
                           kb_version=kb_version, worker_evidence=worker_evidence)
-    confirmed, unconfirmed_reason = _confirmed_parts(decision, revision, confirmation, contract)
+    unconfirmed_reason = confirmation_problem(confirmation, decision, revision, overrides, worker_evidence) or ""
+    confirmed = [] if unconfirmed_reason else sorted(confirmation.part_ids)
     run_id = confirmation.run_id if confirmation else "unattended-" + canonical_digest(inputs)[:12]
     run = VerificationRun(
         run_id=run_id, decision_digest=canonical_digest(record),
-        contract_digest=contract.digest if confirmed else "",
+        contract_digest=confirmation.contract_digest if confirmed else "",
         applicable_rules={}, frozen_inputs=inputs, confirmed_parts=confirmed, unconfirmed_reason=unconfirmed_reason,
         targets=list(record["targets"]),
+        whole_idea={"targets": list(record["targets"]), "reach": record["reach"], "hosting": dict(record["hosting"]),
+                    "facts": dict(record["facts"])},
         parts=[dict(part) for part in record["parts"]], worker_evidence=list(worker_evidence), kb_version=kb_version,
         scope=scope_label, tool_versions={"harness-forge-checkers": inputs["checkers"]},
     )

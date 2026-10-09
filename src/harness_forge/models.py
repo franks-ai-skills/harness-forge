@@ -220,6 +220,7 @@ class VerificationRun:
     scope: str = "Extensive review (rarely needed)"
     tool_versions: dict[str, str] = field(default_factory=dict)
     targets: list[str] = field(default_factory=list)
+    whole_idea: dict = field(default_factory=dict)
     unconfirmed_reason: str = ""
 
 

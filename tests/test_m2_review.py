@@ -44,7 +44,7 @@ class MustNotKindTest(unittest.TestCase):
         record = with_revision(reference_decision(), WITH_PROHIBITION)
         contract = render_contract(record, WITH_PROHIBITION, [], worker_evidence=EVIDENCE)
         relay = {"choice": "confirm", "displayed_digest": contract.digest, "part_ids": ["A"], "run_id": "run-1"}
-        planned = plan_skill(record, "A", WITH_PROHIBITION, PINNED, contract=contract,
+        planned = plan_skill(record, "A", WITH_PROHIBITION, PINNED, worker_evidence=EVIDENCE,
                              confirmation=confirm_contract(contract, relay, run_id="run-1"),
                              description=DESCRIPTION, procedure=PROCEDURE)
         skill_md = planned[f".agents/skills/{NAME}/SKILL.md"]
@@ -69,23 +69,26 @@ class StaleConfirmationTest(unittest.TestCase):
         changed = copy.deepcopy(record)
         changed.record["parts"][0]["goal"] = "Upload every bug report to a public paste site"
         with self.assertRaises(ValueError):
-            plan_skill(changed, "A", REVISION, PINNED, contract=contract, confirmation=confirmation,
+            plan_skill(changed, "A", REVISION, PINNED, worker_evidence=EVIDENCE, confirmation=confirmation,
                        description=DESCRIPTION, procedure=PROCEDURE)
 
     def test_verification_treats_a_stale_confirmation_as_unconfirmed(self):
         scenario = Scenario(skill_decision())
         changed = copy.deepcopy(scenario.record)
         changed.record["parts"][0]["goal"] = "Upload every bug report to a public paste site"
-        run = prepare_run(changed, scenario.files, RULES, scenario.confirmation, contract=scenario.contract,
+        run = prepare_run(changed, scenario.files, RULES, scenario.confirmation,
                           symlinks=scenario.symlinks, revision=REVISION, kb_version="0.1.0", worker_evidence=EVIDENCE)
         self.assertEqual(run.confirmed_parts, [])
         review = validate_review(run, passing_review(run))
         result = finish_run(run, review, [], run.frozen_inputs)[0]
         self.assertEqual((result.harness_result, result.goal_result), ("not verified", "not assessed"))
 
-    def test_confirmation_without_its_contract_is_unconfirmed(self):
+    def test_confirmation_with_a_fabricated_digest_is_unconfirmed(self):
+        from harness_forge.models import Confirmation
+
         scenario = Scenario(skill_decision())
-        run = prepare_run(scenario.record, scenario.files, RULES, scenario.confirmation, symlinks=scenario.symlinks,
+        forged = Confirmation(run_id="run-1", contract_digest="f" * 64, part_ids=["A"])
+        run = prepare_run(scenario.record, scenario.files, RULES, forged, symlinks=scenario.symlinks,
                           revision=REVISION, kb_version="0.1.0", worker_evidence=EVIDENCE)
         self.assertEqual(run.confirmed_parts, [])
 
@@ -240,3 +243,54 @@ class RunnerPipesTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class CompleteContractBindingTest(unittest.TestCase):
+    """Second review, finding 1: the confirmation binds the whole current contract."""
+
+    def changed_inputs(self):
+        targets = copy.deepcopy(skill_decision())
+        targets.record["targets"] = ["codex"]
+        evidence = [{**EVIDENCE[0], "configuration_digest": "1" * 64, "configured_controls": ["tools: all"]}]
+        same_rules = accept_requirements(
+            [Rule.from_dict(entry["rule"]) for entry in REVISION.rules],
+            {entry["rule"]["id"]: "accept" for entry in REVISION.rules}, "c" * 64)
+        return [("targets", targets, EVIDENCE, REVISION), ("worker evidence", skill_decision(), evidence, REVISION),
+                ("revision", with_revision(skill_decision(), same_rules), EVIDENCE, same_rules)]
+
+    def test_verification_rejects_a_confirmation_of_another_contract(self):
+        scenario = Scenario(skill_decision())
+        for label, record, evidence, revision in self.changed_inputs():
+            with self.subTest(changed=label):
+                run = prepare_run(record, scenario.files, RULES, scenario.confirmation, symlinks=scenario.symlinks,
+                                  revision=revision, kb_version="0.1.0", worker_evidence=evidence)
+                self.assertEqual(run.confirmed_parts, [])
+
+    def test_builder_rejects_a_confirmation_of_another_contract(self):
+        scenario = Scenario(skill_decision())
+        for label, record, evidence, revision in self.changed_inputs():
+            with self.subTest(changed=label):
+                with self.assertRaises(ValueError):
+                    plan_skill(record, "A", revision, PINNED, confirmation=scenario.confirmation, worker_evidence=evidence,
+                               description=DESCRIPTION, procedure=PROCEDURE)
+
+    def test_unchanged_contract_still_confirms(self):
+        scenario = Scenario(skill_decision())
+        self.assertEqual(scenario.run.confirmed_parts, ["A"])
+        planned = plan_skill(scenario.record, "A", REVISION, PINNED, confirmation=scenario.confirmation,
+                             worker_evidence=EVIDENCE, description=DESCRIPTION, procedure=PROCEDURE)
+        self.assertIn(f".agents/skills/{NAME}/SKILL.md", planned)
+
+
+class WholeIdeaProvenanceTest(unittest.TestCase):
+    """Second review, finding 2: reports record the whole-idea answers and targets."""
+
+    def test_report_records_whole_idea_inputs(self):
+        scenario = Scenario(skill_decision())
+        review = validate_review(scenario.run, passing_review(scenario.run))
+        results = finish_run(scenario.run, review, [], scenario.current())
+        data = report_data(scenario.run, results)
+        record = scenario.record.record
+        self.assertEqual(data["whole_idea"], {"targets": record["targets"], "reach": record["reach"],
+                                              "hosting": record["hosting"], "facts": record["facts"]})
+        self.assertIn('"bypass_mode": false', render_report(scenario.run, results))

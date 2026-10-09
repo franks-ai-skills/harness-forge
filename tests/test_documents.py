@@ -46,6 +46,8 @@ def report(record: dict) -> dict:
         "rules_digest": "5" * 64,
         "revision_digest": None,
         "confirmed_parts": [],
+        "whole_idea": {"targets": ["claude-code"], "reach": "repository",
+                       "hosting": {"platform": "github", "plan": "free", "visibility": "public"}, "facts": {}},
         "answers": {},
         "scope": "Extensive review (rarely needed)",
         "worker_violations": [],

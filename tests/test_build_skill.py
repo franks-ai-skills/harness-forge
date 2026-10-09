@@ -66,7 +66,7 @@ def confirmed(record, part_ids=("A",)):
 def plan(record=None, **kwargs):
     record = record or reference_decision()
     contract, confirmation = confirmed(record)
-    arguments = {"contract": contract, "confirmation": confirmation, "description": DESCRIPTION, "procedure": PROCEDURE}
+    arguments = {"worker_evidence": EVIDENCE, "confirmation": confirmation, "description": DESCRIPTION, "procedure": PROCEDURE}
     arguments.update(kwargs)
     return plan_skill(record, "A", REVISION, PINNED, **arguments)
 

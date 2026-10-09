@@ -168,6 +168,25 @@ def render_contract(
                     text="\n".join(lines) + "\n", digest=digest)
 
 
+def confirmation_problem(
+    confirmation: Confirmation | None, decision: Decision, revision: AcceptedRevision | None,
+    overrides: list[dict] | tuple, worker_evidence: list[dict] | tuple,
+) -> str | None:
+    """Why a confirmation does not cover the complete current contract, or None.
+
+    The contract is rendered again from the current inputs; the confirmation
+    holds only for exactly that digest. Builder and verifier share this check.
+    """
+    if confirmation is None:
+        return "no live confirmation in this session"
+    if overrides:
+        return "rule overrides block confirmation until their adoption flow exists"
+    current = render_contract(decision, revision, list(overrides), worker_evidence=worker_evidence)
+    if confirmation.contract_digest != current.digest:
+        return "the confirmation is for another contract than the current one"
+    return None
+
+
 def confirm_contract(contract: Contract, relay: dict | None, run_id: str) -> Confirmation | None:
     """A Confirmation only for an explicit, current-session relay of this contract.
 
