@@ -1,0 +1,416 @@
+{
+  "status": "configuration_accepted_tool_absence_unproven",
+  "support_declared": false,
+  "authorized_active_minutes": 20,
+  "started_utc": "2026-10-09T04:10:32Z",
+  "investigation_stopped_utc": "2026-10-09T04:16:19Z",
+  "investigation_elapsed_seconds": 347,
+  "model_turns": 0,
+  "prompt_bearing_invocations": 0,
+  "offline_process_launches": 9,
+  "claude_invocations": 0,
+  "container_setups": 0,
+  "prior_prompt_bearing_invocations_charged": 2,
+  "prior_remaining": 28,
+  "prior_correction_allowance_remaining": 0,
+  "authorization": "User approved one additional bounded option-A round; no automatic extension.",
+  "binary_sha256": "09fa44fdc37a5fc70dc1ace31235f90468a2e193d0e85f7552eab068ea2582be",
+  "final_control_initialized": true,
+  "final_candidate_initialized": true,
+  "invalid_empty_catalog_rejected": true,
+  "effective_inventory_observed": false,
+  "limitations": [
+    "App-server initialize is not a codex exec worker turn or tool inventory.",
+    "User config/profile and managed policy isolation are not established.",
+    "Extension registration and effective per-turn inputs remain unqualified.",
+    "Source checkout is partial; model-provider blob was unavailable with lazy fetch disabled.",
+    "Socket-denial profile used; no claim of system-resolver DNS containment."
+  ],
+  "runner_corrections": [
+    "Initial attempt treated features.tool_registry as boolean; all three runs rejected. Preserved.",
+    "Second round closed stdin immediately; candidate exited without init. Preserved.",
+    "Final round kept stdin open until init/error/EOF, then closed it; all expected control outcomes observed."
+  ],
+  "artifacts": [
+    {
+      "path": "evals/canaries/results/private/catalog-spike-2026-10-09/assessment.json",
+      "bytes": 1637,
+      "sha256": "41437bc15bd9b9e67c47553f14a18a8e9201ccd8f035cd3bc64190c711fc1039"
+    },
+    {
+      "path": "evals/canaries/results/private/catalog-spike-2026-10-09/attempts.json",
+      "bytes": 288,
+      "sha256": "ab823b29459a249c9e9fb90f87c4b7283f889e629881f7c2b9c257e0e17de0a9"
+    },
+    {
+      "path": "evals/canaries/results/private/catalog-spike-2026-10-09/candidate-catalog.json",
+      "bytes": 81852,
+      "sha256": "fd8c81ebf9030cfb4803949f3d75f3cd127e50948d2cec9ace5f1bbf4434c168"
+    },
+    {
+      "path": "evals/canaries/results/private/catalog-spike-2026-10-09/candidate-command.json",
+      "bytes": 8371,
+      "sha256": "98ea9d38b86a4dc01bb78018d8435565b5308720b23e12d9a0dda6eb42b95f2e"
+    },
+    {
+      "path": "evals/canaries/results/private/catalog-spike-2026-10-09/candidate-result.json",
+      "bytes": 166,
+      "sha256": "ca9de2d4532f798bcdb0e897a7e02ad8eea161e67be81e4b93dea12c081b2a32"
+    },
+    {
+      "path": "evals/canaries/results/private/catalog-spike-2026-10-09/candidate-stderr.txt",
+      "bytes": 106,
+      "sha256": "9e96e831eebe90717310999e7d667a2d98d369544fbd40b0fc23298387cfe2ff"
+    },
+    {
+      "path": "evals/canaries/results/private/catalog-spike-2026-10-09/candidate-stdout.jsonl",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "evals/canaries/results/private/catalog-spike-2026-10-09/catalog-changes.json",
+      "bytes": 503,
+      "sha256": "7b3aee6ae7207db8e515e629a56ab82cfc2887f8e5b12f487de375be8f8c7ff2"
+    },
+    {
+      "path": "evals/canaries/results/private/catalog-spike-2026-10-09/control-catalog.json",
+      "bytes": 81927,
+      "sha256": "56ce0ea00369e7ae9bd1a686225daf39912ba847f90534d77d0b74200196063a"
+    },
+    {
+      "path": "evals/canaries/results/private/catalog-spike-2026-10-09/control-command.json",
+      "bytes": 8369,
+      "sha256": "025460c9ba5892a1d0b4400a5af6147d2bbb591be88c987f1e347370ece35db2"
+    },
+    {
+      "path": "evals/canaries/results/private/catalog-spike-2026-10-09/control-result.json",
+      "bytes": 166,
+      "sha256": "7ea7c57e80eb134779d05f0b19367c8fc1ad9896d49cc2c1e6ddc2778ba00636"
+    },
+    {
+      "path": "evals/canaries/results/private/catalog-spike-2026-10-09/control-stderr.txt",
+      "bytes": 106,
+      "sha256": "9e96e831eebe90717310999e7d667a2d98d369544fbd40b0fc23298387cfe2ff"
+    },
+    {
+      "path": "evals/canaries/results/private/catalog-spike-2026-10-09/control-stdout.jsonl",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "evals/canaries/results/private/catalog-spike-2026-10-09/environment-names.json",
+      "bytes": 68,
+      "sha256": "4c7bc471058324c25f31c5d33de9acc514a59aa829c8c9bf7a71ad91bb67a185"
+    },
+    {
+      "path": "evals/canaries/results/private/catalog-spike-2026-10-09/final/attempts.json",
+      "bytes": 289,
+      "sha256": "88d3ddad7d1fe42085b3994ca58a0d6d2d9650d6b29d3745a4a00e7b6a3ed54d"
+    },
+    {
+      "path": "evals/canaries/results/private/catalog-spike-2026-10-09/final/candidate-catalog.json",
+      "bytes": 81852,
+      "sha256": "fd8c81ebf9030cfb4803949f3d75f3cd127e50948d2cec9ace5f1bbf4434c168"
+    },
+    {
+      "path": "evals/canaries/results/private/catalog-spike-2026-10-09/final/candidate-command.json",
+      "bytes": 8335,
+      "sha256": "9f13f1ab969cee6ec3ba0e795ff30430010f886796f4700f3682a09f042cdb51"
+    },
+    {
+      "path": "evals/canaries/results/private/catalog-spike-2026-10-09/final/candidate-result.json",
+      "bytes": 165,
+      "sha256": "6964f2d6499dcaa44788ddd148a2af566729bede6cdb26e313774124952b24e1"
+    },
+    {
+      "path": "evals/canaries/results/private/catalog-spike-2026-10-09/final/candidate-stderr.txt",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "evals/canaries/results/private/catalog-spike-2026-10-09/final/candidate-stdout.jsonl",
+      "bytes": 419,
+      "sha256": "5c9f30e6babb89e06233772befc9d22861674175504d88fc1daa0ff1919a293c"
+    },
+    {
+      "path": "evals/canaries/results/private/catalog-spike-2026-10-09/final/catalog-changes.json",
+      "bytes": 503,
+      "sha256": "7b3aee6ae7207db8e515e629a56ab82cfc2887f8e5b12f487de375be8f8c7ff2"
+    },
+    {
+      "path": "evals/canaries/results/private/catalog-spike-2026-10-09/final/control-catalog.json",
+      "bytes": 81927,
+      "sha256": "56ce0ea00369e7ae9bd1a686225daf39912ba847f90534d77d0b74200196063a"
+    },
+    {
+      "path": "evals/canaries/results/private/catalog-spike-2026-10-09/final/control-command.json",
+      "bytes": 8333,
+      "sha256": "36ee926c408c01f3ee07d7568b352538cfcb53561375a413b0e74878f450e540"
+    },
+    {
+      "path": "evals/canaries/results/private/catalog-spike-2026-10-09/final/control-result.json",
+      "bytes": 165,
+      "sha256": "db6f408b498ee8718e4bf9e3d68ee991916c30bd3eb7a655b8d0ee4bea735220"
+    },
+    {
+      "path": "evals/canaries/results/private/catalog-spike-2026-10-09/final/control-stderr.txt",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "evals/canaries/results/private/catalog-spike-2026-10-09/final/control-stdout.jsonl",
+      "bytes": 419,
+      "sha256": "85cec561e333c70dd659b68e584996732645b80bbf2f317f7ebdcea4cda664b1"
+    },
+    {
+      "path": "evals/canaries/results/private/catalog-spike-2026-10-09/final/environment-names.json",
+      "bytes": 68,
+      "sha256": "4c7bc471058324c25f31c5d33de9acc514a59aa829c8c9bf7a71ad91bb67a185"
+    },
+    {
+      "path": "evals/canaries/results/private/catalog-spike-2026-10-09/final/invalid-catalog.json",
+      "bytes": 19,
+      "sha256": "c8cdda2058dfad73596cb9baef30bb2a825485859ad54c8d9cf5a10a457b0c8c"
+    },
+    {
+      "path": "evals/canaries/results/private/catalog-spike-2026-10-09/final/invalid-command.json",
+      "bytes": 8333,
+      "sha256": "9eeb112e32eff7a90ee6b9ac83369f18f44cda3202da51e2c847fd44f33f2176"
+    },
+    {
+      "path": "evals/canaries/results/private/catalog-spike-2026-10-09/final/invalid-result.json",
+      "bytes": 166,
+      "sha256": "c1e21498c5ba1d7daa958525cc31e83c832b0e82ca5e0d4d2fe424eedbd5ed08"
+    },
+    {
+      "path": "evals/canaries/results/private/catalog-spike-2026-10-09/final/invalid-stderr.txt",
+      "bytes": 216,
+      "sha256": "e807df59b5f0af813aa50d3afc622b301efaed346bd387ade7b39ee5cfe61192"
+    },
+    {
+      "path": "evals/canaries/results/private/catalog-spike-2026-10-09/final/invalid-stdout.jsonl",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "evals/canaries/results/private/catalog-spike-2026-10-09/final/overrides.json",
+      "bytes": 6795,
+      "sha256": "f2eb307ddef03b53369b08080652f1528470127aa4619ed97014977c63d4087c"
+    },
+    {
+      "path": "evals/canaries/results/private/catalog-spike-2026-10-09/final/request.json",
+      "bytes": 206,
+      "sha256": "afb86bc4216293bc124173c794d33419ef7d9b266e75816b3dfa0daf7f449fb4"
+    },
+    {
+      "path": "evals/canaries/results/private/catalog-spike-2026-10-09/invalid-catalog.json",
+      "bytes": 19,
+      "sha256": "c8cdda2058dfad73596cb9baef30bb2a825485859ad54c8d9cf5a10a457b0c8c"
+    },
+    {
+      "path": "evals/canaries/results/private/catalog-spike-2026-10-09/invalid-command.json",
+      "bytes": 8369,
+      "sha256": "1f910cf719a9f2fb661ac14be5da713c1c7d841ea5e4563d38055253f6fa2f3f"
+    },
+    {
+      "path": "evals/canaries/results/private/catalog-spike-2026-10-09/invalid-result.json",
+      "bytes": 166,
+      "sha256": "62e76d4c545cf5e616080d06bceeb78e56197fe85cce033086c6f40b41346b3b"
+    },
+    {
+      "path": "evals/canaries/results/private/catalog-spike-2026-10-09/invalid-stderr.txt",
+      "bytes": 106,
+      "sha256": "9e96e831eebe90717310999e7d667a2d98d369544fbd40b0fc23298387cfe2ff"
+    },
+    {
+      "path": "evals/canaries/results/private/catalog-spike-2026-10-09/invalid-stdout.jsonl",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "evals/canaries/results/private/catalog-spike-2026-10-09/overrides.json",
+      "bytes": 6830,
+      "sha256": "f7fc241a26f2e775dc02afc156f6b5fac9a1559c5ac7acc7b601a1e2d4fd421c"
+    },
+    {
+      "path": "evals/canaries/results/private/catalog-spike-2026-10-09/request.json",
+      "bytes": 206,
+      "sha256": "afb86bc4216293bc124173c794d33419ef7d9b266e75816b3dfa0daf7f449fb4"
+    },
+    {
+      "path": "evals/canaries/results/private/catalog-spike-2026-10-09/run_probe.py",
+      "bytes": 5364,
+      "sha256": "78e55b7b58a6f07ccd17d8ae606d3f2f392954a69102c2b6f364dce95aec6d88"
+    },
+    {
+      "path": "evals/canaries/results/private/catalog-spike-2026-10-09/run_probe_initial.py",
+      "bytes": 4276,
+      "sha256": "38a4d0178878658131b119f002147aafb875a0e081f9c07792902f577f215e5f"
+    },
+    {
+      "path": "evals/canaries/results/private/catalog-spike-2026-10-09/run_probe_schema_corrected.py",
+      "bytes": 4372,
+      "sha256": "2ce0cf8ea67191d608707de3547dcba100eece4944ac240e22225fa26e4aa99a"
+    },
+    {
+      "path": "evals/canaries/results/private/catalog-spike-2026-10-09/schema-corrected/attempts.json",
+      "bytes": 288,
+      "sha256": "30e7970888479dfc65a191268f3b99a34417a20851cb6a6c0e7b7949d08ea93d"
+    },
+    {
+      "path": "evals/canaries/results/private/catalog-spike-2026-10-09/schema-corrected/candidate-catalog.json",
+      "bytes": 81852,
+      "sha256": "fd8c81ebf9030cfb4803949f3d75f3cd127e50948d2cec9ace5f1bbf4434c168"
+    },
+    {
+      "path": "evals/canaries/results/private/catalog-spike-2026-10-09/schema-corrected/candidate-command.json",
+      "bytes": 8346,
+      "sha256": "b55215cefb2f73e70f5af43f19c3198059181c76815a09171348e077f1e74530"
+    },
+    {
+      "path": "evals/canaries/results/private/catalog-spike-2026-10-09/schema-corrected/candidate-result.json",
+      "bytes": 164,
+      "sha256": "7ff44cd5db7579be96d01b0330edd6c8a738f59083dc83222924a1adc25ad439"
+    },
+    {
+      "path": "evals/canaries/results/private/catalog-spike-2026-10-09/schema-corrected/candidate-stderr.txt",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "evals/canaries/results/private/catalog-spike-2026-10-09/schema-corrected/candidate-stdout.jsonl",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "evals/canaries/results/private/catalog-spike-2026-10-09/schema-corrected/catalog-changes.json",
+      "bytes": 503,
+      "sha256": "7b3aee6ae7207db8e515e629a56ab82cfc2887f8e5b12f487de375be8f8c7ff2"
+    },
+    {
+      "path": "evals/canaries/results/private/catalog-spike-2026-10-09/schema-corrected/control-catalog.json",
+      "bytes": 81927,
+      "sha256": "56ce0ea00369e7ae9bd1a686225daf39912ba847f90534d77d0b74200196063a"
+    },
+    {
+      "path": "evals/canaries/results/private/catalog-spike-2026-10-09/schema-corrected/control-command.json",
+      "bytes": 8344,
+      "sha256": "1be2cd8a53b5e0ba0b76b59d4cb954fb5800909b81186561d397b9ebc77c6dbc"
+    },
+    {
+      "path": "evals/canaries/results/private/catalog-spike-2026-10-09/schema-corrected/control-result.json",
+      "bytes": 165,
+      "sha256": "b1fae28ea0699e116a6b207968e70d8696fea26aac33958ab05bd86e4880ed2c"
+    },
+    {
+      "path": "evals/canaries/results/private/catalog-spike-2026-10-09/schema-corrected/control-stderr.txt",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "evals/canaries/results/private/catalog-spike-2026-10-09/schema-corrected/control-stdout.jsonl",
+      "bytes": 419,
+      "sha256": "feeb0fc70427c9555d7a2ed5005147eb1b5a2baa933b1f08dc2be5a8bec66056"
+    },
+    {
+      "path": "evals/canaries/results/private/catalog-spike-2026-10-09/schema-corrected/environment-names.json",
+      "bytes": 68,
+      "sha256": "4c7bc471058324c25f31c5d33de9acc514a59aa829c8c9bf7a71ad91bb67a185"
+    },
+    {
+      "path": "evals/canaries/results/private/catalog-spike-2026-10-09/schema-corrected/invalid-catalog.json",
+      "bytes": 19,
+      "sha256": "c8cdda2058dfad73596cb9baef30bb2a825485859ad54c8d9cf5a10a457b0c8c"
+    },
+    {
+      "path": "evals/canaries/results/private/catalog-spike-2026-10-09/schema-corrected/invalid-command.json",
+      "bytes": 8344,
+      "sha256": "f369e47ba02345683e34a2eb3ab45f2232e5afa8fdf57828fe901b23bb0805b8"
+    },
+    {
+      "path": "evals/canaries/results/private/catalog-spike-2026-10-09/schema-corrected/invalid-result.json",
+      "bytes": 166,
+      "sha256": "9f7a817e8773906b9f0248993d89e0d22a420e01286df6867312d34fc5c19ec7"
+    },
+    {
+      "path": "evals/canaries/results/private/catalog-spike-2026-10-09/schema-corrected/invalid-stderr.txt",
+      "bytes": 227,
+      "sha256": "bee19c98a912fdb79bb227bac0f89a45ffe119abe3c46fafadf1ae797e9ec4e5"
+    },
+    {
+      "path": "evals/canaries/results/private/catalog-spike-2026-10-09/schema-corrected/invalid-stdout.jsonl",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "evals/canaries/results/private/catalog-spike-2026-10-09/schema-corrected/overrides.json",
+      "bytes": 6795,
+      "sha256": "f2eb307ddef03b53369b08080652f1528470127aa4619ed97014977c63d4087c"
+    },
+    {
+      "path": "evals/canaries/results/private/catalog-spike-2026-10-09/schema-corrected/request.json",
+      "bytes": 206,
+      "sha256": "afb86bc4216293bc124173c794d33419ef7d9b266e75816b3dfa0daf7f449fb4"
+    },
+    {
+      "path": "evals/canaries/results/private/catalog-spike-2026-10-09/source/app-server__src__extensions.rs.txt",
+      "bytes": 3550,
+      "sha256": "4b5e1a3265229284c271e5504238c1d1c4851c05b487786e271d489a1a10fc9b"
+    },
+    {
+      "path": "evals/canaries/results/private/catalog-spike-2026-10-09/source/core__src__config__mod.rs.txt",
+      "bytes": 3862,
+      "sha256": "5613ac52be43a29daed36e279cb88413c8350ae42d626ebfb258384019466192"
+    },
+    {
+      "path": "evals/canaries/results/private/catalog-spike-2026-10-09/source/core__src__session__mcp.rs.txt",
+      "bytes": 6515,
+      "sha256": "d025c03c501d39539293bb39696b5d77c7c87450f26432cc733690b4ca0ca096"
+    },
+    {
+      "path": "evals/canaries/results/private/catalog-spike-2026-10-09/source/core__src__session__mod.rs.txt",
+      "bytes": 1784,
+      "sha256": "a929c9714ec2e58305e03367eba02b585289f9bd6b49dae4a75c4815239c9f7d"
+    },
+    {
+      "path": "evals/canaries/results/private/catalog-spike-2026-10-09/source/core__src__thread_manager.rs.txt",
+      "bytes": 551,
+      "sha256": "69a9038d1d6359522218e8be5f474a5c1392fd98210231eabd8584d175ed38d4"
+    },
+    {
+      "path": "evals/canaries/results/private/catalog-spike-2026-10-09/source/core__src__tools__mod.rs.txt",
+      "bytes": 939,
+      "sha256": "edafc2d3acdada9e242737054d4e0e4d5c1de659f9cba0fb040c98513c2e1512"
+    },
+    {
+      "path": "evals/canaries/results/private/catalog-spike-2026-10-09/source/core__src__tools__spec_plan.rs.txt",
+      "bytes": 19296,
+      "sha256": "df079408126c819c3275f210526aaaa7c6fe6b326fb8505ee56b6daa8bb202c8"
+    },
+    {
+      "path": "evals/canaries/results/private/catalog-spike-2026-10-09/source/ext__history-notes__src__extension.rs.txt",
+      "bytes": 2487,
+      "sha256": "fb6e730a58c5a04796669eb61fee0487408b424e970cfc30029a9e73072e2288"
+    },
+    {
+      "path": "evals/canaries/results/private/catalog-spike-2026-10-09/source/ext__skills__src__extension.rs.txt",
+      "bytes": 2144,
+      "sha256": "a3c958ea32a26d569dc191bbfa24f8d613a4f8a68c5d165a3bb1472a16483b84"
+    },
+    {
+      "path": "evals/canaries/results/private/catalog-spike-2026-10-09/source/ext__skills__src__tools__mod.rs.txt",
+      "bytes": 1743,
+      "sha256": "c034e8c7466253d68a212af6bcee957c7972e9a8cff861ea7fda5c25a3401f16"
+    },
+    {
+      "path": "evals/canaries/results/private/catalog-spike-2026-10-09/source/models-manager__src__manager.rs.txt",
+      "bytes": 2256,
+      "sha256": "c2f020a01f12ca4f577644742dcdf534861dacd8cda353390190ca13f2781e12"
+    },
+    {
+      "path": "evals/canaries/results/private/catalog-spike-2026-10-09/source-manifest.json",
+      "bytes": 3114,
+      "sha256": "8618dca134d7db9d9861d97d791bd768035de857e64a7e3db90930d281e035b4"
+    }
+  ]
+}
