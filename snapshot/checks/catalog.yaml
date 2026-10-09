@@ -78,8 +78,8 @@ checkers:
       required: [heading, status]
       additionalProperties: false
   - id: selection.match
-    version: 1.1.0
-    summary: Selection rule. Its predicate over confirmed answers implies an outcome, a mechanism concept or an outside control; pros and cons explain the choice. Rules apply in file order within each kind; the first match wins.
+    version: 1.2.0
+    summary: Selection rule. Its predicate over confirmed answers implies an outcome, a preferred mechanism (concept), an exclusion of a mechanism (excludes) or an outside control; pros and cons explain the choice. Outcome and preference rules apply in file order; policy/selection.md documents the order.
     params:
       type: object
       properties:
@@ -89,6 +89,7 @@ checkers:
           properties:
             outcome: {enum: [harness-only, outside-alongside, outside-instead, reuse, nothing-fits]}
             concept: {enum: [instructions, configuration, permissions-and-sandbox, mcp, skills, commands, subagents, hooks, plugins, automation]}
+            excludes: {enum: [instructions, configuration, permissions-and-sandbox, mcp, skills, commands, subagents, hooks, plugins, automation]}
             control:
               type: object
               properties:

@@ -148,6 +148,14 @@ class ClosedRulesTest(unittest.TestCase):
             errors = validate_kb(root)
             self.assertTrue(any("outside.absent.rule" in error for error in errors), errors)
 
+    def test_preference_rules_must_be_in_the_selection_policy(self):
+        with KbCopy() as root:
+            (root / "policy" / "selection.md").write_text("# Selection policy\n", encoding="utf-8")
+            self.assertTrue(any("selection.user-trigger.skill" in e and "policy/selection.md" in e for e in validate_kb(root)))
+        with KbCopy() as root:
+            (root / "policy" / "selection.md").unlink()
+            self.assertTrue(any("policy/selection.md" in e for e in validate_kb(root)))
+
     def test_coverage_must_reference_existing_rules(self):
         with KbCopy() as root:
             replace_in(root / "rules/coverage.yaml", "rules: [skills.description.length]", "rules: [skills.description.gone]")

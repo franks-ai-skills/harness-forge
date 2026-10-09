@@ -406,6 +406,18 @@ def validate_kb(root: Path) -> list[str]:
         if rule_id not in seen:
             check.error(f"{owner}: control prerequisite {rule_id} is not a rule")
 
+    preference_ids = [rule["id"] for rule in selection["rules"]
+                      if isinstance(rule.get("params", {}).get("implies"), dict) and "concept" in rule["params"]["implies"]]
+    if preference_ids:
+        policy = root / "policy" / "selection.md"
+        policy_text = _read_bounded(policy, root) if policy.is_file() else None
+        if policy_text is None:
+            check.error("policy/selection.md: missing; it documents the preference order")
+        else:
+            for rule_id in preference_ids:
+                if f"`{rule_id}`" not in policy_text:
+                    check.error(f"policy/selection.md: preference rule {rule_id} has no documented rationale")
+
     coverage = check.load("rules/coverage.yaml", "coverage") or {"pages": []}
     covered_rules = set()
     for page in coverage["pages"]:

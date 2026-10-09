@@ -1,7 +1,10 @@
 # Selection data: declared facts, the questions that confirm them, and
-# ordered selection rules. Within each kind (outcome, concept, control)
-# rules apply in file order; for outcomes and concepts the first match
-# wins, every matching control applies. reuse_confirmed is derived from
+# selection rules in four kinds. Outcome rules apply in file order, first
+# match wins. Eligibility rules (excludes) rule a mechanism out when a
+# confirmed answer conflicts with a sourced "When not" condition.
+# Preference rules (concept) apply in file order among eligible
+# mechanisms; that order is Forge policy, see policy/selection.md. Every
+# matching control rule applies. reuse_confirmed is derived from
 # researched candidates, never asked. Encodes docs/overview.md and the
 # outside-gates intake questions (2026-10-09).
 facts:
@@ -386,37 +389,6 @@ rules:
   sources:
   - docs/guide/outside-gates.md#four-outcomes-from-six-intake-questions
   contested: false
-- id: selection.outcome.must-hold-judgment
-  concept: selection
-  kind: should
-  severity: warning
-  check: script
-  checker: selection.match
-  params:
-    when:
-      all:
-      - eq:
-        - every_time
-        - always
-      - eq:
-        - script_checkable
-        - false
-      - in:
-        - job
-        - - guidance
-          - procedure
-    implies:
-      outcome: nothing-fits
-  statement: A rule that must hold every time but needs judgment has no enforcing harness mechanism
-  applies_to:
-    harnesses:
-    - claude-code
-    - codex
-  evidence: Vendor
-  sources:
-  - docs/overview.md#how-the-concepts-fit-together
-  - docs/overview.md#hooks
-  contested: false
 - id: selection.outcome.harness-only
   concept: selection
   kind: should
@@ -446,6 +418,214 @@ rules:
   evidence: Inference
   sources:
   - docs/guide/outside-gates.md#four-outcomes-from-six-intake-questions
+  contested: false
+- id: selection.eligibility.must-hold-instructions
+  concept: selection
+  kind: should
+  severity: warning
+  check: script
+  checker: selection.match
+  params:
+    when:
+      eq:
+      - every_time
+      - always
+    implies:
+      excludes: instructions
+  statement: Instructions cannot guarantee a rule that must hold every time; they are context, not enforcement
+  applies_to:
+    harnesses:
+    - claude-code
+    - codex
+  evidence: Vendor
+  sources:
+  - docs/overview.md#instructions
+  contested: false
+- id: selection.eligibility.must-hold-skills
+  concept: selection
+  kind: should
+  severity: warning
+  check: script
+  checker: selection.match
+  params:
+    when:
+      eq:
+      - every_time
+      - always
+    implies:
+      excludes: skills
+  statement: A skill cannot guarantee a rule that must hold every time
+  applies_to:
+    harnesses:
+    - claude-code
+    - codex
+  evidence: Vendor
+  sources:
+  - docs/overview.md#skills
+  - docs/guide/skills.md#when-to-use-it-and-when-not
+  contested: false
+- id: selection.eligibility.must-hold-commands
+  concept: selection
+  kind: should
+  severity: warning
+  check: script
+  checker: selection.match
+  params:
+    when:
+      eq:
+      - every_time
+      - always
+    implies:
+      excludes: commands
+  statement: A user-invoked skill cannot guarantee a rule that must hold every time
+  applies_to:
+    harnesses:
+    - claude-code
+    - codex
+  evidence: Vendor
+  sources:
+  - docs/overview.md#commands
+  contested: false
+- id: selection.eligibility.must-hold-subagents
+  concept: selection
+  kind: should
+  severity: warning
+  check: script
+  checker: selection.match
+  params:
+    when:
+      eq:
+      - every_time
+      - always
+    implies:
+      excludes: subagents
+  statement: Delegation is a model decision, so a subagent cannot guarantee a check that must always run
+  applies_to:
+    harnesses:
+    - claude-code
+    - codex
+  evidence: Vendor
+  sources:
+  - docs/overview.md#subagents
+  contested: false
+- id: selection.eligibility.must-hold-automation
+  concept: selection
+  kind: should
+  severity: warning
+  check: script
+  checker: selection.match
+  params:
+    when:
+      eq:
+      - every_time
+      - always
+    implies:
+      excludes: automation
+  statement: Running the agent unattended does not make a rule hold on every tool call
+  applies_to:
+    harnesses:
+    - claude-code
+    - codex
+  evidence: Vendor
+  sources:
+  - docs/overview.md#automation
+  contested: false
+- id: selection.eligibility.judgment-hooks
+  concept: selection
+  kind: should
+  severity: warning
+  check: script
+  checker: selection.match
+  params:
+    when:
+      eq:
+      - script_checkable
+      - false
+    implies:
+      excludes: hooks
+  statement: A hook is a deterministic handler; work that needs judgment belongs in instructions or skills
+  applies_to:
+    harnesses:
+    - claude-code
+    - codex
+  evidence: Vendor
+  sources:
+  - docs/overview.md#hooks
+  contested: false
+- id: selection.eligibility.hard-limit-hooks
+  concept: selection
+  kind: should
+  severity: warning
+  check: script
+  checker: selection.match
+  params:
+    when:
+      all:
+      - eq:
+        - job
+        - access-control
+      - eq:
+        - every_time
+        - always
+    implies:
+      excludes: hooks
+  statement: A hard limit on reading, writing or network access needs permissions and the sandbox; tool switching and unhooked paths bypass hooks
+  applies_to:
+    harnesses:
+    - claude-code
+    - codex
+  evidence: Vendor
+  sources:
+  - docs/overview.md#hooks
+  contested: false
+- id: selection.eligibility.model-started-commands
+  concept: selection
+  kind: should
+  severity: warning
+  check: script
+  checker: selection.match
+  params:
+    when:
+      all:
+      - eq:
+        - job
+        - procedure
+      - eq:
+        - trigger
+        - model
+    implies:
+      excludes: commands
+  statement: A procedure the model should start on its own cannot be a user-invoked skill
+  applies_to:
+    harnesses:
+    - claude-code
+    - codex
+  evidence: Vendor
+  sources:
+  - docs/overview.md#commands
+  contested: false
+- id: selection.eligibility.side-effects-skills
+  concept: selection
+  kind: should
+  severity: warning
+  check: script
+  checker: selection.match
+  params:
+    when:
+      eq:
+      - irreversible
+      - true
+    implies:
+      excludes: skills
+  statement: The model must not decide on its own to run an irreversible or publishing procedure, so a model-invoked skill does not fit
+  applies_to:
+    harnesses:
+    - claude-code
+    - codex
+  evidence: Vendor
+  sources:
+  - docs/overview.md#commands
+  - docs/guide/skills.md#user-invoked-skill
   contested: false
 - id: selection.mechanism.early-feedback-mirror
   concept: selection
@@ -664,6 +844,34 @@ rules:
   sources:
   - docs/overview.md#skills
   - docs/guide/skills.md#when-to-use-it-and-when-not
+  contested: false
+- id: selection.mechanism.procedure-as-instructions
+  concept: selection
+  kind: should
+  severity: warning
+  check: script
+  checker: selection.match
+  params:
+    when:
+      eq:
+      - job
+      - procedure
+    implies:
+      concept: instructions
+    pros:
+    - Always in context; cannot be missed
+    cons:
+    - Costs context in every session
+  statement: A procedure can also live in the instruction file, as a pointer or a compressed index, when its omission would silently break output
+  applies_to:
+    harnesses:
+    - claude-code
+    - codex
+  evidence: Vendor
+  sources:
+  - docs/overview.md#instructions
+  - docs/guide/instructions.md#when-to-use-it-and-when-not
+  - docs/guide/skills.md#pointer-in-the-instruction-file-plus-skill
   contested: false
 - id: selection.mechanism.setting
   concept: selection

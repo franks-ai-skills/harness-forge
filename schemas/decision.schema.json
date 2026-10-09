@@ -205,6 +205,11 @@
                     "pattern": "^[a-z][a-z0-9-]*(\\.[a-z0-9-]+)+$",
                     "maxLength": 200
                   }
+                },
+                "why_not_chosen": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 20000
                 }
               },
               "additionalProperties": false,
@@ -213,6 +218,60 @@
                 "pros",
                 "cons",
                 "rules"
+              ]
+            }
+          },
+          "assessment": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "concept": {
+                  "type": "string",
+                  "pattern": "^[a-z][a-z0-9-]*$",
+                  "maxLength": 50
+                },
+                "state": {
+                  "enum": [
+                    "recommended",
+                    "viable alternative",
+                    "not preferred",
+                    "ruled out",
+                    "unresolved"
+                  ]
+                },
+                "rules": {
+                  "type": "array",
+                  "items": {
+                    "type": "string",
+                    "pattern": "^[a-z][a-z0-9-]*(\\.[a-z0-9-]+)+$",
+                    "maxLength": 200
+                  }
+                },
+                "reasons": {
+                  "type": "array",
+                  "items": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 20000
+                  }
+                },
+                "missing_facts": {
+                  "type": "array",
+                  "items": {
+                    "type": "string",
+                    "pattern": "^[a-z][a-z0-9_]*$",
+                    "maxLength": 100
+                  }
+                }
+              },
+              "additionalProperties": false,
+              "required": [
+                "concept",
+                "state",
+                "rules",
+                "reasons",
+                "missing_facts"
               ]
             }
           },

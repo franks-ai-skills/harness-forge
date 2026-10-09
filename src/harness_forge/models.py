@@ -98,6 +98,8 @@ class Recommendation:
     reuse: dict | None = None
     pending_question: str | None = None
     unasked_facts: list[str] = field(default_factory=list)
+    assessment: list[dict] = field(default_factory=list)
+    builder_available: bool = False
 
 
 @dataclass(frozen=True)

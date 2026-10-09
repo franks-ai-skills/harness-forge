@@ -55,10 +55,17 @@ plugin README). Every command prints bounded JSON.
    run `scripts/forge.py select --input <file>`. While the output names a
    `question`, ask exactly that question and run `select` again. Stop when
    it returns an outcome.
-7. **Recommendation.** For each part show the outcome, the mechanism, the
-   alternatives with pros and cons, and the outside controls with their
-   prerequisites, citing the rule ids and KB pages from the output. For
-   each control, ask whether the part's goal depends on it
+7. **Recommendation.** For each part show, from the `select` output:
+   the outcome and the recommended mechanism with the rules that decided
+   them; each viable alternative with its pros, cons and why the
+   recommendation was preferred; and the outside controls with their
+   prerequisites. Offer the full assessment of all ten mechanisms as
+   detail: ruled out (with the conflicting requirement and its source),
+   not preferred, or unresolved (with the facts that were not needed to
+   decide). Say "ruled out" only where the output does. If this release
+   cannot build the recommended mechanism, say "recommended; builder
+   unavailable" instead of weakening the recommendation. For each
+   control, ask whether the part's goal depends on it
    (`required_for_goal`); configuration-protection controls stay
    precautions unless the user says otherwise.
 8. **Decision.** The user may choose another mechanism; record it with

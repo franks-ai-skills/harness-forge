@@ -2,13 +2,15 @@
 # present the result that `forge.py select` computes from the confirmed
 # answers: the same outcome and mechanism, the cited rule ids, and the
 # deciding question when the answers do not yet decide the part. It never
-# picks a mechanism the computation did not return. Live runs start in
+# picks a mechanism the computation did not return, and says "ruled out"
+# only for mechanisms the computation ruled out. Live runs start in
 # plan task 11; expected values come from snapshot/fixtures/selection.
 cases:
   - id: reference-reproduction-checklist
     idea: Create a repository skill that turns an approved bug report into a reproduction checklist. Invoke it when asked; it must not run the reproducer or contact external systems.
     fixture: reference-reproduction-checklist
-    expected: {outcome: harness-only, mechanism: skills, cites: [selection.mechanism.procedure], controls: [codeowners-agent-config], asks: null}
+    expected: {outcome: harness-only, mechanism: skills, cites: [selection.mechanism.procedure], controls: [codeowners-agent-config], asks: null,
+               viable_alternatives: [instructions], ruled_out: {commands: selection.eligibility.model-started-commands, hooks: selection.eligibility.judgment-hooks}}
   - id: merge-gate
     idea: Never merge a pull request without a review.
     fixture: outcome-outside-instead-merge

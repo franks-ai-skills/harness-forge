@@ -1,10 +1,18 @@
 """Compute a part's recommendation from confirmed, normalized answers.
 
-Selection rules (``selection.match``) come from the pinned KB. Within
-each kind the data decides priority: the first matching outcome rule and
-the first matching concept rule win; every matching control applies.
-When an unanswered fact could still change the result, the result is a
-question, never a default.
+Selection has four kinds of rules from the pinned KB (policy/selection.md):
+
+- outcome rules, in order, first match wins;
+- eligibility rules (``excludes``), which rule a mechanism out when a
+  confirmed answer conflicts with a sourced "When not" condition;
+- preference rules (``concept``), in Forge's documented order: the first
+  eligible match is recommended, later eligible matches are viable
+  alternatives;
+- control rules, which all apply.
+
+When an unanswered fact can still change the outcome, mechanism or
+controls, the result is a question, never a default. Citations and the
+per-mechanism assessment rest only on the answers actually given.
 """
 
 from __future__ import annotations
@@ -15,9 +23,14 @@ from typing import Iterable
 from harness_forge.models import Recommendation, Rule
 from harness_forge.predicates import evaluate_partial
 
+CONCEPTS = ("instructions", "configuration", "permissions-and-sandbox", "mcp", "skills", "commands",
+            "subagents", "hooks", "plugins", "automation")
+BUILDABLE = ("skills", "commands")
 _OTHER = object()  # stands for any value no rule tests
 _BUILT = ("harness-only", "outside-alongside")
+_WITHOUT_MECHANISM = {"harness-only": "nothing-fits", "outside-alongside": "outside-instead"}
 _MAX_ASSIGNMENTS = 200_000
+_POLICY = "policy/selection.md"
 
 
 def normalize(values: dict) -> dict:
@@ -35,7 +48,7 @@ def normalize(values: dict) -> dict:
 
 
 def qualifying_candidates(candidates: Iterable[dict]) -> list[dict]:
-    """Reuse candidates with confirmed fit, a known license and maintenance."""
+    """Reuse candidates with confirmed fit, a known license and active maintenance."""
     return [
         candidate for candidate in candidates
         if candidate.get("fit") == "confirmed"
@@ -50,6 +63,14 @@ def _kind(rule: Rule) -> str:
     return kind
 
 
+def _of_kind(rules: list[Rule], kind: str) -> list[Rule]:
+    return [rule for rule in rules if _kind(rule) == kind]
+
+
+def _matches(rule: Rule, facts: dict) -> bool | None:
+    return evaluate_partial(rule.params["when"], facts)
+
+
 def _predicate_facts(predicate: dict) -> list[tuple[str, list]]:
     (operator, operand), = predicate.items()
     if operator in ("all", "any"):
@@ -58,6 +79,10 @@ def _predicate_facts(predicate: dict) -> list[tuple[str, list]]:
         return _predicate_facts(operand)
     fact, value = operand
     return [(fact, value if operator == "in" else [value])]
+
+
+def _unknown_facts(rule: Rule, facts: dict) -> set[str]:
+    return {fact for fact, _ in _predicate_facts(rule.params["when"]) if fact not in facts}
 
 
 def _referenced(rules: list[Rule]) -> list[str]:
@@ -69,63 +94,71 @@ def _referenced(rules: list[Rule]) -> list[str]:
     return seen
 
 
-def _matches(rule: Rule, facts: dict) -> bool | None:
-    return evaluate_partial(rule.params["when"], facts)
+def _evaluate(rules: list[Rule], facts: dict) -> dict:
+    """Every layer for facts that decide all relevant rules."""
+    outcome_rule = next((rule for rule in _of_kind(rules, "outcome") if _matches(rule, facts)), None)
+    outcome = outcome_rule.params["implies"]["outcome"] if outcome_rule else None
+    excluded: dict[str, list[Rule]] = {}
+    for rule in _of_kind(rules, "excludes"):
+        if _matches(rule, facts):
+            excluded.setdefault(rule.params["implies"]["excludes"], []).append(rule)
+    preferred = [rule for rule in _of_kind(rules, "concept")
+                 if _matches(rule, facts) and rule.params["implies"]["concept"] not in excluded]
+    blocked_by = []
+    if outcome in _BUILT and not preferred:
+        candidates = {rule.params["implies"]["concept"] for rule in _of_kind(rules, "concept") if _matches(rule, facts)}
+        blocked_by = [rule for concept in sorted(candidates) for rule in excluded.get(concept, [])]
+        if blocked_by:
+            outcome = _WITHOUT_MECHANISM[outcome]
+    builds = outcome in _BUILT + ("reuse",)
+    return {
+        "outcome_rule": outcome_rule, "outcome": outcome, "blocked_by": blocked_by,
+        "preferred": preferred if builds else [],
+        "controls": [rule for rule in _of_kind(rules, "control") if _matches(rule, facts)],
+    }
 
 
-def _of_kind(rules: list[Rule], kind: str) -> list[Rule]:
-    return [rule for rule in rules if _kind(rule) == kind]
-
-
-def _evaluate(rules: list[Rule], facts: dict) -> tuple:
-    """(outcome rule, matching concept rules in order, matching control rules)."""
-    outcome = next((rule for rule in _of_kind(rules, "outcome") if _matches(rule, facts)), None)
-    builds = outcome is not None and outcome.params["implies"]["outcome"] in _BUILT + ("reuse",)
-    concepts = [rule for rule in _of_kind(rules, "concept") if builds and _matches(rule, facts)]
-    controls = [rule for rule in _of_kind(rules, "control") if _matches(rule, facts)]
-    return outcome, concepts, controls
-
-
-def _signature(evaluated: tuple) -> tuple:
-    outcome, concepts, controls = evaluated
-    outcome_name = outcome.params["implies"]["outcome"] if outcome else None
-    concept = concepts[0].params["implies"]["concept"] if concepts else None
-    return outcome_name, concept, tuple(sorted(rule.params["implies"]["control"]["id"] for rule in controls))
+def _signature(evaluated: dict) -> tuple:
+    concept = None
+    if evaluated["outcome"] in _BUILT and evaluated["preferred"]:
+        concept = evaluated["preferred"][0].params["implies"]["concept"]
+    controls = tuple(sorted(rule.params["implies"]["control"]["id"] for rule in evaluated["controls"]))
+    return evaluated["outcome"], concept, controls
 
 
 def _open_facts(rules: list[Rule], facts: dict) -> set[str]:
-    """Unconfirmed facts that can still change the result.
-
-    Rules after a definitely matching outcome or concept rule are never
-    reached; concept rules do not matter when the outcome builds nothing.
-    """
+    """Unconfirmed facts that can still change the outcome, mechanism or controls."""
     open_facts: set[str] = set()
-
-    def note(rule):
-        open_facts.update(fact for fact, _ in _predicate_facts(rule.params["when"]) if fact not in facts)
-
-    outcome_decided = None
+    outcome = None
     for rule in _of_kind(rules, "outcome"):
         result = _matches(rule, facts)
         if result is None:
-            note(rule)
+            open_facts |= _unknown_facts(rule, facts)
         elif result:
-            outcome_decided = rule.params["implies"]["outcome"] if not open_facts else None
+            outcome = rule.params["implies"]["outcome"] if not open_facts else None
             break
-    if outcome_decided is None or outcome_decided in _BUILT + ("reuse",):
+    if outcome is None or outcome in _BUILT + ("reuse",):
+        exclusions = _of_kind(rules, "excludes")
         for rule in _of_kind(rules, "concept"):
             result = _matches(rule, facts)
+            if result is False:
+                continue
+            concept = rule.params["implies"]["concept"]
+            own = [exclusion for exclusion in exclusions if exclusion.params["implies"]["excludes"] == concept]
             if result is None:
-                note(rule)
-            elif result:
+                open_facts |= _unknown_facts(rule, facts)
+            for exclusion in own:
+                if _matches(exclusion, facts) is None:
+                    open_facts |= _unknown_facts(exclusion, facts)
+            if result and all(_matches(exclusion, facts) is False for exclusion in own):
                 break
     for rule in _of_kind(rules, "control"):
         if _matches(rule, facts) is None:
-            note(rule)
+            open_facts |= _unknown_facts(rule, facts)
     return open_facts
 
 
-def _decide(rules: list[Rule], facts: dict, domains: dict[str, list], order: list[str]) -> tuple[tuple | None, str | None]:
+def _decide(rules: list[Rule], facts: dict, domains: dict[str, list], order: list[str]) -> tuple[dict | None, str | None]:
     """Return (evaluation, None) when decided, else (None, deciding fact)."""
     open_facts = _open_facts(rules, facts)
     unknown = [fact for fact in order if fact in open_facts]
@@ -151,12 +184,6 @@ def _decide(rules: list[Rule], facts: dict, domains: dict[str, list], order: lis
     return None, unknown[0]
 
 
-def _established(rules: list[Rule], kind: str, value, facts: dict) -> Rule | None:
-    """The first rule of a kind that implies value and holds for the given answers."""
-    return next((rule for rule in _of_kind(rules, kind)
-                 if rule.params["implies"][kind] == value and _matches(rule, facts) is True), None)
-
-
 def _domains_from_rules(rules: list[Rule]) -> dict[str, list]:
     """Values the rules test per fact, plus one value no rule tests."""
     domains: dict[str, list] = {}
@@ -177,11 +204,45 @@ def _pages(rules: Iterable[Rule]) -> list[str]:
     return pages
 
 
+def _assessment(rules: list[Rule], facts: dict, mechanism: str | None, winner: Rule | None) -> list[dict]:
+    """One state per mechanism, based only on the answers given."""
+    table = []
+    for concept in CONCEPTS:
+        exclusions = [r for r in _of_kind(rules, "excludes") if r.params["implies"]["excludes"] == concept]
+        preferences = [r for r in _of_kind(rules, "concept") if r.params["implies"]["concept"] == concept]
+        excluded = [r for r in exclusions if _matches(r, facts) is True]
+        open_exclusions = [r for r in exclusions if _matches(r, facts) is None]
+        matched = [r for r in preferences if _matches(r, facts) is True]
+        open_preferences = [r for r in preferences if _matches(r, facts) is None]
+        entry = {"concept": concept, "rules": [], "reasons": [], "missing_facts": []}
+        if concept == mechanism:
+            entry.update(state="recommended", rules=[winner.id] if winner else [],
+                         reasons=[winner.statement] if winner else [])
+        elif excluded:
+            entry.update(state="ruled out", rules=[r.id for r in excluded], reasons=[r.statement for r in excluded])
+        elif open_exclusions or (not matched and open_preferences):
+            unresolved = open_exclusions + open_preferences
+            missing = sorted(set().union(*(_unknown_facts(r, facts) for r in unresolved)))
+            entry.update(state="unresolved", rules=[r.id for r in unresolved], missing_facts=missing)
+        elif matched:
+            entry.update(state="viable alternative", rules=[r.id for r in matched], reasons=[r.statement for r in matched])
+        else:
+            entry.update(state="not preferred", reasons=["no preference rule shows an advantage for this goal"])
+        table.append(entry)
+    return table
+
+
 def _facts(answers: dict, whole_idea: dict, candidates: list[dict]) -> tuple[dict, list[dict]]:
     facts = {**normalize(whole_idea), **normalize(answers)}
     qualifying = qualifying_candidates(candidates)
     facts["reuse_confirmed"] = bool(qualifying)
     return facts, qualifying
+
+
+def _established(rules: list[Rule], kind: str, value, facts: dict) -> Rule | None:
+    """The first rule of a kind that implies value and holds for the given answers."""
+    return next((rule for rule in _of_kind(rules, kind)
+                 if rule.params["implies"][kind] == value and _matches(rule, facts) is True), None)
 
 
 def recommend(answers: dict, whole_idea: dict, rules: list[Rule], candidates: list[dict]) -> Recommendation:
@@ -192,33 +253,41 @@ def recommend(answers: dict, whole_idea: dict, rules: list[Rule], candidates: li
     if evaluated is None:
         return Recommendation(outcome=None, mechanism=None, rule_ids=[], pages=[], pending_question=pending)
 
-    outcome_rule, concept_rules, control_rules = evaluated
-    outcome = outcome_rule.params["implies"]["outcome"]
-    chosen = concept_rules[0] if concept_rules and outcome in _BUILT else None
-    mechanism = chosen.params["implies"]["concept"] if chosen else None
-    # The result holds for every remaining answer. Cite only rules whose
-    # conditions hold for the answers given; name the facts left unasked.
-    unasked = sorted(_open_facts(selection_rules, facts))
-    cited_outcome = _established(selection_rules, "outcome", outcome, facts)
-    cited_concept = _established(selection_rules, "concept", mechanism, facts) if chosen else None
-    concept_rules = [rule for rule in concept_rules if _matches(rule, facts) is True]
+    outcome = evaluated["outcome"]
+    mechanism = None
+    if outcome in _BUILT and evaluated["preferred"]:
+        mechanism = evaluated["preferred"][0].params["implies"]["concept"]
     reuse = None
     if outcome == "reuse":
         reuse = dict(sorted(qualifying, key=lambda candidate: candidate["name"])[0])
         mechanism = reuse["concept"]
 
-    alternatives, seen_concepts = [], {mechanism}
-    for rule in concept_rules:
-        concept = rule.params["implies"]["concept"]
-        if concept in seen_concepts:
+    # The result holds for every remaining answer. Cite only rules whose
+    # conditions hold for the answers given; name the facts left unasked.
+    unasked = sorted(_open_facts(selection_rules, facts))
+    if evaluated["blocked_by"]:
+        cited_outcome = [rule for rule in evaluated["blocked_by"] if _matches(rule, facts) is True]
+    else:
+        established = _established(selection_rules, "outcome", outcome, facts)
+        cited_outcome = [established] if established else []
+    winner = _established(selection_rules, "concept", mechanism, facts) if mechanism and outcome in _BUILT else None
+    assessment = _assessment(selection_rules, facts, mechanism, winner)
+
+    alternatives = []
+    for entry in assessment:
+        if entry["state"] != "viable alternative":
             continue
-        seen_concepts.add(concept)
-        alternatives.append({"concept": concept, "pros": rule.params.get("pros", []),
-                             "cons": rule.params.get("cons", []), "rules": [rule.id]})
+        rule = next(r for r in selection_rules if r.id == entry["rules"][0])
+        if winner is not None:
+            why = f"{winner.id} comes before {rule.id} in Forge's preference order ({_POLICY})"
+        else:
+            why = f"the outcome {outcome} builds no harness mechanism"
+        alternatives.append({"concept": entry["concept"], "pros": rule.params.get("pros", []),
+                             "cons": rule.params.get("cons", []), "rules": entry["rules"], "why_not_chosen": why})
 
     availability = facts.get("plan_controls", "unknown")
     controls: dict[str, dict] = {}
-    for rule in control_rules:
+    for rule in evaluated["controls"]:
         control = rule.params["implies"]["control"]
         merged = controls.setdefault(control["id"], {
             "id": control["id"], "family": control["family"], "prerequisites": [],
@@ -229,8 +298,8 @@ def recommend(answers: dict, whole_idea: dict, rules: list[Rule], candidates: li
         if _matches(rule, facts) is True:
             merged["rules"].append(rule.id)
 
-    cited_controls = [rule for rule in control_rules if _matches(rule, facts) is True]
-    cited = [rule for rule in (cited_outcome, cited_concept) if rule is not None] + cited_controls
+    cited = cited_outcome + ([winner] if winner else []) + [r for r in evaluated["controls"] if _matches(r, facts) is True]
+    described = winner or (evaluated["preferred"][0] if mechanism and evaluated["preferred"] else None)
     return Recommendation(
         outcome=outcome,
         mechanism=mechanism,
@@ -238,10 +307,12 @@ def recommend(answers: dict, whole_idea: dict, rules: list[Rule], candidates: li
         pages=_pages(cited),
         alternatives=alternatives,
         controls=[controls[key] for key in sorted(controls)],
-        pros=list(chosen.params.get("pros", [])) if chosen else [],
-        cons=list(chosen.params.get("cons", [])) if chosen else [],
+        pros=list(described.params.get("pros", [])) if described else [],
+        cons=list(described.params.get("cons", [])) if described else [],
         reuse=reuse,
         unasked_facts=unasked,
+        assessment=assessment,
+        builder_available=mechanism in BUILDABLE,
     )
 
 
