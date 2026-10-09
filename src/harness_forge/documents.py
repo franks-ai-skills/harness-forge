@@ -183,6 +183,22 @@ def _read_bounded(path: Path, root: Path | None) -> str:
         raise ValueError(f"{path}: not UTF-8") from error
 
 
+def safe_path(root: Path, relative: str) -> Path:
+    """root/relative for writing: no parent segments, no linked directory on the way."""
+    root = Path(root).resolve()
+    parts = relative.split("/")
+    if relative.startswith("/") or ".." in parts or "" in parts:
+        raise ValueError(f"{relative}: not a relative path inside {root}")
+    current = root
+    for part in parts:
+        current = current / part
+        if current.is_symlink():
+            raise ValueError(f"{current.relative_to(root)} is a symbolic link; refusing to go through it")
+    if not current.resolve().is_relative_to(root):
+        raise ValueError(f"{relative} escapes {root}")
+    return current
+
+
 def load_document(path: Path, schema: str, *, root: Path | None = None) -> Any:
     """Load a YAML, JSON or Markdown-frontmatter document and validate it.
 

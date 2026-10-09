@@ -247,7 +247,7 @@ class AcceptanceTest(unittest.TestCase):
                       "briefs": [{"pass": "deep", "part_id": "A", "digest": BRIEF}],
                       "findings": [], "support": [], "drift": []}
             md_path = write_research(Path(directory), record, "Findings grouped by pass and part.")
-            self.assertEqual(md_path, Path(directory) / ".harness" / "research" / "repro.md")
+            self.assertEqual(md_path, Path(directory).resolve() / ".harness" / "research" / "repro.md")
 
 
 class DriftTest(unittest.TestCase):

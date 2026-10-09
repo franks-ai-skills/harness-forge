@@ -26,3 +26,4 @@ pages rest on the sources those pages cite.
 | https://docs.github.com/en/repositories/configuring-branches-and-merges-in-your-repository/managing-rulesets/available-rules-for-rulesets | "someone other than the last person to push" |
 | https://docs.github.com/en/repositories/configuring-branches-and-merges-in-your-repository/managing-rulesets/about-rulesets | rulesets on private repositories with "Pro, GitHub Team" |
 | https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/customizing-your-repository/about-code-owners | CODEOWNERS on the "base branch" |
+| https://developers.openai.com/api/docs/guides/deep-research | "Prompt injection and exfiltration"; private data sent "as a query parameter to the attacker's site" through search; following links "could lead to data exfiltration" |

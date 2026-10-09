@@ -13,10 +13,70 @@
       "pattern": "^[0-9a-f]{64}$"
     },
     "contract_digest": {
+      "oneOf": [
+        {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "kb_version": {
+      "type": "string",
+      "minLength": 1
+    },
+    "idea_digest": {
       "type": "string",
       "pattern": "^[0-9a-f]{64}$"
     },
-    "kb_version": {
+    "rules_digest": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "revision_digest": {
+      "oneOf": [
+        {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "confirmed_parts": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "pattern": "^[A-Z][0-9]*$"
+      },
+      "uniqueItems": true
+    },
+    "answers": {
+      "type": "object",
+      "propertyNames": {
+        "type": "string",
+        "pattern": "^[A-Z][0-9]*$"
+      },
+      "additionalProperties": {
+        "type": "object",
+        "propertyNames": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9_]*$",
+          "maxLength": 100
+        },
+        "additionalProperties": {
+          "type": [
+            "string",
+            "boolean",
+            "integer"
+          ]
+        }
+      }
+    },
+    "scope": {
       "type": "string",
       "minLength": 1
     },
@@ -51,13 +111,21 @@
     "runtime_results": {
       "type": "array",
       "items": {
-        "$ref": "#/$defs/runtime_result"
+        "$ref": "urn:harness-forge:schema:runtime-result"
       }
     },
     "worker_evidence": {
       "type": "array",
       "items": {
         "$ref": "urn:harness-forge:schema:worker-evidence"
+      }
+    },
+    "worker_violations": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 20000
       }
     },
     "tool_versions": {
@@ -73,6 +141,13 @@
         "type": "string",
         "pattern": "^[0-9a-f]{64}$"
       }
+    },
+    "symlinks": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "string",
+        "minLength": 1
+      }
     }
   },
   "additionalProperties": false,
@@ -81,12 +156,20 @@
     "decision_digest",
     "contract_digest",
     "kb_version",
+    "idea_digest",
+    "rules_digest",
+    "revision_digest",
+    "confirmed_parts",
+    "answers",
+    "scope",
     "overrides",
     "parts",
     "runtime_results",
     "worker_evidence",
+    "worker_violations",
     "tool_versions",
-    "file_hashes"
+    "file_hashes",
+    "symlinks"
   ],
   "$defs": {
     "part_result": {
@@ -157,6 +240,10 @@
                 "type": "string",
                 "minLength": 1,
                 "maxLength": 20000
+              },
+              "citation": {
+                "type": "string",
+                "minLength": 1
               }
             },
             "additionalProperties": false,
@@ -205,95 +292,6 @@
         "outside_dependencies",
         "rule_results",
         "goal_verdict"
-      ]
-    },
-    "runtime_result": {
-      "type": "object",
-      "properties": {
-        "run_id": {
-          "type": "string",
-          "minLength": 1
-        },
-        "part_id": {
-          "type": "string",
-          "pattern": "^[A-Z][0-9]*$"
-        },
-        "case_id": {
-          "type": "string",
-          "minLength": 1
-        },
-        "prompt": {
-          "type": "string",
-          "minLength": 1,
-          "maxLength": 20000
-        },
-        "expected": {
-          "type": "string",
-          "minLength": 1,
-          "maxLength": 20000
-        },
-        "observed_activation": {
-          "oneOf": [
-            {
-              "type": "string",
-              "minLength": 1,
-              "maxLength": 20000
-            },
-            {
-              "type": "null"
-            }
-          ]
-        },
-        "result": {
-          "enum": [
-            "pass",
-            "fail",
-            "error",
-            "not-run"
-          ]
-        },
-        "reason": {
-          "type": "string",
-          "minLength": 1,
-          "maxLength": 20000
-        },
-        "file_hashes": {
-          "type": "object",
-          "additionalProperties": {
-            "type": "string",
-            "pattern": "^[0-9a-f]{64}$"
-          }
-        },
-        "harness": {
-          "enum": [
-            "claude-code",
-            "codex"
-          ]
-        },
-        "harness_version": {
-          "type": "string",
-          "minLength": 1
-        },
-        "environment": {
-          "type": "string",
-          "minLength": 1,
-          "maxLength": 20000
-        }
-      },
-      "additionalProperties": false,
-      "required": [
-        "run_id",
-        "part_id",
-        "case_id",
-        "prompt",
-        "expected",
-        "observed_activation",
-        "result",
-        "reason",
-        "file_hashes",
-        "harness",
-        "harness_version",
-        "environment"
       ]
     }
   }

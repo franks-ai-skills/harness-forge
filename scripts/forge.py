@@ -17,7 +17,7 @@ if _SOURCE not in sys.path:
 from dataclasses import asdict  # noqa: E402
 
 from harness_forge.contracts import RELAY_KEYS, load_decision, render_contract  # noqa: E402
-from harness_forge.documents import load_document, parse_json, validate, validate_kb  # noqa: E402
+from harness_forge.documents import load_document, parse_json, safe_path, validate, validate_kb  # noqa: E402
 from harness_forge.models import AcceptedRevision, Finding, Rule  # noqa: E402
 from harness_forge.report import render_report, write_report  # noqa: E402
 from harness_forge.research import finding_problem, load_revision  # noqa: E402
@@ -186,11 +186,16 @@ def collect_target(root: Path, decision) -> tuple[dict[str, bytes], dict[str, st
         directory = f".agents/skills/{part['slug']}" if kind == "build" else (part.get("reuse") or {}).get("path")
         if not directory or kind not in ("build", "local-reuse"):
             continue
-        link = root / ".claude" / "skills" / directory.rsplit("/", 1)[-1]
+        name = directory.rsplit("/", 1)[-1]
+        try:
+            base = safe_path(root, directory)
+            safe_path(root, ".claude/skills")
+        except ValueError as error:
+            raise _InvalidInput(str(error)) from error
+        link = root / ".claude" / "skills" / name
         if link.is_symlink():
             symlinks[link.relative_to(root).as_posix()] = str(link.readlink())
-        base = root / directory
-        if base.is_symlink() or not base.is_dir():
+        if not base.is_dir():
             continue
         for path in sorted(base.rglob("*")):
             relative = path.relative_to(root).as_posix()

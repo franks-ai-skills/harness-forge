@@ -78,7 +78,7 @@ class PlanTest(unittest.TestCase):
         references = planned[f".agents/skills/{NAME}/references/requirements.md"]
         self.assertIn(f"name: {NAME}", skill_md)
         self.assertIn("Do not run the reproducer", skill_md)
-        self.assertLess(skill_md.index("The checklist numbers each reproduction step"), skill_md.index("## Procedure"))
+        self.assertLess(skill_md.index("Always: the checklist numbers each reproduction step"), skill_md.index("## Procedure"))
         self.assertIn("The checklist numbers each reproduction step", references)
         self.assertIn("https://docs.example-vendor.com/bug-reports", references)
         self.assertNotIn("uploads logs", "".join(planned.values()))

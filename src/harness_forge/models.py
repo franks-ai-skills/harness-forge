@@ -97,6 +97,7 @@ class Recommendation:
     cons: list[str] = field(default_factory=list)
     reuse: dict | None = None
     pending_question: str | None = None
+    unasked_facts: list[str] = field(default_factory=list)
 
 
 @dataclass(frozen=True)
@@ -218,6 +219,8 @@ class VerificationRun:
     kb_version: str = ""
     scope: str = "Extensive review (rarely needed)"
     tool_versions: dict[str, str] = field(default_factory=dict)
+    targets: list[str] = field(default_factory=list)
+    unconfirmed_reason: str = ""
 
 
 @dataclass(frozen=True)

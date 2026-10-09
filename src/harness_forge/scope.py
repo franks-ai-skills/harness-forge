@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from harness_forge.models import Decision, VerificationRun
 
-_GLOBAL_INPUTS = ("kb_version", "rules", "overrides", "checkers", "worker")
+_GLOBAL_INPUTS = ("idea", "kb_version", "rules", "overrides", "checkers", "worker")
 
 
 def _neighbours(decision: Decision) -> dict[str, set[str]]:

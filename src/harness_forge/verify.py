@@ -11,12 +11,15 @@ failure, and nothing here certifies worker containment.
 from __future__ import annotations
 
 import hashlib
+from dataclasses import asdict
 
 from harness_forge.checks import REGISTRY
 from harness_forge.checks.runner import evaluate_applicability, run_check
+from harness_forge.contracts import contract_parts
 from harness_forge.documents import canonical_digest, validate
 from harness_forge.models import (
-    AcceptedRevision, CheckResult, Confirmation, Decision, PartResult, ReviewResponse, Rule, RuntimeResult, VerificationRun,
+    AcceptedRevision, CheckResult, Confirmation, Contract, Decision, PartResult, ReviewResponse, Rule, RuntimeResult,
+    VerificationRun,
 )
 from harness_forge.predicates import UnknownFact
 from harness_forge.scope import affected_parts
@@ -77,14 +80,29 @@ def bound_inputs(
         "rules": canonical_digest(sorted((rule.to_dict() for rule in rules), key=lambda r: r["id"])),
         "overrides": canonical_digest(list(overrides)),
         "revision": revision.digest if revision else None,
+        "idea": canonical_digest({key: value for key, value in decision.record.items()
+                                  if key not in ("parts", "confirmations_history")}),
         "parts": {part["id"]: canonical_digest(part) for part in decision.record["parts"]},
         "checkers": canonical_digest({checker_id: version for checker_id, (version, _) in sorted(REGISTRY.items())}),
         "worker": canonical_digest(list(worker_evidence)),
     }
 
 
+def _confirmed_parts(decision: Decision, revision: AcceptedRevision | None, confirmation: Confirmation | None,
+                     contract: Contract | None) -> tuple[list[str], str]:
+    """Parts a live confirmation covers, only if its contract still describes the decision."""
+    if confirmation is None:
+        return [], "no live confirmation in this session"
+    if contract is None or confirmation.contract_digest != contract.digest:
+        return [], "the confirmation does not match a displayed contract"
+    if contract.overrides or contract.parts != contract_parts(decision, revision):
+        return [], "the confirmed contract no longer describes the current decision"
+    return sorted(confirmation.part_ids), ""
+
+
 def prepare_run(
     decision: Decision, files: dict[str, bytes], rules: list[Rule], confirmation: Confirmation | None, *,
+    contract: Contract | None = None,
     symlinks: dict[str, str] | None = None, revision: AcceptedRevision | None = None,
     overrides: list[dict] | tuple = (), kb_version: str = "", worker_evidence: list[dict] | tuple = (),
     scope: set[str] | None = None, scope_label: str = "Extensive review (rarely needed)",
@@ -98,11 +116,13 @@ def prepare_run(
     record = decision.record
     inputs = bound_inputs(decision, files, rules, symlinks=symlinks, revision=revision, overrides=overrides,
                           kb_version=kb_version, worker_evidence=worker_evidence)
+    confirmed, unconfirmed_reason = _confirmed_parts(decision, revision, confirmation, contract)
     run_id = confirmation.run_id if confirmation else "unattended-" + canonical_digest(inputs)[:12]
     run = VerificationRun(
         run_id=run_id, decision_digest=canonical_digest(record),
-        contract_digest=confirmation.contract_digest if confirmation else "",
-        applicable_rules={}, frozen_inputs=inputs, confirmed_parts=sorted(confirmation.part_ids) if confirmation else [],
+        contract_digest=contract.digest if confirmed else "",
+        applicable_rules={}, frozen_inputs=inputs, confirmed_parts=confirmed, unconfirmed_reason=unconfirmed_reason,
+        targets=list(record["targets"]),
         parts=[dict(part) for part in record["parts"]], worker_evidence=list(worker_evidence), kb_version=kb_version,
         scope=scope_label, tool_versions={"harness-forge-checkers": inputs["checkers"]},
     )
@@ -155,8 +175,9 @@ def prepare_run(
                 run.not_applicable[part_id][rule.id] = reason
                 continue
             run.applicable_rules[part_id].append(rule.id)
-            run.judged_requests.append({"kind": "rule", "part_id": part_id, "rule_id": rule.id, "statement": rule.statement,
-                                        "applicability": rule.applicability, "severity": rule.severity})
+            run.judged_requests.append({"kind": "rule", "part_id": part_id, "rule_id": rule.id, "rule_kind": rule.kind,
+                                        "statement": rule.statement, "applicability": rule.applicability,
+                                        "severity": rule.severity})
         if part_kind(part) in ("build", "local-reuse"):
             run.judged_requests.append({"kind": "goal", "part_id": part_id, "goal": part["goal"],
                                         "requirement_ids": [rule.id for rule in idea.get(part_id, [])]})
@@ -187,16 +208,19 @@ def validate_review(run: VerificationRun, response: dict) -> ReviewResponse:
 
 
 def _check_runtime(run: VerificationRun, results: list[RuntimeResult]) -> None:
+    """A runtime result counts only for this run, a target harness and exactly the part's frozen files."""
     for result in results:
+        validate(asdict(result), "runtime-result")
         if result.run_id != run.run_id:
             raise ValueError(f"runtime result {result.case_id} belongs to another run")
-        if result.part_id not in run.part_files:
-            raise ValueError(f"runtime result {result.case_id} names an unknown part")
-        for path, digest in result.file_hashes.items():
-            if run.frozen_inputs["files"].get(path) != digest:
-                raise ValueError(f"runtime result {result.case_id} tested a different {path}")
-        if result.result not in ("pass", "fail", "error", "not-run") or not result.reason:
-            raise ValueError(f"runtime result {result.case_id} needs a valid outcome and a reason")
+        if result.part_id not in run.part_dirs:
+            raise ValueError(f"runtime result {result.case_id} names a part without a built artifact")
+        if result.harness not in run.targets:
+            raise ValueError(f"runtime result {result.case_id} ran in {result.harness}, which is not a target")
+        directory = run.part_dirs[result.part_id] + "/"
+        expected = {path: digest for path, digest in run.frozen_inputs["files"].items() if path.startswith(directory)}
+        if not expected or result.file_hashes != expected:
+            raise ValueError(f"runtime result {result.case_id} does not name exactly the part's frozen files")
 
 
 def _goal_result(kind: str, status: str, harness: str, dependencies: list[str]) -> str:
@@ -244,22 +268,25 @@ def finish_run(
                     entry = {"result": "not-applicable", "reason": verdict["reason"]}
             else:
                 entry = {"result": verdict["verdict"], "reason": verdict["reason"]}
+            if verdict is not None:
+                entry["citation"] = verdict["citation"]
             rule_results.append({"rule_id": rule_id, "check": "judged", **entry})
         for rule_id, reason in sorted(run.not_applicable.get(part_id, {}).items()):
             rule_results.append({"rule_id": rule_id, "check": run.rule_index[rule_id]["check"], "result": "not-applicable", "reason": reason})
 
         goal_verdict = goal_verdicts.get(part_id)
         goal = {"verdict": goal_verdict["verdict"], "reason": goal_verdict["reason"]} if goal_verdict else None
+        blocked = part["status"] == "blocked"
         if kind in ("build", "local-reuse"):
             failures = [
                 r for r in rule_results
                 if r["result"] in _BLOCKING or (r["result"] == "fail" and run.rule_index[r["rule_id"]]["severity"] == "error")
             ]
             runtime_failed = any(r.part_id == part_id and r.result in ("fail", "error") for r in runtime_results)
-            ok = confirmed and not failures and not runtime_failed and goal is not None and goal["verdict"] == "met" \
-                and part_id not in changed and not run.worker_violations
+            ok = confirmed and not blocked and not failures and not runtime_failed and goal is not None \
+                and goal["verdict"] == "met" and part_id not in changed and not run.worker_violations
             harness = "verified" if ok else "not verified"
-            status = "verified" if ok else ("built" if confirmed else "blocked")
+            status = "verified" if ok else ("built" if confirmed and not blocked else "blocked")
         else:
             harness = "not checked" if kind == "remote-reuse" else "not applicable"
             status = "blocked" if (not confirmed or kind == "unavailable") else part["status"]

@@ -151,6 +151,12 @@ def _decide(rules: list[Rule], facts: dict, domains: dict[str, list], order: lis
     return None, unknown[0]
 
 
+def _established(rules: list[Rule], kind: str, value, facts: dict) -> Rule | None:
+    """The first rule of a kind that implies value and holds for the given answers."""
+    return next((rule for rule in _of_kind(rules, kind)
+                 if rule.params["implies"][kind] == value and _matches(rule, facts) is True), None)
+
+
 def _domains_from_rules(rules: list[Rule]) -> dict[str, list]:
     """Values the rules test per fact, plus one value no rule tests."""
     domains: dict[str, list] = {}
@@ -190,6 +196,12 @@ def recommend(answers: dict, whole_idea: dict, rules: list[Rule], candidates: li
     outcome = outcome_rule.params["implies"]["outcome"]
     chosen = concept_rules[0] if concept_rules and outcome in _BUILT else None
     mechanism = chosen.params["implies"]["concept"] if chosen else None
+    # The result holds for every remaining answer. Cite only rules whose
+    # conditions hold for the answers given; name the facts left unasked.
+    unasked = sorted(_open_facts(selection_rules, facts))
+    cited_outcome = _established(selection_rules, "outcome", outcome, facts)
+    cited_concept = _established(selection_rules, "concept", mechanism, facts) if chosen else None
+    concept_rules = [rule for rule in concept_rules if _matches(rule, facts) is True]
     reuse = None
     if outcome == "reuse":
         reuse = dict(sorted(qualifying, key=lambda candidate: candidate["name"])[0])
@@ -214,9 +226,11 @@ def recommend(answers: dict, whole_idea: dict, rules: list[Rule], candidates: li
         })
         merged["prerequisites"] = sorted(set(merged["prerequisites"]) | set(control["prerequisites"]))
         merged["required_for_goal"] = merged["required_for_goal"] or control["required_for_goal"]
-        merged["rules"].append(rule.id)
+        if _matches(rule, facts) is True:
+            merged["rules"].append(rule.id)
 
-    cited = [outcome_rule, *([chosen] if chosen else []), *control_rules]
+    cited_controls = [rule for rule in control_rules if _matches(rule, facts) is True]
+    cited = [rule for rule in (cited_outcome, cited_concept) if rule is not None] + cited_controls
     return Recommendation(
         outcome=outcome,
         mechanism=mechanism,
@@ -227,6 +241,7 @@ def recommend(answers: dict, whole_idea: dict, rules: list[Rule], candidates: li
         pros=list(chosen.params.get("pros", [])) if chosen else [],
         cons=list(chosen.params.get("cons", [])) if chosen else [],
         reuse=reuse,
+        unasked_facts=unasked,
     )
 
 

@@ -138,12 +138,17 @@ def run_check(
             pass
         try:
             process.wait(timeout=timeout)
+            timed_out = False
         except subprocess.TimeoutExpired:
             process.kill()
             process.wait()
-            return _result(rule, facts, "error", f"checker {rule.checker} timed out after {timeout:g} s")
+            timed_out = True
         for reader in readers:
             reader.join(timeout=1)
+        process.stdout.close()
+        process.stderr.close()
+        if timed_out:
+            return _result(rule, facts, "error", f"checker {rule.checker} timed out after {timeout:g} s")
 
     output, errors = captured.get("out", b""), captured.get("err", b"").decode("utf-8", "replace")
     if len(output) > output_limit:

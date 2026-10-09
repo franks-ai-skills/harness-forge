@@ -15,6 +15,7 @@ from pathlib import Path
 import yaml
 
 from harness_forge.checks.skills import NAME, PLACEHOLDER
+from harness_forge.contracts import KIND_LABELS, contract_parts
 from harness_forge.models import AcceptedRevision, Confirmation, Contract, Decision, PartResult, Rule
 
 TEMPLATES = Path(__file__).resolve().parents[2] / "templates" / "skill"
@@ -56,6 +57,16 @@ def _limit(rules: list[Rule], rule_id: str, key: str, default: int) -> int:
     return default
 
 
+SKILL_LABELS = {"must": "Always", "must-not": "Never", "should": "Prefer to", "should-not": "Avoid"}
+
+
+def _rule_line(rule: dict) -> str:
+    statement = rule["statement"]
+    if len(statement) > 1 and statement[1].islower():
+        statement = statement[0].lower() + statement[1:]
+    return f"{SKILL_LABELS[rule['kind']]}: {statement}"
+
+
 def _check_bindings(decision: Decision, part_id: str, revision: AcceptedRevision,
                     contract: Contract | None, confirmation: Confirmation | None) -> None:
     if confirmation is None or contract is None:
@@ -67,10 +78,8 @@ def _check_bindings(decision: Decision, part_id: str, revision: AcceptedRevision
     recorded = decision.record.get("accepted_revision") or {}
     if recorded.get("digest") != revision.digest:
         raise ValueError("the decision record names another accepted revision")
-    shown = next((p["requirements"] for p in contract.parts if p["id"] == part_id), None)
-    accepted = [{"rule_id": e["rule"]["id"], "statement": e["rule"]["statement"]} for e in revision.rules if e["part_id"] == part_id]
-    if shown != accepted:
-        raise ValueError("the confirmed contract shows other requirements than the revision")
+    if contract.parts != contract_parts(decision, revision) or contract.overrides:
+        raise ValueError("the confirmed contract no longer describes the current decision and revision")
 
 
 def plan_skill(
@@ -109,8 +118,9 @@ def plan_skill(
     title = name.replace("-", " ").capitalize()
     accepted = [entry["rule"] for entry in revision.rules if entry["part_id"] == part_id]
     body = _template("body.md.tmpl", title=title, procedure=procedure.rstrip() + "\n",
-                     rules="\n".join(f"- {rule['statement']}." for rule in accepted) or "- None accepted.")
-    items = [f"- **{rule['id']}**: {rule['statement']}. Sources: {', '.join(rule['sources'])}" for rule in accepted]
+                     rules="\n".join(f"- {_rule_line(rule)}." for rule in accepted) or "- None accepted.")
+    items = [f"- **{rule['id']}** ({KIND_LABELS[rule['kind']].lower()}): {rule['statement']}. Sources: {', '.join(rule['sources'])}"
+             for rule in accepted]
     planned = {
         f"{base}/SKILL.md": "---\n" + yaml.dump(frontmatter, Dumper=_NoAliases, sort_keys=False, width=10_000) + "---\n" + body,
         f"{base}/references/requirements.md": _template("requirements.md.tmpl", digest=revision.digest,

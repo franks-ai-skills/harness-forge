@@ -97,7 +97,7 @@ class DecisionRecordTest(unittest.TestCase):
                           survey_findings_used=["F1"], split_confirmed=True)
         with tempfile.TemporaryDirectory(prefix="forge-intake-") as directory:
             path = write_decision(Path(directory), record, slug="repro-checklist", date="2026-10-09")
-            self.assertEqual(path, Path(directory) / ".harness" / "decisions" / "2026-10-09-repro-checklist.md")
+            self.assertEqual(path, Path(directory).resolve() / ".harness" / "decisions" / "2026-10-09-repro-checklist.md")
             loaded = load_decision(path)
         self.assertEqual(loaded.record, record.record)
         self.assertEqual(loaded.body.strip(), record.body.strip())

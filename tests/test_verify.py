@@ -42,7 +42,7 @@ def readme(record):
 
 
 def skill_decision(*extra_parts, **part_changes):
-    record = decision(part("A", "Write a reproduction checklist when asked", slug=NAME, status="built", **part_changes),
+    record = decision(part("A", "Write a reproduction checklist when asked", slug=NAME, **{"status": "built", **part_changes}),
                       *extra_parts, facts=FACTS)
     record.record["accepted_revision"] = {"digest": REVISION.digest, "rule_ids": REVISION.rule_ids}
     return record
@@ -65,12 +65,15 @@ class Scenario:
         built_files, built_links = build_files(record) if record.part("A")["chosen"] in ("skills", "commands") else ({}, {})
         self.files = {**built_files, "README.md": readme(record), **(files or {})}
         self.symlinks = symlinks if symlinks is not None else built_links
-        self.confirmation = Confirmation(run_id="run-1", contract_digest="d" * 64, part_ids=list(confirmed)) if confirmed else None
+        self.contract = render_contract(record, REVISION, [], worker_evidence=EVIDENCE)
+        relay = {"choice": "confirm", "displayed_digest": self.contract.digest, "part_ids": list(confirmed), "run_id": "run-1"}
+        self.confirmation = confirm_contract(self.contract, relay, run_id="run-1") if confirmed else None
         key = canonical_digest({"record": record.record, "files": {k: v.decode("latin-1") for k, v in self.files.items()},
                                 "symlinks": self.symlinks, "confirmed": list(confirmed)})
         if key not in _PREPARED:
-            _PREPARED[key] = prepare_run(record, self.files, RULES, self.confirmation, symlinks=self.symlinks,
-                                         revision=REVISION, kb_version="0.1.0", worker_evidence=EVIDENCE)
+            _PREPARED[key] = prepare_run(record, self.files, RULES, self.confirmation, contract=self.contract,
+                                         symlinks=self.symlinks, revision=REVISION, kb_version="0.1.0",
+                                         worker_evidence=EVIDENCE)
         self.run = copy.deepcopy(_PREPARED[key])
 
     def current(self, **changes):
@@ -134,8 +137,10 @@ class PrecedenceTest(unittest.TestCase):
         files, symlinks = build_files(skill_decision())
         scenario = Scenario.__new__(Scenario)
         scenario.record, scenario.files, scenario.symlinks = record, {**files, "README.md": readme(record)}, symlinks
-        scenario.confirmation = Confirmation(run_id="run-1", contract_digest="d" * 64, part_ids=["A"])
-        scenario.run = prepare_run(record, scenario.files, RULES, scenario.confirmation, symlinks=symlinks,
+        contract = render_contract(record, REVISION, [], worker_evidence=EVIDENCE)
+        relay = {"choice": "confirm", "displayed_digest": contract.digest, "part_ids": ["A"], "run_id": "run-1"}
+        scenario.confirmation = confirm_contract(contract, relay, run_id="run-1")
+        scenario.run = prepare_run(record, scenario.files, RULES, scenario.confirmation, contract=contract, symlinks=symlinks,
                                    revision=REVISION, kb_version="0.1.0", worker_evidence=EVIDENCE)
         assert_result(self, scenario.finish()["A"], "verified", "met by the verified build")
 
@@ -222,7 +227,8 @@ class RuntimeAndInputsTest(unittest.TestCase):
         self.scenario = Scenario(skill_decision())
 
     def runtime(self, **changes):
-        part_files = {path: self.scenario.run.frozen_inputs["files"][path] for path in self.scenario.run.part_files["A"]}
+        directory = self.scenario.run.part_dirs["A"] + "/"
+        part_files = {path: digest for path, digest in self.scenario.run.frozen_inputs["files"].items() if path.startswith(directory)}
         value = dict(run_id="run-1", part_id="A", case_id="explicit", prompt="/reproduction-checklist bug 12",
                      expected="The skill activates", observed_activation="Skill tool use", result="pass",
                      reason="Activated once.", file_hashes=part_files, harness="claude-code", harness_version="2.1.292",

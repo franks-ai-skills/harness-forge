@@ -100,8 +100,9 @@ pages:
       - skills.inputs.from-message
     - text: 9. Write evals first and test triggering and behavior separately
       status: not-a-rule
-      reason: Process advice; Forge's verification runs its own activation tests of each built skill (runtime
-        tests), reported separately from rules.
+      reason: 'Process advice; not observable in the built files. Forge''s runtime activation tests are
+        narrower: they check that the built skill activates, and they replace neither a no-skill baseline
+        nor behavior evaluation.'
     - text: 10. Ground skills in human domain knowledge
       status: not-a-rule
       reason: Process advice about authoring; not observable in the built files. Forge's deep research
@@ -161,7 +162,9 @@ pages:
       - skills.reuse.reviewed-and-pinned
     - text: No-skill baseline, trigger and behavior evals; catalog fits both budgets
       status: not-a-rule
-      reason: Process and library-level checks; Forge's runtime tests cover activation of the built skill.
+      reason: 'Process advice; not observable in the built files. Forge''s runtime activation tests are
+        narrower: they check that the built skill activates, and they replace neither a no-skill baseline
+        nor behavior evaluation. Catalog size applies to a whole library.'
     - text: Structure validators, discovery and headless trigger checks
       status: not-a-rule
       reason: Verification tooling, not a property of the files.
@@ -336,8 +339,9 @@ pages:
     items:
     - text: Trigger and behavior eval sets
       status: not-a-rule
-      reason: Process advice; Forge runs its own activation tests of each built skill and reports them
-        separately.
+      reason: 'Process advice; not observable in the built files. Forge''s runtime activation tests are
+        narrower: they check that the built skill activates, and they replace neither a no-skill baseline
+        nor behavior evaluation.'
   - section: 10-ground-skills-in-human-domain-knowledge
     items:
     - text: Source content from real tasks
@@ -454,7 +458,9 @@ pages:
       - skills.goal.no-must-hold-rule-in-skill
     - text: Baseline, evals and catalog size
       status: not-a-rule
-      reason: Process and library-level checks; Forge's runtime tests cover activation.
+      reason: 'Process advice; not observable in the built files. Forge''s runtime activation tests are
+        narrower: they check that the built skill activates, and they replace neither a no-skill baseline
+        nor behavior evaluation. Catalog size applies to a whole library.'
   - section: open-questions
     items:
     - text: Open questions
@@ -828,10 +834,13 @@ pages:
         this slice.
   - section: data-access-and-outbound-channels
     items:
-    - text: Data access and outbound channels
+    - text: Allowed fields and destinations for data a procedure sends out
+      rules:
+      - security.outbound.minimal-data
+    - text: Credential brokering, workload isolation and enforcement at the outbound call
       status: not-a-rule
-      reason: Applies to concepts other than skills; their rules are extracted with their builders, outside
-        this slice.
+      reason: Platform, MCP and network controls outside a built skill's files; their rules come with
+        those builders.
   - section: mcp-authorization-and-transport
     items:
     - text: MCP authorization and transport

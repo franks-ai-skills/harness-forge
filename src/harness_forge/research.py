@@ -17,7 +17,7 @@ from urllib.parse import urlsplit
 import yaml
 
 from harness_forge.checks import REGISTRY
-from harness_forge.documents import canonical_digest, load_document, schema_errors, validate
+from harness_forge.documents import canonical_digest, load_document, safe_path, schema_errors, validate
 from harness_forge.models import AcceptedRevision, Decision, Finding, ResearchBrief, Rule
 
 SNAPSHOT = Path(__file__).resolve().parents[2] / "snapshot"
@@ -248,7 +248,7 @@ def can_adopt(drift: dict, support: dict | None) -> bool:
 
 def write_research(root: Path, record: dict, body: str) -> Path:
     validate(record, "research")
-    path = Path(root) / ".harness" / "research" / f"{record['slug']}.md"
+    path = safe_path(root, f".harness/research/{record['slug']}.md")
     path.parent.mkdir(parents=True, exist_ok=True)
     frontmatter = yaml.dump(record, Dumper=_NoAliases, sort_keys=False, allow_unicode=True, width=100)
     path.write_text(f"---\n{frontmatter}---\n{body.rstrip()}\n", encoding="utf-8")
@@ -260,7 +260,7 @@ def write_revision(root: Path, slug: str, revision: AcceptedRevision) -> Path:
         raise ValueError(f"invalid slug {slug!r}")
     value = {"brief_digest": revision.brief_digest, "digest": revision.digest, "rules": revision.rules}
     validate(value, "revision")
-    path = Path(root) / ".harness" / "research" / f"{slug}.rules.yaml"
+    path = safe_path(root, f".harness/research/{slug}.rules.yaml")
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(yaml.dump(value, Dumper=_NoAliases, sort_keys=False, allow_unicode=True, width=100), encoding="utf-8")
     return path

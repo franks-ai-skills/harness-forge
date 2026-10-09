@@ -15,7 +15,7 @@ from pathlib import Path
 
 import yaml
 
-from harness_forge.documents import canonical_digest, load_document, split_frontmatter, validate
+from harness_forge.documents import canonical_digest, load_document, safe_path, split_frontmatter, validate
 from harness_forge.models import AcceptedRevision, Confirmation, Contract, Decision
 from harness_forge.selection import next_question
 
@@ -42,11 +42,15 @@ def _dump(value) -> str:
 # --- Contract -------------------------------------------------------------
 
 
-def _contract_parts(decision: Decision, revision: AcceptedRevision | None) -> list[dict]:
+KIND_LABELS = {"must": "Must", "must-not": "Must not", "should": "Should", "should-not": "Should not"}
+
+
+def contract_parts(decision: Decision, revision: AcceptedRevision | None) -> list[dict]:
+    """The per-part content a contract shows and its digest binds."""
     requirements: dict[str, list[dict]] = {}
     for entry in revision.rules if revision else []:
         requirements.setdefault(entry["part_id"], []).append(
-            {"rule_id": entry["rule"]["id"], "statement": entry["rule"]["statement"]}
+            {"rule_id": entry["rule"]["id"], "kind": entry["rule"]["kind"], "statement": entry["rule"]["statement"]}
         )
     return [
         {
@@ -81,7 +85,7 @@ def _part_text(part: dict) -> list[str]:
         lines.append("  Outside controls: none")
     if part["requirements"]:
         lines.append("  Accepted requirements:")
-        lines.extend(f"    - {item['rule_id']}: {item['statement']}" for item in part["requirements"])
+        lines.extend(f"    - {item['rule_id']}: {KIND_LABELS[item['kind']]}: {item['statement']}" for item in part["requirements"])
     else:
         lines.append("  Accepted requirements: none")
     return lines
@@ -118,7 +122,7 @@ def render_contract(
     validate(decision.record, "decision")
     for evidence in worker_evidence:
         validate(evidence, "worker-evidence")
-    parts = _contract_parts(decision, revision)
+    parts = contract_parts(decision, revision)
     override_entries = [
         {"rule_id": override["rule_id"], "content": _dump(override), "digest": canonical_digest(override)}
         for override in overrides
@@ -302,7 +306,7 @@ def write_decision(root: Path, decision: Decision, *, slug: str, date: str) -> P
     if not re.fullmatch(r"[a-z0-9][a-z0-9-]*", slug) or not re.fullmatch(r"\d{4}-\d{2}-\d{2}", date):
         raise ValueError(f"invalid slug {slug!r} or date {date!r}")
     validate(decision.record, "decision")
-    path = Path(root) / ".harness" / "decisions" / f"{date}-{slug}.md"
+    path = safe_path(root, f".harness/decisions/{date}-{slug}.md")
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(f"---\n{_dump(decision.record)}---\n{decision.body.rstrip()}\n", encoding="utf-8")
     return path

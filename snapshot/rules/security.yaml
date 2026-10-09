@@ -54,3 +54,17 @@
     - docs/guide/security.md#where-each-concept-is-attacked
     - docs/guide/security.md#executables-approvals-and-isolation
   contested: false
+
+- id: security.outbound.minimal-data
+  concept: security
+  kind: should
+  severity: warning
+  check: judged
+  applicability: judged
+  statement: A procedure that sends data to an external service, a search or a tool names the allowed destinations and passes only the fields the task needs, never private data or text taken from fetched or untrusted content
+  applies_to: {harnesses: [claude-code, codex, opencode]}
+  evidence: Vendor
+  sources:
+    - docs/guide/security.md#data-access-and-outbound-channels
+    - https://developers.openai.com/api/docs/guides/deep-research
+  contested: false
