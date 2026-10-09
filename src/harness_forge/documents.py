@@ -228,16 +228,17 @@ def file_digest(path: Path) -> str:
 
 # --- Harness KB validation -------------------------------------------------
 
-_CAPPED_EVIDENCE = ("Practitioner", "Inference")
+_CAPPED_EVIDENCE = ("Advisory", "Practitioner", "Inference")
 
 
-def heading_anchors(text: str) -> set[str]:
-    """GitHub-style anchors of Markdown headings."""
+def heading_anchors(text: str, levels: range = range(1, 7)) -> set[str]:
+    """GitHub-style anchors of Markdown headings outside code fences."""
     anchors = set()
+    text = re.sub(r"^(```|~~~).*?^\1", "", text, flags=re.S | re.M)
     for line in text.splitlines():
-        match = re.match(r"^#{1,6}\s+(.*?)\s*#*\s*$", line)
-        if match:
-            slug = re.sub(r"[^\w\- ]", "", match.group(1).lower()).strip().replace(" ", "-")
+        match = re.match(r"^(#{1,6})\s+(.*?)\s*#*\s*$", line)
+        if match and len(match.group(1)) in levels:
+            slug = re.sub(r"[^\w\- ]", "", match.group(2).lower()).strip().replace(" ", "-")
             anchors.add(slug)
     return anchors
 
@@ -304,7 +305,7 @@ class _KbCheck:
 
 def validate_kb(root: Path) -> list[str]:
     """Check a Harness KB checkout or snapshot; return its errors."""
-    check = _KbCheck(root)
+    check = _KbCheck(Path(root).resolve())
     root = check.root
     if not root.is_dir():
         return [f"{root}: not a directory"]
@@ -379,13 +380,23 @@ def validate_kb(root: Path) -> list[str]:
                     check.check_source(owner, source)
 
     coverage = check.load("rules/coverage.yaml", "coverage") or {"pages": []}
+    covered_rules = set()
     for page in coverage["pages"]:
         if check.page_anchors(page["page"]) is None:
             check.error(f"rules/coverage.yaml: page {page['page']} is not in the KB")
+            continue
+        sections = {section["section"] for section in page["sections"]}
+        page_text = _read_bounded(root / page["page"], root)
+        for anchor in sorted(heading_anchors(page_text, range(2, 4)) - sections):
+            check.error(f"rules/coverage.yaml: uncovered section {page['page']}#{anchor}")
         for section in page["sections"]:
             check.check_source("rules/coverage.yaml", f"{page['page']}#{section['section']}")
             for item in section["items"]:
                 for rule_id in item.get("rules", []):
+                    covered_rules.add(rule_id)
                     if rule_id not in seen:
                         check.error(f"rules/coverage.yaml: {page['page']}#{section['section']}: unknown rule {rule_id}")
+    for rule_id, relative in seen.items():
+        if relative != "rules/selection.yaml" and rule_id not in covered_rules:
+            check.error(f"{relative}: rule {rule_id} is not in rules/coverage.yaml")
     return check.errors

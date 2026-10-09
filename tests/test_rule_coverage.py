@@ -99,6 +99,36 @@ class SnapshotPinTest(unittest.TestCase):
             self.tool.pin_snapshot(self.kb, Path(self._directory.name) / "dirty")
 
 
+class CoverageCompletenessTest(unittest.TestCase):
+    def setUp(self):
+        sys.path.insert(0, str(FORGE / "src"))
+        from harness_forge.documents import validate_kb
+
+        self.validate_kb = validate_kb
+        self._directory = tempfile.TemporaryDirectory(prefix="forge-coverage-")
+        self.kb = Path(self._directory.name) / "kb"
+        shutil.copytree(FORGE / "tests" / "fixtures" / "minimal-kb", self.kb)
+
+    def tearDown(self):
+        self._directory.cleanup()
+
+    def test_minimal_kb_is_fully_covered(self):
+        self.assertEqual(self.validate_kb(self.kb), [])
+
+    def test_uncovered_section_fails(self):
+        page = self.kb / "docs" / "guide" / "skills.md"
+        page.write_text(page.read_text(encoding="utf-8") + "\n## Portability\n\nNew section.\n", encoding="utf-8")
+        errors = self.validate_kb(self.kb)
+        self.assertTrue(any("uncovered section docs/guide/skills.md#portability" in error for error in errors), errors)
+
+    def test_rule_missing_from_coverage_fails(self):
+        coverage = self.kb / "rules" / "coverage.yaml"
+        text = coverage.read_text(encoding="utf-8").replace("rules: [skills.description.length]", "status: not-a-rule\n            reason: Synthetic.")
+        coverage.write_text(text, encoding="utf-8")
+        errors = self.validate_kb(self.kb)
+        self.assertTrue(any("skills.description.length is not in rules/coverage.yaml" in error for error in errors), errors)
+
+
 @unittest.skipUnless(SIBLINGS, "needs sibling playground and agent-harness-kb checkouts")
 class KbCopyTest(unittest.TestCase):
     def setUp(self):
@@ -131,6 +161,12 @@ class KbCopyTest(unittest.TestCase):
         for text in (instructions, skill):
             self.assertIn("../agent-harness-kb", text)
             self.assertRegex(text, r"(?i)frozen")
+
+    def test_real_kb_validates(self):
+        sys.path.insert(0, str(FORGE / "src"))
+        from harness_forge.documents import validate_kb
+
+        self.assertEqual(validate_kb(KB.resolve()), [])
 
     def test_retained_research_is_unchanged(self):
         self.assertEqual(self.tool.check_migration_source(PLAYGROUND, self.manifest), [])

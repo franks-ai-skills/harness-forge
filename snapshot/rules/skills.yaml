@@ -1,0 +1,469 @@
+# Skills rules, extracted 2026-10-09 from the skills pages in all four
+# layers. Primary sources re-fetched on 2026-10-09 (policy/source-checks.md).
+
+# --- Package and frontmatter (script) ---------------------------------------
+
+- id: skills.frontmatter.valid
+  concept: skills
+  kind: must
+  severity: error
+  check: script
+  checker: skills.frontmatter
+  statement: SKILL.md starts with YAML frontmatter that sets a non-empty string name and description; license and compatibility are strings, compatibility at most 500 characters, and metadata maps strings to strings
+  applies_to: {harnesses: [claude-code, codex, opencode]}
+  evidence: Vendor
+  sources:
+    - docs/vendors/opencode/skills.md#format
+    - docs/vendors/codex/skills.md#skillmd-frontmatter-that-codex-reads
+    - docs/vendors/claude-code/skills.md#format
+    - docs/concepts/skills.md#frontmatter
+    - https://opencode.ai/docs/skills/
+    - https://agentskills.io/specification
+  contested: false
+
+- id: skills.name.format
+  concept: skills
+  kind: must
+  severity: error
+  check: script
+  checker: skills.name-format
+  params: {max_chars: 64}
+  statement: The skill name is 1 to 64 lowercase letters, digits and single hyphens, and equals the skill directory name
+  applies_to: {harnesses: [claude-code, codex, opencode]}
+  evidence: Vendor
+  sources:
+    - docs/guide/skills.md#portability
+    - docs/concepts/skills.md#frontmatter
+    - docs/vendors/opencode/skills.md#format
+    - https://opencode.ai/docs/skills/
+    - https://agentskills.io/specification
+  contested: false
+
+- id: skills.description.length
+  concept: skills
+  kind: must
+  severity: error
+  check: script
+  checker: skills.description-length
+  params: {max_chars: 1024}
+  statement: The description is present and at most 1,024 characters, the limit of Codex, OpenCode and the specification
+  applies_to: {harnesses: [claude-code, codex, opencode]}
+  evidence: Vendor
+  sources:
+    - docs/concepts/skills.md#frontmatter
+    - docs/vendors/codex/skills.md#skillmd-frontmatter-that-codex-reads
+    - docs/vendors/opencode/skills.md#format
+    - https://github.com/openai/codex/blob/main/codex-rs/ext/skills/src/loader/mod.rs
+    - https://opencode.ai/docs/skills/
+  contested: false
+
+- id: skills.description.concise
+  concept: skills
+  kind: should
+  severity: warning
+  check: script
+  checker: skills.description-length
+  params: {max_chars: 500}
+  statement: The description stays within about 500 characters, so catalog truncation in either harness keeps the trigger words
+  applies_to: {harnesses: [claude-code, codex]}
+  evidence: Inference
+  sources:
+    - docs/best-practices/skills.md#2-write-the-description-as-the-trigger-condition
+    - docs/research-notes/agent-harness-best-practices/skills.md
+  contested: false
+
+- id: skills.body.size
+  concept: skills
+  kind: should
+  severity: warning
+  check: script
+  checker: skills.body-lines
+  params: {max_lines: 500}
+  statement: SKILL.md stays under 500 lines, with detail moved to reference files
+  applies_to: {harnesses: [claude-code, codex, opencode]}
+  evidence: Vendor
+  sources:
+    - docs/best-practices/skills.md#3-keep-skillmd-lean-and-put-gotchas-first
+    - docs/concepts/skills.md#body
+    - https://code.claude.com/docs/en/skills
+    - https://agentskills.io/specification
+  contested: false
+
+- id: skills.references.resolve
+  concept: skills
+  kind: must
+  severity: error
+  check: script
+  checker: links.relative-references
+  statement: Every relative link in SKILL.md and its Markdown files points to an existing file inside the skill directory
+  applies_to: {harnesses: [claude-code, codex, opencode]}
+  evidence: Vendor
+  severity_rationale: A missing or escaping target leaves the body's instruction to read or run that file unusable in every harness.
+  sources:
+    - docs/best-practices/skills.md#4-disclose-detail-progressively-with-explicit-triggers
+    - https://platform.claude.com/docs/en/agents-and-tools/agent-skills/best-practices
+  contested: false
+
+- id: skills.references.one-level
+  concept: skills
+  kind: should
+  severity: warning
+  check: script
+  checker: skills.reference-depth
+  statement: Reference files link directly from SKILL.md and do not chain to further reference files
+  applies_to: {harnesses: [claude-code, codex, opencode]}
+  evidence: Vendor
+  sources:
+    - docs/best-practices/skills.md#4-disclose-detail-progressively-with-explicit-triggers
+    - https://platform.claude.com/docs/en/agents-and-tools/agent-skills/best-practices
+    - https://agentskills.io/specification
+  contested: false
+
+- id: skills.package.no-auxiliary-docs
+  concept: skills
+  kind: must-not
+  severity: warning
+  check: script
+  checker: skills.no-auxiliary-docs
+  params: {names: [README.md, CHANGELOG.md, INSTALLATION_GUIDE.md, QUICK_REFERENCE.md]}
+  statement: The skill directory contains no README, changelog or other documentation the agent does not use
+  applies_to: {harnesses: [claude-code, codex, opencode]}
+  evidence: Vendor
+  sources:
+    - docs/best-practices/skills.md#anti-patterns
+    - https://raw.githubusercontent.com/openai/skills/main/skills/.system/skill-creator/SKILL.md
+  contested: false
+
+# --- Portability (script, when both harnesses are targets) ------------------
+
+- id: skills.portable.layout
+  concept: skills
+  kind: must
+  severity: error
+  check: script
+  checker: links.portable-symlink
+  statement: The canonical skill lives in .agents/skills/<name>/ and .claude/skills/<name> is a relative symbolic link to it
+  applies_to:
+    harnesses: [claude-code, codex]
+    when: [{eq: [target_set, both]}]
+  evidence: Vendor
+  sources:
+    - docs/concepts/skills.md#directory-layout
+    - docs/guide/skills.md#portability
+    - https://code.claude.com/docs/en/skills
+    - https://learn.chatgpt.com/docs/build-skills
+  contested: false
+
+- id: skills.portable.frontmatter
+  concept: skills
+  kind: should
+  severity: warning
+  check: script
+  checker: skills.portable-frontmatter
+  params: {allowed_keys: [name, description, license, compatibility, metadata, disable-model-invocation]}
+  statement: A skill shared by both harnesses uses only portable frontmatter keys, plus disable-model-invocation for user-invoked skills
+  applies_to:
+    harnesses: [claude-code, codex]
+    when: [{eq: [target_set, both]}]
+  evidence: Vendor
+  sources:
+    - docs/concepts/skills.md#frontmatter
+    - docs/best-practices/skills.md#12-keep-one-canonical-copy-with-portable-frontmatter
+    - https://code.claude.com/docs/en/skills
+  contested: false
+
+- id: skills.portable.no-claude-placeholders
+  concept: skills
+  kind: must-not
+  severity: warning
+  check: script
+  checker: skills.portable-body
+  statement: The body of a skill shared by both harnesses uses no $ARGUMENTS, $N, ${CLAUDE_SKILL_DIR} placeholders or !`cmd` injection, which stay literal in Codex
+  applies_to:
+    harnesses: [claude-code, codex]
+    when: [{eq: [target_set, both]}]
+  evidence: Vendor
+  sources:
+    - docs/concepts/skills.md#body
+    - docs/guide/skills.md#portability
+    - https://code.claude.com/docs/en/skills
+  contested: false
+
+- id: skills.invocation.both-flags
+  concept: skills
+  kind: must
+  severity: error
+  check: script
+  checker: skills.invocation-flags
+  statement: disable-model-invocation true in SKILL.md and policy.allow_implicit_invocation false in agents/openai.yaml are set together or not at all
+  applies_to:
+    harnesses: [claude-code, codex]
+    when: [{eq: [target_set, both]}]
+  evidence: Vendor
+  severity_rationale: With only one flag, one harness invokes a skill the user meant to start themselves, including side-effecting ones.
+  sources:
+    - docs/concepts/skills.md#invocation-policy-in-both-leads
+    - docs/best-practices/skills.md#8-make-side-effecting-skills-user-invoked-in-both-leads
+    - https://code.claude.com/docs/en/skills
+    - https://learn.chatgpt.com/docs/build-skills
+  contested: false
+
+# --- Description and body (judged) -------------------------------------------
+
+- id: skills.description.what-and-when
+  concept: skills
+  kind: should
+  severity: warning
+  check: judged
+  statement: The description says what the skill does with concrete verbs and objects, then when to use it in phrases a user would say, with the key use case and trigger words first
+  applies_to: {harnesses: [claude-code, codex, opencode]}
+  evidence: Vendor
+  sources:
+    - docs/best-practices/skills.md#2-write-the-description-as-the-trigger-condition
+    - https://learn.chatgpt.com/docs/build-skills
+    - https://agentskills.io/skill-creation/optimizing-descriptions.md
+  contested: false
+
+- id: skills.description.no-workflow-steps
+  concept: skills
+  kind: must-not
+  severity: warning
+  check: judged
+  statement: The description lists the skill's workflow steps
+  applies_to: {harnesses: [claude-code, codex, opencode]}
+  evidence: Practitioner
+  sources:
+    - docs/best-practices/skills.md#2-write-the-description-as-the-trigger-condition
+    - https://raw.githubusercontent.com/obra/superpowers/main/skills/writing-skills/SKILL.md
+  contested: false
+
+- id: skills.description.boundary
+  concept: skills
+  kind: should
+  severity: warning
+  check: judged
+  statement: The description names what the skill is not for when a neighbouring task could trigger it
+  applies_to: {harnesses: [claude-code, codex, opencode]}
+  evidence: Advisory
+  sources:
+    - docs/best-practices/skills.md#2-write-the-description-as-the-trigger-condition
+    - https://agentskills.io/skill-creation/optimizing-descriptions.md
+  contested: false
+
+- id: skills.description.voice
+  concept: skills
+  kind: should
+  severity: warning
+  check: judged
+  statement: The description describes the skill in the third person rather than as "I can" or "You can"
+  applies_to: {harnesses: [claude-code, codex, opencode]}
+  evidence: Vendor
+  sources:
+    - docs/best-practices/skills.md#2-write-the-description-as-the-trigger-condition
+  contested: true
+  positions:
+    - position: Always write in the third person; an inconsistent point of view can cause discovery problems
+      sources: [https://platform.claude.com/docs/en/agents-and-tools/agent-skills/best-practices]
+    - position: Use imperative "Use this skill when" phrasing for the trigger
+      sources: [https://agentskills.io/skill-creation/optimizing-descriptions.md, https://raw.githubusercontent.com/obra/superpowers/main/skills/writing-skills/SKILL.md]
+
+- id: skills.body.only-what-model-lacks
+  concept: skills
+  kind: should
+  severity: warning
+  check: judged
+  statement: The body holds only what the model would otherwise get wrong, as standing instructions, without explaining what the model already knows
+  applies_to: {harnesses: [claude-code, codex, opencode]}
+  evidence: Vendor
+  sources:
+    - docs/best-practices/skills.md#3-keep-skillmd-lean-and-put-gotchas-first
+    - https://platform.claude.com/docs/en/agents-and-tools/agent-skills/best-practices
+  contested: false
+
+- id: skills.body.gotchas-first
+  concept: skills
+  kind: should
+  severity: warning
+  check: judged
+  statement: Gotchas and non-negotiable rules sit near the top of SKILL.md, not in a reference file
+  applies_to: {harnesses: [claude-code, codex, opencode]}
+  evidence: Advisory
+  sources:
+    - docs/best-practices/skills.md#3-keep-skillmd-lean-and-put-gotchas-first
+    - https://agentskills.io/skill-creation/best-practices.md
+  contested: false
+
+- id: skills.body.no-time-bound-statements
+  concept: skills
+  kind: must-not
+  severity: warning
+  check: judged
+  statement: The skill contains time-bound statements outside an "Old patterns" section
+  applies_to: {harnesses: [claude-code, codex, opencode]}
+  evidence: Vendor
+  sources:
+    - docs/best-practices/skills.md#3-keep-skillmd-lean-and-put-gotchas-first
+    - https://platform.claude.com/docs/en/agents-and-tools/agent-skills/best-practices
+  contested: false
+
+- id: skills.references.load-conditions
+  concept: skills
+  kind: should
+  severity: warning
+  check: judged
+  applicability: judged
+  statement: Each reference file is named in SKILL.md with the condition under which to read it, and each fact lives in one place
+  applies_to: {harnesses: [claude-code, codex, opencode]}
+  evidence: Vendor
+  sources:
+    - docs/best-practices/skills.md#4-disclose-detail-progressively-with-explicit-triggers
+    - https://platform.claude.com/docs/en/agents-and-tools/agent-skills/best-practices
+    - https://agentskills.io/skill-creation/best-practices.md
+  contested: false
+
+- id: skills.body.strictness-matches-fragility
+  concept: skills
+  kind: should
+  severity: warning
+  check: judged
+  statement: Instructions are prescriptive only where an operation is fragile, and offer one default with an escape hatch instead of a menu of options
+  applies_to: {harnesses: [claude-code, codex, opencode]}
+  evidence: Vendor
+  sources:
+    - docs/best-practices/skills.md#5-match-strictness-to-fragility
+    - https://platform.claude.com/docs/en/agents-and-tools/agent-skills/best-practices
+  contested: false
+
+- id: skills.scripts.agent-caller
+  concept: skills
+  kind: should
+  severity: warning
+  check: judged
+  applicability: judged
+  statement: Bundled scripts are non-interactive, document themselves through --help, write structured output to stdout and diagnostics to stderr, bound their output, explain errors and offer --dry-run for destructive actions
+  applies_to: {harnesses: [claude-code, codex, opencode]}
+  evidence: Vendor
+  sources:
+    - docs/best-practices/skills.md#6-put-deterministic-logic-in-tested-scripts
+    - https://platform.claude.com/docs/en/agents-and-tools/agent-skills/best-practices
+    - https://agentskills.io/skill-creation/using-scripts.md
+  contested: false
+
+- id: skills.body.reasons-before-hard-rules
+  concept: skills
+  kind: should
+  severity: warning
+  check: judged
+  statement: Rules carry their reason; emphatic ALWAYS/NEVER wording appears only where it is needed
+  applies_to: {harnesses: [claude-code, codex, opencode]}
+  evidence: Vendor
+  sources:
+    - docs/best-practices/skills.md#7-explain-the-why-before-adding-hard-rules
+  contested: true
+  positions:
+    - position: All-caps ALWAYS or NEVER is a yellow flag; explain the reasoning instead
+      sources: [https://raw.githubusercontent.com/anthropics/skills/main/skills/skill-creator/SKILL.md, https://agentskills.io/skill-creation/evaluating-skills.md]
+    - position: Discipline skills need firm prohibitions and rationalization tables
+      sources: [https://raw.githubusercontent.com/obra/superpowers/main/skills/writing-skills/SKILL.md, https://platform.claude.com/docs/en/agents-and-tools/agent-skills/best-practices]
+
+- id: skills.invocation.side-effects-user-invoked
+  concept: skills
+  kind: must
+  severity: error
+  check: judged
+  applicability: judged
+  statement: A skill that changes external state or where timing matters, such as deploying or committing, is user-invoked in every target harness
+  applies_to: {harnesses: [claude-code, codex]}
+  evidence: Vendor
+  sources:
+    - docs/best-practices/skills.md#8-make-side-effecting-skills-user-invoked-in-both-leads
+    - https://code.claude.com/docs/en/skills
+    - https://learn.chatgpt.com/docs/build-skills
+  contested: false
+
+- id: skills.inputs.from-message
+  concept: skills
+  kind: should
+  severity: warning
+  check: judged
+  statement: The body reads its inputs from the user's message and asks when they are missing, instead of relying on argument substitution
+  applies_to:
+    harnesses: [claude-code, codex]
+    when: [{eq: [target_set, both]}]
+  evidence: Vendor
+  sources:
+    - docs/best-practices/skills.md#8-make-side-effecting-skills-user-invoked-in-both-leads
+    - docs/concepts/skills.md#body
+  contested: false
+
+- id: skills.goal.no-must-hold-rule-in-skill
+  concept: skills
+  kind: must-not
+  severity: error
+  check: judged
+  statement: A rule that the confirmed goal says must hold every time is enforced only by skill text
+  applies_to: {harnesses: [claude-code, codex, opencode]}
+  evidence: Vendor
+  sources:
+    - docs/best-practices/skills.md#13-move-rules-that-must-hold-every-time-into-hooks
+    - https://code.claude.com/docs/en/skills
+  contested: false
+
+- id: skills.scope.committed-for-automation
+  concept: skills
+  kind: should
+  severity: warning
+  check: judged
+  applicability: judged
+  statement: A skill that CI or cloud runs need is committed in project scope, not only in user scope
+  applies_to: {harnesses: [claude-code, codex]}
+  evidence: Vendor
+  sources:
+    - docs/concepts/skills.md#directory-layout
+    - https://code.claude.com/docs/en/skills
+  contested: false
+
+# --- Security (judged) --------------------------------------------------------
+
+- id: skills.security.no-surprising-content
+  concept: skills
+  kind: must-not
+  severity: error
+  check: judged
+  statement: The skill's files contain instructions or code whose intent would surprise the user given its description, such as hidden directives, remote fetch-and-run, encoded payloads or credential access
+  applies_to: {harnesses: [claude-code, codex, opencode]}
+  evidence: Vendor
+  sources:
+    - docs/best-practices/skills.md#security
+    - https://raw.githubusercontent.com/anthropics/skills/main/skills/skill-creator/SKILL.md
+  contested: false
+
+- id: skills.security.allowed-tools-least-privilege
+  concept: skills
+  kind: should
+  severity: warning
+  check: judged
+  applicability: judged
+  statement: allowed-tools grants only the tools the skill needs, because workspace trust does not gate it
+  applies_to: {harnesses: [claude-code]}
+  evidence: Vendor
+  sources:
+    - docs/best-practices/skills.md#security
+    - docs/vendors/claude-code/skills.md#limits-and-gotchas
+    - https://code.claude.com/docs/en/skills
+  contested: false
+
+- id: skills.reuse.reviewed-and-pinned
+  concept: skills
+  kind: must
+  severity: error
+  check: judged
+  statement: A reused third-party skill was read in full, including scripts, and is pinned by commit or hash
+  applies_to:
+    harnesses: [claude-code, codex, opencode]
+    when: [{eq: [outcome, reuse]}]
+  evidence: Vendor
+  sources:
+    - docs/best-practices/skills.md#security
+    - https://owasp.github.io/www-project-agentic-skills-top-10/ast01
+  contested: false

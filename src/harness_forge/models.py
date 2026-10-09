@@ -153,10 +153,14 @@ class Confirmation:
 
 @dataclass(frozen=True)
 class CheckResult:
+    """A script rule's result: ``pass | fail | not-applicable | error``."""
+
+    part_id: str | None
     rule_id: str
-    part_id: str
-    result: str
+    status: str
+    severity: str
     reason: str
+    sources: list[str]
     checker: str | None = None
     checker_version: str | None = None
 

@@ -1,0 +1,970 @@
+# Every swept section and item: the rules it became, or why it is not a rule.
+# Extracted 2026-10-09.
+pages:
+- page: docs/guide/skills.md
+  sections:
+  - section: comparison
+    items:
+    - text: Harness comparison table
+      status: not-a-rule
+      reason: Reference facts about the harness; the rules that depend on them cite this section.
+  - section: generalized-model
+    items:
+    - text: Skill package, frontmatter, roots, catalog, lifecycle and invocation policy
+      status: not-a-rule
+      reason: Reference facts about the harness; the rules that depend on them cite this section.
+  - section: when-to-use-it-and-when-not
+    items:
+    - text: Use and do-not-use table
+      status: not-a-rule
+      reason: Mechanism selection, not a property of a built skill; rules/selection.yaml encodes it (plan
+        task 6).
+  - section: approaches
+    items:
+    - text: Overview of the approaches below
+      status: not-a-rule
+      reason: Reference facts about the harness; the rules that depend on them cite this section.
+  - section: model-invoked-skill
+    items:
+    - text: Activation depends entirely on the description
+      rules:
+      - skills.description.what-and-when
+  - section: user-invoked-skill
+    items:
+    - text: Side-effecting skills are user-invoked with both flags
+      rules:
+      - skills.invocation.side-effects-user-invoked
+      - skills.invocation.both-flags
+  - section: pointer-in-the-instruction-file-plus-skill
+    items:
+    - text: Pointer or compressed index for knowledge whose omission is silent
+      status: not-a-rule
+      reason: Mechanism selection, not a property of a built skill; rules/selection.yaml encodes it (plan
+        task 6).
+  - section: script-backed-skill
+    items:
+    - text: Deterministic operations go into scripts built for an agent caller
+      rules:
+      - skills.scripts.agent-caller
+  - section: skill-that-delegates-to-a-subagent
+    items:
+    - text: 'context: fork and naming a subagent in the body'
+      status: dropped
+      reason: Claude Code-only feature or a subagent build; subagent builders are outside this slice.
+  - section: distribution-and-scope
+    items:
+    - text: Skills needed by CI or cloud runs are committed
+      rules:
+      - skills.scope.committed-for-automation
+    - text: One canonical copy symlinked into the other root
+      rules:
+      - skills.portable.layout
+  - section: practices
+    items:
+    - text: 1. Write a skill only where it adds what the model lacks
+      status: not-a-rule
+      reason: Process advice about whether to build; not observable in the built files. The intake's selection
+        asks whether a skill is needed.
+    - text: 2. Write the description as the trigger condition
+      rules:
+      - skills.description.what-and-when
+      - skills.description.no-workflow-steps
+      - skills.description.boundary
+      - skills.description.voice
+      - skills.description.concise
+      - skills.description.length
+    - text: 3. Keep SKILL.md lean and put gotchas first
+      rules:
+      - skills.body.size
+      - skills.body.only-what-model-lacks
+      - skills.body.gotchas-first
+      - skills.package.no-auxiliary-docs
+    - text: 4. Disclose detail progressively with explicit triggers
+      rules:
+      - skills.references.one-level
+      - skills.references.load-conditions
+      - skills.references.resolve
+    - text: 5. Match strictness to fragility
+      rules:
+      - skills.body.strictness-matches-fragility
+    - text: 6. Put deterministic logic in tested scripts built for an agent caller
+      rules:
+      - skills.scripts.agent-caller
+    - text: 7. Explain the why before adding hard rules
+      rules:
+      - skills.body.reasons-before-hard-rules
+    - text: 8. Make side-effecting skills user-invoked in both leads, and read inputs from the message
+      rules:
+      - skills.invocation.side-effects-user-invoked
+      - skills.invocation.both-flags
+      - skills.inputs.from-message
+    - text: 9. Write evals first and test triggering and behavior separately
+      status: not-a-rule
+      reason: Process advice; Forge's verification runs its own activation tests of each built skill (runtime
+        tests), reported separately from rules.
+    - text: 10. Ground skills in human domain knowledge
+      status: not-a-rule
+      reason: Process advice about authoring; not observable in the built files. Forge's deep research
+        supplies sourced domain requirements.
+    - text: 11. Keep the library small and curated
+      status: not-a-rule
+      reason: Applies to a whole skill library, not to one built skill.
+    - text: 12. Move rules that must hold every time into hooks
+      rules:
+      - skills.goal.no-must-hold-rule-in-skill
+  - section: security
+    items:
+    - text: Third-party skills are code and prompt injection with the user's privileges
+      rules:
+      - skills.reuse.reviewed-and-pinned
+      - skills.security.no-surprising-content
+    - text: Repository skills grant tools without trust
+      rules:
+      - skills.security.allowed-tools-least-privilege
+  - section: cross-concept-checks
+    items:
+    - text: Connect the skill to the security guide's boundaries
+      rules:
+      - security.helpers.confined
+      - security.untrusted-input.as-data
+  - section: verification-and-checklist
+    items:
+    - text: name is spec-valid and equals the directory name
+      rules:
+      - skills.name.format
+    - text: description states what, Use when and a boundary; key words first; no workflow steps
+      rules:
+      - skills.description.what-and-when
+      - skills.description.boundary
+      - skills.description.no-workflow-steps
+    - text: SKILL.md under 500 lines; references one level deep with load conditions
+      rules:
+      - skills.body.size
+      - skills.references.one-level
+      - skills.references.load-conditions
+    - text: Scripts are non-interactive, bounded, with --help, clear errors and --dry-run
+      rules:
+      - skills.scripts.agent-caller
+    - text: Side-effecting skills set both lead flags
+      rules:
+      - skills.invocation.side-effects-user-invoked
+      - skills.invocation.both-flags
+    - text: Shared skills use only portable frontmatter; one canonical copy is symlinked
+      rules:
+      - skills.portable.frontmatter
+      - skills.portable.layout
+    - text: Skills needed by CI or cloud runs are committed
+      rules:
+      - skills.scope.committed-for-automation
+    - text: Every third-party skill was read in full and pinned
+      rules:
+      - skills.reuse.reviewed-and-pinned
+    - text: No-skill baseline, trigger and behavior evals; catalog fits both budgets
+      status: not-a-rule
+      reason: Process and library-level checks; Forge's runtime tests cover activation of the built skill.
+    - text: Structure validators, discovery and headless trigger checks
+      status: not-a-rule
+      reason: Verification tooling, not a property of the files.
+  - section: portability
+    items:
+    - text: Directory layout with one canonical copy and a symlink
+      rules:
+      - skills.portable.layout
+    - text: Portable frontmatter table
+      rules:
+      - skills.frontmatter.valid
+      - skills.name.format
+      - skills.description.length
+      - skills.portable.frontmatter
+    - text: 'Traps: both flags, no placeholders, cloud runs ignore user scope'
+      rules:
+      - skills.invocation.both-flags
+      - skills.portable.no-claude-placeholders
+      - skills.scope.committed-for-automation
+    - text: OpenCode sees two copies; script pre-approval; versioning
+      status: not-a-rule
+      reason: Harness facts without a checkable property for Claude Code and Codex builds.
+  - section: dropped-from-the-generalization
+    items:
+    - text: Harness-only features stay out of shared skills
+      rules:
+      - skills.portable.frontmatter
+      - skills.portable.no-claude-placeholders
+  - section: open-questions
+    items:
+    - text: Open questions
+      status: not-a-rule
+      reason: Open questions record gaps; no practice to check.
+  - section: sources
+    items:
+    - text: Sources
+      status: not-a-rule
+      reason: List of sources; no practice to check.
+- page: docs/best-practices/skills.md
+  sections:
+  - section: summary
+    items:
+    - text: Summary of the practices below
+      status: not-a-rule
+      reason: Summarizes sections covered individually below.
+  - section: when-to-use-it
+    items:
+    - text: Need-to-mechanism table
+      status: not-a-rule
+      reason: Mechanism selection, not a property of a built skill; rules/selection.yaml encodes it (plan
+        task 6).
+  - section: approaches
+    items:
+    - text: Overview of the approaches below
+      status: not-a-rule
+      reason: Reference facts about the harness; the rules that depend on them cite this section.
+  - section: model-invoked-skill
+    items:
+    - text: Activation depends entirely on the description
+      rules:
+      - skills.description.what-and-when
+  - section: user-invoked-skill-replaces-custom-commands
+    items:
+    - text: Side-effecting skills are user-invoked in both leads
+      rules:
+      - skills.invocation.side-effects-user-invoked
+      - skills.invocation.both-flags
+  - section: pointer-in-the-instruction-file-plus-skill
+    items:
+    - text: Pointer or compressed index
+      status: not-a-rule
+      reason: Mechanism selection, not a property of a built skill; rules/selection.yaml encodes it (plan
+        task 6).
+  - section: script-backed-skill
+    items:
+    - text: State whether to run or read each script; scripts built for an agent caller
+      rules:
+      - skills.scripts.agent-caller
+  - section: skill-that-runs-in-its-own-context
+    items:
+    - text: 'context: fork'
+      status: dropped
+      reason: Claude Code-only feature; portable skills name a subagent instead, and subagent builders
+        are outside this slice.
+  - section: distribution-and-scope
+    items:
+    - text: Project scope for CI and cloud runs
+      rules:
+      - skills.scope.committed-for-automation
+    - text: Canonical copy plus symlink
+      rules:
+      - skills.portable.layout
+  - section: practices
+    items:
+    - text: Section heading for the numbered practices
+      status: not-a-rule
+      reason: The practices are covered by their own sections below.
+  - section: 1-use-a-skill-only-where-it-adds-what-the-model-lacks
+    items:
+    - text: Baseline before writing a skill
+      status: not-a-rule
+      reason: Process advice about whether to build; not observable in the built files.
+  - section: 2-write-the-description-as-the-trigger-condition
+    items:
+    - text: What, Use when, boundary; key words first
+      rules:
+      - skills.description.what-and-when
+      - skills.description.boundary
+    - text: No workflow summary in the description
+      rules:
+      - skills.description.no-workflow-steps
+    - text: Roughly 500 characters
+      rules:
+      - skills.description.concise
+    - text: Spec-valid name equal to the directory; description 1 to 1,024 characters
+      rules:
+      - skills.name.format
+      - skills.description.length
+    - text: Third person versus Use when voice
+      rules:
+      - skills.description.voice
+    - text: Anthropic forbids anthropic and claude in names; prefers gerund names
+      status: not-a-rule
+      reason: Anthropic-specific naming preference for uploads; no evidence that it affects Claude Code
+        or Codex builds.
+    - text: Fixing false triggers and over-triggering
+      status: not-a-rule
+      reason: Iteration advice for evaluating triggers; not a property of one version of the files.
+  - section: 3-keep-skillmd-lean-and-put-gotchas-first
+    items:
+    - text: Under 500 lines; only what the model lacks; gotchas first
+      rules:
+      - skills.body.size
+      - skills.body.only-what-model-lacks
+      - skills.body.gotchas-first
+    - text: No README or CHANGELOG; no time-sensitive statements
+      rules:
+      - skills.package.no-auxiliary-docs
+      - skills.body.no-time-bound-statements
+  - section: 4-disclose-detail-progressively-with-explicit-triggers
+    items:
+    - text: References one level deep with load conditions; each fact in one place
+      rules:
+      - skills.references.one-level
+      - skills.references.load-conditions
+    - text: Links resolve inside the skill
+      rules:
+      - skills.references.resolve
+  - section: 5-match-strictness-to-fragility
+    items:
+    - text: Degrees of freedom; one default with an escape hatch
+      rules:
+      - skills.body.strictness-matches-fragility
+  - section: 6-put-deterministic-logic-in-tested-scripts
+    items:
+    - text: Scripts designed for an agent caller
+      rules:
+      - skills.scripts.agent-caller
+  - section: 7-explain-the-why-before-adding-hard-rules
+    items:
+    - text: Reasons first; prohibitions only where needed
+      rules:
+      - skills.body.reasons-before-hard-rules
+  - section: 8-make-side-effecting-skills-user-invoked-in-both-leads
+    items:
+    - text: Both flags; inputs from the message
+      rules:
+      - skills.invocation.side-effects-user-invoked
+      - skills.invocation.both-flags
+      - skills.inputs.from-message
+  - section: 9-write-evals-first-and-test-triggering-and-behavior-separately
+    items:
+    - text: Trigger and behavior eval sets
+      status: not-a-rule
+      reason: Process advice; Forge runs its own activation tests of each built skill and reports them
+        separately.
+  - section: 10-ground-skills-in-human-domain-knowledge
+    items:
+    - text: Source content from real tasks
+      status: not-a-rule
+      reason: Process advice about authoring; not observable in the built files.
+  - section: 11-keep-the-library-small-and-curated
+    items:
+    - text: Small, curated library
+      status: not-a-rule
+      reason: Applies to a whole skill library, not to one built skill.
+  - section: 12-keep-one-canonical-copy-with-portable-frontmatter
+    items:
+    - text: Canonical copy, portable frontmatter, no placeholders, committed for CI
+      rules:
+      - skills.portable.layout
+      - skills.portable.frontmatter
+      - skills.portable.no-claude-placeholders
+      - skills.scope.committed-for-automation
+      - skills.frontmatter.valid
+  - section: 13-move-rules-that-must-hold-every-time-into-hooks
+    items:
+    - text: Must-hold rules are hooks
+      rules:
+      - skills.goal.no-must-hold-rule-in-skill
+  - section: anti-patterns
+    items:
+    - text: Vague or first-person descriptions; workflow steps; when-to-use only in the body
+      rules:
+      - skills.description.what-and-when
+      - skills.description.voice
+      - skills.description.no-workflow-steps
+    - text: Explaining what the model knows; menus of options
+      rules:
+      - skills.body.only-what-model-lacks
+      - skills.body.strictness-matches-fragility
+    - text: Nested references; duplicated content; README or CHANGELOG
+      rules:
+      - skills.references.one-level
+      - skills.references.load-conditions
+      - skills.package.no-auxiliary-docs
+    - text: Time-bound statements
+      rules:
+      - skills.body.no-time-bound-statements
+    - text: Scripts that prompt, dump output or fail without guidance
+      rules:
+      - skills.scripts.agent-caller
+    - text: Claude-only placeholders in shared skills; model-invocable side effects
+      rules:
+      - skills.portable.no-claude-placeholders
+      - skills.invocation.side-effects-user-invoked
+    - text: ALL-CAPS rules
+      rules:
+      - skills.body.reasons-before-hard-rules
+    - text: Third-party skills read only partly; must-hold rules only in skill text
+      rules:
+      - skills.reuse.reviewed-and-pinned
+      - skills.goal.no-must-hold-rule-in-skill
+    - text: Backslash paths and @path links to other skills
+      status: not-a-rule
+      reason: Covered only as judged advice in practice 4; no separate rule, because the reference checker
+        already rejects links that do not resolve.
+    - text: Keywords from failed queries; model-generated skills; large libraries; judging triggers by
+        eye
+      status: not-a-rule
+      reason: Process and library-level advice; not observable in one built skill.
+  - section: security
+    items:
+    - text: Third-party skill review and pinning
+      rules:
+      - skills.reuse.reviewed-and-pinned
+    - text: Contents that would surprise the user
+      rules:
+      - skills.security.no-surprising-content
+    - text: allowed-tools least privilege
+      rules:
+      - skills.security.allowed-tools-least-privilege
+    - text: Prevalence studies, OWASP AST01 and harness-level controls
+      status: not-a-rule
+      reason: Evidence and platform settings; harness-level settings belong to the permissions concept,
+        outside this slice.
+  - section: verification
+    items:
+    - text: Structure validators, discovery checks, evals and in-use reports
+      status: not-a-rule
+      reason: Verification tooling; Forge's runtime tests use the activation checks.
+  - section: checklist
+    items:
+    - text: name and description items
+      rules:
+      - skills.name.format
+      - skills.description.what-and-when
+      - skills.description.no-workflow-steps
+      - skills.description.concise
+    - text: SKILL.md size, gotchas, references
+      rules:
+      - skills.body.size
+      - skills.body.gotchas-first
+      - skills.references.one-level
+      - skills.references.load-conditions
+    - text: Scripts
+      rules:
+      - skills.scripts.agent-caller
+    - text: Side-effecting skills, portable frontmatter, committed skills
+      rules:
+      - skills.invocation.both-flags
+      - skills.portable.frontmatter
+      - skills.portable.no-claude-placeholders
+      - skills.portable.layout
+      - skills.scope.committed-for-automation
+    - text: Third-party skills and must-hold rules
+      rules:
+      - skills.reuse.reviewed-and-pinned
+      - skills.security.allowed-tools-least-privilege
+      - skills.goal.no-must-hold-rule-in-skill
+    - text: Baseline, evals and catalog size
+      status: not-a-rule
+      reason: Process and library-level checks; Forge's runtime tests cover activation.
+  - section: open-questions
+    items:
+    - text: Open questions
+      status: not-a-rule
+      reason: Open questions record gaps; no practice to check.
+  - section: sources
+    items:
+    - text: Sources
+      status: not-a-rule
+      reason: List of sources; no practice to check.
+- page: docs/concepts/skills.md
+  sections:
+  - section: comparison
+    items:
+    - text: Harness comparison
+      status: not-a-rule
+      reason: Reference facts about the harness; the rules that depend on them cite this section.
+  - section: generalized-model
+    items:
+    - text: Generalized model introduction
+      status: not-a-rule
+      reason: Reference facts about the harness; the rules that depend on them cite this section.
+  - section: entities
+    items:
+    - text: Skill package and frontmatter
+      rules:
+      - skills.frontmatter.valid
+  - section: scopes
+    items:
+    - text: Scopes and discovery
+      status: not-a-rule
+      reason: Reference facts about the harness; the rules that depend on them cite this section.
+  - section: lifecycle
+    items:
+    - text: Trigger words at the start survive truncation
+      rules:
+      - skills.description.what-and-when
+  - section: invocation-policy
+    items:
+    - text: Invocation flags
+      status: not-a-rule
+      reason: Reference facts about the harness; the rules that depend on them cite this section.
+  - section: mapping
+    items:
+    - text: Term mapping
+      status: not-a-rule
+      reason: Reference facts about the harness; the rules that depend on them cite this section.
+  - section: portability
+    items:
+    - text: Portability introduction
+      status: not-a-rule
+      reason: Reference facts about the harness; the rules that depend on them cite this section.
+  - section: directory-layout
+    items:
+    - text: Canonical copy plus symlink; committed for cloud runs
+      rules:
+      - skills.portable.layout
+      - skills.scope.committed-for-automation
+    - text: OpenCode sees two copies; installer location; plugins
+      status: not-a-rule
+      reason: Harness facts without a checkable property for Claude Code and Codex builds.
+  - section: frontmatter
+    items:
+    - text: Portable field rules
+      rules:
+      - skills.frontmatter.valid
+      - skills.name.format
+      - skills.description.length
+      - skills.portable.frontmatter
+  - section: invocation-policy-in-both-leads
+    items:
+    - text: Both flags in the same folder
+      rules:
+      - skills.invocation.both-flags
+  - section: body
+    items:
+    - text: No placeholders or shell injection; size; resource paths
+      rules:
+      - skills.portable.no-claude-placeholders
+      - skills.inputs.from-message
+      - skills.body.size
+    - text: Script approval differs
+      status: not-a-rule
+      reason: No shared mechanism to check; harness permissions are outside this slice.
+  - section: dropped-from-the-generalization
+    items:
+    - text: Harness-only features stay out of shared skills
+      rules:
+      - skills.portable.frontmatter
+      - skills.portable.no-claude-placeholders
+  - section: sources
+    items:
+    - text: Sources
+      status: not-a-rule
+      reason: List of sources; no practice to check.
+- page: docs/vendors/claude-code/skills.md
+  sections:
+  - section: locations-and-scopes
+    items:
+    - text: Claude Code skill roots
+      status: not-a-rule
+      reason: Reference facts about the harness; the rules that depend on them cite this section.
+  - section: format
+    items:
+    - text: Frontmatter parsing rules
+      rules:
+      - skills.frontmatter.valid
+  - section: frontmatter-fields-claude-code
+    items:
+    - text: Claude Code frontmatter fields
+      rules:
+      - skills.portable.frontmatter
+      - skills.invocation.both-flags
+  - section: string-substitutions
+    items:
+    - text: Claude Code-only placeholders
+      rules:
+      - skills.portable.no-claude-placeholders
+  - section: dynamic-context-injection-claude-code-only
+    items:
+    - text: '!`cmd` injection'
+      rules:
+      - skills.portable.no-claude-placeholders
+  - section: relation-to-the-agent-skills-spec-agentskillsio
+    items:
+    - text: Spec differences
+      rules:
+      - skills.name.format
+      - skills.description.length
+  - section: related-settings
+    items:
+    - text: Managed and user settings for skills
+      status: not-a-rule
+      reason: Harness settings belong to the configuration concept, outside this slice.
+  - section: loading-and-invocation
+    items:
+    - text: Loading and invocation
+      status: not-a-rule
+      reason: Reference facts about the harness; the rules that depend on them cite this section.
+  - section: discovery-and-context-cost
+    items:
+    - text: Catalog budget and truncation
+      rules:
+      - skills.description.concise
+  - section: invocation
+    items:
+    - text: disable-model-invocation
+      rules:
+      - skills.invocation.both-flags
+  - section: context-fork
+    items:
+    - text: 'context: fork'
+      status: dropped
+      reason: Claude Code-only feature.
+  - section: bundled-skills
+    items:
+    - text: Bundled skills
+      status: not-a-rule
+      reason: Reference facts about the harness; the rules that depend on them cite this section.
+  - section: example
+    items:
+    - text: Example skill
+      status: not-a-rule
+      reason: Reference facts about the harness; the rules that depend on them cite this section.
+  - section: limits-and-gotchas
+    items:
+    - text: allowed-tools grants and is not gated by trust
+      rules:
+      - skills.security.allowed-tools-least-privilege
+    - text: Claude-only keys error on upload
+      rules:
+      - skills.portable.frontmatter
+    - text: Other gotchas
+      status: not-a-rule
+      reason: Reference facts about the harness; the rules that depend on them cite this section.
+  - section: sources
+    items:
+    - text: Sources
+      status: not-a-rule
+      reason: List of sources; no practice to check.
+- page: docs/vendors/codex/skills.md
+  sections:
+  - section: locations-and-scopes
+    items:
+    - text: Codex skill roots
+      status: not-a-rule
+      reason: Reference facts about the harness; the rules that depend on them cite this section.
+  - section: format
+    items:
+    - text: Format introduction
+      status: not-a-rule
+      reason: Reference facts about the harness; the rules that depend on them cite this section.
+  - section: folder-layout
+    items:
+    - text: Folder layout; reference files with when to load them
+      rules:
+      - skills.references.load-conditions
+  - section: skillmd-frontmatter-that-codex-reads
+    items:
+    - text: name at most 64, description required and at most 1,024
+      rules:
+      - skills.frontmatter.valid
+      - skills.name.format
+      - skills.description.length
+  - section: comparison-with-the-agent-skills-specification
+    items:
+    - text: Spec comparison
+      rules:
+      - skills.name.format
+  - section: agentsopenaiyaml
+    items:
+    - text: policy.allow_implicit_invocation
+      rules:
+      - skills.invocation.both-flags
+  - section: enabling-and-disabling-configtoml
+    items:
+    - text: Enabling and disabling in config.toml
+      status: not-a-rule
+      reason: User configuration, outside a built skill.
+  - section: loading-and-invocation
+    items:
+    - text: Loading and invocation
+      status: not-a-rule
+      reason: Reference facts about the harness; the rules that depend on them cite this section.
+  - section: discovery
+    items:
+    - text: Discovery
+      status: not-a-rule
+      reason: Reference facts about the harness; the rules that depend on them cite this section.
+  - section: context-cost-catalog-budget
+    items:
+    - text: Catalog budget and truncation
+      rules:
+      - skills.description.concise
+  - section: invocation
+    items:
+    - text: Invocation
+      status: not-a-rule
+      reason: Reference facts about the harness; the rules that depend on them cite this section.
+  - section: creation-and-installation
+    items:
+    - text: Creation and installation tooling
+      status: not-a-rule
+      reason: Reference facts about the harness; the rules that depend on them cite this section.
+  - section: feature-flags
+    items:
+    - text: Feature flags
+      status: not-a-rule
+      reason: Reference facts about the harness; the rules that depend on them cite this section.
+  - section: example
+    items:
+    - text: Example skill
+      status: not-a-rule
+      reason: Reference facts about the harness; the rules that depend on them cite this section.
+  - section: limits-and-gotchas
+    items:
+    - text: Claude-style keys are not read; placeholders are not substituted
+      rules:
+      - skills.portable.frontmatter
+      - skills.portable.no-claude-placeholders
+      - skills.inputs.from-message
+    - text: Other gotchas
+      status: not-a-rule
+      reason: Reference facts about the harness; the rules that depend on them cite this section.
+  - section: sources
+    items:
+    - text: Sources
+      status: not-a-rule
+      reason: List of sources; no practice to check.
+- page: docs/vendors/opencode/skills.md
+  sections:
+  - section: locations-and-scopes
+    items:
+    - text: OpenCode skill roots
+      status: not-a-rule
+      reason: Reference facts about the harness; the rules that depend on them cite this section.
+  - section: discovery-patterns-in-source
+    items:
+    - text: Discovery patterns
+      status: not-a-rule
+      reason: Reference facts about the harness; the rules that depend on them cite this section.
+  - section: switches
+    items:
+    - text: Switches
+      status: not-a-rule
+      reason: Reference facts about the harness; the rules that depend on them cite this section.
+  - section: format
+    items:
+    - text: name regex and description limits
+      rules:
+      - skills.frontmatter.valid
+      - skills.name.format
+      - skills.description.length
+  - section: skills-config-key
+    items:
+    - text: skills config key
+      status: dropped
+      reason: OpenCode-only configuration; OpenCode builders are outside this slice.
+  - section: permissionskill
+    items:
+    - text: permission.skill
+      status: dropped
+      reason: OpenCode-only configuration; OpenCode builders are outside this slice.
+  - section: loading-and-invocation
+    items:
+    - text: Loading and invocation
+      status: not-a-rule
+      reason: Reference facts about the harness; the rules that depend on them cite this section.
+  - section: example
+    items:
+    - text: Example skill
+      status: not-a-rule
+      reason: Reference facts about the harness; the rules that depend on them cite this section.
+  - section: limits-and-gotchas
+    items:
+    - text: Troubleshooting checklist
+      rules:
+      - skills.frontmatter.valid
+      - skills.name.format
+    - text: Other gotchas
+      status: not-a-rule
+      reason: Reference facts about the harness; the rules that depend on them cite this section.
+  - section: sources
+    items:
+    - text: Sources
+      status: not-a-rule
+      reason: List of sources; no practice to check.
+- page: docs/guide/security.md
+  sections:
+  - section: threat-model
+    items:
+    - text: Threat model
+      status: not-a-rule
+      reason: Explains threats; the controls sections below carry the rules.
+  - section: where-each-concept-is-attacked
+    items:
+    - text: 'Skills row: review prose, scripts and dependencies; confine helpers'
+      rules:
+      - skills.security.no-surprising-content
+      - security.helpers.confined
+    - text: Keep secrets out of context
+      rules:
+      - security.secrets.none-in-files
+    - text: Rows for other concepts
+      status: not-a-rule
+      reason: Applies to concepts other than skills; their rules are extracted with their builders, outside
+        this slice.
+  - section: controls-to-apply-before-a-privileged-run
+    items:
+    - text: Section introduction
+      status: not-a-rule
+      reason: Reference facts about the harness; the rules that depend on them cite this section.
+  - section: context-and-persistent-state
+    items:
+    - text: Untrusted content and claimed approvals are data
+      rules:
+      - security.untrusted-input.as-data
+      - security.approval.claims-are-data
+    - text: Memory poisoning and persistent writes
+      status: not-a-rule
+      reason: Applies to concepts other than skills; their rules are extracted with their builders, outside
+        this slice.
+  - section: executables-approvals-and-isolation
+    items:
+    - text: Helpers under permissions and isolation
+      rules:
+      - security.helpers.confined
+    - text: Startup review, bare mode, hook decisions
+      status: not-a-rule
+      reason: Applies to concepts other than skills; their rules are extracted with their builders, outside
+        this slice.
+  - section: data-access-and-outbound-channels
+    items:
+    - text: Data access and outbound channels
+      status: not-a-rule
+      reason: Applies to concepts other than skills; their rules are extracted with their builders, outside
+        this slice.
+  - section: mcp-authorization-and-transport
+    items:
+    - text: MCP authorization and transport
+      status: not-a-rule
+      reason: Applies to concepts other than skills; their rules are extracted with their builders, outside
+        this slice.
+  - section: automation-output-and-resource-limits
+    items:
+    - text: Automation, output and resource limits
+      status: not-a-rule
+      reason: Applies to concepts other than skills; their rules are extracted with their builders, outside
+        this slice.
+  - section: verification-with-benign-canaries
+    items:
+    - text: Benign canary checks
+      status: not-a-rule
+      reason: Proposed deployment checks; Forge's worker canaries follow its own policy, not these KB
+        rules.
+  - section: detection-and-recovery
+    items:
+    - text: Detection and recovery
+      status: not-a-rule
+      reason: Operational guidance after an incident; not a property of a built skill.
+- page: docs/guide/outside-gates.md
+  sections:
+  - section: summary
+    items:
+    - text: Summary
+      status: not-a-rule
+      reason: Summarizes sections covered individually below.
+  - section: harness-controls-keep-failing-so-guarantees-live-elsewhere
+    items:
+    - text: Why guarantees live outside the harness
+      status: not-a-rule
+      reason: Mechanism selection, not a property of a built skill; rules/selection.yaml encodes it (plan
+        task 6).
+  - section: ten-families-of-outside-gates-and-what-each-stops
+    items:
+    - text: Families overview
+      status: not-a-rule
+      reason: Describes one family of outside controls; the prerequisite rules from the seven conditions
+        apply to whichever control is recommended.
+  - section: branch-protection-and-merge-rules-the-gate-is-separation-of-identities
+    items:
+    - text: Identity separation, stale-approval reset, code owners on agent config
+      rules:
+      - outside.merge.requester-cannot-approve
+      - outside.codeowners.agent-config
+  - section: ci-pipelines-a-check-is-a-gate-only-if-the-change-cannot-rewrite-it
+    items:
+    - text: Required on the ref; protected workflow definition
+      rules:
+      - outside.ci.required-on-ref
+      - outside.ci.workflow-protected
+  - section: static-analysis-and-scanners-every-in-repo-suppression-is-a-bypass
+    items:
+    - text: Scanners
+      status: not-a-rule
+      reason: Describes one family of outside controls; the prerequisite rules from the seven conditions
+        apply to whichever control is recommended.
+  - section: identity-iam-and-credentials-the-agent-cannot-misuse-what-it-never-holds
+    items:
+    - text: Identity and credentials
+      status: not-a-rule
+      reason: Describes one family of outside controls; the prerequisite rules from the seven conditions
+        apply to whichever control is recommended.
+  - section: network-egress-and-dns-filtering-is-not-a-boundary
+    items:
+    - text: Network egress and DNS
+      status: not-a-rule
+      reason: Describes one family of outside controls; the prerequisite rules from the seven conditions
+        apply to whichever control is recommended.
+  - section: protecting-domains-and-dns-records-from-an-agent-with-infra-access
+    items:
+    - text: Domains and DNS records
+      status: not-a-rule
+      reason: Describes one family of outside controls; the prerequisite rules from the seven conditions
+        apply to whichever control is recommended.
+  - section: isolation-containment-of-reach-never-a-business-rule
+    items:
+    - text: Isolation
+      status: not-a-rule
+      reason: Describes one family of outside controls; the prerequisite rules from the seven conditions
+        apply to whichever control is recommended.
+  - section: policy-engines-limits-recovery-and-dlp
+    items:
+    - text: Policy engines, limits, recovery and DLP
+      status: not-a-rule
+      reason: Describes one family of outside controls; the prerequisite rules from the seven conditions
+        apply to whichever control is recommended.
+  - section: summary-matrix
+    items:
+    - text: Summary matrix
+      status: not-a-rule
+      reason: Reference facts about the harness; the rules that depend on them cite this section.
+  - section: seven-conditions-turn-a-control-into-a-gate
+    items:
+    - text: 1. Real refs and resources
+      rules:
+      - outside.gate.real-refs
+    - text: 2. Agent identity on no bypass path
+      rules:
+      - outside.merge.no-agent-bypass
+    - text: 3. Approval by another identity, reset on push
+      rules:
+      - outside.merge.requester-cannot-approve
+    - text: 4. Gate definition outside the change's reach
+      rules:
+      - outside.ci.source-pinned
+      - outside.ci.workflow-protected
+    - text: 5. No broader credential or channel
+      rules:
+      - outside.gate.no-broader-bypass
+    - text: 6. Enforced on the plan and visibility
+      rules:
+      - outside.gate.plan-enforced
+    - text: 7. Verified periodically
+      rules:
+      - outside.gate.periodic-verification
+    - text: README hand-off of recommended controls
+      rules:
+      - outside.readme.lists-controls
+  - section: four-outcomes-from-six-intake-questions
+    items:
+    - text: Intake questions and outcomes
+      status: not-a-rule
+      reason: Mechanism selection, not a property of a built skill; rules/selection.yaml encodes it (plan
+        task 6).
+    - text: Agent-opened PRs come with a merge rule
+      rules:
+      - outside.merge.rule-for-agent-prs
+  - section: conclusion
+    items:
+    - text: Conclusion
+      status: not-a-rule
+      reason: Summarizes sections covered individually above.

@@ -149,6 +149,11 @@ class ValidateKbCliTest(unittest.TestCase):
         self.assertEqual(code, 0)
         self.assertEqual(output, {"command": "validate-kb", "ok": True, "error_count": 0, "errors": []})
 
+    def test_kb_root_given_with_parent_segments_is_accepted(self):
+        relative = MINIMAL_KB / ".." / "minimal-kb"
+        code, output = run_cli("validate-kb", "--kb", str(relative))
+        self.assertEqual(code, 0, output)
+
     def test_invalid_kb_exits_one(self):
         with KbCopy() as root:
             replace_in(root / "rules/skills.yaml", "checker: skills.description-length", "checker: skills.run-anything")

@@ -7,3 +7,8 @@ pages:
             rules: [skills.description.no-workflow-steps]
           - text: Keep the description within the harness limit.
             rules: [skills.description.length]
+      - section: security
+        items:
+          - text: Synthetic security section.
+            status: not-a-rule
+            reason: Synthetic fixture section without rules.

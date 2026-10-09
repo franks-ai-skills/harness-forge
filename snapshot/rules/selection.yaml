@@ -1,0 +1,12 @@
+# Selection facts, questions and rules. Plan task 6 adds the questions and
+# the ordered selection rules; task 5 declares the facts that rules in
+# other files use in applies_to.when.
+facts:
+  - id: target_set
+    scope: idea
+    values: [claude-code, codex, both]
+  - id: outcome
+    scope: part
+    values: [harness-only, outside-alongside, outside-instead, reuse, nothing-fits]
+questions: []
+rules: []

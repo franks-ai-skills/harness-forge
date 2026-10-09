@@ -1,0 +1,20 @@
+# Synthetic bad case for outside.readme.lists-controls.
+facts:
+  targets:
+  - claude-code
+  - codex
+  target_set: both
+  part_id: A
+  outside_controls:
+  - part_id: A
+    control: codeowners-agent-config
+files:
+  README.md: '# Repro
+
+
+    ## Outside controls
+
+
+    - `codeowners-agent-config` (part A): configured
+
+    '
