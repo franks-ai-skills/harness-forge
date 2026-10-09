@@ -132,6 +132,18 @@ class Finding:
     quote: str
     context: str
     brief_digest: str
+    source_role: str = "primary"
+
+    def to_dict(self) -> dict:
+        value = dict(self.__dict__)
+        value["pass"] = value.pop("pass_name")
+        return value
+
+    @classmethod
+    def from_dict(cls, value: dict) -> "Finding":
+        fields = dict(value)
+        fields["pass_name"] = fields.pop("pass")
+        return cls(**fields)
 
 
 @dataclass(frozen=True)

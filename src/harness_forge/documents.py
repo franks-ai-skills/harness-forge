@@ -142,7 +142,7 @@ def schema_names() -> list[str]:
     return sorted(_schemas()[0])
 
 
-def _errors(value: Any, schema: dict) -> list[str]:
+def schema_errors(value: Any, schema: dict) -> list[str]:
     validator = Draft202012Validator(schema, registry=_schemas()[1])
     messages = []
     for error in sorted(validator.iter_errors(value), key=lambda e: list(e.absolute_path)):
@@ -158,7 +158,7 @@ def validate(value: Any, schema: str) -> None:
     schemas = _schemas()[0]
     if schema not in schemas:
         raise ValueError(f"unknown schema {schema!r}")
-    messages = _errors(value, schemas[schema])
+    messages = schema_errors(value, schemas[schema])
     if messages:
         raise ValueError(f"{schema}: " + "; ".join(messages))
 
@@ -369,7 +369,7 @@ def validate_kb(root: Path) -> list[str]:
                     check.error(f"{owner}: selection.match is reserved for rules/selection.yaml")
                 else:
                     params = rule.get("params", {})
-                    messages = _errors(params, checker["params"])
+                    messages = schema_errors(params, checker["params"])
                     if messages:
                         check.error(f"{owner}: invalid params for {rule['checker']}: {'; '.join(messages)}")
                     elif is_selection:

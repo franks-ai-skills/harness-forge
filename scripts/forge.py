@@ -18,7 +18,8 @@ from dataclasses import asdict  # noqa: E402
 
 from harness_forge.contracts import RELAY_KEYS, load_decision, render_contract  # noqa: E402
 from harness_forge.documents import load_document, parse_json, validate, validate_kb  # noqa: E402
-from harness_forge.models import AcceptedRevision, Rule  # noqa: E402
+from harness_forge.models import AcceptedRevision, Finding, Rule  # noqa: E402
+from harness_forge.research import finding_problem  # noqa: E402
 from harness_forge.selection import next_question, recommend  # noqa: E402
 
 MAX_OUTPUT_BYTES = 64 * 1024
@@ -136,6 +137,36 @@ def _prepare_contract(arguments: argparse.Namespace) -> int:
     return 0
 
 
+def _research_check(arguments: argparse.Namespace) -> int:
+    """Deterministic source, quote and support checks for findings."""
+    request = _read_json(arguments.input)
+    if set(request) != {"findings", "fetched", "support"}:
+        raise _InvalidInput("input needs exactly findings, fetched and support")
+    try:
+        for item in request["findings"]:
+            validate({"slug": "check", "search_mode": "live", "briefs": [{"pass": item["pass"], "part_id": item["part_id"],
+                      "digest": item["brief_digest"]}], "findings": [item], "support": [], "drift": []}, "research")
+        findings = [Finding.from_dict(item) for item in request["findings"]]
+        validate(request["support"], "source-support")
+    except (ValueError, KeyError, TypeError) as error:
+        raise _InvalidInput(f"invalid findings or support: {error}") from error
+    verdicts: dict[str, list[dict]] = {}
+    for verdict in request["support"]["verdicts"]:
+        verdicts.setdefault(verdict["finding_id"], []).append(verdict)
+    kept, dropped = [], []
+    for finding in findings:
+        matching = verdicts.get(finding.id, [])
+        problem = "duplicate support verdicts" if len(matching) > 1 else finding_problem(
+            finding, request["fetched"].get(finding.id), matching[0] if matching else None)
+        if problem:
+            dropped.append({"id": finding.id, "reason": problem})
+        else:
+            kept.append(finding.id)
+    unknown = sorted(set(verdicts) - {finding.id for finding in findings})
+    emit({"command": "research-check", "kept": kept, "dropped": dropped, "unknown_verdicts": unknown})
+    return 0 if not dropped and not unknown else 1
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = _Parser(prog="forge.py", description=__doc__)
     commands = parser.add_subparsers(dest="command", required=True, parser_class=_Parser)
@@ -151,6 +182,9 @@ def build_parser() -> argparse.ArgumentParser:
     prepare.add_argument("--overrides", help="directory with .harness/overrides/*.yaml")
     prepare.add_argument("--evidence", help="JSON object with worker_evidence records")
     prepare.set_defaults(handler=_prepare_contract)
+    research = commands.add_parser("research-check", help="check findings' sources, quotes and support verdicts")
+    research.add_argument("--input", required=True, help="JSON with findings, fetched texts by finding id and support verdicts")
+    research.set_defaults(handler=_research_check)
     return parser
 
 

@@ -1,0 +1,8 @@
+# Routing cases for harness-research.
+skill: harness-research
+cases:
+  - {id: explicit, prompt: "Research prior art for a reproduction-checklist skill.", expect: trigger, mode: explicit}
+  - {id: prior-art, prompt: "Before we build it, find what tools already turn bug reports into reproduction steps.", expect: trigger, mode: implicit}
+  - {id: requirements, prompt: "What must a reproduction checklist contain to be useful? Research it with sources.", expect: trigger, mode: implicit}
+  - {id: near-miss-harness-fact, prompt: "How long can a skill description be in Codex?", expect: no-trigger, mode: implicit}
+  - {id: near-miss-build, prompt: "Build the skill we decided on.", expect: no-trigger, mode: implicit}

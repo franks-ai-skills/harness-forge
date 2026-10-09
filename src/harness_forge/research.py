@@ -1,0 +1,276 @@
+"""Idea research: approved briefs, source filtering, support and acceptance.
+
+Fetched pages are untrusted data. A finding reaches the user only when
+its source passes the source policy, its quote appears verbatim in the
+fetched text and inside its stated context, and a separate support
+worker judged that the quote supports the claim. Only requirements the
+user accepts enter the hashed Idea KB revision.
+"""
+
+from __future__ import annotations
+
+import re
+from functools import lru_cache
+from pathlib import Path
+from urllib.parse import urlsplit
+
+import yaml
+
+from harness_forge.checks import REGISTRY
+from harness_forge.documents import canonical_digest, load_document, schema_errors, validate
+from harness_forge.models import AcceptedRevision, Decision, Finding, ResearchBrief, Rule
+
+SNAPSHOT = Path(__file__).resolve().parents[2] / "snapshot"
+X_HOSTS = ("x.com", "twitter.com")
+X_MIRRORS = ("xcancel.com", "fxtwitter.com", "vxtwitter.com", "fixupx.com")
+_BLOCKING_DRIFT = ("security", "compatibility")
+
+
+class _NoAliases(yaml.SafeDumper):
+    def ignore_aliases(self, data):
+        return True
+
+
+# --- Briefs -----------------------------------------------------------------
+
+
+def make_brief(decision: Decision, pass_name: str, part_id: str | None) -> ResearchBrief:
+    """The approved inputs for one research pass, bound by their digest."""
+    if pass_name not in ("survey", "deep") or (pass_name == "deep") != (part_id is not None):
+        raise ValueError("survey briefs have no part; deep briefs name one part")
+    record = decision.record
+    parts = [
+        {"id": part["id"], "goal": part["goal"], "answers": part["answers"], "outcome": part["outcome"], "chosen": part["chosen"]}
+        for part in record["parts"]
+        if part_id is None or part["id"] == part_id
+    ]
+    if part_id is not None and not parts:
+        raise ValueError(f"unknown part {part_id!r}")
+    content = {
+        "pass": pass_name,
+        "goals": record["goals"],
+        "picture": record["picture"],
+        "targets": record["targets"],
+        "reach": record["reach"],
+        "parts": parts,
+    }
+    if part_id is not None:
+        content["part_id"] = part_id
+    return ResearchBrief(pass_name=pass_name, part_id=part_id, content=content, digest=canonical_digest(content))
+
+
+def research_matches_brief(record: dict, brief: ResearchBrief) -> bool:
+    """Existing research is reused only for exactly the same brief."""
+    return any(
+        entry["pass"] == brief.pass_name and entry["part_id"] == brief.part_id and entry["digest"] == brief.digest
+        for entry in record.get("briefs", [])
+    )
+
+
+# --- Sources and findings -----------------------------------------------------
+
+
+@lru_cache(maxsize=4)
+def rejected_domains(snapshot: Path = SNAPSHOT) -> dict[str, frozenset[str]]:
+    """Hosts and GitHub repositories the pinned source policy rejects."""
+    text = (snapshot / "docs" / "sources.md").read_text(encoding="utf-8")
+    section = text.split("## Rejected domains", 1)[1]
+    hosts, github = set(X_HOSTS), set()
+    for line in section.splitlines():
+        if not line.startswith("| `") and not line.startswith("| GitHub"):
+            continue
+        first_cell = line.split("|")[1]
+        for token in re.findall(r"`([^`]+)`", first_cell):
+            (github if "/" in token else hosts).add(token.lower())
+    return {"hosts": frozenset(hosts), "github": frozenset(github)}
+
+
+def source_rejection(url: str) -> str | None:
+    """Why the source policy rejects this URL, or None."""
+    parts = urlsplit(url)
+    if parts.scheme != "https" or not parts.hostname:
+        return "sources must be fetched over https"
+    host = parts.hostname.lower()
+    policy = rejected_domains()
+
+    def matches(domain: str) -> bool:
+        return host == domain or host.endswith("." + domain)
+
+    if any(matches(domain) for domain in X_HOSTS) or host.startswith("nitter.") or any(matches(m) for m in X_MIRRORS):
+        return "the X platform and its mirrors are not sources"
+    if any(matches(domain) for domain in policy["hosts"]):
+        return f"{host} is a rejected domain"
+    if matches("github.com"):
+        repository = "/".join(parts.path.strip("/").split("/")[:2]).lower()
+        if repository in policy["github"]:
+            return f"GitHub {repository} is a rejected source"
+    return None
+
+
+def _normalized(text: str) -> str:
+    return re.sub(r"\s+", " ", text).strip()
+
+
+def finding_problem(finding: Finding, fetched_text: str | None, support: dict | None) -> str | None:
+    """Why a finding must be dropped, or None when it may be shown."""
+    rejection = source_rejection(finding.source)
+    if rejection:
+        return rejection
+    if fetched_text is None:
+        return "the source could not be fetched"
+    quote, context, page = _normalized(finding.quote), _normalized(finding.context), _normalized(fetched_text)
+    if not quote or quote not in page:
+        return "the quote does not appear in the fetched text"
+    if quote not in context or context not in page:
+        return "the context does not contain the quote or does not appear in the fetched text"
+    try:
+        validate({"verdicts": [support]}, "source-support")
+    except (ValueError, TypeError):
+        return "no valid source-support verdict"
+    if support["finding_id"] != finding.id:
+        return "the support verdict names another finding"
+    if support["verdict"] != "supported":
+        return "the support worker judged that the quote does not support the claim"
+    return None
+
+
+def validate_finding(finding: Finding, fetched_text: str | None, support: dict | None) -> Finding | None:
+    """The finding when it passes every check, else None (dropped)."""
+    return None if finding_problem(finding, fetched_text, support) else finding
+
+
+def match_support(findings: list[Finding], response: dict) -> dict[str, dict]:
+    """Map a support worker's verdicts to findings: exactly one per finding."""
+    validate(response, "source-support")
+    expected = {finding.id for finding in findings}
+    verdicts: dict[str, dict] = {}
+    for verdict in response["verdicts"]:
+        finding_id = verdict["finding_id"]
+        if finding_id in verdicts:
+            raise ValueError(f"duplicate verdict for {finding_id}")
+        if finding_id not in expected:
+            raise ValueError(f"verdict for unknown finding {finding_id}")
+        verdicts[finding_id] = verdict
+    missing = expected - set(verdicts)
+    if missing:
+        raise ValueError(f"no verdict for {', '.join(sorted(missing))}")
+    return verdicts
+
+
+# --- Acceptance -----------------------------------------------------------------
+
+
+@lru_cache(maxsize=4)
+def _catalog(snapshot: Path = SNAPSHOT) -> dict[str, dict]:
+    catalog = load_document(snapshot / "checks" / "catalog.yaml", "catalog")
+    return {checker["id"]: checker for checker in catalog["checkers"]}
+
+
+def _idea_part(rule: Rule) -> str:
+    segments = rule.id.split(".")
+    if rule.concept != "idea" or len(segments) < 4 or segments[0] != "idea":
+        raise ValueError(f"{rule.id}: idea rules are named idea.<slug>.<part>.<name> with concept idea")
+    part_id = segments[2].upper()
+    if not re.fullmatch(r"[A-Z][0-9]*", part_id):
+        raise ValueError(f"{rule.id}: {segments[2]!r} is not a part id")
+    return part_id
+
+
+def _check_idea_rule(rule: Rule) -> None:
+    if rule.check == "script":
+        checker = _catalog().get(rule.checker)
+        if checker is None or rule.checker not in REGISTRY or rule.checker == "selection.match":
+            raise ValueError(f"{rule.id}: {rule.checker} is not a catalog checker idea rules may use")
+        errors = schema_errors(rule.params or {}, checker["params"])
+        if errors:
+            raise ValueError(f"{rule.id}: invalid params for {rule.checker}: {errors[0]}")
+
+
+def accept_requirements(proposed: list[Rule], choices: dict, brief_digest: str) -> AcceptedRevision:
+    """Build the Idea KB revision from the user's accept, edit or reject choices.
+
+    A proposed requirement without a choice stays pending and is excluded.
+    """
+    by_id = {rule.id: rule for rule in proposed}
+    unknown = set(choices) - set(by_id)
+    if unknown:
+        raise ValueError(f"choices for unknown requirements: {', '.join(sorted(unknown))}")
+    accepted = []
+    for rule in proposed:
+        choice = choices.get(rule.id)
+        if choice is None or choice == "reject":
+            continue
+        if choice == "accept":
+            final = rule
+        elif isinstance(choice, dict) and set(choice) == {"edit"}:
+            final = Rule.from_dict(choice["edit"])
+            if final.id != rule.id:
+                raise ValueError(f"an edit of {rule.id} must keep its id")
+        else:
+            raise ValueError(f"{rule.id}: choice must be accept, reject or an edit")
+        part_id = _idea_part(final)
+        _check_idea_rule(final)
+        accepted.append({"part_id": part_id, "rule": final.to_dict()})
+    digest = canonical_digest({"brief_digest": brief_digest, "rules": accepted})
+    return AcceptedRevision(rule_ids=[entry["rule"]["id"] for entry in accepted], rules=accepted,
+                            brief_digest=brief_digest, digest=digest)
+
+
+# --- Drift ----------------------------------------------------------------------
+
+
+def drift_category(drift: dict) -> str:
+    """Security rules always count as security drift, whatever research says."""
+    rule_id = drift["rule_id"]
+    if rule_id.startswith(("security.", "outside.")) or ".security." in rule_id:
+        return "security"
+    return drift.get("category", "ordinary")
+
+
+def blocked_parts(drift: list[dict], applicable: dict[str, list[str]]) -> set[str]:
+    """Parts blocked by unresolved security or compatibility drift."""
+    blocking = {entry["rule_id"] for entry in drift if drift_category(entry) in _BLOCKING_DRIFT}
+    return {part for part, rule_ids in applicable.items() if blocking & set(rule_ids)}
+
+
+def can_adopt(drift: dict, support: dict | None) -> bool:
+    """A drift correction may be adopted only after both source checks passed."""
+    return (
+        support is not None
+        and support.get("finding_id") == drift["finding_id"]
+        and support.get("quote_check") == "pass"
+        and support.get("verdict") == "supported"
+    )
+
+
+# --- Records --------------------------------------------------------------------
+
+
+def write_research(root: Path, record: dict, body: str) -> Path:
+    validate(record, "research")
+    path = Path(root) / ".harness" / "research" / f"{record['slug']}.md"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    frontmatter = yaml.dump(record, Dumper=_NoAliases, sort_keys=False, allow_unicode=True, width=100)
+    path.write_text(f"---\n{frontmatter}---\n{body.rstrip()}\n", encoding="utf-8")
+    return path
+
+
+def write_revision(root: Path, slug: str, revision: AcceptedRevision) -> Path:
+    if not re.fullmatch(r"[a-z0-9][a-z0-9-]*", slug):
+        raise ValueError(f"invalid slug {slug!r}")
+    value = {"brief_digest": revision.brief_digest, "digest": revision.digest, "rules": revision.rules}
+    validate(value, "revision")
+    path = Path(root) / ".harness" / "research" / f"{slug}.rules.yaml"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(yaml.dump(value, Dumper=_NoAliases, sort_keys=False, allow_unicode=True, width=100), encoding="utf-8")
+    return path
+
+
+def load_revision(path: Path, *, root: Path | None = None) -> AcceptedRevision:
+    """Load a revision and recompute its digest; a mismatch is an edit."""
+    value = load_document(path, "revision", root=root)
+    digest = canonical_digest({"brief_digest": value["brief_digest"], "rules": value["rules"]})
+    if digest != value["digest"]:
+        raise ValueError(f"{path}: accepted requirements changed after acceptance")
+    return AcceptedRevision(rule_ids=[entry["rule"]["id"] for entry in value["rules"]], rules=value["rules"],
+                            brief_digest=value["brief_digest"], digest=digest)

@@ -1,0 +1,7 @@
+Synthetic fetched page for research tests; not a source.
+
+Reproducer documentation
+
+Platform support. The reproducer is supported only on Linux. macOS and Windows are not tested.
+
+Installation. Download the release archive and run the installer.

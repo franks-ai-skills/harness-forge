@@ -110,14 +110,30 @@
             "type": "string",
             "minLength": 1,
             "maxLength": 20000
+          },
+          "category": {
+            "enum": [
+              "security",
+              "compatibility",
+              "ordinary"
+            ]
           }
         },
         "additionalProperties": false,
         "required": [
           "rule_id",
           "finding_id",
-          "summary"
+          "summary",
+          "category"
         ]
+      }
+    },
+    "limits": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 20000
       }
     }
   },
@@ -182,6 +198,13 @@
         "brief_digest": {
           "type": "string",
           "pattern": "^[0-9a-f]{64}$"
+        },
+        "source_role": {
+          "enum": [
+            "primary",
+            "practitioner",
+            "trade-press"
+          ]
         }
       },
       "additionalProperties": false,
@@ -194,7 +217,8 @@
         "fetched",
         "quote",
         "context",
-        "brief_digest"
+        "brief_digest",
+        "source_role"
       ]
     }
   }
