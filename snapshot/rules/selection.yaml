@@ -107,11 +107,25 @@ facts:
   - none
   - cli
   - no-cli
+- id: own_model
+  scope: part
+  values:
+  - true
+  - false
 - id: script_checkable
   scope: part
   values:
   - true
   - false
+- id: hook_event
+  scope: part
+  values:
+  - tool-call
+  - permission-request
+  - prompt-submit
+  - turn-end
+  - session-or-compaction
+  - claude-code-only
 - id: reuse_confirmed
   scope: part
   values:
@@ -226,11 +240,25 @@ questions:
   - none
   - cli
   - no-cli
+- id: own_model
+  text: Does it need a model of its own, such as its own context window or another model, rather than only other tools?
+  choices:
+  - true
+  - false
 - id: script_checkable
   text: Can a script decide it without judgment?
   choices:
   - true
   - false
+- id: hook_event
+  text: 'At which point must it run: before or after a tool call, at a permission request, when a prompt is submitted, when a turn ends, at session start or end, compaction or subagent start, or at an event only Claude Code has?'
+  choices:
+  - tool-call
+  - permission-request
+  - prompt-submit
+  - turn-end
+  - session-or-compaction
+  - claude-code-only
 rules:
 - id: selection.outcome.reuse
   concept: selection
@@ -655,6 +683,100 @@ rules:
   sources:
   - docs/overview.md#mcp
   contested: false
+- id: selection.eligibility.own-model-hooks
+  concept: selection
+  kind: should
+  severity: warning
+  check: script
+  checker: selection.match
+  params:
+    when:
+      all:
+      - eq:
+        - own_context
+        - true
+      - eq:
+        - own_model
+        - true
+      - in:
+        - target_set
+        - - codex
+          - both
+    implies:
+      excludes: hooks
+  statement: Portable hook handlers are commands and MCP tool calls; a separate process gives no model of its own, and prompt and agent hooks are Claude Code only
+  applies_to:
+    harnesses:
+    - claude-code
+    - codex
+  evidence: Vendor
+  sources:
+  - docs/guide/hooks.md#comparison
+  - docs/guide/hooks.md#when-to-use-it-and-when-not
+  contested: false
+- id: selection.eligibility.model-handler-event-hooks
+  concept: selection
+  kind: should
+  severity: warning
+  check: script
+  checker: selection.match
+  params:
+    when:
+      all:
+      - any:
+        - eq:
+          - script_checkable
+          - false
+        - all:
+          - eq:
+            - own_context
+            - true
+          - eq:
+            - own_model
+            - true
+      - in:
+        - hook_event
+        - - session-or-compaction
+          - claude-code-only
+    implies:
+      excludes: hooks
+  statement: Prompt and agent handlers run only on the tool-call, permission-request, prompt-submit and turn-end events here; session, compaction and subagent-start events take commands only, and Forge does not tell the Claude Code-only events apart
+  applies_to:
+    harnesses:
+    - claude-code
+    - codex
+  evidence: Vendor
+  sources:
+  - docs/vendors/claude-code/hooks.md#handler-types-and-support-by-event
+  contested: false
+- id: selection.eligibility.claude-code-only-event-hooks
+  concept: selection
+  kind: should
+  severity: warning
+  check: script
+  checker: selection.match
+  params:
+    when:
+      all:
+      - in:
+        - target_set
+        - - codex
+          - both
+      - eq:
+        - hook_event
+        - claude-code-only
+    implies:
+      excludes: hooks
+  statement: Codex shares only eleven hook events with Claude Code; a hook on any other event does not run in Codex
+  applies_to:
+    harnesses:
+    - claude-code
+    - codex
+  evidence: Vendor
+  sources:
+  - docs/guide/hooks.md#generalized-model
+  - docs/guide/hooks.md#portability
+  contested: false
 - id: selection.eligibility.side-effects-instructions
   concept: selection
   kind: should
@@ -686,17 +808,12 @@ rules:
   checker: selection.match
   params:
     when:
-      all:
-      - eq:
-        - irreversible
-        - true
-      - in:
-        - target_set
-        - - claude-code
-          - both
+      eq:
+      - irreversible
+      - true
     implies:
       excludes: subagents
-  statement: Claude Code delegates to a subagent on its description, so the model would decide on its own to start an irreversible or publishing procedure
+  statement: Delegation starts on the model's decision, or on instructions or a skill it follows, so a subagent cannot keep an irreversible or publishing procedure from starting without the user
   applies_to:
     harnesses:
     - claude-code
@@ -943,6 +1060,55 @@ rules:
   - docs/overview.md#permissions-and-sandbox
   - docs/guide/permissions-and-sandbox.md#when-to-use-it-and-when-not
   contested: false
+- id: selection.mechanism.judgment-hook
+  concept: selection
+  kind: should
+  severity: warning
+  check: script
+  checker: selection.match
+  params:
+    when:
+      all:
+      - eq:
+        - target_set
+        - claude-code
+      - any:
+        - eq:
+          - script_checkable
+          - false
+        - all:
+          - eq:
+            - own_context
+            - true
+          - eq:
+            - own_model
+            - true
+      - any:
+        - eq:
+          - every_time
+          - always
+        - eq:
+          - job
+          - check
+    implies:
+      concept: hooks
+    pros:
+    - Runs at the event, whatever the main model decides
+    - A model judges what a script cannot
+    cons:
+    - 'Claude Code only: Codex parses prompt and agent handlers but skips them'
+    - Prompt and agent handlers run only on the events that support them
+    - A model verdict, not a deterministic check
+  statement: On Claude Code alone, a check that needs judgment or a model of its own and must run at an event is a prompt or agent hook
+  applies_to:
+    harnesses:
+    - claude-code
+  evidence: Vendor
+  sources:
+  - docs/guide/hooks.md#when-to-use-it-and-when-not
+  - docs/best-practices/hooks.md#judgement-hooks-claude-code-only
+  - docs/vendors/claude-code/hooks.md#handler-types-and-support-by-event
+  contested: false
 - id: selection.mechanism.must-hold-check
   concept: selection
   kind: should
@@ -974,47 +1140,6 @@ rules:
   sources:
   - docs/overview.md#hooks
   - docs/guide/hooks.md#when-to-use-it-and-when-not
-  contested: false
-- id: selection.mechanism.judgment-hook
-  concept: selection
-  kind: should
-  severity: warning
-  check: script
-  checker: selection.match
-  params:
-    when:
-      all:
-      - eq:
-        - script_checkable
-        - false
-      - eq:
-        - target_set
-        - claude-code
-      - any:
-        - eq:
-          - every_time
-          - always
-        - eq:
-          - job
-          - check
-    implies:
-      concept: hooks
-    pros:
-    - Runs at the event, whatever the main model decides
-    - A model judges what a script cannot
-    cons:
-    - 'Claude Code only: Codex parses prompt and agent handlers but skips them'
-    - Prompt and agent handlers run only on the events that support them
-    - A model verdict, not a deterministic check
-  statement: On Claude Code alone, a check that needs judgment and must run at an event is a prompt or agent hook
-  applies_to:
-    harnesses:
-    - claude-code
-  evidence: Vendor
-  sources:
-  - docs/guide/hooks.md#when-to-use-it-and-when-not
-  - docs/best-practices/hooks.md#judgement-hooks-claude-code-only
-  - docs/vendors/claude-code/hooks.md#handler-types-and-support-by-event
   contested: false
 - id: selection.mechanism.fresh-context
   concept: selection

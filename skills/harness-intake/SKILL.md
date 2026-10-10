@@ -64,7 +64,10 @@ plugin README). Every command prints bounded JSON.
    not preferred, or unresolved (with the facts that were not needed to
    decide). Say "ruled out" only where the output does. For each
    `reuse_conflicts` entry, say which researched candidate was not reused
-   and which requirement rules out its mechanism. If this release
+   and which requirement rules out its mechanism. When
+   `no_standalone_mechanism` is true, say that no supported standalone
+   mechanism meets every confirmed requirement and that combinations of
+   mechanisms were not assessed; do not say that nothing could work. If this release
    cannot build the recommended mechanism, say "recommended; builder
    unavailable" instead of weakening the recommendation. For each
    control, ask whether the part's goal depends on it
@@ -88,7 +91,7 @@ plugin README). Every command prints bounded JSON.
 | `outside-alongside` | An outside control is needed, with a harness mechanism for feedback |
 | `outside-instead` | Only an outside control enforces it; nothing is built |
 | `reuse` | A researched existing solution fits; fit, license and maintenance were confirmed |
-| `nothing-fits` | No mechanism or available control meets the goal; say so plainly |
+| `nothing-fits` | No supported standalone mechanism or available control meets the goal; say so plainly, and that combinations were not assessed when `no_standalone_mechanism` is true |
 
 Outside controls are always `recommended, not verified`: Forge never
 configures or checks them on the platform.

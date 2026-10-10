@@ -366,6 +366,7 @@ def recommend(answers: dict, whole_idea: dict, rules: list[Rule], candidates: li
         unasked_facts=unasked,
         assessment=assessment,
         builder_available=mechanism in BUILDABLE,
+        no_standalone_mechanism=bool(evaluated["blocked_by"]),
     )
 
 

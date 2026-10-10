@@ -33,8 +33,11 @@ continues as if no candidate qualified. Forge asks a question only when its answ
 change the outcome, the recommended mechanism or the controls.
 
 If the outcome needs a harness mechanism but every matching mechanism is
-ruled out, no harness mechanism fits: the outcome becomes nothing fits,
-or outside control instead when an outside control is still recommended.
+ruled out, no supported standalone mechanism fits: the outcome becomes
+nothing fits, or outside control instead when an outside control is
+still recommended, and the result says that combinations of mechanisms
+were not assessed. A combination, such as a skill whose irreversible
+action an ask rule guards, may still fit; it is not ruled out.
 
 Whether this release can build the recommended mechanism does not affect
 selection; an unbuildable recommendation stays recommended.
@@ -48,18 +51,21 @@ mechanism description each exclusion rests on.
 | Confirmed requirement | Ruled out | Why |
 | --- | --- | --- |
 | Must hold every time | instructions, skills, commands, subagents, automation, MCP | Each depends on a model decision or applies outside the tool call |
-| Irreversible, about money, or publishes or discloses data | instructions, skills; subagents when Claude Code is a target | The model would decide on its own to start it; Claude Code delegates on a subagent's description |
+| Irreversible, about money, or publishes or discloses data | instructions, skills, subagents | The model would decide on its own to start it; delegation starts on the model's decision or on instructions or a skill it follows, in both harnesses |
 | Needs its own context, other tools or another model | instructions, skills, commands | They run in the session's own context; a subagent can use a skill |
-| Needs judgment, for Codex or both harnesses | hooks | Portable handlers are commands and MCP tool calls; prompt and agent hooks are Claude Code only |
+| Needs judgment, or a model of its own, for Codex or both harnesses | hooks | Portable handlers are commands and MCP tool calls; prompt and agent hooks are Claude Code only |
+| Needs judgment or a model of its own, at a session, compaction, subagent-start or Claude Code-only event | hooks | Prompt and agent handlers do not run at session, compaction or subagent-start events; Forge does not tell the Claude Code-only events apart |
+| An event only Claude Code has, for Codex or both harnesses | hooks | Codex shares eleven events with Claude Code |
 | A hard limit on access that must hold every time | hooks | Tool switching and unhooked paths bypass hooks |
 | A procedure the model starts | commands | Only the user starts a command |
 | A procedure an event starts | instructions, skills, commands, subagents | None of them starts on an event |
 
-A requirement that rules out no mechanism is not a gap. A hook handler,
-for example, runs as its own process outside the session's context and
-returns only its decision or added context, so needing its own context
-does not rule out a hook (Forge policy, an inference from
-`docs/overview.md#hooks`).
+Needing its own context covers three capabilities: its own context
+window, another model, or only other tools. When it is needed and a hook
+could be chosen, Forge asks which: a command handler gives a process with
+its own tools, but no model; only Claude Code's prompt and agent handlers
+give a model of its own. For a hook, Forge also asks the event when it
+decides whether the handler can run there.
 
 ## Preference order and rationale
 
@@ -67,8 +73,8 @@ does not rule out a hook (Forge policy, an inference from
 | --- | --- | --- |
 | 1 | `selection.mechanism.early-feedback-mirror` | The user asked for earlier feedback than the outside gate gives; only a hook gives it on every relevant event. |
 | 2 | `selection.mechanism.must-hold-access` | A capability that must never be used is a permission rule before anything else; permissions are the harness's hard limit. |
-| 3 | `selection.mechanism.must-hold-check` | A rule that must hold every time and that a script can check is the hook's defining use; it goes before job-based preferences so a must-hold requirement decides first. |
-| 4 | `selection.mechanism.judgment-hook` | On Claude Code alone, a check that needs judgment at an event is what prompt and agent hooks are for; it follows the scripted check because a script is deterministic and portable. |
+| 3 | `selection.mechanism.judgment-hook` | On Claude Code alone, a check that needs judgment or a model of its own at an event is what prompt and agent hooks are for. It goes before the scripted check, which matches the same check whenever a script can decide it but would give no model. |
+| 4 | `selection.mechanism.must-hold-check` | A rule that must hold every time and that a script can check is the hook's defining use; it goes before job-based preferences so a must-hold requirement decides first. |
 | 5 | `selection.mechanism.fresh-context` | A stated need for its own context, other tools or another model is specific; it outranks the general job-based preferences. |
 | 6 | `selection.mechanism.event-procedure` | A procedure an event starts runs where events are handled: a hook at that event. |
 | 7 | `selection.mechanism.event-procedure-unattended` | A schedule or CI event starts an unattended run instead; offered as the alternative to a hook. |

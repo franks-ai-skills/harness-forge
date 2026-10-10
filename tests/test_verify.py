@@ -306,6 +306,15 @@ class WorkerObservationTest(unittest.TestCase):
         result = finish_run(self.scenario.run, review, [], self.scenario.current(), worker_observations=[changed])[0]
         assert_result(self, result, "not verified", "not met")
 
+    def test_a_rejected_configuration_stays_rejected_when_finalized_again(self):
+        changed = {**self.OBSERVED, "configured_controls": ["tools: Read, Grep, Glob, Bash"]}
+        review = validate_review(self.scenario.run, passing_review(self.scenario.run))
+        for observations in ([changed], [changed], []):
+            with self.subTest(observations=len(observations)):
+                result = finish_run(self.scenario.run, review, [], self.scenario.current(),
+                                    worker_observations=observations)[0]
+                assert_result(self, result, "not verified", "not met")
+
     def test_an_observed_violation_still_blocks_success(self):
         self.scenario.run.worker_violations.append("review worker used Bash")
         assert_result(self, self.finish([self.OBSERVED]), "not verified", "not met")

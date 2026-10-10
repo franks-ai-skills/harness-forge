@@ -121,7 +121,8 @@ def prepare_run(
         targets=list(record["targets"]),
         whole_idea={"targets": list(record["targets"]), "reach": record["reach"], "hosting": dict(record["hosting"]),
                     "facts": dict(record["facts"])},
-        parts=[dict(part) for part in record["parts"]], worker_evidence=list(worker_evidence), kb_version=kb_version,
+        parts=[dict(part) for part in record["parts"]], worker_evidence=list(worker_evidence),
+        approved_workers=worker_configurations(worker_evidence), kb_version=kb_version,
         scope=scope_label, tool_versions={"harness-forge-checkers": inputs["checkers"]},
     )
     idea = _idea_rules(revision)
@@ -240,18 +241,18 @@ def finish_run(
 
     worker_observations are evidence records from workers that ran after the
     run was prepared. They join the report. A configuration that was not
-    frozen with the run (a changed control, model or launcher) invalidates
-    every part, like any other changed bound input.
+    approved with the run (a changed control, model or launcher) invalidates
+    every part, like any other changed bound input, and keeps doing so when
+    the run is finalized again: approval is kept apart from report evidence.
     """
     _check_runtime(run, runtime_results)
     for evidence in worker_observations:
         validate(evidence, "worker-evidence")
     run.runtime_results = list(runtime_results)
     changed = affected_parts(run, current_inputs)
-    frozen = worker_configurations(run.worker_evidence)
-    if any(configuration not in frozen for configuration in worker_configurations(worker_observations)):
-        changed = {part["id"] for part in run.parts}
     run.worker_evidence += [evidence for evidence in worker_observations if evidence not in run.worker_evidence]
+    if any(configuration not in run.approved_workers for configuration in worker_configurations(run.worker_evidence)):
+        changed = {part["id"] for part in run.parts}
     verdicts = {} if run.worker_violations else {(v["part_id"], v["rule_id"]): v for v in review.verdicts}
     goal_verdicts = {} if run.worker_violations else {v["part_id"]: v for v in review.goal_verdicts}
     statics = {(r.part_id, r.rule_id): r for r in run.static_results}

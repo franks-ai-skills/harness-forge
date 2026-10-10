@@ -19,7 +19,7 @@ def assessed(recommendation) -> dict[str, dict]:
 
 def answers(**changes):
     case = CASES["concept-skills"]
-    return {**case["answers"], **changes}, case["whole_idea"]
+    return {**case["answers"], "hook_event": "tool-call", **changes}, case["whole_idea"]
 
 
 class AssessmentTest(unittest.TestCase):

@@ -101,6 +101,7 @@ class Recommendation:
     unasked_facts: list[str] = field(default_factory=list)
     assessment: list[dict] = field(default_factory=list)
     builder_available: bool = False
+    no_standalone_mechanism: bool = False  # every matching mechanism is ruled out; combinations are not assessed
 
 
 @dataclass(frozen=True)
@@ -218,6 +219,7 @@ class VerificationRun:
     requirement_parts: list[str] = field(default_factory=list)
     rule_index: dict[str, dict] = field(default_factory=dict)
     worker_evidence: list[dict] = field(default_factory=list)
+    approved_workers: list[dict] = field(default_factory=list)
     worker_violations: list[str] = field(default_factory=list)
     kb_version: str = ""
     scope: str = "Extensive review (rarely needed)"

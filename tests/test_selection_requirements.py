@@ -1,9 +1,12 @@
-"""Every recommended mechanism and viable alternative meets every confirmed requirement.
+"""Every recommended mechanism and viable alternative meets the requirement table.
 
-REQUIREMENTS below is written from the overview's "When not" conditions,
-independently of the KB rule ids: for a set of confirmed answers it names
-each mechanism that cannot meet a requirement on its own. Selection must
-rule each of them out, for new builds and for reuse alike.
+requirements() below is a hand-written table from the overview's "When
+not" conditions and the hooks handler support, kept apart from the KB
+rule ids: for confirmed answers it names each mechanism that cannot meet
+a requirement on its own. Selection must rule each of them out, for new
+builds and for reuse alike. This checks selection against that table;
+it does not prove the table itself, which shares Forge's policy choices
+(see policy/selection.md).
 """
 
 import itertools
@@ -23,11 +26,17 @@ VARIED = {
     "irreversible": [True, False],
     "trigger": ["user", "model", "event"],
     "own_context": [True, False],
+    "own_model": [True, False],
     "script_checkable": [True, False],
+    "hook_event": ["tool-call", "permission-request", "prompt-submit", "turn-end", "session-or-compaction",
+                   "claude-code-only"],
     "external_system": ["none", "cli", "no-cli"],
     "target_set": ["claude-code", "codex", "both"],
 }
-MODEL_STARTED = {"instructions", "skills"}  # the model applies them on its own decision
+# The model, or instructions and skills it follows, start these on its own decision.
+MODEL_STARTED = {"instructions", "skills", "subagents"}
+# Shared events whose Claude Code handlers include prompt or agent (a model of its own).
+MODEL_HANDLER_EVENTS = {"tool-call", "permission-request", "prompt-submit", "turn-end"}
 
 
 def requirements(facts: dict) -> dict[str, str]:
@@ -41,12 +50,16 @@ def requirements(facts: dict) -> dict[str, str]:
     if facts["every_time"] == "always":
         add({"instructions", "skills", "commands", "subagents", "automation", "mcp"}, "must hold every time")
     if facts["irreversible"]:
-        delegated = {"subagents"} if facts["target_set"] != "codex" else set()
-        add(MODEL_STARTED | delegated, "the model must not start an irreversible action on its own")
+        add(MODEL_STARTED, "the model must not start an irreversible action on its own")
     if facts["own_context"]:
         add({"instructions", "skills", "commands"}, "needs its own context")
-    if not facts["script_checkable"] and facts["target_set"] != "claude-code":
-        add({"hooks"}, "needs judgment; portable hook handlers cannot judge")
+    needs_model = not facts["script_checkable"] or (facts["own_context"] and facts["own_model"])
+    if needs_model and facts["target_set"] != "claude-code":
+        add({"hooks"}, "needs a model; portable hook handlers are commands and MCP tool calls")
+    if needs_model and facts["hook_event"] not in MODEL_HANDLER_EVENTS:
+        add({"hooks"}, "needs a model; prompt and agent handlers do not run at this event")
+    if facts["target_set"] != "claude-code" and facts["hook_event"] == "claude-code-only":
+        add({"hooks"}, "the event exists only in Claude Code")
     if facts["job"] == "access-control" and facts["every_time"] == "always":
         add({"hooks"}, "a hard limit on access")
     if facts["job"] == "procedure" and facts["trigger"] == "model":
@@ -59,7 +72,12 @@ def requirements(facts: dict) -> dict[str, str]:
 def combinations(**limits):
     varied = {**VARIED, **limits}
     for values in itertools.product(*varied.values()):
-        yield dict(zip(varied, values))
+        facts = dict(zip(varied, values))
+        if facts["job"] != "integration" and facts["external_system"] != varied["external_system"][0]:
+            continue  # only integrations ask about external systems
+        if not facts["own_context"] and facts["own_model"] != varied["own_model"][0]:
+            continue  # own_model refines own_context only
+        yield facts
 
 
 def run(facts: dict, candidates=()):
@@ -90,7 +108,7 @@ class RequirementSetTest(unittest.TestCase):
                         self.assertEqual(states[concept], "ruled out", f"{concept}: {unmet[concept]}")
 
     def test_reuse_meets_every_confirmed_requirement(self):
-        for facts in combinations(external_system=["none"], target_set=["both"]):
+        for facts in combinations(external_system=["none"], target_set=["both"], hook_event=["tool-call"]):
             unmet = requirements(facts)
             for concept in CONCEPTS:
                 actual = run(facts, [candidate(concept)])
@@ -106,8 +124,8 @@ class RequirementSetTest(unittest.TestCase):
 
     def test_an_eligible_candidate_is_reused_when_another_conflicts(self):
         facts = next(combinations(job=["procedure"], every_time=["always"], irreversible=[False], trigger=["model"],
-                                  own_context=[False], script_checkable=[True], external_system=["none"],
-                                  target_set=["both"]))
+                                  own_context=[False], own_model=[False], script_checkable=[True],
+                                  hook_event=["tool-call"], external_system=["none"], target_set=["both"]))
         actual = run(facts, [candidate("skills"), candidate("hooks")])
         self.assertEqual((actual.outcome, actual.mechanism), ("reuse", "hooks"))
         self.assertEqual([conflict["candidate"] for conflict in actual.reuse_conflicts], ["existing-skills"])
@@ -116,7 +134,8 @@ class RequirementSetTest(unittest.TestCase):
 class ReportedBypassesTest(unittest.TestCase):
     def base(self, **changes):
         facts = {"job": "procedure", "every_time": "usually", "irreversible": False, "trigger": "model",
-                 "own_context": False, "script_checkable": False, "external_system": "none", "target_set": "both"}
+                 "own_context": False, "own_model": False, "script_checkable": False, "hook_event": "tool-call",
+                 "external_system": "none", "target_set": "both"}
         return {**facts, **changes}
 
     def states(self, recommendation):
@@ -151,6 +170,35 @@ class ReportedBypassesTest(unittest.TestCase):
             entry = next(entry for entry in actual.assessment if entry["concept"] == "hooks")
             self.assertEqual(entry["state"], "ruled out")
             self.assertTrue(any("Claude Code only" in reason for reason in entry["reasons"]), entry["reasons"])
+
+    def test_codex_subagent_is_no_way_around_the_irreversible_exclusion(self):
+        actual = run(self.base(irreversible=True, own_context=True, target_set="codex"))
+        self.assertNotEqual(actual.mechanism, "subagents")
+        self.assertEqual(self.states(actual)["subagents"], "ruled out")
+
+    def test_a_model_of_its_own_rules_out_portable_hooks(self):
+        facts = self.base(job="check", every_time="always", script_checkable=True, own_context=True, own_model=True)
+        for target_set, expected in (("codex", None), ("both", None), ("claude-code", "hooks")):
+            actual = run({**facts, "target_set": target_set})
+            self.assertEqual(actual.mechanism, expected, target_set)
+        actual = run({**facts, "own_model": False})
+        self.assertEqual(actual.mechanism, "hooks")
+
+    def test_the_event_decides_whether_a_judgment_hook_can_run(self):
+        facts = self.base(job="check", target_set="claude-code")
+        self.assertEqual(run({**facts, "hook_event": "turn-end"}).mechanism, "hooks")
+        actual = run({**facts, "hook_event": "session-or-compaction"})
+        self.assertNotEqual(actual.mechanism, "hooks")
+        self.assertEqual(self.states(actual)["hooks"], "ruled out")
+
+    def test_an_unknown_event_is_asked_when_it_decides(self):
+        facts = {k: v for k, v in self.base(job="check", target_set="claude-code").items() if k != "hook_event"}
+        self.assertEqual(run(facts).pending_question, "hook_event")
+
+    def test_no_standalone_mechanism_is_not_reported_as_nothing_fitting(self):
+        actual = run(self.base(irreversible=True))
+        self.assertTrue(actual.no_standalone_mechanism)
+        self.assertFalse(run(self.base()).no_standalone_mechanism)
 
     def test_event_started_procedure_is_not_a_skill(self):
         actual = run(self.base(trigger="event", script_checkable=True))
