@@ -88,6 +88,12 @@ def observe(stdout: str) -> dict:
                 behavior.append(f"model reported: {event['model']}")
             if "apiKeySource" in event:
                 behavior.append(f"apiKeySource: {event['apiKeySource']}")
+            if isinstance(event.get("skills"), list):
+                behavior.append(f"skills listed: {', '.join(sorted(str(skill) for skill in event['skills']))}")
+            plugins = [p for p in event.get("plugins", []) if isinstance(p, dict)]
+            if plugins:
+                behavior.append("plugins listed: " + ", ".join(sorted(f"{p.get('name')} ({p.get('path')})"
+                                                                       for p in plugins)))
         message = event.get("message")
         if event.get("type") == "assistant" and isinstance(message, dict) and isinstance(message.get("content"), list):
             calls += [str(block.get("name")) for block in message["content"]
