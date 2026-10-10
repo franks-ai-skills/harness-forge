@@ -186,11 +186,18 @@ def _check_idea_rule(rule: Rule) -> None:
             raise ValueError(f"{rule.id}: invalid params for {rule.checker}: {errors[0]}")
 
 
+def _require_unique(rule_ids: list[str], where: str) -> None:
+    duplicates = sorted({rule_id for rule_id in rule_ids if rule_ids.count(rule_id) > 1})
+    if duplicates:
+        raise ValueError(f"{where} use an id more than once: {', '.join(duplicates)}")
+
+
 def accept_requirements(proposed: list[Rule], choices: dict, brief_digest: str) -> AcceptedRevision:
     """Build the Idea KB revision from the user's accept, edit or reject choices.
 
     A proposed requirement without a choice stays pending and is excluded.
     """
+    _require_unique([rule.id for rule in proposed], "proposed requirements")
     by_id = {rule.id: rule for rule in proposed}
     unknown = set(choices) - set(by_id)
     if unknown:
@@ -272,5 +279,6 @@ def load_revision(path: Path, *, root: Path | None = None) -> AcceptedRevision:
     digest = canonical_digest({"brief_digest": value["brief_digest"], "rules": value["rules"]})
     if digest != value["digest"]:
         raise ValueError(f"{path}: accepted requirements changed after acceptance")
+    _require_unique([entry["rule"]["id"] for entry in value["rules"]], f"{path}: accepted requirements")
     return AcceptedRevision(rule_ids=[entry["rule"]["id"] for entry in value["rules"]], rules=value["rules"],
                             brief_digest=value["brief_digest"], digest=digest)

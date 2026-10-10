@@ -182,13 +182,29 @@
                       "type": "string",
                       "minLength": 1,
                       "maxLength": 20000
+                    },
+                    "rule_kind": {
+                      "enum": [
+                        "must",
+                        "must-not",
+                        "should",
+                        "should-not"
+                      ]
+                    },
+                    "applicability": {
+                      "enum": [
+                        "script",
+                        "judged"
+                      ]
                     }
                   },
                   "additionalProperties": false,
                   "required": [
                     "part_id",
                     "rule_id",
-                    "statement"
+                    "statement",
+                    "rule_kind",
+                    "applicability"
                   ]
                 },
                 "minItems": 0
@@ -206,12 +222,22 @@
                       "type": "string",
                       "minLength": 1,
                       "maxLength": 20000
+                    },
+                    "requirement_ids": {
+                      "type": "array",
+                      "items": {
+                        "type": "string",
+                        "pattern": "^[a-z][a-z0-9-]*(\\.[a-z0-9-]+)+$",
+                        "maxLength": 200
+                      },
+                      "uniqueItems": true
                     }
                   },
                   "additionalProperties": false,
                   "required": [
                     "part_id",
-                    "goal"
+                    "goal",
+                    "requirement_ids"
                   ]
                 }
               },

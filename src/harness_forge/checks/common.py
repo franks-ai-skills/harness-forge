@@ -7,7 +7,11 @@ import re
 
 from harness_forge.documents import parse_yaml, split_frontmatter
 
-LINK = re.compile(r"\]\(<?([^)\s>]+)>?\)")
+_DESTINATION = r"(?:<([^<>\n]*)>|((?:[^\s<>()]|\([^\s<>()]*\))+))"
+_TITLE = r"""(?:\s+(?:"[^"]*"|'[^']*'|\([^()]*\)))?"""
+# Inline links and images, with an optional title, and reference definitions.
+LINK = re.compile(r"\]\(\s*" + _DESTINATION + _TITLE + r"\s*\)")
+DEFINITION = re.compile(r"^ {0,3}\[[^\]\n]+\]:[ \t]*\n?[ \t]*" + _DESTINATION, re.M)
 FENCE = re.compile(r"^(```|~~~).*?^\1", re.S | re.M)
 
 
@@ -34,7 +38,9 @@ def without_code(markdown: str) -> str:
 
 def relative_links(markdown: str) -> list[str]:
     links = []
-    for target in LINK.findall(without_code(markdown)):
+    markdown = without_code(markdown)
+    for angled, bare in LINK.findall(markdown) + DEFINITION.findall(markdown):
+        target = angled or bare
         if re.match(r"^[a-zA-Z][a-zA-Z0-9+.-]*:", target) or target.startswith("#"):
             continue
         links.append(target.split("#")[0])

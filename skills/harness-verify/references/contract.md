@@ -13,8 +13,10 @@ Read this before explaining a verification result.
 
 ## Goal result, decided in this order
 
-1. `not assessed`: the contract is unconfirmed, the part is blocked, or
-   the harness result is `not checked`.
+1. `not assessed`: the contract is unconfirmed, the part is blocked, the
+   harness result is `not checked`, or a bound input of a part without a
+   build (its goal, its README hand-off) changed after the run was
+   prepared.
 2. `not met`: the harness result is `not verified`, or the confirmed
    outcome is nothing fits. A failed build is a failure, never a
    dependency.

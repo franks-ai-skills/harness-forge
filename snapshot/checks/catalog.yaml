@@ -32,7 +32,7 @@ checkers:
       required: [max_lines]
       additionalProperties: false
   - id: skills.reference-depth
-    version: 1.0.0
+    version: 1.1.0
     summary: Markdown files other than SKILL.md link to no other Markdown file of the skill.
     params: {type: object, properties: {}, additionalProperties: false}
   - id: skills.no-auxiliary-docs
@@ -60,7 +60,7 @@ checkers:
     summary: disable-model-invocation true in SKILL.md and policy.allow_implicit_invocation false in agents/openai.yaml are both set or both absent.
     params: {type: object, properties: {}, additionalProperties: false}
   - id: links.relative-references
-    version: 1.0.0
+    version: 1.1.0
     summary: Every relative Markdown link in the skill's Markdown files resolves to a file inside the skill directory.
     params: {type: object, properties: {}, additionalProperties: false}
   - id: links.portable-symlink

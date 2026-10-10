@@ -18,7 +18,7 @@ from dataclasses import asdict  # noqa: E402
 
 from harness_forge.contracts import RELAY_KEYS, load_decision, render_contract  # noqa: E402
 from harness_forge.documents import load_document, parse_json, safe_path, validate, validate_kb  # noqa: E402
-from harness_forge.models import AcceptedRevision, Finding, Rule  # noqa: E402
+from harness_forge.models import Finding, Rule  # noqa: E402
 from harness_forge.report import render_report, write_report  # noqa: E402
 from harness_forge.research import finding_problem, load_revision  # noqa: E402
 from harness_forge.scope import scope_options  # noqa: E402
@@ -42,13 +42,19 @@ class _Parser(argparse.ArgumentParser):
 
 
 def emit(payload: dict) -> None:
-    """Print payload as JSON, dropping listed errors until it fits the bound."""
+    """Print payload as JSON, dropping listed errors until it fits the bound.
+
+    A payload that still exceeds the bound is not printed at all.
+    """
     errors = list(payload.get("errors", []))[:MAX_LISTED_ERRORS]
     while True:
         text = json.dumps({**payload, "errors": errors} if "errors" in payload else payload, ensure_ascii=False)
-        if len(text.encode("utf-8")) <= MAX_OUTPUT_BYTES or not errors:
+        size = len(text.encode("utf-8"))
+        if size <= MAX_OUTPUT_BYTES:
             print(text)
             return
+        if not errors:
+            raise _InvalidInput(f"output of {size} bytes exceeds the {MAX_OUTPUT_BYTES}-byte bound")
         errors = errors[: len(errors) // 2]
 
 
@@ -110,19 +116,13 @@ def _prepare_contract(arguments: argparse.Namespace) -> int:
     """Render the current contract offline; confirmation needs a live relay."""
     try:
         decision = load_decision(Path(arguments.decision))
+        revision = load_revision(Path(arguments.revision)) if arguments.revision else None
         overrides = []
         if arguments.overrides:
             for path in sorted(Path(arguments.overrides).glob("*.yaml")):
                 overrides.append(load_document(path, "override"))
     except ValueError as error:
         raise _InvalidInput(str(error)) from error
-    revision = None
-    if arguments.revision:
-        value = _read_json(arguments.revision)
-        try:
-            revision = AcceptedRevision(**value)
-        except TypeError as error:
-            raise _InvalidInput(f"--revision: {error}") from error
     evidence = []
     if arguments.evidence:
         value = _read_json(arguments.evidence)
@@ -278,7 +278,7 @@ def build_parser() -> argparse.ArgumentParser:
     select.set_defaults(handler=_select)
     prepare = commands.add_parser("prepare-contract", help="render the current contract for confirmation")
     prepare.add_argument("--decision", required=True, help=".harness/decisions/<date>-<slug>.md")
-    prepare.add_argument("--revision", help="JSON accepted Idea KB revision")
+    prepare.add_argument("--revision", help=".harness/research/<slug>.rules.yaml")
     prepare.add_argument("--overrides", help="directory with .harness/overrides/*.yaml")
     prepare.add_argument("--evidence", help="JSON object with worker_evidence records")
     prepare.set_defaults(handler=_prepare_contract)

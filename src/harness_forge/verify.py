@@ -132,6 +132,10 @@ def prepare_run(
         scope=scope_label, tool_versions={"harness-forge-checkers": inputs["checkers"]},
     )
     idea = _idea_rules(revision)
+    rule_ids = [rule.id for rule in rules] + [rule.id for part_rules in idea.values() for rule in part_rules]
+    duplicates = sorted({rule_id for rule_id in rule_ids if rule_ids.count(rule_id) > 1})
+    if duplicates:
+        raise ValueError(f"rule ids used more than once: {', '.join(duplicates)}")
     run.requirement_parts = sorted(idea)
     for part in record["parts"]:
         part_id = part["id"]
@@ -189,6 +193,30 @@ def prepare_run(
     return run
 
 
+def review_request(run: VerificationRun, request_id: str) -> dict:
+    """The review worker's request: the frozen files, each rule to judge and each goal.
+
+    Rules carry their kind and applicability, as the worker instructions
+    promise; severity stays out, so it cannot change how strictly a rule is
+    judged.
+    """
+    requested = {request["part_id"] for request in run.judged_requests}
+    paths = sorted({path for part_id in requested for path in run.part_files.get(part_id, [])})
+    inputs = {
+        "files": [{"path": path, "sha256": run.frozen_inputs["files"][path]} for path in paths],
+        "rules": [{"part_id": r["part_id"], "rule_id": r["rule_id"], "statement": r["statement"],
+                   "rule_kind": r["rule_kind"], "applicability": r["applicability"]}
+                  for r in run.judged_requests if r["kind"] == "rule"],
+        "goals": [{"part_id": r["part_id"], "goal": r["goal"], "requirement_ids": r["requirement_ids"]}
+                  for r in run.judged_requests if r["kind"] == "goal"],
+        "decision_digest": run.decision_digest,
+    }
+    request = {"role": "review", "run_id": run.run_id, "request_id": request_id,
+               "input_digest": canonical_digest(inputs), "inputs": inputs}
+    validate(request, "worker-request")
+    return request
+
+
 def validate_review(run: VerificationRun, response: dict) -> ReviewResponse:
     """Check the review worker's response: one verdict per request, nothing else."""
     validate(response, "review")
@@ -228,8 +256,8 @@ def _check_runtime(run: VerificationRun, results: list[RuntimeResult]) -> None:
             raise ValueError(f"runtime result {result.case_id} does not name exactly the part's frozen files")
 
 
-def _goal_result(kind: str, status: str, harness: str, dependencies: list[str]) -> str:
-    if status == "blocked" or harness == "not checked":
+def _goal_result(kind: str, status: str, harness: str, dependencies: list[str], stale: bool) -> str:
+    if status == "blocked" or harness == "not checked" or stale:
         return "not assessed"
     if harness == "not verified" or kind == "nothing-fits":
         return "not met"
@@ -314,7 +342,8 @@ def finish_run(
                                  "reason": "a bound input changed after the run was prepared"})
         results.append(PartResult(
             part_id=part_id, status=status, harness_result=harness,
-            goal_result=_goal_result(kind, status, harness, dependencies),
+            goal_result=_goal_result(kind, status, harness, dependencies,
+                                     stale=part_id in changed and harness == "not applicable"),
             outside_dependencies=dependencies, rule_results=rule_results, goal_verdict=goal,
         ))
     return results

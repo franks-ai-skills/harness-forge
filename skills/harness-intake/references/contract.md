@@ -6,9 +6,10 @@ verification.
 ## What to show
 
 Run `scripts/forge.py prepare-contract --decision <record>`, adding
-`--revision`, `--overrides .harness/overrides` and `--evidence` when they
-exist. Show its `text` in full, unchanged: every part's goal, outcome and
-mechanism, outside controls, accepted requirements with the revision's
+`--revision .harness/research/<slug>.rules.yaml`, `--overrides
+.harness/overrides` and `--evidence` when they exist. Show its `text` in
+full, unchanged: every part's goal, outcome and mechanism, the reused
+artifact of a reuse part, outside controls, accepted requirements with the revision's
 sha256, every override with its content and sha256, the worker policy
 (`best-effort-v1`, isolation not certified) and the contract digest. A
 line marked as a hint from an untrusted record only points at

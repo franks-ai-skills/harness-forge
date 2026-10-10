@@ -60,6 +60,7 @@ def contract_parts(decision: Decision, revision: AcceptedRevision | None) -> lis
             "mechanism": part["chosen"],
             "recommended": part["recommended"],
             "override_reason": part["override_reason"],
+            "reuse": dict(part["reuse"]) if part.get("reuse") else None,
             "outside_controls": [dict(control) for control in part["outside_controls"]],
             "requirements": requirements.get(part["id"], []),
         }
@@ -73,6 +74,11 @@ def _part_text(part: dict) -> list[str]:
     lines.append(f"  Outcome: {part['outcome']}; mechanism: {mechanism} (recommended: {part['recommended'] or 'none'})")
     if part["override_reason"]:
         lines.append(f"  Override reason: {part['override_reason']}")
+    if part["reuse"]:
+        reuse = part["reuse"]
+        lines.append(f"  Reused artifact: {reuse['name']} from {reuse['source']}; license {reuse['license']}; "
+                     f"maintenance {reuse['maintenance']}; form {reuse.get('variant') or 'not recorded'}; "
+                     f"local path {reuse.get('path') or 'none, not available locally'}")
     if part["outside_controls"]:
         lines.append("  Outside controls (recommended, not verified):")
         for control in part["outside_controls"]:
