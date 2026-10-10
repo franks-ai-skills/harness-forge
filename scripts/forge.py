@@ -462,8 +462,9 @@ def _verify(arguments: argparse.Namespace) -> int:
             raise _InvalidInput(str(error)) from error
     parts = [{"part_id": r.part_id, "status": r.status, "harness_result": r.harness_result, "goal_result": r.goal_result}
              for r in results]
-    emit({"command": "verify", "run_id": run.run_id, "parts": parts, "worker_violations": list(run.worker_violations),
-          "written": written})
+    runtime = [{"case_id": r.case_id, "result": r.result, "reason": r.reason} for r in run.runtime_results]
+    emit({"command": "verify", "run_id": run.run_id, "parts": parts, "runtime": runtime,
+          "worker_violations": list(run.worker_violations), "written": written})
     return 1 if any(part["harness_result"] == "not verified" for part in parts) else 0
 
 

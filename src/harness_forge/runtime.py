@@ -88,6 +88,8 @@ def _observe_claude(stdout: str, name: str, baseline: set[str]) -> dict:
                 arguments = block.get("input") if isinstance(block.get("input"), dict) else {}
                 if block.get("name") == "Skill" and name in (arguments.get("skill"), arguments.get("command")):
                     observed["activation"] = f"Skill tool called for {name}"
+        if event.get("type") == "user" and f"<command-name>/{name}</command-name>" in json.dumps(event):
+            observed["activation"] = observed["activation"] or f"/{name} was invoked"
         if event.get("type") == "result":
             observed["completed"] = event.get("is_error") is False and event.get("subtype") == "success"
             observed["errored"] = not observed["completed"]
@@ -132,6 +134,55 @@ def _decide(harness: str, test_case: dict, observed: dict, permitted: list[str])
     if harness == "codex":
         return "not-run", "Codex has no observable signal that proves non-activation"
     return "pass", "no Skill tool call for the candidate"
+
+
+def activation_case(
+    harness: str, files: Mapping[str, bytes], skill_dirs: list[str], target: str, prompt: str, expected: str,
+    permitted: list[str], fixtures: Mapping[str, str], *, runner: Runner, environ: Mapping[str, str],
+    baseline: set[str], timeout: int = RUNTIME_TIMEOUT, workspace_root: str | None = None, slash: bool = False,
+) -> tuple[str, str, str | None]:
+    """Run one prompt in a throwaway workspace holding ``files``; judge whether ``target`` activated.
+
+    Skills in ``skill_dirs`` other than the target are installed on purpose
+    and never count as competing; Claude finds each through its
+    .claude/skills link. A slash or $ invocation (``slash``) may load the
+    skill without a tool call; with no observed signal it is not-run.
+    """
+    name = target.rsplit("/", 1)[-1]
+    companions = {directory.rsplit("/", 1)[-1] for directory in skill_dirs} - {name}
+    with tempfile.TemporaryDirectory(prefix="forge-runtime-", dir=workspace_root) as temporary:
+        workspace = Path(temporary)
+        for path, data in files.items():
+            destination = safe_path(workspace, path)
+            destination.parent.mkdir(parents=True, exist_ok=True)
+            destination.write_bytes(data)
+        for path, text in fixtures.items():
+            destination = safe_path(workspace, path)
+            destination.parent.mkdir(parents=True, exist_ok=True)
+            destination.write_text(text, encoding="utf-8")
+        if harness == "claude-code":
+            for directory in skill_dirs:
+                link = workspace / ".claude" / "skills" / directory.rsplit("/", 1)[-1]
+                link.parent.mkdir(parents=True, exist_ok=True)
+                link.symlink_to(f"../../{directory}")
+            command = _claude_command(permitted)
+        else:
+            command = codex.command("review", str(workspace))
+        try:
+            completed = runner(command, cwd=str(workspace), env=worker_environment(environ, harness), stdin=prompt,
+                               timeout=timeout)
+        except OSError as error:
+            return "not-run", f"unavailable: the harness could not start: {error}", None
+    if completed.timed_out:
+        return "not-run", f"timed out after {timeout} s", None
+    if completed.returncode:
+        return "error", f"the harness exited with {completed.returncode}", None
+    observed = (_observe_claude(completed.stdout, name, baseline | companions) if harness == "claude-code"
+                else _observe_codex(completed.stdout, target))
+    outcome, reason = _decide(harness, {"expected": expected}, observed, permitted)
+    if slash and outcome == "fail" and observed["activation"] is None and expected == "activates":
+        return "not-run", "the explicit invocation left no observable activation signal", None
+    return outcome, reason, observed["activation"]
 
 
 def run_skill_runtime(
@@ -181,38 +232,10 @@ def run_skill_runtime(
         if not checked["available"]:
             results.append(result("not-run", f"unavailable: {checked['reason']}"))
             continue
-        with tempfile.TemporaryDirectory(prefix="forge-runtime-", dir=workspace_root) as temporary:
-            workspace = Path(temporary)
-            for path, data in files.items():
-                if path.startswith(directory + "/"):
-                    target = safe_path(workspace, path)
-                    target.parent.mkdir(parents=True, exist_ok=True)
-                    target.write_bytes(data)
-            for path, text in fixtures.items():
-                target = safe_path(workspace, path)
-                target.parent.mkdir(parents=True, exist_ok=True)
-                target.write_text(text, encoding="utf-8")
-            if harness == "claude-code":
-                link = workspace / ".claude" / "skills" / name
-                link.parent.mkdir(parents=True, exist_ok=True)
-                link.symlink_to(f"../../{directory}")
-                command = _claude_command(permitted)
-            else:
-                command = codex.command("review", str(workspace))
-            try:
-                completed = runner(command, cwd=str(workspace), env=worker_environment(environ, harness),
-                                   stdin=test_case["prompt"], timeout=timeout)
-            except OSError as error:
-                results.append(result("not-run", f"unavailable: the harness could not start: {error}"))
-                continue
-        if completed.timed_out:
-            results.append(result("not-run", f"timed out after {timeout} s"))
-            continue
-        if completed.returncode:
-            results.append(result("error", f"the harness exited with {completed.returncode}"))
-            continue
-        observed = (_observe_claude(completed.stdout, name, set(baseline_skills)) if harness == "claude-code"
-                    else _observe_codex(completed.stdout, directory))
-        outcome, reason = _decide(harness, test_case, observed, permitted)
-        results.append(result(outcome, reason, observed["activation"]))
+        staged = {path: data for path, data in files.items() if path.startswith(directory + "/")}
+        outcome, reason, activation = activation_case(
+            harness, staged, [directory], directory, test_case["prompt"], test_case["expected"], permitted, fixtures,
+            runner=runner, environ=environ, baseline=set(baseline_skills), timeout=timeout,
+            workspace_root=workspace_root)
+        results.append(result(outcome, reason, activation))
     return results

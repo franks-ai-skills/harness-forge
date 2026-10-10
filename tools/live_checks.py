@@ -357,15 +357,33 @@ def run_probe(harness, launcher, role, baseline, timeout):
     return result
 
 
+def run_live_case(harness, case):
+    """T11's automated live runs (tools/live_runs.py); evidence goes to the private results directory."""
+    import sys
+    sys.path.insert(0, str(ROOT / "tools"))
+    import live_runs
+
+    stamp = time.strftime("%Y%m%d-%H%M%S")
+    out = ROOT / "evals/canaries/results/private" / f"{case}-{harness}-{stamp}"
+    summary = (live_runs.vertical(harness, out) if case == "vertical" else live_runs.routing_smoke(harness, out))
+    print(json.dumps({key: summary.get(key) for key in ("case", "harness", "status", "clean", "parts")}
+                     | {"summary": str(out / "summary.json")}), flush=True)
+    return 0 if summary["status"] == "completed" and summary["clean"] else 1
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--harness", choices=("codex", "claude-code"), required=True)
-    parser.add_argument("--case", choices=("worker-boundaries",), required=True)
-    parser.add_argument("--launcher", choices=("native", "process"), required=True)
+    parser.add_argument("--case", choices=("worker-boundaries", "vertical", "routing-smoke"), required=True)
+    parser.add_argument("--launcher", choices=("native", "process"), help="worker-boundaries only")
     parser.add_argument("--role", choices=ROLES + ("all",), default="all")
     parser.add_argument("--baseline", action="store_true")
     parser.add_argument("--timeout", type=int, default=150)
     args = parser.parse_args()
+    if args.case != "worker-boundaries":
+        return run_live_case(args.harness, args.case)
+    if args.launcher is None:
+        parser.error("--launcher is required for worker-boundaries")
     results = [run_probe(args.harness, args.launcher, role, args.baseline, args.timeout)
                for role in (ROLES if args.role == "all" else (args.role,))]
     # Expected denials are evidence; insufficient evidence never reports support.
