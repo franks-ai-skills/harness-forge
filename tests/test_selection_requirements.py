@@ -52,8 +52,9 @@ CAPABLE = {
     ("codex", "feedback"): {"PreToolUse", "PostToolUse", "UserPromptSubmit", "Stop", "SubagentStop", "SessionStart",
                             "SubagentStart"},
     # Claude Code prompt and agent hooks: what ok: false does at each event.
+    # TaskCreated and TaskCompleted only return the reason as a tool error; prevention is not documented.
     ("model", "prevent"): {"PreToolUse", "UserPromptSubmit", "UserPromptExpansion", "Stop", "SubagentStop",
-                           "TaskCreated", "TaskCompleted", "TeammateIdle"},
+                           "TeammateIdle"},
     ("model", "stop"): {"PreToolUse", "PostToolUse", "PostToolBatch", "UserPromptSubmit", "UserPromptExpansion",
                         "TeammateIdle"},
     ("model", "feedback"): {"PreToolUse", "PostToolUse", "PostToolUseFailure", "Stop", "SubagentStop", "TaskCreated",
@@ -73,8 +74,11 @@ SOURCE_FACTS = {"SessionStart": ("session_start_source", ["after-compaction", "a
                 "DirectoryAdded": ("directory_added_source", ["add-dir", "any"])}
 MODEL_VERDICT_EVENTS = {"PreToolUse", "PostToolUse", "PostToolBatch", "PostToolUseFailure", "UserPromptSubmit",
                         "UserPromptExpansion", "Stop", "SubagentStop", "TaskCreated", "TaskCompleted", "TeammateIdle"}
-# Agent hooks act like continueOnBlock: true, so only a prompt hook ends the turn here.
-PROMPT_ONLY_STOP = {"PreToolUse", "PostToolUse", "TeammateIdle", "TaskCompleted"}
+# Where continueOnBlock changes what ok: false does. Agent hooks act like continueOnBlock: true.
+CONTINUE_ON_BLOCK_EVENTS = {"PreToolUse", "PostToolUse", "TeammateIdle", "TaskCompleted"}
+# A hook's own form, with every setting that changes its effect.
+SYNC, ASYNC = "synchronous command handler", "async command handler"
+PROMPT, PROMPT_COB, AGENT = "prompt handler without continueOnBlock", "prompt handler with continueOnBlock", "agent handler"
 EFFECTS = ["prevent", "stop", "feedback", "report"]
 HARNESSES = {"claude-code": ("claude-code",), "codex": ("codex",), "both": ("claude-code", "codex")}
 ALL_EVENTS = sorted(EVENTS["claude-code"] | EVENTS["codex"])
@@ -164,18 +168,27 @@ def combinations(**limits):
         yield from with_sources(facts)
 
 
-def handler(facts: dict) -> str:
+def required(facts: dict) -> tuple[str, list[str]]:
+    """The handler the part needs, and the hook forms that provide it."""
+    event, effect = facts["hook_event"], facts["hook_effect"]
     if not needs_model(facts):
-        return "command handler"
-    if facts["hook_effect"] == "stop" and facts["hook_event"] in PROMPT_ONLY_STOP:
-        return "prompt handler"
-    return "prompt or agent handler"
+        if effect == "report":
+            return "command handler", [SYNC, ASYNC]
+        return "synchronous command handler", [SYNC]  # async hooks can't block, and report a turn late
+    if effect == "stop" and event in CONTINUE_ON_BLOCK_EVENTS:
+        return PROMPT, [PROMPT]
+    if (effect == "feedback" and event in CONTINUE_ON_BLOCK_EVENTS) or (effect == "prevent" and event == "TeammateIdle"):
+        return "prompt handler with continueOnBlock, or agent handler", [PROMPT_COB, AGENT]
+    return "prompt or agent handler", [PROMPT, PROMPT_COB, AGENT]
+
+
+def handler(facts: dict) -> str:
+    return required(facts)[0]
 
 
 def form(facts: dict) -> str:
-    """A reusable hook's own handler that meets the required one."""
-    return {"command handler": "command handler", "prompt handler": "prompt handler",
-            "prompt or agent handler": "agent handler"}[handler(facts)]
+    """A reusable hook's own form that meets the required handler."""
+    return required(facts)[1][0]
 
 
 def run(facts: dict, candidates=()):
@@ -232,7 +245,7 @@ class RequirementSetTest(unittest.TestCase):
                                   own_context=[False], own_model=[False], script_checkable=[True],
                                   hook_event=["PreToolUse"], hook_effect=["prevent"], external_system=["none"],
                                   target_set=["both"]))
-        actual = run(facts, [candidate("skills"), candidate("hooks", "command handler")])
+        actual = run(facts, [candidate("skills"), candidate("hooks", SYNC)])
         self.assertEqual((actual.outcome, actual.mechanism), ("reuse", "hooks"))
         self.assertEqual([conflict["candidate"] for conflict in actual.reuse_conflicts], ["existing-skills"])
 
@@ -320,8 +333,10 @@ class ReportedBypassesTest(unittest.TestCase):
 
     def test_the_event_decides_whether_a_judgment_hook_can_run(self):
         facts = self.base(job="check", target_set="claude-code")
-        for event in ("Stop", "TaskCompleted"):
-            self.assertEqual(run({**facts, "hook_event": event}).mechanism, "hooks", event)
+        self.assertEqual(run({**facts, "hook_event": "Stop"}).mechanism, "hooks")
+        # At TaskCompleted ok: false returns a tool error; prevention is not documented.
+        self.assertEqual(self.states(run({**facts, "hook_event": "TaskCompleted"}))["hooks"], "ruled out")
+        self.assertEqual(run({**facts, "hook_event": "TaskCompleted", "hook_effect": "feedback"}).mechanism, "hooks")
         for event in ("SessionStart", "PermissionRequest", "PermissionDenied"):
             actual = run({**facts, "hook_event": event})
             self.assertNotEqual(actual.mechanism, "hooks", event)
@@ -353,8 +368,33 @@ class ReportedBypassesTest(unittest.TestCase):
 
     def test_only_a_prompt_hook_ends_the_turn_at_a_tool_call(self):
         facts = self.base(job="check", target_set="claude-code", hook_effect="stop")
-        self.assertEqual(run(facts).variant, "prompt handler")
+        self.assertEqual(run(facts).variant, PROMPT)
         self.assertEqual(run({**facts, "hook_effect": "prevent"}).variant, "prompt or agent handler")
+        self.assertEqual(run({**facts, "hook_effect": "feedback"}).variant,
+                         "prompt handler with continueOnBlock, or agent handler")
+
+    def test_keeping_a_teammate_working_needs_continue_on_block_or_an_agent(self):
+        facts = self.base(job="check", target_set="claude-code", hook_event="TeammateIdle", hook_effect="prevent")
+        self.assertEqual(run(facts).variant, "prompt handler with continueOnBlock, or agent handler")
+        self.assertEqual(run({**facts, "hook_effect": "stop"}).variant, PROMPT)
+        self.assertNotEqual(run(facts, [candidate("hooks", PROMPT)]).outcome, "reuse")
+        self.assertEqual(run(facts, [candidate("hooks", PROMPT_COB)]).outcome, "reuse")
+
+    def test_settings_that_change_the_effect_decide_reuse(self):
+        stop = self.base(job="check", target_set="claude-code", hook_effect="stop")
+        self.assertNotEqual(run(stop, [candidate("hooks", PROMPT_COB)]).outcome, "reuse")
+        self.assertEqual(run(stop, [candidate("hooks", PROMPT)]).outcome, "reuse")
+        scripted = self.base(job="check", script_checkable=True, target_set="claude-code")
+        for effect in ("prevent", "stop", "feedback"):
+            actual = run({**scripted, "hook_effect": effect}, [candidate("hooks", ASYNC)])
+            self.assertNotEqual(actual.outcome, "reuse", effect)
+            self.assertIn("async command handler", actual.reuse_conflicts[0]["reasons"][-1])
+        self.assertEqual(run({**scripted, "hook_effect": "report"}, [candidate("hooks", ASYNC)]).outcome, "reuse")
+
+    def test_an_unknown_form_is_not_reused(self):
+        facts = self.base(job="check", script_checkable=True, target_set="claude-code", hook_effect="report")
+        actual = run(facts, [candidate("hooks", "command handler")])
+        self.assertNotEqual(actual.outcome, "reuse")
 
     def test_codex_can_stop_after_compaction(self):
         facts = self.base(job="check", every_time="always", script_checkable=True, hook_event="PostCompact",
@@ -387,8 +427,10 @@ class ReportedBypassesTest(unittest.TestCase):
         facts = self.base(job="check", script_checkable=True, hook_event="SessionStart", target_set="codex")
         del facts["hook_effect"]
         self.assertEqual(run(facts).pending_question, "hook_effect")
-        facts["hook_event"] = "Stop"  # Codex can prevent, stop and feed back here
-        self.assertIsNone(run(facts).pending_question)
+        # Codex can prevent, stop and feed back at Stop, but the effect still decides
+        # whether an async command hook would do.
+        facts["hook_event"] = "Stop"
+        self.assertEqual(run(facts).pending_question, "hook_effect")
 
     def test_reuse_is_described_by_its_candidate(self):
         facts = self.base(job="check", every_time="always", script_checkable=True)
@@ -412,16 +454,16 @@ class ReportedBypassesTest(unittest.TestCase):
         facts = self.base(job="check", script_checkable=True, own_context=True, target_set="claude-code")
         del facts["own_model"]
         self.assertEqual(run(facts, [candidate("hooks", "agent handler")]).pending_question, "own_model")
-        for own_model, required, own in ((True, "prompt or agent handler", "agent handler"),
-                                         (False, "command handler", "command handler")):
+        for own_model, needed, own in ((True, "prompt or agent handler", AGENT),
+                                       (False, "synchronous command handler", SYNC)):
             actual = run({**facts, "own_model": own_model}, [candidate("hooks", own)])
-            self.assertEqual((actual.outcome, actual.mechanism, actual.variant), ("reuse", "hooks", required))
+            self.assertEqual((actual.outcome, actual.mechanism, actual.variant), ("reuse", "hooks", needed))
             self.assertEqual(actual.reuse["variant"], own)
             self.assertTrue(any(rule.startswith("selection.variant.") for rule in actual.rule_ids), actual.rule_ids)
 
     def test_a_hook_with_another_or_unknown_handler_is_not_reused(self):
         facts = self.base(job="check", target_set="claude-code")
-        for own in ("command handler", None):
+        for own in (SYNC, None):
             actual = run(facts, [candidate("hooks", own)])
             with self.subTest(candidate_variant=own):
                 self.assertNotEqual(actual.outcome, "reuse")
@@ -429,15 +471,18 @@ class ReportedBypassesTest(unittest.TestCase):
                 self.assertEqual(conflict["candidate"], "existing-hooks")
                 self.assertIn("selection.variant.model-hook-handler", conflict["rules"])
                 self.assertIn("prompt or agent handler", conflict["reasons"][0])
-        self.assertEqual(run(facts, [candidate("hooks", "prompt handler")]).outcome, "reuse")
+        for own in (PROMPT, PROMPT_COB, AGENT):
+            self.assertEqual(run(facts, [candidate("hooks", own)]).outcome, "reuse", own)
 
     def test_a_hook_alternative_names_and_cites_its_handler(self):
         actual = run(self.base(job="check", script_checkable=True, own_context=True, own_model=False,
                                target_set="claude-code"))
         self.assertEqual(actual.mechanism, "subagents")
         alternative = next(a for a in actual.alternatives if a["concept"] == "hooks")
-        self.assertEqual(alternative["variant"], "command handler")
-        self.assertIn("selection.variant.command-hook-handler", alternative["rules"])
+        self.assertEqual(alternative["variant"], "synchronous command handler")
+        self.assertIn("selection.variant.synchronous-command-hook-handler", alternative["rules"])
+        self.assertIn("docs/overview.md#hooks", alternative["pages"])
+        self.assertIn("docs/guide/hooks.md#comparison", alternative["pages"])
 
     def test_an_alternative_with_an_open_handler_says_what_decides_it(self):
         facts = self.base(job="check", every_time="always", script_checkable=True, own_context=True,

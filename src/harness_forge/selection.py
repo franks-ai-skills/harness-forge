@@ -412,6 +412,8 @@ def recommend(answers: dict, whole_idea: dict, rules: list[Rule], candidates: li
                              "variant_missing_facts": open_variant,
                              "pros": rule.params.get("pros", []), "cons": rule.params.get("cons", []),
                              "rules": entry["rules"] + ([variant_rule.id] if variant_rule else []),
+                             "pages": _pages([r for r in selection_rules if r.id in entry["rules"]]
+                                             + ([variant_rule] if variant_rule else [])),
                              "why_not_chosen": why})
 
     availability = facts.get("plan_controls", "unknown")

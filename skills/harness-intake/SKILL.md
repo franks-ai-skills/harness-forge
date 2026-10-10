@@ -55,16 +55,19 @@ plugin README). Every command prints bounded JSON.
    run `scripts/forge.py select --input <file>`. Add each reuse
    candidate the user confirmed from the survey under `candidates`, with
    its `name`, `source`, `license`, `maintenance`, `fit`, `concept` and,
-   for a hook, its handler as `variant` (`command handler`, `prompt
-   handler` or `agent handler`) as its source shows it; leave `variant`
-   out when the source does not show it, and Forge will not reuse it.
+   for a hook, its form as `variant`, with every setting that changes its
+   effect: `synchronous command handler`, `async command handler` (also
+   `asyncRewake`), `prompt handler without continueOnBlock`, `prompt
+   handler with continueOnBlock` or `agent handler`, as its configuration
+   shows it; leave `variant` out when the configuration does not show it,
+   and Forge will not reuse it.
    While the output names a `question`, ask exactly that question and run
    `select` again. Stop when it returns an outcome.
 7. **Recommendation.** For each part show, from the `select` output:
    the outcome and the recommended mechanism, with its `variant` when
    the output names one (such as a hook's handler), and the rules that
-   decided them; each viable alternative with its `variant`, pros, cons
-   and why the recommendation was preferred; and the outside controls
+   decided them; each viable alternative with its `variant`, pros, cons,
+   cited `pages` and why the recommendation was preferred; and the outside controls
    with their prerequisites. When an alternative's `variant` is null and
    `variant_missing_facts` is not empty, say that its form is still open
    and ask those questions only if the user considers that alternative.

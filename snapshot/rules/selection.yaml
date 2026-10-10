@@ -1279,12 +1279,10 @@ rules:
             - UserPromptExpansion
             - Stop
             - SubagentStop
-            - TaskCreated
-            - TaskCompleted
             - TeammateIdle
     implies:
       excludes: hooks
-  statement: A prompt or agent hook's ok false prevents the event's action only at some events; elsewhere it only feeds back, ends the turn or has no effect
+  statement: A prompt or agent hook's ok false prevents the event's action only where it denies the call, blocks the prompt, keeps the turn going or keeps a teammate working; at TaskCreated and TaskCompleted it only returns the reason as a tool error
   applies_to:
     harnesses:
     - claude-code
@@ -2225,10 +2223,63 @@ rules:
     implies:
       variant:
         concept: hooks
-        value: prompt handler
+        value: prompt handler without continueOnBlock
         accepts:
-        - prompt handler
-  statement: Where a judgment must stop the agent at a tool call or a teammate, only a prompt hook ends the turn or halts the teammate; an agent hook feeds its reason back like continueOnBlock true
+        - prompt handler without continueOnBlock
+  statement: Where a judgment must stop the agent at a tool call or a teammate, only a prompt hook without continueOnBlock ends the turn or halts the teammate; with continueOnBlock, and for agent hooks, the reason is fed back and work continues
+  applies_to:
+    harnesses:
+    - claude-code
+  evidence: Vendor
+  sources:
+  - docs/vendors/claude-code/hooks.md#prompt-and-agent-hooks
+  contested: false
+- id: selection.variant.continue-on-block-hook-handler
+  concept: selection
+  kind: should
+  severity: warning
+  check: script
+  checker: selection.match
+  params:
+    when:
+      all:
+      - any:
+        - eq:
+          - script_checkable
+          - false
+        - all:
+          - eq:
+            - own_context
+            - true
+          - eq:
+            - own_model
+            - true
+      - any:
+        - all:
+          - eq:
+            - hook_effect
+            - feedback
+          - in:
+            - hook_event
+            - - PreToolUse
+              - PostToolUse
+              - TeammateIdle
+              - TaskCompleted
+        - all:
+          - eq:
+            - hook_effect
+            - prevent
+          - eq:
+            - hook_event
+            - TeammateIdle
+    implies:
+      variant:
+        concept: hooks
+        value: prompt handler with continueOnBlock, or agent handler
+        accepts:
+        - prompt handler with continueOnBlock
+        - agent handler
+  statement: Where a judgment must reach the agent at a tool call or a teammate, or keep a teammate working, a prompt hook needs continueOnBlock; an agent hook acts that way by default
   applies_to:
     harnesses:
     - claude-code
@@ -2260,7 +2311,8 @@ rules:
         concept: hooks
         value: prompt or agent handler
         accepts:
-        - prompt handler
+        - prompt handler without continueOnBlock
+        - prompt handler with continueOnBlock
         - agent handler
   statement: A hook that needs judgment or a model of its own is a prompt or agent hook; a command handler is a process without a model
   applies_to:
@@ -2270,6 +2322,48 @@ rules:
   sources:
   - docs/guide/hooks.md#comparison
   - docs/vendors/claude-code/hooks.md#prompt-and-agent-hooks
+  contested: false
+- id: selection.variant.synchronous-command-hook-handler
+  concept: selection
+  kind: should
+  severity: warning
+  check: script
+  checker: selection.match
+  params:
+    when:
+      all:
+      - all:
+        - eq:
+          - script_checkable
+          - true
+        - any:
+          - eq:
+            - own_context
+            - false
+          - eq:
+            - own_model
+            - false
+      - in:
+        - hook_effect
+        - - prevent
+          - stop
+          - feedback
+    implies:
+      variant:
+        concept: hooks
+        value: synchronous command handler
+        accepts:
+        - synchronous command handler
+  statement: A scripted hook that must prevent, stop or feed back is a synchronous command hook; an async hook cannot block, and its output arrives on the next turn or model request
+  applies_to:
+    harnesses:
+    - claude-code
+    - codex
+  evidence: Vendor
+  sources:
+  - docs/guide/hooks.md#comparison
+  - docs/vendors/claude-code/hooks.md#loading-and-invocation
+  - docs/vendors/codex/hooks.md#loading-and-invocation
   contested: false
 - id: selection.variant.command-hook-handler
   concept: selection
@@ -2295,8 +2389,9 @@ rules:
         concept: hooks
         value: command handler
         accepts:
-        - command handler
-  statement: A hook that a script can decide, without a model of its own, is a command hook, the handler both harnesses run
+        - synchronous command handler
+        - async command handler
+  statement: A scripted hook that only reports is a command hook, synchronous or async, the handler both harnesses run
   applies_to:
     harnesses:
     - claude-code

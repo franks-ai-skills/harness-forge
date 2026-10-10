@@ -178,7 +178,21 @@ From the [hooks reference](https://code.claude.com/docs/en/hooks):
 - On PreToolUse, `ok: false` denies the call and by default ends the turn (since v2.1.210). `continueOnBlock: true` returns the reason to Claude instead.
 - Agent hooks are "experimental": a subagent with Read, Grep, Glob, and similar tools, up to 50 turns, returning `{ok}`.
 - What `ok: false` does depends on the event (rechecked 2026-10-10): on `Stop` and `SubagentStop` the reason is fed back and the turn continues; `PreToolUse` denies the call; `PostToolUse` ends the turn, or feeds the reason back with `continueOnBlock: true`; `PostToolBatch`, `UserPromptSubmit` and `UserPromptExpansion` end the turn; `PostToolUseFailure` and `TaskCreated` return the reason as a tool error; `TaskCompleted` does the same during a turn and halts a stopping teammate; `TeammateIdle` stops the teammate, or keeps it working with `continueOnBlock: true`. On `PermissionRequest`, "`ok: false` has no effect"; on `PermissionDenied` prompt and agent hooks run "but their output is discarded". Agent hooks act like prompt hooks with `continueOnBlock: true`.
-- Prompt-based hooks "evaluate whether to allow or block an action", so `ok: false` blocks the event's action as a block decision does; the list above says what happens to the turn. Since agent hooks act like `continueOnBlock: true`, only a prompt hook ends the turn at `PreToolUse` and `PostToolUse` or halts the teammate at `TeammateIdle` and a teammate's `TaskCompleted` (rechecked 2026-10-10).
+- What `ok: false` does by event and handler setting, from the response schema (rechecked 2026-10-10). Prevent: the event's action does not happen. Stop: the turn ends or the teammate halts. Feedback: the reason reaches Claude or the teammate. Agent hooks act like prompt hooks with `continueOnBlock: true`.
+
+| Event | Prompt hook (default) | Prompt hook with `continueOnBlock: true`, or agent hook |
+| :- | :- | :- |
+| PreToolUse | Prevent (call denied) and stop; the reason is a warning line | Prevent (call denied) and feedback (reason as the tool error) |
+| PostToolUse | Stop; the reason is a warning line | Feedback; the turn continues |
+| PostToolBatch | Stop | Stop |
+| UserPromptSubmit, UserPromptExpansion | Prevent and stop: they "end the turn on `decision: "block"`" | Same |
+| PostToolUseFailure, TaskCreated | Feedback: the reason is returned as a tool error and the turn continues | Same |
+| TaskCompleted during a turn | Feedback: the reason is returned as a tool error and the turn continues | Same |
+| TaskCompleted when a teammate stops, TeammateIdle | Stop: the teammate halts | Prevent and feedback: the reason is fed back and the teammate keeps working |
+| Stop, SubagentStop | Prevent and feedback: the reason is the next instruction, unless `impossible: true` | Same (agent hooks ignore `impossible`) |
+| PermissionRequest, PermissionDenied | No effect | No effect |
+
+- The reference does not say whether `ok: false` at TaskCreated or TaskCompleted keeps the task from being created or completed, so neither counts as prevention.
 
 ### Decision control by event
 

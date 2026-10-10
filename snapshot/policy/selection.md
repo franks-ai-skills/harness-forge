@@ -69,7 +69,7 @@ mechanism description each exclusion rests on.
 | Its result must prevent the event's action, at an event where a target harness cannot | hooks | After a tool call the call has run; a `policy_settings` change cannot be blocked |
 | Its result must stop the agent's further work, at an event where a target harness is not documented to | hooks | Codex stops after `PostCompact` but documents a stop at `SessionStart` only after compaction; Claude Code discards `continue` at `PostCompact` |
 | Its result must reach the agent, at an event where a target harness does not deliver it | hooks | Per harness and event, for example `Notification` or `PreCompact`; at `DirectoryAdded` only for `/add-dir` |
-| Needs judgment or a model of its own, and must prevent, stop or reach the agent where a prompt or agent verdict cannot | hooks | At `PostToolUseFailure` the verdict only feeds back; at `PostToolBatch` it only ends the turn |
+| Needs judgment or a model of its own, and must prevent, stop or reach the agent where a prompt or agent verdict cannot | hooks | At `PostToolUseFailure` and `TaskCreated` the verdict only feeds back; at `PostToolBatch` it only ends the turn |
 | A hard limit on access that must hold every time | hooks | Tool switching and unhooked paths bypass hooks |
 | A procedure the model starts | commands | Only the user starts a command |
 | A procedure an event starts | instructions, skills, commands, subagents | None of them starts on an event |
@@ -79,8 +79,15 @@ window, another model, or only other tools. When it is needed and a hook
 could be chosen, Forge asks which: a command handler gives a process with
 its own tools, but no model; only Claude Code's prompt and agent handlers
 give a model of its own. The variant rules name the hook's handler from
-these answers, so Forge asks whatever decides between a command handler
-and a prompt or agent handler, whether the hook is built or reused.
+these answers and from the event and effect, including every setting
+that changes what the hook does: an async command hook cannot prevent,
+stop or feed back in time, and at a tool call or a teammate a prompt hook
+stops the work only without `continueOnBlock`, while feedback and keeping
+a teammate working need `continueOnBlock` or an agent hook. A reused
+hook records its form in these terms (synchronous or async command
+handler, prompt handler with or without `continueOnBlock`, agent
+handler), and Forge asks whatever decides the handler, whether the hook
+is built or reused.
 
 For a hook, Forge asks the event by name, and what the hook's result
 must do there: prevent the action the event is about, stop the agent's
