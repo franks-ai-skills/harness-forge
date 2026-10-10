@@ -27,6 +27,7 @@ from harness_forge.scope import affected_parts
 BUILDABLE = ("skills", "commands")
 README = "README.md"
 _BLOCKING = ("missing", "error", "unresolved")
+_OBSERVATIONS = ("observed_tools", "observed_behavior", "unknowns", "evidence_refs")
 
 
 def part_kind(part: dict) -> str:
@@ -67,6 +68,13 @@ def _rules_for(part: dict, rules: list[Rule], idea: dict[str, list[Rule]]) -> li
     return selected
 
 
+def worker_configurations(worker_evidence: list[dict] | tuple) -> list[dict]:
+    """Each worker's configuration without what it observed: the part a run is bound to."""
+    configurations = {canonical_digest(c): c for c in
+                      ({k: v for k, v in evidence.items() if k not in _OBSERVATIONS} for evidence in worker_evidence)}
+    return [configurations[key] for key in sorted(configurations)]
+
+
 def bound_inputs(
     decision: Decision, files: dict[str, bytes], rules: list[Rule], *, symlinks: dict[str, str] | None = None,
     revision: AcceptedRevision | None = None, overrides: list[dict] | tuple = (), kb_version: str = "",
@@ -84,7 +92,7 @@ def bound_inputs(
                                   if key not in ("parts", "confirmations_history")}),
         "parts": {part["id"]: canonical_digest(part) for part in decision.record["parts"]},
         "checkers": canonical_digest({checker_id: version for checker_id, (version, _) in sorted(REGISTRY.items())}),
-        "worker": canonical_digest(list(worker_evidence)),
+        "worker": canonical_digest(worker_configurations(worker_evidence)),
     }
 
 
@@ -226,11 +234,24 @@ def _goal_result(kind: str, status: str, harness: str, dependencies: list[str]) 
 def finish_run(
     run: VerificationRun, review: ReviewResponse, runtime_results: list[RuntimeResult], current_inputs: dict, *,
     confirmed_exclusions: set[tuple[str, str]] | frozenset = frozenset(),
+    worker_observations: list[dict] | tuple = (),
 ) -> list[PartResult]:
-    """Each part's harness and goal result. confirmed_exclusions are live user confirmations."""
+    """Each part's harness and goal result. confirmed_exclusions are live user confirmations.
+
+    worker_observations are evidence records from workers that ran after the
+    run was prepared. They join the report. A configuration that was not
+    frozen with the run (a changed control, model or launcher) invalidates
+    every part, like any other changed bound input.
+    """
     _check_runtime(run, runtime_results)
+    for evidence in worker_observations:
+        validate(evidence, "worker-evidence")
     run.runtime_results = list(runtime_results)
     changed = affected_parts(run, current_inputs)
+    frozen = worker_configurations(run.worker_evidence)
+    if any(configuration not in frozen for configuration in worker_configurations(worker_observations)):
+        changed = {part["id"] for part in run.parts}
+    run.worker_evidence += [evidence for evidence in worker_observations if evidence not in run.worker_evidence]
     verdicts = {} if run.worker_violations else {(v["part_id"], v["rule_id"]): v for v in review.verdicts}
     goal_verdicts = {} if run.worker_violations else {v["part_id"]: v for v in review.goal_verdicts}
     statics = {(r.part_id, r.rule_id): r for r in run.static_results}

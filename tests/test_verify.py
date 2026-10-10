@@ -275,5 +275,41 @@ class RuntimeAndInputsTest(unittest.TestCase):
         assert_result(self, self.scenario.finish()["A"], "not verified", "not met")
 
 
+class WorkerObservationTest(unittest.TestCase):
+    """Observations made while the run executes enrich the report; changed controls invalidate it."""
+
+    OBSERVED = {**EVIDENCE[0], "observed_tools": {"status": "observed", "tools": ["Read", "Grep"]},
+                "observed_behavior": ["read the two skill files"], "evidence_refs": ["review-transcript.jsonl"]}
+
+    def setUp(self):
+        self.scenario = Scenario(skill_decision())
+
+    def finish(self, observations):
+        review = validate_review(self.scenario.run, passing_review(self.scenario.run))
+        current = self.scenario.current(worker_evidence=EVIDENCE + observations)
+        return finish_run(self.scenario.run, review, [], current, worker_observations=observations)[0]
+
+    def test_an_observation_with_the_confirmed_configuration_enriches_the_report(self):
+        result = self.finish([self.OBSERVED])
+        assert_result(self, result, "verified", "met by the verified build")
+        self.assertIn(self.OBSERVED, self.scenario.run.worker_evidence)
+
+    def test_an_observation_with_changed_controls_invalidates_the_run(self):
+        changed = {**self.OBSERVED, "configured_controls": ["tools: Read, Grep, Glob, Bash"]}
+        result = self.finish([changed])
+        assert_result(self, result, "not verified", "not met")
+        self.assertIn("inputs.bound", [r["rule_id"] for r in result.rule_results if r["result"] == "fail"])
+
+    def test_changed_controls_invalidate_the_run_even_when_current_inputs_omit_them(self):
+        changed = {**self.OBSERVED, "configured_controls": ["tools: Read, Grep, Glob, Bash"]}
+        review = validate_review(self.scenario.run, passing_review(self.scenario.run))
+        result = finish_run(self.scenario.run, review, [], self.scenario.current(), worker_observations=[changed])[0]
+        assert_result(self, result, "not verified", "not met")
+
+    def test_an_observed_violation_still_blocks_success(self):
+        self.scenario.run.worker_violations.append("review worker used Bash")
+        assert_result(self, self.finish([self.OBSERVED]), "not verified", "not met")
+
+
 if __name__ == "__main__":
     unittest.main()

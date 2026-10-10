@@ -101,7 +101,7 @@ def _select(arguments: argparse.Namespace) -> int:
     recommendation = recommend(answers, whole_idea, rules, candidates)
     payload = {"command": "select", **asdict(recommendation), "question": None}
     if recommendation.pending_question:
-        payload["question"] = next_question({"answers": answers}, whole_idea, selection)
+        payload["question"] = next_question({"answers": answers}, whole_idea, selection, candidates)
     emit(payload)
     return 0
 

@@ -62,7 +62,9 @@ plugin README). Every command prints bounded JSON.
    prerequisites. Offer the full assessment of all ten mechanisms as
    detail: ruled out (with the conflicting requirement and its source),
    not preferred, or unresolved (with the facts that were not needed to
-   decide). Say "ruled out" only where the output does. If this release
+   decide). Say "ruled out" only where the output does. For each
+   `reuse_conflicts` entry, say which researched candidate was not reused
+   and which requirement rules out its mechanism. If this release
    cannot build the recommended mechanism, say "recommended; builder
    unavailable" instead of weakening the recommendation. For each
    control, ask whether the part's goal depends on it

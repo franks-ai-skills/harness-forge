@@ -538,12 +538,17 @@ rules:
   checker: selection.match
   params:
     when:
-      eq:
-      - script_checkable
-      - false
+      all:
+      - eq:
+        - script_checkable
+        - false
+      - in:
+        - target_set
+        - - codex
+          - both
     implies:
       excludes: hooks
-  statement: A hook is a deterministic handler; work that needs judgment belongs in instructions or skills
+  statement: 'Portable hook handlers are commands and MCP tool calls, which cannot judge; judgment hooks (prompt, agent) are Claude Code only'
   applies_to:
     harnesses:
     - claude-code
@@ -551,6 +556,7 @@ rules:
   evidence: Vendor
   sources:
   - docs/overview.md#hooks
+  - docs/guide/hooks.md#when-to-use-it-and-when-not
   contested: false
 - id: selection.eligibility.hard-limit-hooks
   concept: selection
@@ -626,6 +632,252 @@ rules:
   sources:
   - docs/overview.md#commands
   - docs/guide/skills.md#user-invoked-skill
+  contested: false
+- id: selection.eligibility.must-hold-mcp
+  concept: selection
+  kind: should
+  severity: warning
+  check: script
+  checker: selection.match
+  params:
+    when:
+      eq:
+      - every_time
+      - always
+    implies:
+      excludes: mcp
+  statement: The model may not call an MCP tool, so an MCP server cannot make a step hold every time
+  applies_to:
+    harnesses:
+    - claude-code
+    - codex
+  evidence: Vendor
+  sources:
+  - docs/overview.md#mcp
+  contested: false
+- id: selection.eligibility.side-effects-instructions
+  concept: selection
+  kind: should
+  severity: warning
+  check: script
+  checker: selection.match
+  params:
+    when:
+      eq:
+      - irreversible
+      - true
+    implies:
+      excludes: instructions
+  statement: Instructions are context the model acts on by its own decision, so they cannot keep it from starting an irreversible or publishing procedure on its own
+  applies_to:
+    harnesses:
+    - claude-code
+    - codex
+  evidence: Inference
+  sources:
+  - docs/overview.md#commands
+  - docs/overview.md#instructions
+  contested: false
+- id: selection.eligibility.side-effects-subagents
+  concept: selection
+  kind: should
+  severity: warning
+  check: script
+  checker: selection.match
+  params:
+    when:
+      all:
+      - eq:
+        - irreversible
+        - true
+      - in:
+        - target_set
+        - - claude-code
+          - both
+    implies:
+      excludes: subagents
+  statement: Claude Code delegates to a subagent on its description, so the model would decide on its own to start an irreversible or publishing procedure
+  applies_to:
+    harnesses:
+    - claude-code
+    - codex
+  evidence: Inference
+  sources:
+  - docs/overview.md#subagents
+  - docs/overview.md#commands
+  contested: false
+- id: selection.eligibility.own-context-skills
+  concept: selection
+  kind: should
+  severity: warning
+  check: script
+  checker: selection.match
+  params:
+    when:
+      eq:
+      - own_context
+      - true
+    implies:
+      excludes: skills
+  statement: A skill runs in the session's context; work that needs its own context belongs in a subagent, which can use skills
+  applies_to:
+    harnesses:
+    - claude-code
+    - codex
+  evidence: Vendor
+  sources:
+  - docs/overview.md#skills
+  contested: false
+- id: selection.eligibility.own-context-commands
+  concept: selection
+  kind: should
+  severity: warning
+  check: script
+  checker: selection.match
+  params:
+    when:
+      eq:
+      - own_context
+      - true
+    implies:
+      excludes: commands
+  statement: A command is a user-invoked skill and runs in the session's context; work that needs its own context belongs in a subagent
+  applies_to:
+    harnesses:
+    - claude-code
+    - codex
+  evidence: Vendor
+  sources:
+  - docs/overview.md#commands
+  - docs/overview.md#skills
+  contested: false
+- id: selection.eligibility.own-context-instructions
+  concept: selection
+  kind: should
+  severity: warning
+  check: script
+  checker: selection.match
+  params:
+    when:
+      eq:
+      - own_context
+      - true
+    implies:
+      excludes: instructions
+  statement: Instructions load into the session's own context, so they cannot give work a context, tools or model of its own
+  applies_to:
+    harnesses:
+    - claude-code
+    - codex
+  evidence: Inference
+  sources:
+  - docs/overview.md#instructions
+  - docs/overview.md#subagents
+  contested: false
+- id: selection.eligibility.event-started-skills
+  concept: selection
+  kind: should
+  severity: warning
+  check: script
+  checker: selection.match
+  params:
+    when:
+      all:
+      - eq:
+        - job
+        - procedure
+      - eq:
+        - trigger
+        - event
+    implies:
+      excludes: skills
+  statement: A skill starts only when the user invokes it or the model matches its description, never on an event
+  applies_to:
+    harnesses:
+    - claude-code
+    - codex
+  evidence: Vendor
+  sources:
+  - docs/overview.md#skills
+  contested: false
+- id: selection.eligibility.event-started-commands
+  concept: selection
+  kind: should
+  severity: warning
+  check: script
+  checker: selection.match
+  params:
+    when:
+      all:
+      - eq:
+        - job
+        - procedure
+      - eq:
+        - trigger
+        - event
+    implies:
+      excludes: commands
+  statement: A command starts only when the user invokes it, never on an event
+  applies_to:
+    harnesses:
+    - claude-code
+    - codex
+  evidence: Vendor
+  sources:
+  - docs/overview.md#commands
+  contested: false
+- id: selection.eligibility.event-started-instructions
+  concept: selection
+  kind: should
+  severity: warning
+  check: script
+  checker: selection.match
+  params:
+    when:
+      all:
+      - eq:
+        - job
+        - procedure
+      - eq:
+        - trigger
+        - event
+    implies:
+      excludes: instructions
+  statement: Instructions are context the model applies by its own decision; nothing starts them on an event
+  applies_to:
+    harnesses:
+    - claude-code
+    - codex
+  evidence: Inference
+  sources:
+  - docs/overview.md#instructions
+  - docs/overview.md#hooks
+  contested: false
+- id: selection.eligibility.event-started-subagents
+  concept: selection
+  kind: should
+  severity: warning
+  check: script
+  checker: selection.match
+  params:
+    when:
+      all:
+      - eq:
+        - job
+        - procedure
+      - eq:
+        - trigger
+        - event
+    implies:
+      excludes: subagents
+  statement: A subagent starts when the user, an instruction or the model delegates to it, never on an event
+  applies_to:
+    harnesses:
+    - claude-code
+    - codex
+  evidence: Vendor
+  sources:
+  - docs/overview.md#subagents
   contested: false
 - id: selection.mechanism.early-feedback-mirror
   concept: selection
@@ -723,6 +975,47 @@ rules:
   - docs/overview.md#hooks
   - docs/guide/hooks.md#when-to-use-it-and-when-not
   contested: false
+- id: selection.mechanism.judgment-hook
+  concept: selection
+  kind: should
+  severity: warning
+  check: script
+  checker: selection.match
+  params:
+    when:
+      all:
+      - eq:
+        - script_checkable
+        - false
+      - eq:
+        - target_set
+        - claude-code
+      - any:
+        - eq:
+          - every_time
+          - always
+        - eq:
+          - job
+          - check
+    implies:
+      concept: hooks
+    pros:
+    - Runs at the event, whatever the main model decides
+    - A model judges what a script cannot
+    cons:
+    - 'Claude Code only: Codex parses prompt and agent handlers but skips them'
+    - Prompt and agent handlers run only on the events that support them
+    - A model verdict, not a deterministic check
+  statement: On Claude Code alone, a check that needs judgment and must run at an event is a prompt or agent hook
+  applies_to:
+    harnesses:
+    - claude-code
+  evidence: Vendor
+  sources:
+  - docs/guide/hooks.md#when-to-use-it-and-when-not
+  - docs/best-practices/hooks.md#judgement-hooks-claude-code-only
+  - docs/vendors/claude-code/hooks.md#handler-types-and-support-by-event
+  contested: false
 - id: selection.mechanism.fresh-context
   concept: selection
   kind: should
@@ -739,6 +1032,7 @@ rules:
     pros:
     - Own context window; returns one result
     - Narrower tools or another model
+    - Can use a skill for the procedure
     cons:
     - Costs more tokens
     - Each hand-off loses detail
@@ -751,6 +1045,70 @@ rules:
   sources:
   - docs/overview.md#subagents
   - docs/guide/subagents.md#when-to-use-it-and-when-not
+  - docs/overview.md#skills
+  contested: false
+- id: selection.mechanism.event-procedure
+  concept: selection
+  kind: should
+  severity: warning
+  check: script
+  checker: selection.match
+  params:
+    when:
+      all:
+      - eq:
+        - job
+        - procedure
+      - eq:
+        - trigger
+        - event
+    implies:
+      concept: hooks
+    pros:
+    - Runs at the event, whatever the model decides
+    cons:
+    - A slow hook delays every turn
+    - Portable handlers cannot judge
+  statement: A procedure that a lifecycle event starts is a hook at that event
+  applies_to:
+    harnesses:
+    - claude-code
+    - codex
+  evidence: Vendor
+  sources:
+  - docs/overview.md#hooks
+  - docs/guide/hooks.md#when-to-use-it-and-when-not
+  contested: false
+- id: selection.mechanism.event-procedure-unattended
+  concept: selection
+  kind: should
+  severity: warning
+  check: script
+  checker: selection.match
+  params:
+    when:
+      all:
+      - eq:
+        - job
+        - procedure
+      - eq:
+        - trigger
+        - event
+    implies:
+      concept: automation
+    pros:
+    - Schedules and CI events start it without a person
+    cons:
+    - Every unattended run needs explicit permissions and limits
+  statement: A procedure that a schedule or a CI event starts is an unattended run
+  applies_to:
+    harnesses:
+    - claude-code
+    - codex
+  evidence: Vendor
+  sources:
+  - docs/overview.md#automation
+  - docs/guide/automation.md#when-to-use-it-and-when-not
   contested: false
 - id: selection.mechanism.guidance
   concept: selection

@@ -40,7 +40,9 @@ this skill's folder; run it with the Forge environment's Python.
 3. Run the static checks: `scripts/forge.py check --decision <record>
    --root <repository> --revision <rules file>`.
 4. Launch a fresh review worker with the plugin's `workers/reviewer.md`
-   and the frozen files; validate its response. An observed action
+   and the frozen files; validate its response. Its evidence joins the
+   report as an observation; a worker configuration other than the
+   confirmed one leaves every part not verified, and an observed action
    outside its role discards its output and leaves the part not
    verified.
 5. Run the cheap runtime tests the part has, in a throwaway workspace.

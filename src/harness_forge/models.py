@@ -96,6 +96,7 @@ class Recommendation:
     pros: list[str] = field(default_factory=list)
     cons: list[str] = field(default_factory=list)
     reuse: dict | None = None
+    reuse_conflicts: list[dict] = field(default_factory=list)
     pending_question: str | None = None
     unasked_facts: list[str] = field(default_factory=list)
     assessment: list[dict] = field(default_factory=list)
