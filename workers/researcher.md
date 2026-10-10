@@ -6,9 +6,11 @@ decision record; the brief is your whole input.
 
 ## Input
 
-`brief.json` in your working directory: the pass (`survey` or `deep`), the
-goals, the user's own picture, the targets, the reach and the parts with
-their confirmed answers. Research only what this brief needs.
+`request.json`, shown in your prompt: its `inputs` hold the pass
+(`survey` or `deep`), the part for a deep pass, the `brief` (the goals,
+the user's own picture, the targets, the reach and the parts with their
+confirmed answers) and the `brief_digest`. Research only what this brief
+needs.
 
 ## What to find
 
@@ -51,7 +53,7 @@ Print one JSON object and nothing else:
 ```json
 {"findings": [{"id": "F1", "pass": "deep", "part_id": "A", "claim": "...",
   "source": "https://...", "fetched": "YYYY-MM-DD", "quote": "verbatim sentence",
-  "context": "the surrounding sentences, verbatim", "brief_digest": "<from brief.json>",
+  "context": "the surrounding sentences, verbatim", "brief_digest": "<inputs.brief_digest>",
   "source_role": "primary"}]}
 ```
 

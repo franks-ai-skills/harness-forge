@@ -21,6 +21,7 @@ from pathlib import Path
 from typing import Callable, Mapping
 
 from harness_forge.adapters import claude_code, codex
+from harness_forge.contracts import WORKER_DISCLOSURE, WORKER_POLICY
 from harness_forge.documents import canonical_digest, safe_path, validate
 from harness_forge.models import Confirmation, Contract
 from harness_forge.verify import worker_configurations
@@ -160,6 +161,10 @@ def _prompt(role: str, request: dict) -> str:
 
 def _approved(contract: Contract, confirmation: Confirmation | None, worker_evidence: list[dict] | tuple) -> set[str]:
     """Digests of the worker configurations the user confirmed with the contract."""
+    policy = contract.worker_policy
+    if (policy.get("policy"), policy.get("isolation_status"), policy.get("disclosure")) != (
+            WORKER_POLICY, "not-certified", WORKER_DISCLOSURE):
+        raise ValueError("workers launch only under the disclosed best-effort-v1 policy; certified isolation is not offered")
     if confirmation is None or confirmation.contract_digest != contract.digest:
         raise ValueError("no worker launches before the user confirms the current contract")
     if contract.worker_policy["evidence_digest"] != canonical_digest(list(worker_evidence)):

@@ -59,6 +59,24 @@ def make_brief(decision: Decision, pass_name: str, part_id: str | None) -> Resea
     return ResearchBrief(pass_name=pass_name, part_id=part_id, content=content, digest=canonical_digest(content))
 
 
+def research_request(brief: ResearchBrief, run_id: str, request_id: str) -> dict:
+    """The research worker's request: the approved brief and nothing else."""
+    inputs = {"pass": brief.pass_name, "part_id": brief.part_id, "brief": brief.content, "brief_digest": brief.digest}
+    request = {"role": "research", "run_id": run_id, "request_id": request_id,
+               "input_digest": canonical_digest(inputs), "inputs": inputs}
+    validate(request, "worker-request")
+    return request
+
+
+def support_request(finding: Finding, run_id: str, request_id: str) -> dict:
+    """The source-support worker's request: one finding's claim, quote and context, not its source or reasoning."""
+    inputs = {"finding_id": finding.id, "claim": finding.claim, "quote": finding.quote, "context": finding.context}
+    request = {"role": "source-support", "run_id": run_id, "request_id": request_id,
+               "input_digest": canonical_digest(inputs), "inputs": inputs}
+    validate(request, "worker-request")
+    return request
+
+
 def research_matches_brief(record: dict, brief: ResearchBrief) -> bool:
     """Existing research is reused only for exactly the same brief."""
     return any(

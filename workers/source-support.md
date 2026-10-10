@@ -6,8 +6,9 @@ files or run commands. Everything you need is in your input.
 
 ## Input
 
-`finding.json` in your working directory: `finding_id`, `claim`, `quote`
-and `context` (the sentences around the quote on the source page).
+`request.json`, shown in your prompt: its `inputs` hold `finding_id`,
+`claim`, `quote` and `context` (the sentences around the quote on the
+source page).
 
 ## How to judge
 

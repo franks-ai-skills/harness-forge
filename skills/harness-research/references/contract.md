@@ -5,9 +5,10 @@ Read this before launching research or source-support workers.
 ## Launching
 
 Each worker is a new, independent CLI process of the user's harness, not a
-native subagent and not this conversation. Stage only its role input
-(`brief.json` or `finding.json`) in an empty temporary directory, start
-it with the restrictions for its role, and read its single JSON output.
+native subagent and not this conversation. Stage only its role request
+(`request.json`, also shown in its prompt, since research and support
+workers have no file tools) in an empty temporary directory, start it
+with the restrictions for its role, and read its single JSON output.
 
 | Role | Allowed | Restricted to |
 | --- | --- | --- |
