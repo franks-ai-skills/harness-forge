@@ -1,0 +1,335 @@
+"""Independent-process worker adapters with a fake launcher: no model is called."""
+
+import json
+import os
+import unittest
+from pathlib import Path
+
+from harness_forge.adapters import claude_code, codex
+from harness_forge.adapters.base import Completed, preflight, run_worker, worker_environment
+from harness_forge.documents import canonical_digest, validate
+from harness_forge.verify import review_request
+from tests.test_verify import Scenario, skill_decision
+
+FORGE = Path(__file__).resolve().parents[1]
+CLAUDE_SUBSCRIPTION = json.dumps({"loggedIn": True, "authMethod": "claude.ai", "apiProvider": "firstParty"})
+CLAUDE_API_KEY = json.dumps({"loggedIn": True, "authMethod": "api_key", "apiProvider": "firstParty"})
+CLAUDE_LOGGED_OUT = json.dumps({"loggedIn": False})
+CODEX_FEATURES = "\n".join(f"{name:40} stable             true" for name in codex.DISABLED_FEATURES + ("shell_tool", "unified_exec"))
+PARENT = {"HOME": "/home/u", "PATH": "/usr/bin", "USER": "u", "LOGNAME": "u", "LANG": "C.UTF-8", "TMPDIR": "/tmp",
+          "ANTHROPIC_API_KEY": "sk-secret", "OPENAI_API_KEY": "sk-secret", "ANTHROPIC_BASE_URL": "https://proxy",
+          "OPENAI_BASE_URL": "https://proxy", "GITHUB_TOKEN": "ghp", "CLAUDECODE": "1"}
+
+
+def claude_stream(result: dict | str, tools=("Read", "Grep", "Glob"), calls=(), model="claude-opus-5-5"):
+    events = [{"type": "system", "subtype": "init", "tools": list(tools), "model": model, "apiKeySource": "none"}]
+    for number, name in enumerate(calls):
+        events.append({"type": "assistant", "message": {"content": [
+            {"type": "tool_use", "id": f"t{number}", "name": name, "input": {}}]}})
+    text = result if isinstance(result, str) else json.dumps(result)
+    events.append({"type": "result", "subtype": "success", "is_error": False, "result": text})
+    return "\n".join(json.dumps(event) for event in events) + "\n"
+
+
+def codex_stream(result: dict | str, items=()):
+    events = [{"type": "thread.started", "thread_id": "x"}]
+    events += [{"type": "item.completed", "item": {"id": f"i{n}", "type": kind}} for n, kind in enumerate(items)]
+    text = result if isinstance(result, str) else json.dumps(result)
+    events.append({"type": "item.completed", "item": {"id": "last", "type": "agent_message", "text": text}})
+    events.append({"type": "turn.completed"})
+    return "\n".join(json.dumps(event) for event in events) + "\n"
+
+
+class FakeRunner:
+    """Answers the CLI's metadata commands and one worker launch; records every call."""
+
+    def __init__(self, *, login=CLAUDE_SUBSCRIPTION, codex_login="Logged in using ChatGPT", worker="",
+                 missing=(), help_without=(), returncode=0, timed_out=False):
+        self.login, self.codex_login, self.worker = login, codex_login, worker
+        self.missing, self.help_without = set(missing), set(help_without)
+        self.returncode, self.timed_out = returncode, timed_out
+        self.calls, self.worker_calls = [], []
+
+    @property
+    def worker_was_started(self):
+        return bool(self.worker_calls)
+
+    def __call__(self, command, *, cwd, env, stdin, timeout):
+        self.calls.append({"command": list(command), "env": dict(env)})
+        if command[0] in self.missing:
+            raise FileNotFoundError(command[0])
+        flags = claude_code.REQUIRED_FLAGS if command[0] == "claude" else codex.REQUIRED_FLAGS + codex.REQUIRED_EXEC_FLAGS
+        help_text = "\n".join(f"  {flag} <value>" for flag in flags if flag not in self.help_without)
+        answers = {
+            ("claude", "--version"): "2.1.296 (Claude Code)", ("claude", "--help"): help_text,
+            ("claude", "auth", "status", "--json"): self.login,
+            ("codex", "--version"): "codex-cli 0.162.0", ("codex", "--help"): help_text,
+            ("codex", "exec", "--help"): help_text, ("codex", "features", "list"): CODEX_FEATURES,
+            ("codex", "login", "status"): self.codex_login,
+        }
+        if tuple(command) in answers:
+            return Completed(0, answers[tuple(command)], "", False)
+        workspace = Path(cwd)
+        self.worker_calls.append({"command": list(command), "env": dict(env), "cwd": str(workspace), "stdin": stdin,
+                                  "files": sorted(p.relative_to(workspace).as_posix() for p in workspace.rglob("*") if p.is_file())})
+        return Completed(self.returncode, self.worker, "", self.timed_out)
+
+
+def review_case():
+    scenario = Scenario(skill_decision())
+    request = review_request(scenario.run, "review-1")
+    files = {path: scenario.files[path] for path in (entry["path"] for entry in request["inputs"]["files"])}
+    verdicts = {"run_id": scenario.run.run_id,
+                "verdicts": [{"part_id": r["part_id"], "rule_id": r["rule_id"], "verdict": "pass", "reason": "Meets it.",
+                              "citation": "SKILL.md"} for r in request["inputs"]["rules"]],
+                "goal_verdicts": [{"part_id": "A", "verdict": "met", "reason": "It produces the checklist."}]}
+    return request, files, verdicts
+
+
+def approved(harness, role, environ=PARENT, **runner_options):
+    return [preflight(harness, role, runner=FakeRunner(**runner_options), environ=environ)["configuration"]]
+
+
+class EnvironmentTest(unittest.TestCase):
+    def test_only_the_allowlist_and_the_harness_account_location_pass(self):
+        environment = worker_environment({**PARENT, "CLAUDE_CONFIG_DIR": "/somewhere", "CODEX_HOME": "/elsewhere"},
+                                         "claude-code")
+        self.assertEqual(environment, {key: PARENT[key] for key in ("HOME", "PATH", "USER", "LOGNAME", "LANG", "TMPDIR")}
+                         | {"CLAUDE_CONFIG_DIR": "/somewhere"})
+        self.assertEqual(worker_environment({**PARENT, "CODEX_HOME": "/elsewhere"}, "codex")["CODEX_HOME"], "/elsewhere")
+
+    def test_an_unset_account_location_stays_unset(self):
+        self.assertNotIn("CLAUDE_CONFIG_DIR", worker_environment(PARENT, "claude-code"))
+        self.assertNotIn("CODEX_HOME", worker_environment(PARENT, "codex"))
+
+    def test_the_login_check_uses_the_workers_environment(self):
+        runner = FakeRunner()
+        environ = {**PARENT, "CLAUDE_CONFIG_DIR": "/somewhere"}
+        preflight("claude-code", "review", runner=runner, environ=environ)
+        login = next(call for call in runner.calls if call["command"][1:3] == ["auth", "status"])
+        self.assertEqual(login["env"], worker_environment(environ, "claude-code"))
+
+
+class LoginTypeTest(unittest.TestCase):
+    def check(self, harness, **options):
+        return preflight(harness, "review", runner=FakeRunner(**options), environ=PARENT)
+
+    def test_a_subscription_login_needs_no_question(self):
+        for harness in ("claude-code", "codex"):
+            with self.subTest(harness=harness):
+                result = self.check(harness)
+                self.assertTrue(result["available"], result["reason"])
+                self.assertEqual(result["login"]["type"], "subscription")
+                self.assertFalse(result["needs_cost_question"])
+
+    def test_an_api_key_or_unparseable_login_needs_the_cost_question(self):
+        for harness, options in (("claude-code", {"login": CLAUDE_API_KEY}), ("claude-code", {"login": "not json"}),
+                                 ("codex", {"codex_login": "Logged in using an API key - sk-***"}),
+                                 ("codex", {"codex_login": "something new"})):
+            with self.subTest(harness=harness, options=options):
+                result = self.check(harness, **options)
+                self.assertFalse(result["available"])
+                self.assertTrue(result["needs_cost_question"])
+
+    def test_a_missing_login_is_unavailable_without_a_question(self):
+        for harness, options in (("claude-code", {"login": CLAUDE_LOGGED_OUT}), ("codex", {"codex_login": "Not logged in"})):
+            with self.subTest(harness=harness):
+                result = self.check(harness, **options)
+                self.assertFalse(result["available"])
+                self.assertFalse(result["needs_cost_question"])
+                self.assertEqual(result["login"]["type"], "missing")
+
+    def test_continuing_after_the_question_records_the_answer(self):
+        result = preflight("claude-code", "review", runner=FakeRunner(login=CLAUDE_API_KEY), environ=PARENT,
+                           login_answer="continue")
+        self.assertTrue(result["available"])
+        self.assertIn("login: api-key; the user chose to continue after the cost warning",
+                      result["configuration"]["configured_controls"])
+
+    def test_no_login_command_changes_the_account(self):
+        runner = FakeRunner()
+        for harness in ("claude-code", "codex"):
+            preflight(harness, "review", runner=runner, environ=PARENT)
+        for call in runner.calls:
+            self.assertNotIn("logout", call["command"])
+            if "login" in call["command"] or "auth" in call["command"]:
+                self.assertIn("status", call["command"])
+
+
+class PreflightTest(unittest.TestCase):
+    def test_a_missing_executable_is_unavailable(self):
+        result = preflight("codex", "review", runner=FakeRunner(missing=("codex",)), environ=PARENT)
+        self.assertFalse(result["available"])
+        self.assertIn("not installed", result["reason"])
+
+    def test_a_flag_the_installed_version_lacks_blocks_launch(self):
+        result = preflight("claude-code", "review", runner=FakeRunner(help_without=("--safe-mode",)), environ=PARENT)
+        self.assertFalse(result["available"])
+        self.assertIn("--safe-mode", result["reason"])
+
+    def test_a_removed_codex_feature_blocks_launch(self):
+        runner = FakeRunner()
+        runner_features = CODEX_FEATURES.replace("apps                                     stable",
+                                                 "apps                                     removed")
+        original = runner.__call__
+
+        def call(command, **kwargs):
+            if command == ["codex", "features", "list"]:
+                return Completed(0, runner_features, "", False)
+            return original(command, **kwargs)
+
+        result = preflight("codex", "review", runner=call, environ=PARENT)
+        self.assertFalse(result["available"])
+        self.assertIn("apps", result["reason"])
+
+    def test_the_planned_configuration_is_worker_evidence_without_observations(self):
+        for harness in ("claude-code", "codex"):
+            for role in ("research", "source-support", "review"):
+                with self.subTest(harness=harness, role=role):
+                    configuration = preflight(harness, role, runner=FakeRunner(), environ=PARENT)["configuration"]
+                    validate(configuration, "worker-evidence")
+                    self.assertEqual(configuration["launcher"], "independent-process")
+                    self.assertEqual(configuration["observed_tools"], {"status": "unknown"})
+
+    def test_role_controls_follow_the_matrix(self):
+        tools = {"research": "WebFetch,WebSearch", "source-support": "", "review": "Read,Grep,Glob"}
+        for role, listed in tools.items():
+            command = claude_code.command(role, "/w")
+            self.assertEqual(command[command.index("--tools") + 1], listed)
+            self.assertEqual(command[command.index("--allowedTools") + 1], listed)
+            for flag in ("--safe-mode", "--restricted", "--strict-mcp-config", "--disable-slash-commands",
+                         "--no-session-persistence"):
+                self.assertIn(flag, command)
+        for role, web in (("research", '"live"'), ("source-support", '"disabled"'), ("review", '"disabled"')):
+            command = " ".join(codex.command(role, "/w"))
+            self.assertIn("web_search=" + web, command)
+            self.assertIn("apps._default.enabled=false", command)
+            self.assertIn("features.apps=false", command)
+            self.assertIn("--ignore-user-config", command)
+            self.assertIn("mcp_servers={}", command)
+        support = " ".join(codex.command("source-support", "/w"))
+        for feature in ("shell_tool", "unified_exec", "view_image"):
+            self.assertIn(f"features.{feature}=false", support)
+
+    def test_standard_executables_and_no_owner_setup(self):
+        for harness in (claude_code, codex):
+            self.assertIn(harness.command("review", "/w")[0], ("claude", "codex"))
+        for path in (FORGE / "src" / "harness_forge" / "adapters").glob("*.py"):
+            text = path.read_text(encoding="utf-8")
+            for personal in ("personal-profile", ".personal-profile", "team-profile", "zshrc"):
+                self.assertNotIn(personal, text, path.name)
+
+
+class LaunchTest(unittest.TestCase):
+    def test_a_native_launch_fails_before_spawning(self):
+        request, files, verdicts = review_case()
+        runner = FakeRunner(worker=claude_stream(verdicts))
+        with self.assertRaises(ValueError):
+            run_worker(request, "claude-code", approved_configurations=approved("claude-code", "review"),
+                       runner=runner, environ=PARENT, files=files, launcher="native")
+        self.assertFalse(runner.worker_was_started)
+
+    def test_an_unapproved_configuration_fails_before_spawning(self):
+        request, files, verdicts = review_case()
+        runner = FakeRunner(worker=claude_stream(verdicts))
+        for approvals in ([], approved("claude-code", "research"), approved("codex", "review")):
+            with self.subTest(approvals=len(approvals)), self.assertRaises(ValueError):
+                run_worker(request, "claude-code", approved_configurations=approvals, runner=runner,
+                           environ=PARENT, files=files)
+        self.assertFalse(runner.worker_was_started)
+
+    def test_stop_or_no_answer_at_the_cost_question_never_starts_a_worker(self):
+        request, files, verdicts = review_case()
+        for answer in (None, "stop"):
+            runner = FakeRunner(login=CLAUDE_API_KEY, worker=claude_stream(verdicts))
+            with self.subTest(answer=answer):
+                response = run_worker(request, "claude-code", approved_configurations=[], runner=runner,
+                                      environ=PARENT, files=files, login_answer=answer)
+                self.assertEqual(response["status"], "unavailable")
+                self.assertFalse(runner.worker_was_started)
+
+    def test_missing_authentication_is_unavailable(self):
+        request, files, verdicts = review_case()
+        runner = FakeRunner(login=CLAUDE_LOGGED_OUT, worker=claude_stream(verdicts))
+        response = run_worker(request, "claude-code", approved_configurations=[], runner=runner, environ=PARENT,
+                              files=files)
+        self.assertEqual(response["status"], "unavailable")
+        self.assertFalse(runner.worker_was_started)
+
+    def test_staged_files_must_match_the_request(self):
+        request, files, verdicts = review_case()
+        tampered = {**files, next(iter(files)): b"changed after freezing"}
+        runner = FakeRunner(worker=claude_stream(verdicts))
+        with self.assertRaises(ValueError):
+            run_worker(request, "claude-code", approved_configurations=approved("claude-code", "review"),
+                       runner=runner, environ=PARENT, files=tampered)
+        self.assertFalse(runner.worker_was_started)
+
+    def test_a_review_worker_gets_only_its_request_and_frozen_files(self):
+        request, files, verdicts = review_case()
+        environ = {**PARENT, "CLAUDE_CONFIG_DIR": "/somewhere"}
+        runner = FakeRunner(worker=claude_stream(verdicts))
+        response = run_worker(request, "claude-code", approved_configurations=approved("claude-code", "review", environ),
+                              runner=runner, environ=environ, files=files)
+        validate(response, "worker-response")
+        self.assertEqual(response["status"], "completed", response.get("reason"))
+        self.assertEqual(response["output"], verdicts)
+        self.assertEqual(response["request_digest"], canonical_digest(request))
+        call = runner.worker_calls[0]
+        self.assertEqual(call["files"], sorted(["request.json", *files]))
+        self.assertEqual(call["env"], worker_environment(environ, "claude-code"))
+        self.assertFalse(Path(call["cwd"]).exists(), "the workspace is removed after the run")
+        self.assertNotEqual(Path(call["cwd"]).resolve(), Path.cwd().resolve())
+        self.assertIn(json.dumps(request["inputs"]["rules"][0]["rule_id"]), call["stdin"])
+        self.assertEqual(response["evidence"]["observed_tools"], {"status": "observed", "tools": ["Glob", "Grep", "Read"]})
+        self.assertIn("model reported: claude-opus-5-5", response["evidence"]["observed_behavior"])
+        self.assertIn("apiKeySource: none", response["evidence"]["observed_behavior"])
+
+    def test_the_codex_review_worker(self):
+        request, files, verdicts = review_case()
+        runner = FakeRunner(worker=codex_stream(verdicts, items=("command_execution",)))
+        response = run_worker(request, "codex", approved_configurations=approved("codex", "review"), runner=runner,
+                              environ=PARENT, files=files)
+        self.assertEqual(response["status"], "completed", response.get("reason"))
+        self.assertEqual(response["evidence"]["observed_tools"], {"status": "unknown"})
+
+    def test_out_of_scope_behavior_discards_the_output(self):
+        request, files, verdicts = review_case()
+        for harness, stream in (("claude-code", claude_stream(verdicts, calls=("Read", "Write"))),
+                                ("codex", codex_stream(verdicts, items=("file_change",))),
+                                ("codex", codex_stream(verdicts, items=("web_search",)))):
+            runner = FakeRunner(worker=stream)
+            with self.subTest(harness=harness, stream=stream[-120:]):
+                response = run_worker(request, harness, approved_configurations=approved(harness, "review"),
+                                      runner=runner, environ=PARENT, files=files)
+                validate(response, "worker-response")
+                self.assertEqual(response["status"], "failed")
+                self.assertNotIn("output", response)
+                self.assertTrue(any("out of scope" in line for line in response["evidence"]["observed_behavior"]))
+                self.assertEqual(len(runner.worker_calls), 1, "no silent retry")
+
+    def test_a_disclosed_extra_tool_alone_does_not_discard_the_output(self):
+        request, files, verdicts = review_case()
+        runner = FakeRunner(worker=claude_stream(verdicts, tools=("Read", "Grep", "Glob", "TodoWrite")))
+        response = run_worker(request, "claude-code", approved_configurations=approved("claude-code", "review"),
+                              runner=runner, environ=PARENT, files=files)
+        self.assertEqual(response["status"], "completed")
+        self.assertIn("TodoWrite", response["evidence"]["observed_tools"]["tools"])
+
+    def test_invalid_output_timeouts_and_errors_are_explicit(self):
+        request, files, verdicts = review_case()
+        cases = ((FakeRunner(worker=claude_stream("not json")), "failed"),
+                 (FakeRunner(worker=claude_stream({"run_id": "x"})), "failed"),
+                 (FakeRunner(worker="", timed_out=True), "unavailable"),
+                 (FakeRunner(worker=claude_stream(verdicts), returncode=1), "failed"))
+        for runner, status in cases:
+            with self.subTest(status=status):
+                response = run_worker(request, "claude-code", approved_configurations=approved("claude-code", "review"),
+                                      runner=runner, environ=PARENT, files=files)
+                validate(response, "worker-response")
+                self.assertEqual(response["status"], status)
+                self.assertTrue(response["reason"])
+
+
+if __name__ == "__main__":
+    unittest.main()
