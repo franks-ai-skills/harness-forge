@@ -188,7 +188,8 @@ From the [hooks reference](https://code.claude.com/docs/en/hooks):
 | UserPromptSubmit, UserPromptExpansion | Prevent and stop: they "end the turn on `decision: "block"`" | Same |
 | PostToolUseFailure, TaskCreated | Feedback: the reason is returned as a tool error and the turn continues | Same |
 | TaskCompleted during a turn | Feedback: the reason is returned as a tool error and the turn continues | Same |
-| TaskCompleted when a teammate stops, TeammateIdle | Stop: the teammate halts | Prevent and feedback: the reason is fed back and the teammate keeps working |
+| TaskCompleted when a teammate stops | Stop: the teammate halts | Feedback: it "behaves like `TeammateIdle`", so the reason is fed back and the teammate keeps working; that the task stays incomplete is not documented |
+| TeammateIdle | Stop: the teammate halts | Prevent and feedback: the reason is fed back and the teammate keeps working instead of going idle |
 | Stop, SubagentStop | Prevent and feedback: the reason is the next instruction, unless `impossible: true` | Same (agent hooks ignore `impossible`) |
 | PermissionRequest, PermissionDenied | No effect | No effect |
 

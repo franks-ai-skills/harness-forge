@@ -391,6 +391,14 @@ class ReportedBypassesTest(unittest.TestCase):
             self.assertIn("async command handler", actual.reuse_conflicts[0]["reasons"][-1])
         self.assertEqual(run({**scripted, "hook_effect": "report"}, [candidate("hooks", ASYNC)]).outcome, "reuse")
 
+    def test_the_effect_question_states_when_feedback_must_arrive(self):
+        # Async output arrives later (Codex: next model request; Claude Code: next turn
+        # or user interaction), so the confirmed answer must say feedback is immediate.
+        from tests.test_selection import SELECTION
+
+        question = next(q for q in SELECTION["questions"] if q["id"] == "hook_effect")
+        self.assertIn("before its next step", question["text"])
+
     def test_an_unknown_form_is_not_reused(self):
         facts = self.base(job="check", script_checkable=True, target_set="claude-code", hook_effect="report")
         actual = run(facts, [candidate("hooks", "command handler")])

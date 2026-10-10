@@ -93,6 +93,11 @@ For a hook, Forge asks the event by name, and what the hook's result
 must do there: prevent the action the event is about, stop the agent's
 further work, reach the agent as feedback, or only report through the
 hook's own side effects, such as a log, a file or a notification.
+Feedback must arrive before the agent's next step. An async command
+hook's output arrives later, at the next model request in Codex and on
+the next conversation turn in Claude Code (after the next user
+interaction if the session is idle), so an async hook serves only
+report.
 Preventing and stopping are separate answers: a hook after a tool call
 can stop the agent but cannot undo the call. That a step must run every
 time does not mean it must prevent or stop anything: a hook runs at every

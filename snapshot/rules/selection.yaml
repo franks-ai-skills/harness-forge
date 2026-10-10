@@ -346,7 +346,7 @@ questions:
   - PostModelSwitch
   - Interrupt
 - id: hook_effect
-  text: 'When the hook runs, what must its result do: prevent the action the event is about, stop the agent''s further work, reach the agent as feedback, or only report, for example by logging, writing a file or notifying you?'
+  text: 'When the hook runs, what must its result do: prevent the action the event is about, stop the agent''s further work, reach the agent as feedback before its next step, or only report, for example by logging, writing a file or notifying you?'
   choices:
   - prevent
   - stop
