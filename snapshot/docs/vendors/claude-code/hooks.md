@@ -178,43 +178,46 @@ From the [hooks reference](https://code.claude.com/docs/en/hooks):
 - On PreToolUse, `ok: false` denies the call and by default ends the turn (since v2.1.210). `continueOnBlock: true` returns the reason to Claude instead.
 - Agent hooks are "experimental": a subagent with Read, Grep, Glob, and similar tools, up to 50 turns, returning `{ok}`.
 - What `ok: false` does depends on the event (rechecked 2026-10-10): on `Stop` and `SubagentStop` the reason is fed back and the turn continues; `PreToolUse` denies the call; `PostToolUse` ends the turn, or feeds the reason back with `continueOnBlock: true`; `PostToolBatch`, `UserPromptSubmit` and `UserPromptExpansion` end the turn; `PostToolUseFailure` and `TaskCreated` return the reason as a tool error; `TaskCompleted` does the same during a turn and halts a stopping teammate; `TeammateIdle` stops the teammate, or keeps it working with `continueOnBlock: true`. On `PermissionRequest`, "`ok: false` has no effect"; on `PermissionDenied` prompt and agent hooks run "but their output is discarded". Agent hooks act like prompt hooks with `continueOnBlock: true`.
+- Prompt-based hooks "evaluate whether to allow or block an action", so `ok: false` blocks the event's action as a block decision does; the list above says what happens to the turn. Since agent hooks act like `continueOnBlock: true`, only a prompt hook ends the turn at `PreToolUse` and `PostToolUse` or halts the teammate at `TeammateIdle` and a teammate's `TaskCompleted` (rechecked 2026-10-10).
 
 ### Decision control by event
 
-What a command hook can do at each event, from the per-event sections of the [hooks reference](https://code.claude.com/docs/en/hooks) (rechecked 2026-10-10). Every event accepts the universal `continue: false`, which stops Claude entirely, unless its section says it discards the field. "Block or stop" means the hook can prevent the action or stop Claude; "feedback" means its result reaches Claude's context.
+What a command hook can do at each event, from the per-event sections of the [hooks reference](https://code.claude.com/docs/en/hooks) (rechecked 2026-10-10). "Prevent" means the hook stops the action the event is about; after a tool call, for example, the call has already run. "Stop" means it stops Claude's further work: every event accepts the universal `continue: false`, which stops Claude entirely, unless its section says it discards or ignores the field. "Feedback" means its result reaches Claude's context.
 
-| Event | Block or stop | Feedback to Claude |
-| :- | :- | :- |
-| SessionStart | `continue: false` | `additionalContext`, plain stdout |
-| Setup | No: can't block, JSON discarded | No: `additionalContext` discarded |
-| InstructionsLoaded | No: JSON discarded | No |
-| UserPromptSubmit | `decision: "block"`, exit 2 | `additionalContext`, plain stdout |
-| UserPromptExpansion | `decision: "block"`, exit 2 | `additionalContext` |
-| MessageDisplay | No: `continue` discarded | No: can't change what is sent to Claude |
-| PreToolUse | `permissionDecision: "deny"`, exit 2 | Deny reason, `additionalContext` |
-| PermissionRequest | `decision.behavior: "deny"`; `interrupt: true` stops Claude | Deny `message` |
-| PostToolUse | `continue: false` | `decision: "block"` reason, `additionalContext` |
-| PostToolUseFailure | `continue: false` | `additionalContext` |
-| PostToolBatch | `decision: "block"` or `continue: false` stops the loop | `additionalContext` |
-| PermissionDenied | `continue: false` | No: `retry` only adds a fixed message |
-| Notification | No: `continue` discarded | No |
-| SubagentStart | `continue: false`; can't block the subagent's creation | `additionalContext` to the subagent |
-| SubagentStop, Stop | `decision: "block"`, exit 2 keep it running | `reason` as the next instruction, `additionalContext` |
-| TaskCreated | Exit 2 or `decision: "block"` deletes the task; `continue: false` ignored | Message as the tool's error |
-| TaskCompleted | Exit 2 blocks completion | Stderr fed back to the model |
-| StopFailure | No: output ignored | No |
-| TeammateIdle | `continue: false` stops the teammate | Exit 2 stderr to the teammate |
-| ConfigChange | `decision: "block"`, exit 2 (not `policy_settings`) | No: no message reaches Claude |
-| CwdChanged, FileChanged | No: `continue` discarded | No: `systemMessage` is a terminal notification |
-| DirectoryAdded | No: `continue` discarded | Only for `/add-dir`: `systemMessage` as context |
-| WorktreeCreate | Failure fails the creation | No |
-| WorktreeRemove | Non-zero exit fails the removal | No |
-| PreCompact | Exit 2 or `decision: "block"` blocks compaction | No |
-| PostCompact | No: `continue` discarded | No |
-| PreModelSwitch | Exit 2, `decision: "block"` or `deny` cancels the switch | No: the reason goes to the user |
-| PostModelSwitch | `continue: false` | Plain stdout, `additionalContext` |
-| SessionEnd | No: can't block, JSON discarded | No |
-| Elicitation, ElicitationResult | `decline`, exit 2 | No: `reason` discarded |
+| Event | Prevent the action | Stop Claude | Feedback to Claude |
+| :- | :- | :- | :- |
+| SessionStart | No decision control | `continue: false` | `additionalContext`, plain stdout |
+| Setup | No: can't block | No: JSON discarded | No: `additionalContext` discarded |
+| InstructionsLoaded | No | No: JSON discarded | No |
+| UserPromptSubmit | `decision: "block"`, exit 2 | `continue: false` | `additionalContext`, plain stdout |
+| UserPromptExpansion | `decision: "block"`, exit 2 | `continue: false` | `additionalContext` |
+| MessageDisplay | No | No: `continue` discarded | No: can't change what is sent to Claude |
+| PreToolUse | `permissionDecision: "deny"`, exit 2 | `continue: false` | Deny reason, `additionalContext` |
+| PermissionRequest | `decision.behavior: "deny"` | `continue: false`; deny with `interrupt: true` | Deny `message` |
+| PostToolUse | No: runs after the tool completes | `continue: false` | `decision: "block"` reason, `additionalContext` |
+| PostToolUseFailure | No | `continue: false` | `additionalContext` |
+| PostToolBatch | No: the batch has run | `decision: "block"` or `continue: false` stops the loop | `additionalContext` |
+| PermissionDenied | No: the denial already happened | `continue: false` | No: `retry` only adds a fixed message |
+| Notification | No | No: `continue` discarded | No |
+| SubagentStart | No: can't block the subagent's creation | `continue: false` | `additionalContext` to the subagent |
+| SubagentStop, Stop | `decision: "block"`, exit 2 prevent stopping | `continue: false` | `reason` as the next instruction, `additionalContext` |
+| TaskCreated | Exit 2 or `decision: "block"` deletes the task | No: `continue: false` ignored | Message as the tool's error |
+| TaskCompleted | Exit 2 blocks completion | `continue: false` only when a teammate finishing its turn triggered the event; ignored for the `TaskUpdate` tool | Stderr fed back to the model |
+| StopFailure | No: output ignored | No | No |
+| TeammateIdle | Exit 2 keeps the teammate working | `continue: false` stops the teammate | Exit 2 stderr to the teammate |
+| ConfigChange | `decision: "block"`, exit 2, except `policy_settings` changes | No: `continue` discarded | No: no message reaches Claude |
+| CwdChanged, FileChanged | No | No: `continue` discarded | No: `systemMessage` is a terminal notification |
+| DirectoryAdded | No: the add has completed | No: `continue` discarded | Only for `/add-dir` (`slash_command`): `systemMessage` as context |
+| WorktreeCreate | Failure fails the creation | No: `continue` discarded | No |
+| WorktreeRemove | Non-zero exit fails the removal | No: JSON discarded | No |
+| PreCompact | Exit 2 or `decision: "block"` blocks compaction | No: `continue` discarded | No |
+| PostCompact | No | No: `continue` discarded | No |
+| PreModelSwitch | Exit 2, `decision: "block"` or `deny` cancels the switch | `continue: false` | No: the reason goes to the user |
+| PostModelSwitch | No | `continue: false` | Plain stdout, `additionalContext` |
+| SessionEnd | No: can't block | No: JSON discarded | No |
+| Elicitation, ElicitationResult | `decline`, exit 2 | No: `continue` discarded | No: `reason` discarded |
+
+Prompt and agent hooks differ: see [Prompt and agent hooks](#prompt-and-agent-hooks).
 
 ## Loading and invocation
 

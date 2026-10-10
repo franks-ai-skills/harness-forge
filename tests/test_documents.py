@@ -193,5 +193,17 @@ class SharedTypesTest(unittest.TestCase):
         self.assertEqual(Rule.from_dict(rules[1]).to_dict(), rules[1])
 
 
+
+class DecisionReuseTest(unittest.TestCase):
+    def test_a_reused_candidate_keeps_its_recorded_form(self):
+        from tests.builders import decision, part
+
+        reuse = {"name": "gate", "source": "https://example.com/gate", "license": "MIT", "maintenance": "maintained",
+                 "variant": "agent handler"}
+        record = decision(part("A", "Gate risky commands", outcome="reuse", recommended="hooks", chosen="hooks",
+                               reuse=reuse))
+        validate(record.record, "decision")
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -19,6 +19,7 @@ answers:
   external_system: none
   script_checkable: true
   hook_event: PreToolUse
+  hook_effect: prevent
   job: check
 candidates: []
 expected:

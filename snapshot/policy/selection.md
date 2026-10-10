@@ -23,8 +23,11 @@ with the rationale given here, not a claim the sources make.
 4. **Variant.** A variant rule names the selected mechanism's form, such
    as a hook's handler. The first variant rule that holds applies, on
    every route that offers the mechanism: built, reused or shown as an
-   alternative. A reused candidate is described by its own evidence,
-   never by the pros and cons of a rule for building a mechanism.
+   alternative. An alternative whose variant is still open names the
+   facts that would decide it; Forge asks them only if the user considers
+   that alternative. A reused candidate is described by its own evidence,
+   never by the pros and cons of a rule for building a mechanism, and its
+   recorded form must be one the variant rule accepts.
 5. **Dependencies.** Every matching control rule adds an outside control
    with its prerequisites, as a goal dependency or a precaution.
 
@@ -32,8 +35,10 @@ A mechanism whose eligibility or preference depends on an unanswered
 fact is unresolved.
 
 Eligibility applies to reuse too. A researched candidate whose mechanism
-is ruled out is not reused, even with confirmed fit: the result names
-the candidate and the requirement it conflicts with, and selection
+is ruled out, or whose recorded form (`variant`, such as a hook's
+handler) is missing or not accepted by its variant rule, is not reused,
+even with confirmed fit: the result names the candidate and the
+requirement it conflicts with, and selection
 continues as if no candidate qualified. Forge asks a question only when its answer could
 change the outcome, the recommended mechanism, its variant or the controls.
 
@@ -61,9 +66,10 @@ mechanism description each exclusion rests on.
 | Needs judgment, or a model of its own, for Codex or both harnesses | hooks | Portable handlers are commands and MCP tool calls; prompt and agent hooks are Claude Code only |
 | Needs judgment or a model of its own, at an event where a prompt or agent verdict has no effect | hooks | Such a verdict takes effect only at eleven events; elsewhere the handler does not run or, at `PermissionRequest` and `PermissionDenied`, its `ok: false` has no effect |
 | An event a target harness does not have | hooks | Claude Code has 33 events, Codex 12; eleven are shared, and `Interrupt` is Codex only |
-| Its result must block the action or stop the agent, at an event where a target harness cannot | hooks | Per harness and event, for example Codex can stop after `PostCompact` and Claude Code discards `continue` there |
-| Its result must reach the agent, at an event where a target harness does not deliver it | hooks | Per harness and event, for example `Notification` or `PreCompact` |
-| Needs judgment or a model of its own, and must block or reach the agent where a prompt or agent verdict cannot | hooks | At `PostToolUseFailure` the verdict only feeds back; at `UserPromptSubmit` it only ends the turn |
+| Its result must prevent the event's action, at an event where a target harness cannot | hooks | After a tool call the call has run; a `policy_settings` change cannot be blocked |
+| Its result must stop the agent's further work, at an event where a target harness is not documented to | hooks | Codex stops after `PostCompact` but documents a stop at `SessionStart` only after compaction; Claude Code discards `continue` at `PostCompact` |
+| Its result must reach the agent, at an event where a target harness does not deliver it | hooks | Per harness and event, for example `Notification` or `PreCompact`; at `DirectoryAdded` only for `/add-dir` |
+| Needs judgment or a model of its own, and must prevent, stop or reach the agent where a prompt or agent verdict cannot | hooks | At `PostToolUseFailure` the verdict only feeds back; at `PostToolBatch` it only ends the turn |
 | A hard limit on access that must hold every time | hooks | Tool switching and unhooked paths bypass hooks |
 | A procedure the model starts | commands | Only the user starts a command |
 | A procedure an event starts | instructions, skills, commands, subagents | None of them starts on an event |
@@ -77,11 +83,18 @@ these answers, so Forge asks whatever decides between a command handler
 and a prompt or agent handler, whether the hook is built or reused.
 
 For a hook, Forge asks the event by name, and what the hook's result
-must do there: block the action or stop the agent, reach the agent as
-feedback, or only report through the hook's own side effects, such as a
-log, a file or a notification. That a step must run every time does not
-mean it must block: a hook runs at every occurrence of its event either
-way. Each event's capabilities are recorded per harness, in
+must do there: prevent the action the event is about, stop the agent's
+further work, reach the agent as feedback, or only report through the
+hook's own side effects, such as a log, a file or a notification.
+Preventing and stopping are separate answers: a hook after a tool call
+can stop the agent but cannot undo the call. That a step must run every
+time does not mean it must prevent or stop anything: a hook runs at every
+occurrence of its event either way. Where a capability holds only for
+one source of the event, Forge asks that source: a Codex `SessionStart`
+after compaction, a `ConfigChange` outside managed policy settings, a
+`TaskCompleted` from a teammate finishing its turn, a `DirectoryAdded`
+from `/add-dir`. A capability the vendor does not document counts as
+missing, and the reason says it is not documented. Each event's capabilities are recorded per harness, in
 `docs/vendors/claude-code/hooks.md` and `docs/vendors/codex/hooks.md`,
 never inferred from a grouping or from the other harness; for both
 harnesses the event must allow the effect in each.

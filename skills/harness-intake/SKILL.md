@@ -52,22 +52,30 @@ plugin README). Every command prints bounded JSON.
    reused), split ("B" becomes B1 and B2) or add parts (the next unused
    letter). Record `split_confirmed: true` only after the user agrees.
 6. **Per-part questions.** Write the confirmed answers to a JSON file and
-   run `scripts/forge.py select --input <file>`. While the output names a
-   `question`, ask exactly that question and run `select` again. Stop when
-   it returns an outcome.
+   run `scripts/forge.py select --input <file>`. Add each reuse
+   candidate the user confirmed from the survey under `candidates`, with
+   its `name`, `source`, `license`, `maintenance`, `fit`, `concept` and,
+   for a hook, its handler as `variant` (`command handler`, `prompt
+   handler` or `agent handler`) as its source shows it; leave `variant`
+   out when the source does not show it, and Forge will not reuse it.
+   While the output names a `question`, ask exactly that question and run
+   `select` again. Stop when it returns an outcome.
 7. **Recommendation.** For each part show, from the `select` output:
    the outcome and the recommended mechanism, with its `variant` when
    the output names one (such as a hook's handler), and the rules that
    decided them; each viable alternative with its `variant`, pros, cons
    and why the recommendation was preferred; and the outside controls
-   with their prerequisites. For a reused mechanism, describe it from the
-   researched candidate in `reuse` and its `variant`, and check that the
-   candidate has that variant; the output gives no pros or cons for it. Offer the full assessment of all ten mechanisms as
+   with their prerequisites. When an alternative's `variant` is null and
+   `variant_missing_facts` is not empty, say that its form is still open
+   and ask those questions only if the user considers that alternative.
+   Describe a reused mechanism from the researched candidate in `reuse`
+   and the required `variant`; the output gives no pros or cons for it.
+   Record the candidate's own `variant` in the part's `reuse`. Offer the full assessment of all ten mechanisms as
    detail: ruled out (with the conflicting requirement and its source),
    not preferred, or unresolved (with the facts that were not needed to
    decide). Say "ruled out" only where the output does. For each
    `reuse_conflicts` entry, say which researched candidate was not reused
-   and which requirement rules out its mechanism. When
+   and which requirement rules out its mechanism or its form. When
    `no_standalone_mechanism` is true, say that no supported standalone
    mechanism meets every confirmed requirement and that combinations of
    mechanisms were not assessed; do not say that nothing could work. If this release

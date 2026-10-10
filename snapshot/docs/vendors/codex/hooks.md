@@ -126,21 +126,21 @@ Sources: [Hooks](https://learn.chatgpt.com/docs/hooks.md), rechecked 2026-10-10.
 
 ### Decision control by event
 
-From the table above ([Hooks](https://learn.chatgpt.com/docs/hooks.md), rechecked 2026-10-10). "Block or stop" means the hook can prevent the action or stop Codex; "feedback" means its result reaches the model. `prompt` and `agent` handlers are skipped, so these are command and MCP tool hooks.
+From the table above ([Hooks](https://learn.chatgpt.com/docs/hooks.md), rechecked 2026-10-10). "Prevent" means the hook stops the action the event is about; "stop" means it stops Codex's further work; "feedback" means its result reaches the model. "Not documented" is not a proven incompatibility. `prompt` and `agent` handlers are skipped, so these are command and MCP tool hooks.
 
-| Event | Block or stop | Feedback to the model |
-| :- | :- | :- |
-| `PreToolUse` | Deny | `additionalContext` |
-| `PermissionRequest` | Deny | Not documented |
-| `PostToolUse` | No: it can't undo the call, and `continue:false` continues from the feedback | Feedback replaces the tool result, `additionalContext` |
-| `UserPromptSubmit` | Block | Plain stdout, `additionalContext` |
-| `Stop`, `SubagentStop` | Block, so Codex continues; `continue:false` | `reason` as the continuation prompt |
-| `PreCompact` | `continue:false` stops before compacting | No: plain stdout is ignored |
-| `PostCompact` | `continue:false` stops after compacting | No: plain stdout is ignored |
-| `SessionStart` | Only for source `compact`, which ends the turn | Plain stdout, `additionalContext` |
-| `SubagentStart` | No | Context for the subagent |
-| `Interrupt` | No | No |
-| `SessionEnd` | No | No |
+| Event | Prevent the action | Stop Codex | Feedback to the model |
+| :- | :- | :- | :- |
+| `PreToolUse` | Deny | No: `continue` is unsupported and fails the hook run | `additionalContext` |
+| `PermissionRequest` | Deny | No: `continue` is unsupported | Not documented |
+| `PostToolUse` | No: it can't undo the call | No: `continue:false` continues from the feedback | Feedback replaces the tool result, `additionalContext` |
+| `UserPromptSubmit` | Block | Not documented | Plain stdout, `additionalContext` |
+| `Stop`, `SubagentStop` | Block, so Codex continues | `continue:false` wins over continuation | `reason` as the continuation prompt |
+| `PreCompact` | `continue:false` stops before compacting | Same | No: plain stdout is ignored |
+| `PostCompact` | No | `continue:false` stops after compacting | No: plain stdout is ignored |
+| `SessionStart` | No | Only for source `compact`: `continue:false` ends the turn; not documented for other sources | Plain stdout, `additionalContext` |
+| `SubagentStart` | No | No: `continue:false` doesn't stop the subagent | Context for the subagent |
+| `Interrupt` | No: can't prevent the interruption | No | No |
+| `SessionEnd` | No | No: advisory | No |
 
 ### Plugin hook environment
 

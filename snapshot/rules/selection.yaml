@@ -160,9 +160,30 @@ facts:
 - id: hook_effect
   scope: part
   values:
-  - block
+  - prevent
+  - stop
   - feedback
   - report
+- id: session_start_source
+  scope: part
+  values:
+  - after-compaction
+  - any
+- id: config_change_source
+  scope: part
+  values:
+  - without-policy
+  - with-policy
+- id: task_completed_trigger
+  scope: part
+  values:
+  - teammate
+  - any
+- id: directory_added_source
+  scope: part
+  values:
+  - add-dir
+  - any
 - id: reuse_confirmed
   scope: part
   values:
@@ -325,11 +346,32 @@ questions:
   - PostModelSwitch
   - Interrupt
 - id: hook_effect
-  text: 'When the hook runs, what must its result do: block the action or stop the agent, reach the agent as feedback, or only report, for example by logging, writing a file or notifying you?'
+  text: 'When the hook runs, what must its result do: prevent the action the event is about, stop the agent''s further work, reach the agent as feedback, or only report, for example by logging, writing a file or notifying you?'
   choices:
-  - block
+  - prevent
+  - stop
   - feedback
   - report
+- id: session_start_source
+  text: Must it act at every session start, or only when a session continues after compaction?
+  choices:
+  - after-compaction
+  - any
+- id: config_change_source
+  text: Must it cover changes to managed policy settings too, or only changes to user, project or local settings and skills?
+  choices:
+  - without-policy
+  - with-policy
+- id: task_completed_trigger
+  text: Must it act whenever a task is marked completed, or only when a teammate finishing its turn completes one?
+  choices:
+  - teammate
+  - any
+- id: directory_added_source
+  text: Must it act for every added directory, or only for directories added with /add-dir?
+  choices:
+  - add-dir
+  - any
 rules:
 - id: selection.outcome.reuse
   concept: selection
@@ -932,7 +974,7 @@ rules:
   - docs/vendors/codex/hooks.md#decision-control-by-event
   - docs/guide/hooks.md#portability
   contested: false
-- id: selection.eligibility.claude-code-block-hooks
+- id: selection.eligibility.claude-code-prevent-hooks
   concept: selection
   kind: should
   severity: warning
@@ -947,7 +989,60 @@ rules:
           - both
       - eq:
         - hook_effect
-        - block
+        - prevent
+      - not:
+          in:
+          - hook_event
+          - - PreToolUse
+            - PermissionRequest
+            - UserPromptSubmit
+            - UserPromptExpansion
+            - Stop
+            - SubagentStop
+            - PreCompact
+            - TaskCreated
+            - TaskCompleted
+            - TeammateIdle
+            - WorktreeCreate
+            - WorktreeRemove
+            - Elicitation
+            - ElicitationResult
+            - PreModelSwitch
+      - not:
+          all:
+          - eq:
+            - hook_event
+            - ConfigChange
+          - eq:
+            - config_change_source
+            - without-policy
+    implies:
+      excludes: hooks
+  statement: A Claude Code hook prevents the event's action only where a decision, exit code 2 or a failure takes effect; after a tool call the call has already run, and policy_settings changes cannot be blocked
+  applies_to:
+    harnesses:
+    - claude-code
+    - codex
+  evidence: Vendor
+  sources:
+  - docs/vendors/claude-code/hooks.md#decision-control-by-event
+  contested: false
+- id: selection.eligibility.claude-code-stop-hooks
+  concept: selection
+  kind: should
+  severity: warning
+  check: script
+  checker: selection.match
+  params:
+    when:
+      all:
+      - in:
+        - target_set
+        - - claude-code
+          - both
+      - eq:
+        - hook_effect
+        - stop
       - not:
           in:
           - hook_event
@@ -963,20 +1058,20 @@ rules:
             - SubagentStop
             - SubagentStart
             - SessionStart
-            - PreCompact
-            - TaskCreated
-            - TaskCompleted
             - TeammateIdle
-            - ConfigChange
-            - WorktreeCreate
-            - WorktreeRemove
-            - Elicitation
-            - ElicitationResult
             - PreModelSwitch
             - PostModelSwitch
+      - not:
+          all:
+          - eq:
+            - hook_event
+            - TaskCompleted
+          - eq:
+            - task_completed_trigger
+            - teammate
     implies:
       excludes: hooks
-  statement: A Claude Code hook can block or stop only where a decision, a failure or continue false takes effect; some events discard continue
+  statement: A Claude Code hook stops Claude with continue false only at events whose section does not discard it; at TaskCompleted only when a teammate finishing its turn triggered the event
   applies_to:
     harnesses:
     - claude-code
@@ -984,43 +1079,6 @@ rules:
   evidence: Vendor
   sources:
   - docs/vendors/claude-code/hooks.md#decision-control-by-event
-  contested: false
-- id: selection.eligibility.codex-block-hooks
-  concept: selection
-  kind: should
-  severity: warning
-  check: script
-  checker: selection.match
-  params:
-    when:
-      all:
-      - in:
-        - target_set
-        - - codex
-          - both
-      - eq:
-        - hook_effect
-        - block
-      - not:
-          in:
-          - hook_event
-          - - PreToolUse
-            - PermissionRequest
-            - UserPromptSubmit
-            - Stop
-            - SubagentStop
-            - PreCompact
-            - PostCompact
-    implies:
-      excludes: hooks
-  statement: A Codex hook can block or stop only at the events whose decision or continue false is documented to take effect
-  applies_to:
-    harnesses:
-    - claude-code
-    - codex
-  evidence: Vendor
-  sources:
-  - docs/vendors/codex/hooks.md#decision-control-by-event
   contested: false
 - id: selection.eligibility.claude-code-feedback-hooks
   concept: selection
@@ -1041,24 +1099,32 @@ rules:
       - not:
           in:
           - hook_event
-          - - SessionStart
-            - UserPromptSubmit
-            - UserPromptExpansion
-            - PreToolUse
-            - PermissionRequest
+          - - PreToolUse
             - PostToolUse
             - PostToolUseFailure
             - PostToolBatch
+            - PermissionRequest
+            - UserPromptSubmit
+            - UserPromptExpansion
             - Stop
             - SubagentStop
             - SubagentStart
+            - SessionStart
             - TaskCreated
             - TaskCompleted
             - TeammateIdle
             - PostModelSwitch
+      - not:
+          all:
+          - eq:
+            - hook_event
+            - DirectoryAdded
+          - eq:
+            - directory_added_source
+            - add-dir
     implies:
       excludes: hooks
-  statement: A Claude Code hook's result reaches the agent only at events that deliver its context, reason or feedback
+  statement: A Claude Code hook's result reaches Claude only at events that deliver its context, reason or feedback; at DirectoryAdded only for /add-dir
   applies_to:
     harnesses:
     - claude-code
@@ -1066,6 +1132,84 @@ rules:
   evidence: Vendor
   sources:
   - docs/vendors/claude-code/hooks.md#decision-control-by-event
+  contested: false
+- id: selection.eligibility.codex-prevent-hooks
+  concept: selection
+  kind: should
+  severity: warning
+  check: script
+  checker: selection.match
+  params:
+    when:
+      all:
+      - in:
+        - target_set
+        - - codex
+          - both
+      - eq:
+        - hook_effect
+        - prevent
+      - not:
+          in:
+          - hook_event
+          - - PreToolUse
+            - PermissionRequest
+            - UserPromptSubmit
+            - Stop
+            - SubagentStop
+            - PreCompact
+    implies:
+      excludes: hooks
+  statement: A Codex hook prevents the event's action only where a deny, a block or continue false is documented to take effect
+  applies_to:
+    harnesses:
+    - claude-code
+    - codex
+  evidence: Vendor
+  sources:
+  - docs/vendors/codex/hooks.md#decision-control-by-event
+  contested: false
+- id: selection.eligibility.codex-stop-hooks
+  concept: selection
+  kind: should
+  severity: warning
+  check: script
+  checker: selection.match
+  params:
+    when:
+      all:
+      - in:
+        - target_set
+        - - codex
+          - both
+      - eq:
+        - hook_effect
+        - stop
+      - not:
+          in:
+          - hook_event
+          - - Stop
+            - SubagentStop
+            - PreCompact
+            - PostCompact
+      - not:
+          all:
+          - eq:
+            - hook_event
+            - SessionStart
+          - eq:
+            - session_start_source
+            - after-compaction
+    implies:
+      excludes: hooks
+  statement: A Codex hook is documented to stop Codex only before or after compaction, at Stop and SubagentStop, and at SessionStart after compaction
+  applies_to:
+    harnesses:
+    - claude-code
+    - codex
+  evidence: Vendor
+  sources:
+  - docs/vendors/codex/hooks.md#decision-control-by-event
   contested: false
 - id: selection.eligibility.codex-feedback-hooks
   concept: selection
@@ -1091,11 +1235,11 @@ rules:
             - UserPromptSubmit
             - Stop
             - SubagentStop
-            - SessionStart
             - SubagentStart
+            - SessionStart
     implies:
       excludes: hooks
-  statement: A Codex hook's result reaches the agent only at events that add its context or continue from its reason
+  statement: A Codex hook's result reaches the model only at events documented to add its context or continue from its reason
   applies_to:
     harnesses:
     - claude-code
@@ -1104,7 +1248,7 @@ rules:
   sources:
   - docs/vendors/codex/hooks.md#decision-control-by-event
   contested: false
-- id: selection.eligibility.model-handler-block-hooks
+- id: selection.eligibility.model-handler-prevent-hooks
   concept: selection
   kind: should
   severity: warning
@@ -1126,13 +1270,11 @@ rules:
             - true
       - eq:
         - hook_effect
-        - block
+        - prevent
       - not:
           in:
           - hook_event
           - - PreToolUse
-            - PostToolUse
-            - PostToolBatch
             - UserPromptSubmit
             - UserPromptExpansion
             - Stop
@@ -1142,7 +1284,58 @@ rules:
             - TeammateIdle
     implies:
       excludes: hooks
-  statement: A prompt or agent hook's ok false blocks or stops only at some events; elsewhere it only feeds back or has no effect
+  statement: A prompt or agent hook's ok false prevents the event's action only at some events; elsewhere it only feeds back, ends the turn or has no effect
+  applies_to:
+    harnesses:
+    - claude-code
+    - codex
+  evidence: Vendor
+  sources:
+  - docs/vendors/claude-code/hooks.md#prompt-and-agent-hooks
+  contested: false
+- id: selection.eligibility.model-handler-stop-hooks
+  concept: selection
+  kind: should
+  severity: warning
+  check: script
+  checker: selection.match
+  params:
+    when:
+      all:
+      - any:
+        - eq:
+          - script_checkable
+          - false
+        - all:
+          - eq:
+            - own_context
+            - true
+          - eq:
+            - own_model
+            - true
+      - eq:
+        - hook_effect
+        - stop
+      - not:
+          in:
+          - hook_event
+          - - PreToolUse
+            - PostToolUse
+            - PostToolBatch
+            - UserPromptSubmit
+            - UserPromptExpansion
+            - TeammateIdle
+      - not:
+          all:
+          - eq:
+            - hook_event
+            - TaskCompleted
+          - eq:
+            - task_completed_trigger
+            - teammate
+    implies:
+      excludes: hooks
+  statement: A prompt or agent hook's ok false ends the turn or halts a teammate only at some events; elsewhere it only feeds back or has no effect
   applies_to:
     harnesses:
     - claude-code
@@ -2000,6 +2193,49 @@ rules:
   - docs/overview.md#automation
   - docs/guide/automation.md#when-to-use-it-and-when-not
   contested: false
+- id: selection.variant.prompt-hook-handler-to-stop
+  concept: selection
+  kind: should
+  severity: warning
+  check: script
+  checker: selection.match
+  params:
+    when:
+      all:
+      - any:
+        - eq:
+          - script_checkable
+          - false
+        - all:
+          - eq:
+            - own_context
+            - true
+          - eq:
+            - own_model
+            - true
+      - eq:
+        - hook_effect
+        - stop
+      - in:
+        - hook_event
+        - - PreToolUse
+          - PostToolUse
+          - TeammateIdle
+          - TaskCompleted
+    implies:
+      variant:
+        concept: hooks
+        value: prompt handler
+        accepts:
+        - prompt handler
+  statement: Where a judgment must stop the agent at a tool call or a teammate, only a prompt hook ends the turn or halts the teammate; an agent hook feeds its reason back like continueOnBlock true
+  applies_to:
+    harnesses:
+    - claude-code
+  evidence: Vendor
+  sources:
+  - docs/vendors/claude-code/hooks.md#prompt-and-agent-hooks
+  contested: false
 - id: selection.variant.model-hook-handler
   concept: selection
   kind: should
@@ -2023,6 +2259,9 @@ rules:
       variant:
         concept: hooks
         value: prompt or agent handler
+        accepts:
+        - prompt handler
+        - agent handler
   statement: A hook that needs judgment or a model of its own is a prompt or agent hook; a command handler is a process without a model
   applies_to:
     harnesses:
@@ -2055,6 +2294,8 @@ rules:
       variant:
         concept: hooks
         value: command handler
+        accepts:
+        - command handler
   statement: A hook that a script can decide, without a model of its own, is a command hook, the handler both harnesses run
   applies_to:
     harnesses:
