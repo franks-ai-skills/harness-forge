@@ -54,7 +54,8 @@ mechanism description each exclusion rests on.
 | Irreversible, about money, or publishes or discloses data | instructions, skills, subagents | The model would decide on its own to start it; delegation starts on the model's decision or on instructions or a skill it follows, in both harnesses |
 | Needs its own context, other tools or another model | instructions, skills, commands | They run in the session's own context; a subagent can use a skill |
 | Needs judgment, or a model of its own, for Codex or both harnesses | hooks | Portable handlers are commands and MCP tool calls; prompt and agent hooks are Claude Code only |
-| Needs judgment or a model of its own, at a session, compaction, subagent-start or Claude Code-only event | hooks | Prompt and agent handlers do not run at session, compaction or subagent-start events; Forge does not tell the Claude Code-only events apart |
+| Needs judgment or a model of its own, at an event where a prompt or agent verdict has no effect | hooks | Such a verdict takes effect only at eleven events; elsewhere the handler does not run or, at `PermissionRequest` and `PermissionDenied`, its `ok: false` has no effect |
+| A check or a must-hold rule, at an event without decision control | hooks | A hook there can neither block nor feed back, for example at `SessionStart` or `Notification` |
 | An event only Claude Code has, for Codex or both harnesses | hooks | Codex shares eleven events with Claude Code |
 | A hard limit on access that must hold every time | hooks | Tool switching and unhooked paths bypass hooks |
 | A procedure the model starts | commands | Only the user starts a command |
@@ -64,8 +65,12 @@ Needing its own context covers three capabilities: its own context
 window, another model, or only other tools. When it is needed and a hook
 could be chosen, Forge asks which: a command handler gives a process with
 its own tools, but no model; only Claude Code's prompt and agent handlers
-give a model of its own. For a hook, Forge also asks the event when it
-decides whether the handler can run there.
+give a model of its own. For a hook, Forge also asks the event by name
+when it decides whether the handler can run there and whether its
+verdict takes effect; each event's capabilities come from
+`docs/vendors/claude-code/hooks.md`, never from a grouping. A preference
+rule's `variant` names the hook's handler, so Forge also asks a question
+that decides between a command handler and a prompt or agent handler.
 
 ## Preference order and rationale
 

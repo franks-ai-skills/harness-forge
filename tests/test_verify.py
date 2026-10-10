@@ -315,6 +315,17 @@ class WorkerObservationTest(unittest.TestCase):
                                     worker_observations=observations)[0]
                 assert_result(self, result, "not verified", "not met")
 
+    def test_changing_the_callers_evidence_after_prepare_changes_nothing_approved(self):
+        evidence = [copy.deepcopy(EVIDENCE[0])]
+        run = prepare_run(self.scenario.record, self.scenario.files, RULES, self.scenario.confirmation,
+                          symlinks=self.scenario.symlinks, revision=REVISION, kb_version="0.1.0",
+                          worker_evidence=evidence)
+        evidence[0]["configured_controls"].append("tools: Bash")
+        review = validate_review(run, passing_review(run))
+        result = finish_run(run, review, [], run.frozen_inputs, worker_observations=evidence)[0]
+        assert_result(self, result, "not verified", "not met")
+        self.assertNotIn("tools: Bash", run.worker_evidence[0]["configured_controls"])
+
     def test_an_observed_violation_still_blocks_success(self):
         self.scenario.run.worker_violations.append("review worker used Bash")
         assert_result(self, self.finish([self.OBSERVED]), "not verified", "not met")

@@ -10,6 +10,7 @@ failure, and nothing here certifies worker containment.
 
 from __future__ import annotations
 
+import copy
 import hashlib
 from dataclasses import asdict
 
@@ -68,6 +69,10 @@ def _rules_for(part: dict, rules: list[Rule], idea: dict[str, list[Rule]]) -> li
     return selected
 
 
+def _approval_digests(worker_evidence: list[dict] | tuple) -> tuple[str, ...]:
+    return tuple(canonical_digest(configuration) for configuration in worker_configurations(worker_evidence))
+
+
 def worker_configurations(worker_evidence: list[dict] | tuple) -> list[dict]:
     """Each worker's configuration without what it observed: the part a run is bound to."""
     configurations = {canonical_digest(c): c for c in
@@ -108,7 +113,8 @@ def prepare_run(
     for evidence in worker_evidence:
         validate(evidence, "worker-evidence")
     symlinks = dict(symlinks or {})
-    record = decision.record
+    worker_evidence = copy.deepcopy(list(worker_evidence))  # later changes by the caller must not reach the run
+    record = copy.deepcopy(decision.record)
     inputs = bound_inputs(decision, files, rules, symlinks=symlinks, revision=revision, overrides=overrides,
                           kb_version=kb_version, worker_evidence=worker_evidence)
     unconfirmed_reason = confirmation_problem(confirmation, decision, revision, overrides, worker_evidence) or ""
@@ -122,7 +128,7 @@ def prepare_run(
         whole_idea={"targets": list(record["targets"]), "reach": record["reach"], "hosting": dict(record["hosting"]),
                     "facts": dict(record["facts"])},
         parts=[dict(part) for part in record["parts"]], worker_evidence=list(worker_evidence),
-        approved_workers=worker_configurations(worker_evidence), kb_version=kb_version,
+        approved_workers=_approval_digests(worker_evidence), kb_version=kb_version,
         scope=scope_label, tool_versions={"harness-forge-checkers": inputs["checkers"]},
     )
     idea = _idea_rules(revision)
@@ -250,8 +256,9 @@ def finish_run(
         validate(evidence, "worker-evidence")
     run.runtime_results = list(runtime_results)
     changed = affected_parts(run, current_inputs)
-    run.worker_evidence += [evidence for evidence in worker_observations if evidence not in run.worker_evidence]
-    if any(configuration not in run.approved_workers for configuration in worker_configurations(run.worker_evidence)):
+    run.worker_evidence += [copy.deepcopy(evidence) for evidence in worker_observations
+                            if evidence not in run.worker_evidence]
+    if any(digest not in run.approved_workers for digest in _approval_digests(run.worker_evidence)):
         changed = {part["id"] for part in run.parts}
     verdicts = {} if run.worker_violations else {(v["part_id"], v["rule_id"]): v for v in review.verdicts}
     goal_verdicts = {} if run.worker_violations else {v["part_id"]: v for v in review.goal_verdicts}

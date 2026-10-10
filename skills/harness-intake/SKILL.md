@@ -56,8 +56,9 @@ plugin README). Every command prints bounded JSON.
    `question`, ask exactly that question and run `select` again. Stop when
    it returns an outcome.
 7. **Recommendation.** For each part show, from the `select` output:
-   the outcome and the recommended mechanism with the rules that decided
-   them; each viable alternative with its pros, cons and why the
+   the outcome and the recommended mechanism, with its `variant` when
+   the output names one (such as a hook's handler), and the rules that
+   decided them; each viable alternative with its pros, cons and why the
    recommendation was preferred; and the outside controls with their
    prerequisites. Offer the full assessment of all ten mechanisms as
    detail: ruled out (with the conflicting requirement and its source),

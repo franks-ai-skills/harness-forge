@@ -28,15 +28,24 @@ VARIED = {
     "own_context": [True, False],
     "own_model": [True, False],
     "script_checkable": [True, False],
-    "hook_event": ["tool-call", "permission-request", "prompt-submit", "turn-end", "session-or-compaction",
-                   "claude-code-only"],
+    # One event per capability class; the sets below name every event.
+    "hook_event": ["PreToolUse", "PermissionRequest", "SessionStart", "TaskCompleted", "PreModelSwitch",
+                   "Notification", "PermissionDenied"],
     "external_system": ["none", "cli", "no-cli"],
     "target_set": ["claude-code", "codex", "both"],
 }
 # The model, or instructions and skills it follows, start these on its own decision.
 MODEL_STARTED = {"instructions", "skills", "subagents"}
-# Shared events whose Claude Code handlers include prompt or agent (a model of its own).
-MODEL_HANDLER_EVENTS = {"tool-call", "permission-request", "prompt-submit", "turn-end"}
+# From the Claude Code hooks reference (checked 2026-10-10) and the KB's shared-event table.
+SHARED_EVENTS = {"SessionStart", "UserPromptSubmit", "PreToolUse", "PermissionRequest", "PostToolUse", "PreCompact",
+                 "PostCompact", "SubagentStart", "SubagentStop", "Stop", "SessionEnd"}
+# Events where a prompt or agent hook's ok: false takes effect.
+MODEL_VERDICT_EVENTS = {"PreToolUse", "PostToolUse", "PostToolBatch", "PostToolUseFailure", "UserPromptSubmit",
+                        "UserPromptExpansion", "Stop", "SubagentStop", "TaskCreated", "TaskCompleted", "TeammateIdle"}
+# Events without decision control: a hook there cannot block or feed back.
+NO_DECISION_EVENTS = {"SessionStart", "Setup", "Notification", "SubagentStart", "StopFailure", "InstructionsLoaded",
+                      "MessageDisplay", "PermissionDenied", "PostCompact", "SessionEnd", "CwdChanged", "FileChanged",
+                      "DirectoryAdded", "PostModelSwitch"}
 
 
 def requirements(facts: dict) -> dict[str, str]:
@@ -56,10 +65,12 @@ def requirements(facts: dict) -> dict[str, str]:
     needs_model = not facts["script_checkable"] or (facts["own_context"] and facts["own_model"])
     if needs_model and facts["target_set"] != "claude-code":
         add({"hooks"}, "needs a model; portable hook handlers are commands and MCP tool calls")
-    if needs_model and facts["hook_event"] not in MODEL_HANDLER_EVENTS:
-        add({"hooks"}, "needs a model; prompt and agent handlers do not run at this event")
-    if facts["target_set"] != "claude-code" and facts["hook_event"] == "claude-code-only":
+    if needs_model and facts["hook_event"] not in MODEL_VERDICT_EVENTS:
+        add({"hooks"}, "needs a model; a prompt or agent verdict has no effect at this event")
+    if facts["target_set"] != "claude-code" and facts["hook_event"] not in SHARED_EVENTS:
         add({"hooks"}, "the event exists only in Claude Code")
+    if (facts["job"] == "check" or facts["every_time"] == "always") and facts["hook_event"] in NO_DECISION_EVENTS:
+        add({"hooks"}, "a check must take effect; the event has no decision control")
     if facts["job"] == "access-control" and facts["every_time"] == "always":
         add({"hooks"}, "a hard limit on access")
     if facts["job"] == "procedure" and facts["trigger"] == "model":
@@ -108,7 +119,7 @@ class RequirementSetTest(unittest.TestCase):
                         self.assertEqual(states[concept], "ruled out", f"{concept}: {unmet[concept]}")
 
     def test_reuse_meets_every_confirmed_requirement(self):
-        for facts in combinations(external_system=["none"], target_set=["both"], hook_event=["tool-call"]):
+        for facts in combinations(external_system=["none"], target_set=["both"], hook_event=["PreToolUse"]):
             unmet = requirements(facts)
             for concept in CONCEPTS:
                 actual = run(facts, [candidate(concept)])
@@ -125,7 +136,7 @@ class RequirementSetTest(unittest.TestCase):
     def test_an_eligible_candidate_is_reused_when_another_conflicts(self):
         facts = next(combinations(job=["procedure"], every_time=["always"], irreversible=[False], trigger=["model"],
                                   own_context=[False], own_model=[False], script_checkable=[True],
-                                  hook_event=["tool-call"], external_system=["none"], target_set=["both"]))
+                                  hook_event=["PreToolUse"], external_system=["none"], target_set=["both"]))
         actual = run(facts, [candidate("skills"), candidate("hooks")])
         self.assertEqual((actual.outcome, actual.mechanism), ("reuse", "hooks"))
         self.assertEqual([conflict["candidate"] for conflict in actual.reuse_conflicts], ["existing-skills"])
@@ -134,7 +145,7 @@ class RequirementSetTest(unittest.TestCase):
 class ReportedBypassesTest(unittest.TestCase):
     def base(self, **changes):
         facts = {"job": "procedure", "every_time": "usually", "irreversible": False, "trigger": "model",
-                 "own_context": False, "own_model": False, "script_checkable": False, "hook_event": "tool-call",
+                 "own_context": False, "own_model": False, "script_checkable": False, "hook_event": "PreToolUse",
                  "external_system": "none", "target_set": "both"}
         return {**facts, **changes}
 
@@ -186,10 +197,23 @@ class ReportedBypassesTest(unittest.TestCase):
 
     def test_the_event_decides_whether_a_judgment_hook_can_run(self):
         facts = self.base(job="check", target_set="claude-code")
-        self.assertEqual(run({**facts, "hook_event": "turn-end"}).mechanism, "hooks")
-        actual = run({**facts, "hook_event": "session-or-compaction"})
-        self.assertNotEqual(actual.mechanism, "hooks")
-        self.assertEqual(self.states(actual)["hooks"], "ruled out")
+        for event in ("Stop", "TaskCompleted"):
+            self.assertEqual(run({**facts, "hook_event": event}).mechanism, "hooks", event)
+        for event in ("SessionStart", "PermissionRequest", "PermissionDenied"):
+            actual = run({**facts, "hook_event": event})
+            self.assertNotEqual(actual.mechanism, "hooks", event)
+            self.assertEqual(self.states(actual)["hooks"], "ruled out", event)
+
+    def test_a_scripted_check_needs_an_event_with_decision_control(self):
+        facts = self.base(job="check", every_time="always", script_checkable=True)
+        self.assertEqual(run({**facts, "hook_event": "PermissionRequest"}).mechanism, "hooks")
+        self.assertNotEqual(run({**facts, "hook_event": "SessionStart"}).mechanism, "hooks")
+
+    def test_an_undecided_handler_asks_for_a_model_of_its_own(self):
+        facts = self.base(job="check", every_time="always", script_checkable=True, own_context=True,
+                          target_set="claude-code")
+        del facts["own_model"]
+        self.assertEqual(run(facts).pending_question, "own_model")
 
     def test_an_unknown_event_is_asked_when_it_decides(self):
         facts = {k: v for k, v in self.base(job="check", target_set="claude-code").items() if k != "hook_event"}

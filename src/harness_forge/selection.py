@@ -139,11 +139,13 @@ def _evaluate(rules: list[Rule], facts: dict, reuse_concepts: tuple[str, ...] = 
 
 
 def _signature(evaluated: dict) -> tuple:
-    concept = None
+    """What a question could change: outcome, mechanism, its variant (such as a hook's handler) and controls."""
+    concept = variant = None
     if evaluated["outcome"] in _BUILT and evaluated["preferred"]:
         concept = evaluated["preferred"][0].params["implies"]["concept"]
+        variant = evaluated["preferred"][0].params.get("variant")
     controls = tuple(sorted(rule.params["implies"]["control"]["id"] for rule in evaluated["controls"]))
-    return evaluated["outcome"], concept or evaluated["reused"], controls
+    return evaluated["outcome"], concept or evaluated["reused"], variant, controls
 
 
 def _exclusion_facts(rules: list[Rule], concept: str, facts: dict) -> set[str]:
@@ -359,6 +361,7 @@ def recommend(answers: dict, whole_idea: dict, rules: list[Rule], candidates: li
         pages=_pages(cited),
         alternatives=alternatives,
         controls=[controls[key] for key in sorted(controls)],
+        variant=described.params.get("variant") if described else None,
         pros=list(described.params.get("pros", [])) if described else [],
         cons=list(described.params.get("cons", [])) if described else [],
         reuse=reuse,

@@ -177,6 +177,15 @@ From the [hooks reference](https://code.claude.com/docs/en/hooks):
 - Prompt hooks expect the model to return `{"ok": bool, "reason": "...", "impossible": bool}`. They default to the background model.
 - On PreToolUse, `ok: false` denies the call and by default ends the turn (since v2.1.210). `continueOnBlock: true` returns the reason to Claude instead.
 - Agent hooks are "experimental": a subagent with Read, Grep, Glob, and similar tools, up to 50 turns, returning `{ok}`.
+- What `ok: false` does depends on the event (rechecked 2026-10-10): on `Stop` and `SubagentStop` the reason is fed back and the turn continues; `PreToolUse` denies the call; `PostToolUse` ends the turn, or feeds the reason back with `continueOnBlock: true`; `PostToolBatch`, `UserPromptSubmit` and `UserPromptExpansion` end the turn; `PostToolUseFailure` and `TaskCreated` return the reason as a tool error; `TaskCompleted` does the same during a turn and halts a stopping teammate; `TeammateIdle` stops the teammate, or keeps it working with `continueOnBlock: true`. On `PermissionRequest`, "`ok: false` has no effect"; on `PermissionDenied` prompt and agent hooks run "but their output is discarded". Agent hooks act like prompt hooks with `continueOnBlock: true`.
+
+### Decision control by event
+
+Whether a hook can block, deny, cancel or feed back at each event, from the per-event sections of the [hooks reference](https://code.claude.com/docs/en/hooks) (rechecked 2026-10-10):
+
+| Can block or feed back | No decision control |
+| :- | :- |
+| UserPromptSubmit, UserPromptExpansion, PreToolUse, PermissionRequest (decision object only; exit 2 is not honored), PostToolUse, PostToolUseFailure, PostToolBatch, Stop, SubagentStop, TaskCreated, TaskCompleted, TeammateIdle, ConfigChange, PreCompact, PreModelSwitch, WorktreeCreate (failure fails the creation), WorktreeRemove (non-zero exit fails the removal), Elicitation, ElicitationResult | SessionStart, Setup, Notification, SubagentStart, StopFailure, InstructionsLoaded, MessageDisplay (display-only rewrite), PermissionDenied (`retry` only; the denial already happened), PostCompact, SessionEnd, CwdChanged, FileChanged, DirectoryAdded, PostModelSwitch |
 
 ## Loading and invocation
 

@@ -120,12 +120,39 @@ facts:
 - id: hook_event
   scope: part
   values:
-  - tool-call
-  - permission-request
-  - prompt-submit
-  - turn-end
-  - session-or-compaction
-  - claude-code-only
+  - PreToolUse
+  - PostToolUse
+  - PostToolUseFailure
+  - PostToolBatch
+  - PermissionRequest
+  - PermissionDenied
+  - UserPromptSubmit
+  - UserPromptExpansion
+  - Stop
+  - SubagentStop
+  - SubagentStart
+  - SessionStart
+  - SessionEnd
+  - Setup
+  - PreCompact
+  - PostCompact
+  - TaskCreated
+  - TaskCompleted
+  - TeammateIdle
+  - Notification
+  - StopFailure
+  - ConfigChange
+  - InstructionsLoaded
+  - MessageDisplay
+  - CwdChanged
+  - FileChanged
+  - DirectoryAdded
+  - WorktreeCreate
+  - WorktreeRemove
+  - Elicitation
+  - ElicitationResult
+  - PreModelSwitch
+  - PostModelSwitch
 - id: reuse_confirmed
   scope: part
   values:
@@ -251,14 +278,41 @@ questions:
   - true
   - false
 - id: hook_event
-  text: 'At which point must it run: before or after a tool call, at a permission request, when a prompt is submitted, when a turn ends, at session start or end, compaction or subagent start, or at an event only Claude Code has?'
+  text: 'At which hook event must it run, for example PreToolUse before a tool call, PostToolUse after one, UserPromptSubmit when a prompt is submitted, Stop when a turn ends, or PermissionRequest at an approval prompt?'
   choices:
-  - tool-call
-  - permission-request
-  - prompt-submit
-  - turn-end
-  - session-or-compaction
-  - claude-code-only
+  - PreToolUse
+  - PostToolUse
+  - PostToolUseFailure
+  - PostToolBatch
+  - PermissionRequest
+  - PermissionDenied
+  - UserPromptSubmit
+  - UserPromptExpansion
+  - Stop
+  - SubagentStop
+  - SubagentStart
+  - SessionStart
+  - SessionEnd
+  - Setup
+  - PreCompact
+  - PostCompact
+  - TaskCreated
+  - TaskCompleted
+  - TeammateIdle
+  - Notification
+  - StopFailure
+  - ConfigChange
+  - InstructionsLoaded
+  - MessageDisplay
+  - CwdChanged
+  - FileChanged
+  - DirectoryAdded
+  - WorktreeCreate
+  - WorktreeRemove
+  - Elicitation
+  - ElicitationResult
+  - PreModelSwitch
+  - PostModelSwitch
 rules:
 - id: selection.outcome.reuse
   concept: selection
@@ -734,19 +788,30 @@ rules:
           - eq:
             - own_model
             - true
-      - in:
-        - hook_event
-        - - session-or-compaction
-          - claude-code-only
+      - not:
+          in:
+          - hook_event
+          - - PreToolUse
+            - PostToolUse
+            - PostToolBatch
+            - PostToolUseFailure
+            - UserPromptSubmit
+            - UserPromptExpansion
+            - Stop
+            - SubagentStop
+            - TaskCreated
+            - TaskCompleted
+            - TeammateIdle
     implies:
       excludes: hooks
-  statement: Prompt and agent handlers run only on the tool-call, permission-request, prompt-submit and turn-end events here; session, compaction and subagent-start events take commands only, and Forge does not tell the Claude Code-only events apart
+  statement: A prompt or agent hook's verdict takes effect only at events whose ok false blocks or feeds back; elsewhere the handler does not run or its verdict has no effect
   applies_to:
     harnesses:
     - claude-code
     - codex
   evidence: Vendor
   sources:
+  - docs/vendors/claude-code/hooks.md#prompt-and-agent-hooks
   - docs/vendors/claude-code/hooks.md#handler-types-and-support-by-event
   contested: false
 - id: selection.eligibility.claude-code-only-event-hooks
@@ -762,9 +827,20 @@ rules:
         - target_set
         - - codex
           - both
-      - eq:
-        - hook_event
-        - claude-code-only
+      - not:
+          in:
+          - hook_event
+          - - SessionStart
+            - UserPromptSubmit
+            - PreToolUse
+            - PermissionRequest
+            - PostToolUse
+            - PreCompact
+            - PostCompact
+            - SubagentStart
+            - SubagentStop
+            - Stop
+            - SessionEnd
     implies:
       excludes: hooks
   statement: Codex shares only eleven hook events with Claude Code; a hook on any other event does not run in Codex
@@ -776,6 +852,50 @@ rules:
   sources:
   - docs/guide/hooks.md#generalized-model
   - docs/guide/hooks.md#portability
+  contested: false
+- id: selection.eligibility.no-decision-event-hooks
+  concept: selection
+  kind: should
+  severity: warning
+  check: script
+  checker: selection.match
+  params:
+    when:
+      all:
+      - any:
+        - eq:
+          - job
+          - check
+        - eq:
+          - every_time
+          - always
+      - in:
+        - hook_event
+        - - SessionStart
+          - Setup
+          - Notification
+          - SubagentStart
+          - StopFailure
+          - InstructionsLoaded
+          - MessageDisplay
+          - PermissionDenied
+          - PostCompact
+          - SessionEnd
+          - CwdChanged
+          - FileChanged
+          - DirectoryAdded
+          - PostModelSwitch
+    implies:
+      excludes: hooks
+  statement: A check must take effect, and a hook at an event without decision control can neither block nor feed back
+  applies_to:
+    harnesses:
+    - claude-code
+    - codex
+  evidence: Vendor
+  sources:
+  - docs/vendors/claude-code/hooks.md#decision-control-by-event
+  - docs/guide/hooks.md#generalized-model
   contested: false
 - id: selection.eligibility.side-effects-instructions
   concept: selection
@@ -1092,6 +1212,7 @@ rules:
           - check
     implies:
       concept: hooks
+    variant: prompt or agent handler
     pros:
     - Runs at the event, whatever the main model decides
     - A model judges what a script cannot
@@ -1126,6 +1247,7 @@ rules:
         - true
     implies:
       concept: hooks
+    variant: command handler
     pros:
     - Runs every time, whatever the model decides
     cons:
@@ -1485,6 +1607,7 @@ rules:
       - check
     implies:
       concept: hooks
+    variant: command handler
     pros:
     - Runs every time at the event
     cons:

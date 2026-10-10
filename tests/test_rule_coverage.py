@@ -136,15 +136,21 @@ class KbCopyTest(unittest.TestCase):
         self.manifest = json.loads((KB / "kb-manifest.json").read_text(encoding="utf-8"))
 
     def test_kb_copy_preserves_source_bytes_and_links(self):
+        # The migration commit is the one that added the manifest. The KB's
+        # docs may change after it (corrections go to the KB); the copy is
+        # checked as it was migrated, and links as they are now.
         migration = self.manifest["migration"]
         self.assertRegex(migration["source_commit"], r"^[0-9a-f]{40}$")
         self.assertEqual(set(migration["repairs"]), set(self.tool.REPAIRS))
+        migrated = git(KB, "log", "--diff-filter=A", "--format=%H", "--", "kb-manifest.json").split()[-1]
         for relative, digest in migration["files"].items():
             with self.subTest(file=relative):
                 source = (PLAYGROUND / relative).read_bytes()
                 self.assertEqual(self.tool.sha256(source), digest)
-                self.assertEqual((KB / relative).read_bytes(), self.tool.apply_repairs(relative, source))
-        copied = {p.relative_to(KB).as_posix() for p in (KB / "docs").rglob("*") if p.is_file()}
+                copy = subprocess.run(["git", "-C", str(KB), "show", f"{migrated}:{relative}"], check=True,
+                                      capture_output=True).stdout
+                self.assertEqual(copy, self.tool.apply_repairs(relative, source))
+        copied = set(git(KB, "ls-tree", "-r", "--name-only", migrated, "docs").split())
         self.assertEqual(copied, {f for f in migration["files"] if f.startswith("docs/")})
         for page in (KB / "docs").rglob("*.md"):
             for link in relative_links(page):

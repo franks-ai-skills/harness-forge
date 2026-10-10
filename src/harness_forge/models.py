@@ -93,6 +93,7 @@ class Recommendation:
     pages: list[str]
     alternatives: list[dict] = field(default_factory=list)
     controls: list[dict] = field(default_factory=list)
+    variant: str | None = None  # the mechanism's form when it matters, such as a hook's handler
     pros: list[str] = field(default_factory=list)
     cons: list[str] = field(default_factory=list)
     reuse: dict | None = None
@@ -219,7 +220,7 @@ class VerificationRun:
     requirement_parts: list[str] = field(default_factory=list)
     rule_index: dict[str, dict] = field(default_factory=dict)
     worker_evidence: list[dict] = field(default_factory=list)
-    approved_workers: list[dict] = field(default_factory=list)
+    approved_workers: tuple[str, ...] = ()  # digests of approved configurations; immutable
     worker_violations: list[str] = field(default_factory=list)
     kb_version: str = ""
     scope: str = "Extensive review (rarely needed)"
