@@ -58,9 +58,11 @@ plugin README). Every command prints bounded JSON.
 7. **Recommendation.** For each part show, from the `select` output:
    the outcome and the recommended mechanism, with its `variant` when
    the output names one (such as a hook's handler), and the rules that
-   decided them; each viable alternative with its pros, cons and why the
-   recommendation was preferred; and the outside controls with their
-   prerequisites. Offer the full assessment of all ten mechanisms as
+   decided them; each viable alternative with its `variant`, pros, cons
+   and why the recommendation was preferred; and the outside controls
+   with their prerequisites. For a reused mechanism, describe it from the
+   researched candidate in `reuse` and its `variant`, and check that the
+   candidate has that variant; the output gives no pros or cons for it. Offer the full assessment of all ten mechanisms as
    detail: ruled out (with the conflicting requirement and its source),
    not preferred, or unresolved (with the facts that were not needed to
    decide). Say "ruled out" only where the output does. For each

@@ -58,14 +58,14 @@ Both leads use identical event names for the overlap, so the generalized model k
 
 | Event | When | Matcher target | Can block or steer |
 | --- | --- | --- | --- |
-| `SessionStart` | Session starts, resumes, is cleared, or restarts after compaction | Source: `startup`, `resume`, `clear`, `compact` | Plain stdout becomes model context |
+| `SessionStart` | Session starts, resumes, is cleared, or restarts after compaction | Source: `startup`, `resume`, `clear`, `compact` | Plain stdout becomes model context; `continue: false` stops (Codex: only after compaction) |
 | `UserPromptSubmit` | User submits a prompt | None | Reject the prompt; add context |
 | `PreToolUse` | Before a tool call | Tool name | Deny; rewrite input; add context |
 | `PermissionRequest` | An approval prompt is about to appear | Tool name | Allow or deny on the user's behalf |
 | `PostToolUse` | After a tool call | Tool name | Feed back a block reason; add context |
 | `PreCompact` | Before context compaction | `manual`, `auto` | Cancel compaction (output differs per lead, see Portability) |
-| `PostCompact` | After compaction | `manual`, `auto` | — |
-| `SubagentStart` | A subagent starts | Agent type (Codex; not recorded for Claude Code) | — |
+| `PostCompact` | After compaction | `manual`, `auto` | Codex: `continue: false` stops after compacting; Claude Code discards `continue` |
+| `SubagentStart` | A subagent starts | Agent type (Codex; not recorded for Claude Code) | Add context for the subagent |
 | `SubagentStop` | A subagent finishes | Agent type (Codex; not recorded for Claude Code) | Force the subagent to continue |
 | `Stop` | The main agent's turn ends | None | Force the agent to continue with a reason |
 | `SessionEnd` | Session ends | Reason | — |

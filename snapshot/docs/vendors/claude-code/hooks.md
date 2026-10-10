@@ -181,11 +181,40 @@ From the [hooks reference](https://code.claude.com/docs/en/hooks):
 
 ### Decision control by event
 
-Whether a hook can block, deny, cancel or feed back at each event, from the per-event sections of the [hooks reference](https://code.claude.com/docs/en/hooks) (rechecked 2026-10-10):
+What a command hook can do at each event, from the per-event sections of the [hooks reference](https://code.claude.com/docs/en/hooks) (rechecked 2026-10-10). Every event accepts the universal `continue: false`, which stops Claude entirely, unless its section says it discards the field. "Block or stop" means the hook can prevent the action or stop Claude; "feedback" means its result reaches Claude's context.
 
-| Can block or feed back | No decision control |
-| :- | :- |
-| UserPromptSubmit, UserPromptExpansion, PreToolUse, PermissionRequest (decision object only; exit 2 is not honored), PostToolUse, PostToolUseFailure, PostToolBatch, Stop, SubagentStop, TaskCreated, TaskCompleted, TeammateIdle, ConfigChange, PreCompact, PreModelSwitch, WorktreeCreate (failure fails the creation), WorktreeRemove (non-zero exit fails the removal), Elicitation, ElicitationResult | SessionStart, Setup, Notification, SubagentStart, StopFailure, InstructionsLoaded, MessageDisplay (display-only rewrite), PermissionDenied (`retry` only; the denial already happened), PostCompact, SessionEnd, CwdChanged, FileChanged, DirectoryAdded, PostModelSwitch |
+| Event | Block or stop | Feedback to Claude |
+| :- | :- | :- |
+| SessionStart | `continue: false` | `additionalContext`, plain stdout |
+| Setup | No: can't block, JSON discarded | No: `additionalContext` discarded |
+| InstructionsLoaded | No: JSON discarded | No |
+| UserPromptSubmit | `decision: "block"`, exit 2 | `additionalContext`, plain stdout |
+| UserPromptExpansion | `decision: "block"`, exit 2 | `additionalContext` |
+| MessageDisplay | No: `continue` discarded | No: can't change what is sent to Claude |
+| PreToolUse | `permissionDecision: "deny"`, exit 2 | Deny reason, `additionalContext` |
+| PermissionRequest | `decision.behavior: "deny"`; `interrupt: true` stops Claude | Deny `message` |
+| PostToolUse | `continue: false` | `decision: "block"` reason, `additionalContext` |
+| PostToolUseFailure | `continue: false` | `additionalContext` |
+| PostToolBatch | `decision: "block"` or `continue: false` stops the loop | `additionalContext` |
+| PermissionDenied | `continue: false` | No: `retry` only adds a fixed message |
+| Notification | No: `continue` discarded | No |
+| SubagentStart | `continue: false`; can't block the subagent's creation | `additionalContext` to the subagent |
+| SubagentStop, Stop | `decision: "block"`, exit 2 keep it running | `reason` as the next instruction, `additionalContext` |
+| TaskCreated | Exit 2 or `decision: "block"` deletes the task; `continue: false` ignored | Message as the tool's error |
+| TaskCompleted | Exit 2 blocks completion | Stderr fed back to the model |
+| StopFailure | No: output ignored | No |
+| TeammateIdle | `continue: false` stops the teammate | Exit 2 stderr to the teammate |
+| ConfigChange | `decision: "block"`, exit 2 (not `policy_settings`) | No: no message reaches Claude |
+| CwdChanged, FileChanged | No: `continue` discarded | No: `systemMessage` is a terminal notification |
+| DirectoryAdded | No: `continue` discarded | Only for `/add-dir`: `systemMessage` as context |
+| WorktreeCreate | Failure fails the creation | No |
+| WorktreeRemove | Non-zero exit fails the removal | No |
+| PreCompact | Exit 2 or `decision: "block"` blocks compaction | No |
+| PostCompact | No: `continue` discarded | No |
+| PreModelSwitch | Exit 2, `decision: "block"` or `deny` cancels the switch | No: the reason goes to the user |
+| PostModelSwitch | `continue: false` | Plain stdout, `additionalContext` |
+| SessionEnd | No: can't block, JSON discarded | No |
+| Elicitation, ElicitationResult | `decline`, exit 2 | No: `reason` discarded |
 
 ## Loading and invocation
 

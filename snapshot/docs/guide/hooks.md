@@ -43,13 +43,13 @@ Details per cell: [Claude Code hooks][cc-hooks], [Codex hooks][cx-hooks], [OpenC
 
 | Event | When | Matcher target | Can block or steer |
 | --- | --- | --- | --- |
-| `SessionStart` | Start, resume, clear, after compaction | `startup`, `resume`, `clear`, `compact` | Plain stdout becomes context |
+| `SessionStart` | Start, resume, clear, after compaction | `startup`, `resume`, `clear`, `compact` | Plain stdout becomes context; `continue: false` stops (Codex: only after compaction) |
 | `UserPromptSubmit` | Prompt submitted | None | Reject the prompt; add context |
 | `PreToolUse` | Before a tool call | Tool name | Deny; rewrite input; add context |
 | `PermissionRequest` | Approval prompt about to appear | Tool name | Allow or deny for the user |
 | `PostToolUse` | After a tool call | Tool name | Feed back a reason; add context |
-| `PreCompact` / `PostCompact` | Around compaction | `manual`, `auto` | Cancel compaction (output differs) |
-| `SubagentStart` / `SubagentStop` | Subagent starts / finishes | Agent type (Codex) | `SubagentStop`: force it to continue |
+| `PreCompact` / `PostCompact` | Around compaction | `manual`, `auto` | `PreCompact`: cancel compaction (output differs); `PostCompact`: Codex can stop after compacting |
+| `SubagentStart` / `SubagentStop` | Subagent starts / finishes | Agent type (Codex) | `SubagentStart`: add context for the subagent; `SubagentStop`: force it to continue |
 | `Stop` | Main agent's turn ends | None | Force the agent to continue |
 | `SessionEnd` | Session ends | Reason | — |
 

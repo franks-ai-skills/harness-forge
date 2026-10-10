@@ -116,10 +116,31 @@ Per-event decisions:
 | `UserPromptSubmit` | Block with `decision:"block"` or exit 2, or add context | |
 | `Stop`, `SubagentStop` | `decision:"block"` plus `reason` (or exit 2): Codex continues with `reason` as a new prompt. `continue:false` from any hook wins | |
 | `PreCompact` | `continue:false` cancels compaction | |
-| `SessionStart` | Source `compact` runs after compaction, before the next model request | |
-| `Interrupt` | Only `systemMessage` | |
+| `PostCompact` | `continue:false` stops after compacting | Plain stdout is ignored |
+| `SessionStart` | Plain stdout or `additionalContext` becomes developer context. Source `compact` runs after compaction, before the next model request; there `continue:false` ends the turn without another model request | |
+| `SubagentStart` | Plain stdout or `additionalContext` becomes developer context for the subagent | `continue:false` is parsed but doesn't stop the subagent |
+| `Interrupt` | Only `systemMessage`; output can't prevent the interruption or restart the turn | |
+| `SessionEnd` | None: advisory, output won't steer Codex or keep the thread open | |
 
-Sources: [Hooks](https://learn.chatgpt.com/docs/hooks.md).
+Sources: [Hooks](https://learn.chatgpt.com/docs/hooks.md), rechecked 2026-10-10.
+
+### Decision control by event
+
+From the table above ([Hooks](https://learn.chatgpt.com/docs/hooks.md), rechecked 2026-10-10). "Block or stop" means the hook can prevent the action or stop Codex; "feedback" means its result reaches the model. `prompt` and `agent` handlers are skipped, so these are command and MCP tool hooks.
+
+| Event | Block or stop | Feedback to the model |
+| :- | :- | :- |
+| `PreToolUse` | Deny | `additionalContext` |
+| `PermissionRequest` | Deny | Not documented |
+| `PostToolUse` | No: it can't undo the call, and `continue:false` continues from the feedback | Feedback replaces the tool result, `additionalContext` |
+| `UserPromptSubmit` | Block | Plain stdout, `additionalContext` |
+| `Stop`, `SubagentStop` | Block, so Codex continues; `continue:false` | `reason` as the continuation prompt |
+| `PreCompact` | `continue:false` stops before compacting | No: plain stdout is ignored |
+| `PostCompact` | `continue:false` stops after compacting | No: plain stdout is ignored |
+| `SessionStart` | Only for source `compact`, which ends the turn | Plain stdout, `additionalContext` |
+| `SubagentStart` | No | Context for the subagent |
+| `Interrupt` | No | No |
+| `SessionEnd` | No | No |
 
 ### Plugin hook environment
 

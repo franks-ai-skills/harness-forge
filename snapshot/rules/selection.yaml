@@ -1,10 +1,13 @@
 # Selection data: declared facts, the questions that confirm them, and
-# selection rules in four kinds. Outcome rules apply in file order, first
+# selection rules in five kinds. Outcome rules apply in file order, first
 # match wins. Eligibility rules (excludes) rule a mechanism out when a
 # confirmed answer conflicts with a sourced "When not" condition.
 # Preference rules (concept) apply in file order among eligible
-# mechanisms; that order is Forge policy, see policy/selection.md. Every
-# matching control rule applies. reuse_confirmed is derived from
+# mechanisms; that order is Forge policy, see policy/selection.md.
+# Variant rules (variant) name the selected mechanism's form, such as a
+# hook's handler; the first that holds applies, whether the mechanism is
+# built, reused or offered as an alternative. Every matching control
+# rule applies. reuse_confirmed is derived from
 # researched candidates, never asked. Encodes docs/overview.md and the
 # outside-gates intake questions (2026-10-09).
 facts:
@@ -153,6 +156,13 @@ facts:
   - ElicitationResult
   - PreModelSwitch
   - PostModelSwitch
+  - Interrupt
+- id: hook_effect
+  scope: part
+  values:
+  - block
+  - feedback
+  - report
 - id: reuse_confirmed
   scope: part
   values:
@@ -278,7 +288,7 @@ questions:
   - true
   - false
 - id: hook_event
-  text: 'At which hook event must it run, for example PreToolUse before a tool call, PostToolUse after one, UserPromptSubmit when a prompt is submitted, Stop when a turn ends, or PermissionRequest at an approval prompt?'
+  text: 'At which hook event must it run, for example PreToolUse before a tool call, PostToolUse after one, UserPromptSubmit when a prompt is submitted, Stop when a turn ends, PermissionRequest at an approval prompt, or Interrupt when you interrupt a Codex turn?'
   choices:
   - PreToolUse
   - PostToolUse
@@ -313,6 +323,13 @@ questions:
   - ElicitationResult
   - PreModelSwitch
   - PostModelSwitch
+  - Interrupt
+- id: hook_effect
+  text: 'When the hook runs, what must its result do: block the action or stop the agent, reach the agent as feedback, or only report, for example by logging, writing a file or notifying you?'
+  choices:
+  - block
+  - feedback
+  - report
 rules:
 - id: selection.outcome.reuse
   concept: selection
@@ -814,7 +831,68 @@ rules:
   - docs/vendors/claude-code/hooks.md#prompt-and-agent-hooks
   - docs/vendors/claude-code/hooks.md#handler-types-and-support-by-event
   contested: false
-- id: selection.eligibility.claude-code-only-event-hooks
+- id: selection.eligibility.claude-code-event-hooks
+  concept: selection
+  kind: should
+  severity: warning
+  check: script
+  checker: selection.match
+  params:
+    when:
+      all:
+      - in:
+        - target_set
+        - - claude-code
+          - both
+      - not:
+          in:
+          - hook_event
+          - - PreToolUse
+            - PostToolUse
+            - PostToolUseFailure
+            - PostToolBatch
+            - PermissionRequest
+            - PermissionDenied
+            - UserPromptSubmit
+            - UserPromptExpansion
+            - Stop
+            - SubagentStop
+            - SubagentStart
+            - SessionStart
+            - SessionEnd
+            - Setup
+            - PreCompact
+            - PostCompact
+            - TaskCreated
+            - TaskCompleted
+            - TeammateIdle
+            - Notification
+            - StopFailure
+            - ConfigChange
+            - InstructionsLoaded
+            - MessageDisplay
+            - CwdChanged
+            - FileChanged
+            - DirectoryAdded
+            - WorktreeCreate
+            - WorktreeRemove
+            - Elicitation
+            - ElicitationResult
+            - PreModelSwitch
+            - PostModelSwitch
+    implies:
+      excludes: hooks
+  statement: A hook runs in Claude Code only at one of its documented events
+  applies_to:
+    harnesses:
+    - claude-code
+    - codex
+  evidence: Vendor
+  sources:
+  - docs/vendors/claude-code/hooks.md#decision-control-by-event
+  - docs/guide/hooks.md#portability
+  contested: false
+- id: selection.eligibility.codex-event-hooks
   concept: selection
   kind: should
   severity: warning
@@ -831,29 +909,202 @@ rules:
           in:
           - hook_event
           - - SessionStart
+            - SubagentStart
             - UserPromptSubmit
             - PreToolUse
             - PermissionRequest
             - PostToolUse
             - PreCompact
             - PostCompact
-            - SubagentStart
             - SubagentStop
             - Stop
+            - Interrupt
             - SessionEnd
     implies:
       excludes: hooks
-  statement: Codex shares only eleven hook events with Claude Code; a hook on any other event does not run in Codex
+  statement: A hook runs in Codex only at one of its twelve documented events
   applies_to:
     harnesses:
     - claude-code
     - codex
   evidence: Vendor
   sources:
-  - docs/guide/hooks.md#generalized-model
+  - docs/vendors/codex/hooks.md#decision-control-by-event
   - docs/guide/hooks.md#portability
   contested: false
-- id: selection.eligibility.no-decision-event-hooks
+- id: selection.eligibility.claude-code-block-hooks
+  concept: selection
+  kind: should
+  severity: warning
+  check: script
+  checker: selection.match
+  params:
+    when:
+      all:
+      - in:
+        - target_set
+        - - claude-code
+          - both
+      - eq:
+        - hook_effect
+        - block
+      - not:
+          in:
+          - hook_event
+          - - PreToolUse
+            - PostToolUse
+            - PostToolUseFailure
+            - PostToolBatch
+            - PermissionRequest
+            - PermissionDenied
+            - UserPromptSubmit
+            - UserPromptExpansion
+            - Stop
+            - SubagentStop
+            - SubagentStart
+            - SessionStart
+            - PreCompact
+            - TaskCreated
+            - TaskCompleted
+            - TeammateIdle
+            - ConfigChange
+            - WorktreeCreate
+            - WorktreeRemove
+            - Elicitation
+            - ElicitationResult
+            - PreModelSwitch
+            - PostModelSwitch
+    implies:
+      excludes: hooks
+  statement: A Claude Code hook can block or stop only where a decision, a failure or continue false takes effect; some events discard continue
+  applies_to:
+    harnesses:
+    - claude-code
+    - codex
+  evidence: Vendor
+  sources:
+  - docs/vendors/claude-code/hooks.md#decision-control-by-event
+  contested: false
+- id: selection.eligibility.codex-block-hooks
+  concept: selection
+  kind: should
+  severity: warning
+  check: script
+  checker: selection.match
+  params:
+    when:
+      all:
+      - in:
+        - target_set
+        - - codex
+          - both
+      - eq:
+        - hook_effect
+        - block
+      - not:
+          in:
+          - hook_event
+          - - PreToolUse
+            - PermissionRequest
+            - UserPromptSubmit
+            - Stop
+            - SubagentStop
+            - PreCompact
+            - PostCompact
+    implies:
+      excludes: hooks
+  statement: A Codex hook can block or stop only at the events whose decision or continue false is documented to take effect
+  applies_to:
+    harnesses:
+    - claude-code
+    - codex
+  evidence: Vendor
+  sources:
+  - docs/vendors/codex/hooks.md#decision-control-by-event
+  contested: false
+- id: selection.eligibility.claude-code-feedback-hooks
+  concept: selection
+  kind: should
+  severity: warning
+  check: script
+  checker: selection.match
+  params:
+    when:
+      all:
+      - in:
+        - target_set
+        - - claude-code
+          - both
+      - eq:
+        - hook_effect
+        - feedback
+      - not:
+          in:
+          - hook_event
+          - - SessionStart
+            - UserPromptSubmit
+            - UserPromptExpansion
+            - PreToolUse
+            - PermissionRequest
+            - PostToolUse
+            - PostToolUseFailure
+            - PostToolBatch
+            - Stop
+            - SubagentStop
+            - SubagentStart
+            - TaskCreated
+            - TaskCompleted
+            - TeammateIdle
+            - PostModelSwitch
+    implies:
+      excludes: hooks
+  statement: A Claude Code hook's result reaches the agent only at events that deliver its context, reason or feedback
+  applies_to:
+    harnesses:
+    - claude-code
+    - codex
+  evidence: Vendor
+  sources:
+  - docs/vendors/claude-code/hooks.md#decision-control-by-event
+  contested: false
+- id: selection.eligibility.codex-feedback-hooks
+  concept: selection
+  kind: should
+  severity: warning
+  check: script
+  checker: selection.match
+  params:
+    when:
+      all:
+      - in:
+        - target_set
+        - - codex
+          - both
+      - eq:
+        - hook_effect
+        - feedback
+      - not:
+          in:
+          - hook_event
+          - - PreToolUse
+            - PostToolUse
+            - UserPromptSubmit
+            - Stop
+            - SubagentStop
+            - SessionStart
+            - SubagentStart
+    implies:
+      excludes: hooks
+  statement: A Codex hook's result reaches the agent only at events that add its context or continue from its reason
+  applies_to:
+    harnesses:
+    - claude-code
+    - codex
+  evidence: Vendor
+  sources:
+  - docs/vendors/codex/hooks.md#decision-control-by-event
+  contested: false
+- id: selection.eligibility.model-handler-block-hooks
   concept: selection
   kind: should
   severity: warning
@@ -864,38 +1115,86 @@ rules:
       all:
       - any:
         - eq:
-          - job
-          - check
-        - eq:
-          - every_time
-          - always
-      - in:
-        - hook_event
-        - - SessionStart
-          - Setup
-          - Notification
-          - SubagentStart
-          - StopFailure
-          - InstructionsLoaded
-          - MessageDisplay
-          - PermissionDenied
-          - PostCompact
-          - SessionEnd
-          - CwdChanged
-          - FileChanged
-          - DirectoryAdded
-          - PostModelSwitch
+          - script_checkable
+          - false
+        - all:
+          - eq:
+            - own_context
+            - true
+          - eq:
+            - own_model
+            - true
+      - eq:
+        - hook_effect
+        - block
+      - not:
+          in:
+          - hook_event
+          - - PreToolUse
+            - PostToolUse
+            - PostToolBatch
+            - UserPromptSubmit
+            - UserPromptExpansion
+            - Stop
+            - SubagentStop
+            - TaskCreated
+            - TaskCompleted
+            - TeammateIdle
     implies:
       excludes: hooks
-  statement: A check must take effect, and a hook at an event without decision control can neither block nor feed back
+  statement: A prompt or agent hook's ok false blocks or stops only at some events; elsewhere it only feeds back or has no effect
   applies_to:
     harnesses:
     - claude-code
     - codex
   evidence: Vendor
   sources:
-  - docs/vendors/claude-code/hooks.md#decision-control-by-event
-  - docs/guide/hooks.md#generalized-model
+  - docs/vendors/claude-code/hooks.md#prompt-and-agent-hooks
+  contested: false
+- id: selection.eligibility.model-handler-feedback-hooks
+  concept: selection
+  kind: should
+  severity: warning
+  check: script
+  checker: selection.match
+  params:
+    when:
+      all:
+      - any:
+        - eq:
+          - script_checkable
+          - false
+        - all:
+          - eq:
+            - own_context
+            - true
+          - eq:
+            - own_model
+            - true
+      - eq:
+        - hook_effect
+        - feedback
+      - not:
+          in:
+          - hook_event
+          - - PreToolUse
+            - PostToolUse
+            - PostToolUseFailure
+            - Stop
+            - SubagentStop
+            - TaskCreated
+            - TaskCompleted
+            - TeammateIdle
+    implies:
+      excludes: hooks
+  statement: A prompt or agent hook's reason reaches Claude only at some events; elsewhere ok false ends the turn or has no effect
+  applies_to:
+    harnesses:
+    - claude-code
+    - codex
+  evidence: Vendor
+  sources:
+  - docs/vendors/claude-code/hooks.md#prompt-and-agent-hooks
   contested: false
 - id: selection.eligibility.side-effects-instructions
   concept: selection
@@ -1212,7 +1511,6 @@ rules:
           - check
     implies:
       concept: hooks
-    variant: prompt or agent handler
     pros:
     - Runs at the event, whatever the main model decides
     - A model judges what a script cannot
@@ -1247,7 +1545,6 @@ rules:
         - true
     implies:
       concept: hooks
-    variant: command handler
     pros:
     - Runs every time, whatever the model decides
     cons:
@@ -1607,7 +1904,6 @@ rules:
       - check
     implies:
       concept: hooks
-    variant: command handler
     pros:
     - Runs every time at the event
     cons:
@@ -1703,6 +1999,71 @@ rules:
   sources:
   - docs/overview.md#automation
   - docs/guide/automation.md#when-to-use-it-and-when-not
+  contested: false
+- id: selection.variant.model-hook-handler
+  concept: selection
+  kind: should
+  severity: warning
+  check: script
+  checker: selection.match
+  params:
+    when:
+      any:
+      - eq:
+        - script_checkable
+        - false
+      - all:
+        - eq:
+          - own_context
+          - true
+        - eq:
+          - own_model
+          - true
+    implies:
+      variant:
+        concept: hooks
+        value: prompt or agent handler
+  statement: A hook that needs judgment or a model of its own is a prompt or agent hook; a command handler is a process without a model
+  applies_to:
+    harnesses:
+    - claude-code
+  evidence: Vendor
+  sources:
+  - docs/guide/hooks.md#comparison
+  - docs/vendors/claude-code/hooks.md#prompt-and-agent-hooks
+  contested: false
+- id: selection.variant.command-hook-handler
+  concept: selection
+  kind: should
+  severity: warning
+  check: script
+  checker: selection.match
+  params:
+    when:
+      all:
+      - eq:
+        - script_checkable
+        - true
+      - any:
+        - eq:
+          - own_context
+          - false
+        - eq:
+          - own_model
+          - false
+    implies:
+      variant:
+        concept: hooks
+        value: command handler
+  statement: A hook that a script can decide, without a model of its own, is a command hook, the handler both harnesses run
+  applies_to:
+    harnesses:
+    - claude-code
+    - codex
+  evidence: Vendor
+  sources:
+  - docs/guide/hooks.md#comparison
+  - docs/guide/hooks.md#portability
   contested: false
 - id: selection.control.configuration-protection
   concept: selection

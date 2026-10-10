@@ -1,6 +1,6 @@
 """Compute a part's recommendation from confirmed, normalized answers.
 
-Selection has four kinds of rules from the pinned KB (policy/selection.md):
+Selection has five kinds of rules from the pinned KB (policy/selection.md):
 
 - outcome rules, in order, first match wins;
 - eligibility rules (``excludes``), which rule a mechanism out when a
@@ -8,13 +8,16 @@ Selection has four kinds of rules from the pinned KB (policy/selection.md):
 - preference rules (``concept``), in Forge's documented order: the first
   eligible match is recommended, later eligible matches are viable
   alternatives;
+- variant rules (``variant``), in order: the first that holds names the
+  selected mechanism's form, such as a hook's handler, whether it is
+  built, reused or an alternative;
 - control rules, which all apply.
 
 Eligibility applies to reuse too: a candidate whose mechanism is ruled
 out is not reused, and the result names the conflict.
 
-When an unanswered fact can still change the outcome, mechanism or
-controls, the result is a question, never a default. Citations and the
+When an unanswered fact can still change the outcome, mechanism, its
+variant or the controls, the result is a question, never a default. Citations and the
 per-mechanism assessment rest only on the answers actually given.
 """
 
@@ -106,6 +109,28 @@ def _eligible(rules: list[Rule], concept: str, facts: dict) -> bool | None:
     return None if None in results else True
 
 
+def _variant_rules(rules: list[Rule], concept: str) -> list[Rule]:
+    return [rule for rule in _of_kind(rules, "variant") if rule.params["implies"]["variant"]["concept"] == concept]
+
+
+def _variant(rules: list[Rule], concept: str | None, facts: dict) -> str | None:
+    """The mechanism's form, such as a hook's handler: the first variant rule that holds."""
+    rule = next((rule for rule in _variant_rules(rules, concept) if _matches(rule, facts)), None)
+    return rule.params["implies"]["variant"]["value"] if rule else None
+
+
+def _variant_facts(rules: list[Rule], concept: str, facts: dict) -> set[str]:
+    """Unconfirmed facts that can still decide the mechanism's variant."""
+    open_facts: set[str] = set()
+    for rule in _variant_rules(rules, concept):
+        result = _matches(rule, facts)
+        if result is None:
+            open_facts |= _unknown_facts(rule, facts)
+        elif result:
+            break
+    return open_facts
+
+
 def _reusable(rules: list[Rule], facts: dict, reuse_concepts: tuple[str, ...]) -> str | None:
     """The mechanism of the first candidate that no confirmed answer rules out."""
     return next((concept for concept in reuse_concepts if _eligible(rules, concept, facts)), None)
@@ -130,9 +155,11 @@ def _evaluate(rules: list[Rule], facts: dict, reuse_concepts: tuple[str, ...] = 
         if blocked_by:
             outcome = _WITHOUT_MECHANISM[outcome]
     builds = outcome in _BUILT + ("reuse",)
+    reused = reused if outcome == "reuse" else None
+    selected = preferred[0].params["implies"]["concept"] if outcome in _BUILT and preferred else reused
     return {
         "outcome_rule": outcome_rule, "outcome": outcome, "blocked_by": blocked_by,
-        "reused": reused if outcome == "reuse" else None,
+        "reused": reused, "selected": selected, "variant": _variant(rules, selected, facts),
         "preferred": preferred if builds else [],
         "controls": [rule for rule in _of_kind(rules, "control") if _matches(rule, facts)],
     }
@@ -140,12 +167,8 @@ def _evaluate(rules: list[Rule], facts: dict, reuse_concepts: tuple[str, ...] = 
 
 def _signature(evaluated: dict) -> tuple:
     """What a question could change: outcome, mechanism, its variant (such as a hook's handler) and controls."""
-    concept = variant = None
-    if evaluated["outcome"] in _BUILT and evaluated["preferred"]:
-        concept = evaluated["preferred"][0].params["implies"]["concept"]
-        variant = evaluated["preferred"][0].params.get("variant")
     controls = tuple(sorted(rule.params["implies"]["control"]["id"] for rule in evaluated["controls"]))
-    return evaluated["outcome"], concept or evaluated["reused"], variant, controls
+    return evaluated["outcome"], evaluated["selected"], evaluated["variant"], controls
 
 
 def _exclusion_facts(rules: list[Rule], concept: str, facts: dict) -> set[str]:
@@ -170,6 +193,8 @@ def _open_facts(rules: list[Rule], facts: dict, reuse_concepts: tuple[str, ...] 
                     if states[-1] is None:
                         open_facts |= _exclusion_facts(rules, concept, facts)
                     if states[-1] is not False:
+                        open_facts |= _variant_facts(rules, concept, facts)
+                    if states[-1] is not False:
                         break
                 if not states or states[-1] is not True:
                     continue  # no candidate is known to be eligible; a later outcome may apply
@@ -185,6 +210,7 @@ def _open_facts(rules: list[Rule], facts: dict, reuse_concepts: tuple[str, ...] 
             own = [exclusion for exclusion in exclusions if exclusion.params["implies"]["excludes"] == concept]
             if result is None:
                 open_facts |= _unknown_facts(rule, facts)
+            open_facts |= _variant_facts(rules, concept, facts)
             for exclusion in own:
                 if _matches(exclusion, facts) is None:
                     open_facts |= _unknown_facts(exclusion, facts)
@@ -336,8 +362,9 @@ def recommend(answers: dict, whole_idea: dict, rules: list[Rule], candidates: li
             why = f"{winner.id} comes before {rule.id} in Forge's preference order ({_POLICY})"
         else:
             why = f"the outcome {outcome} builds no harness mechanism"
-        alternatives.append({"concept": entry["concept"], "pros": rule.params.get("pros", []),
-                             "cons": rule.params.get("cons", []), "rules": entry["rules"], "why_not_chosen": why})
+        alternatives.append({"concept": entry["concept"], "variant": _variant(selection_rules, entry["concept"], facts),
+                             "pros": rule.params.get("pros", []), "cons": rule.params.get("cons", []),
+                             "rules": entry["rules"], "why_not_chosen": why})
 
     availability = facts.get("plan_controls", "unknown")
     controls: dict[str, dict] = {}
@@ -353,7 +380,9 @@ def recommend(answers: dict, whole_idea: dict, rules: list[Rule], candidates: li
             merged["rules"].append(rule.id)
 
     cited = cited_outcome + ([winner] if winner else []) + [r for r in evaluated["controls"] if _matches(r, facts) is True]
-    described = winner or (evaluated["preferred"][0] if mechanism and evaluated["preferred"] else None)
+    # A built mechanism is described by its preference rule; a reused one
+    # only by its candidate's own evidence (``reuse``).
+    described = winner or (evaluated["preferred"][0] if outcome in _BUILT and evaluated["preferred"] else None)
     return Recommendation(
         outcome=outcome,
         mechanism=mechanism,
@@ -361,7 +390,7 @@ def recommend(answers: dict, whole_idea: dict, rules: list[Rule], candidates: li
         pages=_pages(cited),
         alternatives=alternatives,
         controls=[controls[key] for key in sorted(controls)],
-        variant=described.params.get("variant") if described else None,
+        variant=evaluated["variant"] if mechanism else None,
         pros=list(described.params.get("pros", [])) if described else [],
         cons=list(described.params.get("cons", [])) if described else [],
         reuse=reuse,

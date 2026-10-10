@@ -20,7 +20,12 @@ with the rationale given here, not a claim the sources make.
    viable alternatives, shown with their pros and cons. An eligible
    mechanism without a matching preference rule is not preferred: it
    may work, but nothing shows an advantage for this goal.
-4. **Dependencies.** Every matching control rule adds an outside control
+4. **Variant.** A variant rule names the selected mechanism's form, such
+   as a hook's handler. The first variant rule that holds applies, on
+   every route that offers the mechanism: built, reused or shown as an
+   alternative. A reused candidate is described by its own evidence,
+   never by the pros and cons of a rule for building a mechanism.
+5. **Dependencies.** Every matching control rule adds an outside control
    with its prerequisites, as a goal dependency or a precaution.
 
 A mechanism whose eligibility or preference depends on an unanswered
@@ -30,7 +35,7 @@ Eligibility applies to reuse too. A researched candidate whose mechanism
 is ruled out is not reused, even with confirmed fit: the result names
 the candidate and the requirement it conflicts with, and selection
 continues as if no candidate qualified. Forge asks a question only when its answer could
-change the outcome, the recommended mechanism or the controls.
+change the outcome, the recommended mechanism, its variant or the controls.
 
 If the outcome needs a harness mechanism but every matching mechanism is
 ruled out, no supported standalone mechanism fits: the outcome becomes
@@ -55,8 +60,10 @@ mechanism description each exclusion rests on.
 | Needs its own context, other tools or another model | instructions, skills, commands | They run in the session's own context; a subagent can use a skill |
 | Needs judgment, or a model of its own, for Codex or both harnesses | hooks | Portable handlers are commands and MCP tool calls; prompt and agent hooks are Claude Code only |
 | Needs judgment or a model of its own, at an event where a prompt or agent verdict has no effect | hooks | Such a verdict takes effect only at eleven events; elsewhere the handler does not run or, at `PermissionRequest` and `PermissionDenied`, its `ok: false` has no effect |
-| A check or a must-hold rule, at an event without decision control | hooks | A hook there can neither block nor feed back, for example at `SessionStart` or `Notification` |
-| An event only Claude Code has, for Codex or both harnesses | hooks | Codex shares eleven events with Claude Code |
+| An event a target harness does not have | hooks | Claude Code has 33 events, Codex 12; eleven are shared, and `Interrupt` is Codex only |
+| Its result must block the action or stop the agent, at an event where a target harness cannot | hooks | Per harness and event, for example Codex can stop after `PostCompact` and Claude Code discards `continue` there |
+| Its result must reach the agent, at an event where a target harness does not deliver it | hooks | Per harness and event, for example `Notification` or `PreCompact` |
+| Needs judgment or a model of its own, and must block or reach the agent where a prompt or agent verdict cannot | hooks | At `PostToolUseFailure` the verdict only feeds back; at `UserPromptSubmit` it only ends the turn |
 | A hard limit on access that must hold every time | hooks | Tool switching and unhooked paths bypass hooks |
 | A procedure the model starts | commands | Only the user starts a command |
 | A procedure an event starts | instructions, skills, commands, subagents | None of them starts on an event |
@@ -65,12 +72,19 @@ Needing its own context covers three capabilities: its own context
 window, another model, or only other tools. When it is needed and a hook
 could be chosen, Forge asks which: a command handler gives a process with
 its own tools, but no model; only Claude Code's prompt and agent handlers
-give a model of its own. For a hook, Forge also asks the event by name
-when it decides whether the handler can run there and whether its
-verdict takes effect; each event's capabilities come from
-`docs/vendors/claude-code/hooks.md`, never from a grouping. A preference
-rule's `variant` names the hook's handler, so Forge also asks a question
-that decides between a command handler and a prompt or agent handler.
+give a model of its own. The variant rules name the hook's handler from
+these answers, so Forge asks whatever decides between a command handler
+and a prompt or agent handler, whether the hook is built or reused.
+
+For a hook, Forge asks the event by name, and what the hook's result
+must do there: block the action or stop the agent, reach the agent as
+feedback, or only report through the hook's own side effects, such as a
+log, a file or a notification. That a step must run every time does not
+mean it must block: a hook runs at every occurrence of its event either
+way. Each event's capabilities are recorded per harness, in
+`docs/vendors/claude-code/hooks.md` and `docs/vendors/codex/hooks.md`,
+never inferred from a grouping or from the other harness; for both
+harnesses the event must allow the effect in each.
 
 ## Preference order and rationale
 
