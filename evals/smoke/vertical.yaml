@@ -1,0 +1,53 @@
+# Runtime activation cases for the generated reproduction-checklist skill
+# (T11 vertical case). Each case runs once per target harness in a
+# throwaway workspace that holds only the frozen skill and the fixtures
+# below. Tools outside permitted_tools fail the case. Claude reads the
+# skill through the Skill tool; Codex reads skill files only through its
+# shell, so its read-only command execution is the minimum that makes an
+# activation observable. Neither needs web access or writes.
+cases:
+- id: repro-explicit
+  part_id: A
+  mode: explicit
+  prompt: >-
+    Use the reproduction-checklist skill on the approved bug report in
+    bug-report.md and give me the checklist.
+  expected: activates
+  permitted_tools:
+    claude-code: [Skill, Read]
+    codex: [command_execution]
+  fixtures:
+    bug-report.md: |
+      # Bug 42 (approved)
+      Exporting a report with an empty date range crashes the app on macOS 15.
+      Expected: an empty export. Observed: the app quits.
+- id: repro-implicit
+  part_id: A
+  mode: implicit
+  prompt: >-
+    The bug report in bug-report.md is approved. What exactly should
+    someone do to reproduce it?
+  expected: activates
+  permitted_tools:
+    claude-code: [Skill, Read]
+    codex: [command_execution]
+  fixtures:
+    bug-report.md: |
+      # Bug 42 (approved)
+      Exporting a report with an empty date range crashes the app on macOS 15.
+      Expected: an empty export. Observed: the app quits.
+- id: repro-near-miss
+  part_id: A
+  mode: negative
+  prompt: >-
+    Summarize in two sentences what the bug report in bug-report.md is
+    about; I do not need reproduction steps.
+  expected: does-not-activate
+  permitted_tools:
+    claude-code: [Skill, Read]
+    codex: [command_execution]
+  fixtures:
+    bug-report.md: |
+      # Bug 42 (approved)
+      Exporting a report with an empty date range crashes the app on macOS 15.
+      Expected: an empty export. Observed: the app quits.

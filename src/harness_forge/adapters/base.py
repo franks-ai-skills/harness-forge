@@ -22,6 +22,7 @@ from typing import Callable, Mapping
 
 from harness_forge.adapters import claude_code, codex
 from harness_forge.documents import canonical_digest, safe_path, validate
+from harness_forge.models import Confirmation, Contract
 from harness_forge.verify import worker_configurations
 
 ADAPTERS = {"claude-code": claude_code, "codex": codex}
@@ -157,15 +158,26 @@ def _prompt(role: str, request: dict) -> str:
             f"```json\n{json.dumps(request, indent=2, ensure_ascii=False)}\n```\n")
 
 
-def run_worker(request: dict, harness: str, *, approved_configurations: list[dict] | tuple, runner: Runner = run_command,
+def _approved(contract: Contract, confirmation: Confirmation | None, worker_evidence: list[dict] | tuple) -> set[str]:
+    """Digests of the worker configurations the user confirmed with the contract."""
+    if confirmation is None or confirmation.contract_digest != contract.digest:
+        raise ValueError("no worker launches before the user confirms the current contract")
+    if contract.worker_policy["evidence_digest"] != canonical_digest(list(worker_evidence)):
+        raise ValueError("the worker configurations are not the ones the confirmed contract shows")
+    return {canonical_digest(item) for item in worker_configurations(list(worker_evidence))}
+
+
+def run_worker(request: dict, harness: str, *, contract: Contract, confirmation: Confirmation | None,
+               worker_evidence: list[dict] | tuple, runner: Runner = run_command,
                environ: Mapping[str, str] | None = None, files: Mapping[str, bytes] | None = None,
                login_answer: str | None = None, launcher: str = "independent-process",
                timeout: int = WORKER_TIMEOUT, workspace_root: str | None = None) -> dict:
     """Run one worker in a throwaway workspace and return its validated response.
 
     Refused before spawning: a native-subagent launch, a request whose digest
-    or staged files do not match, and a configuration the user did not
-    approve with the contract. Out-of-scope tool use discards the output.
+    or staged files do not match, and a configuration that the contract the
+    user confirmed in this session does not show. Out-of-scope tool use
+    discards the output.
     """
     if launcher != "independent-process":
         raise ValueError("workers run as independent processes; native subagent launch is refused")
@@ -181,7 +193,7 @@ def run_worker(request: dict, harness: str, *, approved_configurations: list[dic
     configuration = checked["configuration"]
     if not checked["available"]:
         return _response(request, "unavailable", configuration, reason=checked["reason"])
-    approved = {canonical_digest(item) for item in worker_configurations(list(approved_configurations))}
+    approved = _approved(contract, confirmation, worker_evidence)
     if canonical_digest(worker_configurations([configuration])[0]) not in approved:
         raise ValueError("this worker configuration was not approved with the confirmed contract")
 

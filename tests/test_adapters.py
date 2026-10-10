@@ -8,7 +8,9 @@ from pathlib import Path
 from harness_forge.adapters import claude_code, codex
 from harness_forge.adapters.base import Completed, preflight, run_worker, worker_environment
 from harness_forge.documents import canonical_digest, validate
+from harness_forge.contracts import confirm_contract, render_contract
 from harness_forge.verify import review_request
+from tests.test_build_skill import REVISION
 from tests.test_verify import Scenario, skill_decision
 
 FORGE = Path(__file__).resolve().parents[1]
@@ -86,8 +88,13 @@ def review_case():
     return request, files, verdicts
 
 
-def approved(harness, role, environ=PARENT, **runner_options):
-    return [preflight(harness, role, runner=FakeRunner(**runner_options), environ=environ)["configuration"]]
+def approval(harness, role, environ=PARENT, confirmed=True, **runner_options):
+    """The confirmed contract that shows the planned worker configuration."""
+    evidence = [preflight(harness, role, runner=FakeRunner(**runner_options), environ=environ)["configuration"]]
+    contract = render_contract(skill_decision(), REVISION, [], worker_evidence=evidence)
+    relay = {"choice": "confirm", "displayed_digest": contract.digest, "part_ids": ["A"], "run_id": "run-1"}
+    confirmation = confirm_contract(contract, relay, run_id="run-1") if confirmed else None
+    return {"contract": contract, "confirmation": confirmation, "worker_evidence": evidence}
 
 
 class EnvironmentTest(unittest.TestCase):
@@ -225,17 +232,22 @@ class LaunchTest(unittest.TestCase):
         request, files, verdicts = review_case()
         runner = FakeRunner(worker=claude_stream(verdicts))
         with self.assertRaises(ValueError):
-            run_worker(request, "claude-code", approved_configurations=approved("claude-code", "review"),
+            run_worker(request, "claude-code", **approval("claude-code", "review"),
                        runner=runner, environ=PARENT, files=files, launcher="native")
         self.assertFalse(runner.worker_was_started)
 
     def test_an_unapproved_configuration_fails_before_spawning(self):
         request, files, verdicts = review_case()
         runner = FakeRunner(worker=claude_stream(verdicts))
-        for approvals in ([], approved("claude-code", "research"), approved("codex", "review")):
-            with self.subTest(approvals=len(approvals)), self.assertRaises(ValueError):
-                run_worker(request, "claude-code", approved_configurations=approvals, runner=runner,
-                           environ=PARENT, files=files)
+        other_contract = approval("claude-code", "review")
+        other_contract["contract"] = render_contract(skill_decision(), None, [],
+                                                     worker_evidence=other_contract["worker_evidence"])
+        for name, approved in (("unconfirmed", approval("claude-code", "review", confirmed=False)),
+                               ("another role", approval("claude-code", "research")),
+                               ("another harness", approval("codex", "review")),
+                               ("another contract", other_contract)):
+            with self.subTest(name), self.assertRaises(ValueError):
+                run_worker(request, "claude-code", **approved, runner=runner, environ=PARENT, files=files)
         self.assertFalse(runner.worker_was_started)
 
     def test_stop_or_no_answer_at_the_cost_question_never_starts_a_worker(self):
@@ -243,7 +255,7 @@ class LaunchTest(unittest.TestCase):
         for answer in (None, "stop"):
             runner = FakeRunner(login=CLAUDE_API_KEY, worker=claude_stream(verdicts))
             with self.subTest(answer=answer):
-                response = run_worker(request, "claude-code", approved_configurations=[], runner=runner,
+                response = run_worker(request, "claude-code", **approval("claude-code", "review"), runner=runner,
                                       environ=PARENT, files=files, login_answer=answer)
                 self.assertEqual(response["status"], "unavailable")
                 self.assertFalse(runner.worker_was_started)
@@ -251,7 +263,7 @@ class LaunchTest(unittest.TestCase):
     def test_missing_authentication_is_unavailable(self):
         request, files, verdicts = review_case()
         runner = FakeRunner(login=CLAUDE_LOGGED_OUT, worker=claude_stream(verdicts))
-        response = run_worker(request, "claude-code", approved_configurations=[], runner=runner, environ=PARENT,
+        response = run_worker(request, "claude-code", **approval("claude-code", "review"), runner=runner, environ=PARENT,
                               files=files)
         self.assertEqual(response["status"], "unavailable")
         self.assertFalse(runner.worker_was_started)
@@ -261,7 +273,7 @@ class LaunchTest(unittest.TestCase):
         tampered = {**files, next(iter(files)): b"changed after freezing"}
         runner = FakeRunner(worker=claude_stream(verdicts))
         with self.assertRaises(ValueError):
-            run_worker(request, "claude-code", approved_configurations=approved("claude-code", "review"),
+            run_worker(request, "claude-code", **approval("claude-code", "review"),
                        runner=runner, environ=PARENT, files=tampered)
         self.assertFalse(runner.worker_was_started)
 
@@ -269,7 +281,7 @@ class LaunchTest(unittest.TestCase):
         request, files, verdicts = review_case()
         environ = {**PARENT, "CLAUDE_CONFIG_DIR": "/somewhere"}
         runner = FakeRunner(worker=claude_stream(verdicts))
-        response = run_worker(request, "claude-code", approved_configurations=approved("claude-code", "review", environ),
+        response = run_worker(request, "claude-code", **approval("claude-code", "review", environ),
                               runner=runner, environ=environ, files=files)
         validate(response, "worker-response")
         self.assertEqual(response["status"], "completed", response.get("reason"))
@@ -288,7 +300,7 @@ class LaunchTest(unittest.TestCase):
     def test_the_codex_review_worker(self):
         request, files, verdicts = review_case()
         runner = FakeRunner(worker=codex_stream(verdicts, items=("command_execution",)))
-        response = run_worker(request, "codex", approved_configurations=approved("codex", "review"), runner=runner,
+        response = run_worker(request, "codex", **approval("codex", "review"), runner=runner,
                               environ=PARENT, files=files)
         self.assertEqual(response["status"], "completed", response.get("reason"))
         self.assertEqual(response["evidence"]["observed_tools"], {"status": "unknown"})
@@ -300,7 +312,7 @@ class LaunchTest(unittest.TestCase):
                                 ("codex", codex_stream(verdicts, items=("web_search",)))):
             runner = FakeRunner(worker=stream)
             with self.subTest(harness=harness, stream=stream[-120:]):
-                response = run_worker(request, harness, approved_configurations=approved(harness, "review"),
+                response = run_worker(request, harness, **approval(harness, "review"),
                                       runner=runner, environ=PARENT, files=files)
                 validate(response, "worker-response")
                 self.assertEqual(response["status"], "failed")
@@ -311,7 +323,7 @@ class LaunchTest(unittest.TestCase):
     def test_a_disclosed_extra_tool_alone_does_not_discard_the_output(self):
         request, files, verdicts = review_case()
         runner = FakeRunner(worker=claude_stream(verdicts, tools=("Read", "Grep", "Glob", "TodoWrite")))
-        response = run_worker(request, "claude-code", approved_configurations=approved("claude-code", "review"),
+        response = run_worker(request, "claude-code", **approval("claude-code", "review"),
                               runner=runner, environ=PARENT, files=files)
         self.assertEqual(response["status"], "completed")
         self.assertIn("TodoWrite", response["evidence"]["observed_tools"]["tools"])
@@ -324,7 +336,7 @@ class LaunchTest(unittest.TestCase):
                  (FakeRunner(worker=claude_stream(verdicts), returncode=1), "failed"))
         for runner, status in cases:
             with self.subTest(status=status):
-                response = run_worker(request, "claude-code", approved_configurations=approved("claude-code", "review"),
+                response = run_worker(request, "claude-code", **approval("claude-code", "review"),
                                       runner=runner, environ=PARENT, files=files)
                 validate(response, "worker-response")
                 self.assertEqual(response["status"], status)
