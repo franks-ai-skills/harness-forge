@@ -125,6 +125,60 @@ class ReuseBindingTest(unittest.TestCase):
                 self.assertIsNotNone(confirmation_problem(confirmation, replaced, REVISION, [], EVIDENCE))
 
 
+class ConfirmedAnswersTest(unittest.TestCase):
+    """Follow-up 1: the contract binds the confirmed answers and facts that decide applicability."""
+
+    def confirmation(self, record):
+        contract = render_contract(record, REVISION, [], worker_evidence=EVIDENCE)
+        relay = {"choice": "confirm", "displayed_digest": contract.digest, "part_ids": ["A"], "run_id": "run-1"}
+        return confirm_contract(contract, relay, run_id="run-1")
+
+    def test_the_contract_text_shows_facts_and_answers(self):
+        text = render_contract(skill_decision(), REVISION, [], worker_evidence=EVIDENCE).text
+        self.assertIn("target_set: both", text)
+        self.assertIn("reach: repository", text)
+        self.assertIn("job: procedure", text)
+        self.assertIn(f"Name: {NAME}", text)
+
+    def test_changed_facts_answers_or_name_need_a_new_confirmation(self):
+        original = skill_decision()
+        confirmation = self.confirmation(original)
+        edits = (lambda r: r.record["facts"].update(untrusted_repo=True),
+                 lambda r: (r.record.update(reach="public"), r.record["facts"].update(reach="public")),
+                 lambda r: r.record["hosting"].update(visibility="private"),
+                 lambda r: r.record["parts"][0]["answers"].update(job="knowledge"),
+                 lambda r: r.record["parts"][0].update(slug="other-skill"))
+        for number, edit in enumerate(edits):
+            with self.subTest(edit=number):
+                changed = copy.deepcopy(original)
+                edit(changed)
+                self.assertIsNotNone(confirmation_problem(confirmation, changed, REVISION, [], EVIDENCE))
+
+    def test_a_target_set_that_contradicts_the_targets_is_refused(self):
+        changed = skill_decision()
+        changed.record["facts"]["target_set"] = "codex"
+        with self.assertRaises(ValueError):
+            render_contract(changed, REVISION, [], worker_evidence=EVIDENCE)
+
+    def test_the_reviewers_reproduction_stays_unverified(self):
+        original = skill_decision()
+        confirmation = self.confirmation(original)
+        changed = copy.deepcopy(original)
+        changed.record["facts"]["target_set"] = "codex"
+        run = prepare_run(changed, {}, RULES, confirmation, revision=REVISION, worker_evidence=EVIDENCE)
+        self.assertEqual(run.confirmed_parts, [])
+        self.assertIn("contradicts", run.unconfirmed_reason)
+
+    def test_the_cli_refuses_a_contradictory_record(self):
+        changed = skill_decision()
+        changed.record["facts"]["target_set"] = "codex"
+        with tempfile.TemporaryDirectory(prefix="forge-cli-") as directory:
+            path = write_decision(Path(directory), changed, slug="repro", date="2026-10-10")
+            code, stdout, stderr = run_cli("prepare-contract", "--decision", str(path))
+        self.assertEqual((code, stdout), (2, ""))
+        self.assertIn("contradicts", stderr)
+
+
 class OutsideOnlyInputsTest(unittest.TestCase):
     """Finding 4: a changed input leaves an outside-only part unassessed."""
 
@@ -167,6 +221,9 @@ class ReferenceSyntaxTest(unittest.TestCase):
                      'Read [it][details].\n\n  [details]: <references/missing.md> "Details"\n'):
             with self.subTest(body=body):
                 self.assertEqual(self.status(body), "fail")
+
+    def test_footnotes_are_not_file_links(self):
+        self.assertEqual(self.status("Use this checklist.[^1]\n\n[^1]: Background explanation only.\n"), "pass")
 
     def test_existing_targets_in_every_form_pass(self):
         files = skill("name: repro-checklist\ndescription: d\n",

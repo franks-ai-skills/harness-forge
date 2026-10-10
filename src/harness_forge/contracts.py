@@ -55,7 +55,9 @@ def contract_parts(decision: Decision, revision: AcceptedRevision | None) -> lis
     return [
         {
             "id": part["id"],
+            "name": part["slug"],
             "goal": part["goal"],
+            "answers": dict(part["answers"]),
             "outcome": part["outcome"],
             "mechanism": part["chosen"],
             "recommended": part["recommended"],
@@ -68,8 +70,28 @@ def contract_parts(decision: Decision, revision: AcceptedRevision | None) -> lis
     ]
 
 
+def _pairs(values: dict) -> str:
+    """Confirmed answers as readable ``name: value`` pairs."""
+    if not values:
+        return "none"
+    return "; ".join(f"{key}: {str(value).lower() if isinstance(value, bool) else value}"
+                     for key, value in sorted(values.items()))
+
+
+def _consistency_problem(record: dict) -> str | None:
+    """Facts stored twice must agree, or the contract would show both readings."""
+    targets = set(record["targets"])
+    expected = "both" if targets == {"claude-code", "codex"} else next(iter(targets))
+    facts = record["facts"]
+    if "target_set" in facts and facts["target_set"] != expected:
+        return f"facts.target_set {facts['target_set']!r} contradicts targets {sorted(targets)}"
+    if "reach" in facts and facts["reach"] != record["reach"]:
+        return f"facts.reach {facts['reach']!r} contradicts reach {record['reach']!r}"
+    return None
+
+
 def _part_text(part: dict) -> list[str]:
-    lines = [f"Part {part['id']}: {part['goal']}"]
+    lines = [f"Part {part['id']}: {part['goal']}", f"  Name: {part['name']}", f"  Answers: {_pairs(part['answers'])}"]
     mechanism = part["mechanism"] or "no harness build"
     lines.append(f"  Outcome: {part['outcome']}; mechanism: {mechanism} (recommended: {part['recommended'] or 'none'})")
     if part["override_reason"]:
@@ -126,6 +148,9 @@ def render_contract(
 ) -> Contract:
     """The whole current contract with readable text and a binding digest."""
     validate(decision.record, "decision")
+    problem = _consistency_problem(decision.record)
+    if problem:
+        raise ValueError(f"the decision record contradicts itself: {problem}")
     for evidence in worker_evidence:
         validate(evidence, "worker-evidence")
     parts = contract_parts(decision, revision)
@@ -143,6 +168,9 @@ def render_contract(
     content = {
         "idea": decision.record["idea"],
         "targets": decision.record["targets"],
+        "reach": decision.record["reach"],
+        "hosting": decision.record["hosting"],
+        "facts": decision.record["facts"],
         "parts": parts,
         "revision_digest": revision_digest,
         "overrides": [{"rule_id": o["rule_id"], "digest": o["digest"]} for o in override_entries],
@@ -150,7 +178,11 @@ def render_contract(
     }
     digest = canonical_digest(content)
 
-    lines = [f"Contract for: {decision.record['idea']}", f"Targets: {', '.join(decision.record['targets'])}", ""]
+    record = decision.record
+    hosting = record["hosting"]
+    lines = [f"Contract for: {record['idea']}", f"Targets: {', '.join(record['targets'])}",
+             f"Reach: {record['reach']}; hosting: {hosting['platform']}, {hosting['plan']} plan, {hosting['visibility']}",
+             f"Facts: {_pairs(record['facts'])}", ""]
     for part in parts:
         lines += _part_text(part) + [""]
     lines.append(f"Accepted Idea KB revision: {'sha256 ' + revision_digest if revision_digest else 'none yet'}")
@@ -187,7 +219,10 @@ def confirmation_problem(
         return "no live confirmation in this session"
     if overrides:
         return "rule overrides block confirmation until their adoption flow exists"
-    current = render_contract(decision, revision, list(overrides), worker_evidence=worker_evidence)
+    try:
+        current = render_contract(decision, revision, list(overrides), worker_evidence=worker_evidence)
+    except ValueError as error:
+        return str(error)
     if confirmation.contract_digest != current.digest:
         return "the confirmation is for another contract than the current one"
     return None

@@ -181,6 +181,7 @@ class RuntimeBindingTest(unittest.TestCase):
     def test_runtime_harness_must_be_a_target(self):
         record = skill_decision()
         record.record["targets"] = ["codex"]
+        record.record["facts"]["target_set"] = "codex"
         self.helper.scenario = Scenario(record)
         with self.assertRaises(ValueError):
             self.helper.scenario.finish(runtime=[self.helper.runtime(harness="claude-code")])

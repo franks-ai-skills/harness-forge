@@ -9,9 +9,10 @@ from harness_forge.documents import parse_yaml, split_frontmatter
 
 _DESTINATION = r"(?:<([^<>\n]*)>|((?:[^\s<>()]|\([^\s<>()]*\))+))"
 _TITLE = r"""(?:\s+(?:"[^"]*"|'[^']*'|\([^()]*\)))?"""
-# Inline links and images, with an optional title, and reference definitions.
+# Inline links and images, with an optional title, and reference definitions;
+# a footnote definition ([^1]: text) is not a link.
 LINK = re.compile(r"\]\(\s*" + _DESTINATION + _TITLE + r"\s*\)")
-DEFINITION = re.compile(r"^ {0,3}\[[^\]\n]+\]:[ \t]*\n?[ \t]*" + _DESTINATION, re.M)
+DEFINITION = re.compile(r"^ {0,3}\[(?!\^)[^\]\n]+\]:[ \t]*\n?[ \t]*" + _DESTINATION, re.M)
 FENCE = re.compile(r"^(```|~~~).*?^\1", re.S | re.M)
 
 

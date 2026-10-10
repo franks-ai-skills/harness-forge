@@ -132,7 +132,10 @@ def _prepare_contract(arguments: argparse.Namespace) -> int:
                 validate(record, "worker-evidence")
         except ValueError as error:
             raise _InvalidInput(str(error)) from error
-    contract = render_contract(decision, revision, overrides, worker_evidence=evidence)
+    try:
+        contract = render_contract(decision, revision, overrides, worker_evidence=evidence)
+    except ValueError as error:
+        raise _InvalidInput(str(error)) from error
     emit({
         "command": "prepare-contract", "digest": contract.digest, "text": contract.text,
         "parts": contract.parts, "overrides": contract.overrides, "worker_policy": contract.worker_policy,
