@@ -44,8 +44,12 @@ the skill's own directories.
    user's message. Use no argument placeholders, skill-directory variables
    or shell-injection syntax: only Claude Code processes them, before the
    model reads the skill, and Codex leaves them as literal text.
-4. Hand both texts to Forge's build step for the part. It refuses the
-   build when a binding does not match, and reports conflicts as a diff.
+4. Save both texts to files and run `scripts/forge.py build --decision
+   <record> --root <repository> --part <id> --revision <rules file>
+   --evidence <workers output> --relay <relay> --description <file>
+   --procedure <file>`. It refuses the build when a binding does not
+   match, and reports conflicts as a diff; after the user agrees, run it
+   again with `--replace` listing the agreed paths.
 5. Run harness-verify on the result.
 
 For user-invoked commands, Forge sets `disable-model-invocation: true` in

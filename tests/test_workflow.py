@@ -130,6 +130,22 @@ class VerifyLiveTest(unittest.TestCase):
         self.assertTrue(any(e["role"] == "review" and e["observed_tools"]["status"] == "observed"
                             for e in run.worker_evidence))
 
+    def test_a_file_changed_while_workers_ran_invalidates_the_part(self):
+        record = skill_decision()
+        files, symlinks = build_files(record)
+        files["README.md"] = update_outside_section("# Repro\n", record).encode()
+        runner = ScriptedRunner()
+        planned = [preflight("claude-code", role, runner=runner, environ=PARENT)["configuration"] for role in ROLES]
+        contract, confirmation = confirmed(record, REVISION, planned, "verify-1")
+        changed = {**files, f".agents/skills/{NAME}/SKILL.md": files[f".agents/skills/{NAME}/SKILL.md"] + b"\nMore."}
+        run, results = verify_live(record, files, symlinks, RULES, REVISION, "claude-code", contract=contract,
+                                   confirmation=confirmation, worker_evidence=planned, cases=[], runner=runner,
+                                   environ=PARENT, kb_version="0.1.0", collect=lambda: (changed, symlinks))
+        part = {result.part_id: result for result in results}["A"]
+        self.assertEqual(part.harness_result, "not verified")
+        self.assertIn("inputs.bound", [r["rule_id"] for r in part.rule_results])
+        self.assertEqual(runner.roles, ["review"], "the reviewer runs once")
+
     def test_an_out_of_scope_reviewer_voids_every_verdict(self):
         record = skill_decision()
         files, symlinks = build_files(record)

@@ -99,13 +99,15 @@ def verify_live(
     revision: AcceptedRevision | None, harness: str, *, contract: Contract, confirmation: Confirmation | None,
     worker_evidence: list[dict] | tuple, cases: list[dict], runner: Runner = run_command,
     environ: Mapping[str, str] | None = None, kb_version: str = "", login_answer: str | None = None,
-    current_files: dict[str, bytes] | None = None,
+    collect: Callable[[], tuple[dict[str, bytes], dict[str, str]]] | None = None,
 ):
     """Static checks, a fresh review worker, runtime cases, then results in the design's precedence.
 
     A reviewer seen acting outside its role voids every judged verdict of the
     run. The built-in skills the review worker lists (all customizations
     off) are the runtime cases' baseline, so they never count as competing.
+    ``collect`` reads the target's files and links again after the workers
+    ran, so a change made meanwhile invalidates the affected parts.
     """
     environ = os.environ if environ is None else environ
     run = prepare_run(decision, files, rules, confirmation, symlinks=symlinks, revision=revision,
@@ -135,8 +137,9 @@ def verify_live(
     if part_cases and harness in run.targets:
         runtime = run_skill_runtime(run, harness, part_cases, files=files, runner=runner, environ=environ,
                                     login_answer=login_answer, baseline_skills=baseline)
-    current = bound_inputs(decision, current_files if current_files is not None else files, rules, symlinks=symlinks,
-                           revision=revision, kb_version=kb_version, worker_evidence=worker_evidence)
+    current_files, current_links = collect() if collect else (files, symlinks)
+    current = bound_inputs(decision, current_files, rules, symlinks=current_links, revision=revision,
+                           kb_version=kb_version, worker_evidence=worker_evidence)
     for evidence in observations:
         validate(evidence, "worker-evidence")
     results = finish_run(run, review, runtime, current, worker_observations=observations)

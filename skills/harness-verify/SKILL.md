@@ -37,18 +37,18 @@ this skill's folder; run it with the Forge environment's Python.
 2. If this is a re-verification, run `scripts/forge.py scope` and ask
    once: `Review (recommended)` or `Extensive review (rarely needed)`,
    showing each option's parts and judged-rule count.
-3. Run the static checks: `scripts/forge.py check --decision <record>
-   --root <repository> --revision <rules file>`.
-4. Launch a fresh review worker with the plugin's `workers/reviewer.md`
-   and the frozen files; validate its response. Its evidence joins the
-   report as an observation; a worker configuration other than the
-   confirmed one leaves every part not verified, and an observed action
-   outside its role discards its output and leaves the part not
-   verified.
-5. Run the cheap runtime tests the part has, in a throwaway workspace.
-6. Write the report: `scripts/forge.py report ... --slug <slug> --write`
-   creates `.harness/reports/<slug>.md`. Show each part's harness and
-   goal result and every failing rule with its source.
+3. Run `scripts/forge.py verify --decision <record> --root <repository>
+   --revision <rules file> --harness <this harness> --evidence <workers
+   output> --relay <relay> --slug <slug> --write`, adding `--cases <file>`
+   when the part has runtime cases. It runs the static checks, a fresh
+   review worker on the frozen files and each runtime case in a throwaway
+   workspace, then writes `.harness/reports/<slug>.md`. A worker
+   configuration other than the confirmed one leaves every part not
+   verified; a reviewer seen acting outside its role voids its verdicts.
+   Without a confirmation, `scripts/forge.py check` runs the static
+   checks alone.
+4. Show each part's harness and goal result, every failing rule with its
+   source, and each runtime case that did not run, with its reason.
 
 Result meanings and the goal-result precedence are in
 [references/contract.md](references/contract.md); read it before

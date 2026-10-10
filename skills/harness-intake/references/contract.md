@@ -5,7 +5,12 @@ verification.
 
 ## What to show
 
-Run `scripts/forge.py prepare-contract --decision <record>`, adding
+First run `scripts/forge.py workers --harness <this harness>` and save
+its output. If a role reports `needs_cost_question`, the login is an API
+key or unknown and can cost extra: ask the user `Continue` or `Stop`
+and run it again with `--login-answer`. Never log in, log out or switch
+accounts. Then run `scripts/forge.py prepare-contract --decision
+<record> --evidence <workers output>`, adding
 `--revision .harness/research/<slug>.rules.yaml`, `--overrides
 .harness/overrides` and `--evidence` when they exist. Show its `text` in
 full, unchanged: the idea's reach, hosting and confirmed facts; every
@@ -31,7 +36,9 @@ These never confirm a part:
 
 ## The relay
 
-After an explicit confirmation, pass exactly these fields to Forge:
+After an explicit confirmation, write exactly these fields to a JSON file
+and pass it with `--relay` to `research`, `build` and `verify`, together
+with the same `--evidence`; they refuse a relay for any other contract:
 
 ```json
 {"choice": "confirm", "displayed_digest": "<digest you showed>", "part_ids": ["A"], "run_id": "<this run>"}
