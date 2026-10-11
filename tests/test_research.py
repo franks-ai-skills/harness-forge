@@ -359,6 +359,9 @@ class DriftRecordTest(unittest.TestCase):
         forged = {"drift_decisions": [{**displayed["drift_decisions"][0], "drift_digest": drift_digest(other)}]}
         self.assertEqual(drift_state(other, forged, []), "open",
                          "the contract showed other text than the drift the digest names")
+        relabelled = {"drift_decisions": [{**displayed["drift_decisions"][0], "rule_id": "skills.body.size",
+                                           "finding_id": "F99"}]}
+        self.assertEqual(drift_state(entry, relabelled, []), "open", "the contract showed another rule and finding")
         adopted = {"rule_id": entry["rule_id"], "drift": {"finding": self.record["findings"][0]}}
         self.assertEqual(drift_state(entry, decision_record, [adopted]), "adopted")
         other = {"rule_id": entry["rule_id"], "drift": {"finding": {**self.record["findings"][0], "id": "F2"}}}

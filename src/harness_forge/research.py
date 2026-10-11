@@ -317,8 +317,8 @@ def drift_state(drift: dict, decision_record: dict, overrides: list[dict]) -> st
     them, which the caller holds. A filed or pending issue decides nothing.
     """
     finding = drift.get("finding") or {}
-    shown = {"slug": drift.get("slug"), "summary": drift.get("summary"), "source": finding.get("source"),
-             "quote": finding.get("quote")}
+    shown = {"rule_id": drift.get("rule_id"), "finding_id": drift.get("finding_id"), "slug": drift.get("slug"),
+             "summary": drift.get("summary"), "source": finding.get("source"), "quote": finding.get("quote")}
     for entry in decision_record.get("drift_decisions", []):
         # The contract shows the decision's copy of the drift: it must be the drift the digest names.
         if (entry["choice"] == "keep" and entry.get("drift_digest") == drift_digest(drift)
