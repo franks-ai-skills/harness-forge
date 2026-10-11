@@ -73,8 +73,9 @@ def _rule_line(rule: dict) -> str:
 
 
 def _check_bindings(decision: Decision, part_id: str, revision: AcceptedRevision,
-                    confirmation: Confirmation | None, worker_evidence: list[dict] | tuple) -> None:
-    problem = confirmation_problem(confirmation, decision, revision, [], worker_evidence)
+                    confirmation: Confirmation | None, worker_evidence: list[dict] | tuple,
+                    overrides: list[dict] | tuple = ()) -> None:
+    problem = confirmation_problem(confirmation, decision, revision, list(overrides), worker_evidence)
     if problem:
         raise ValueError(f"building needs the current contract confirmed in this session: {problem}")
     if part_id not in confirmation.part_ids:
@@ -94,15 +95,20 @@ def plan_skill(
     worker_evidence: list[dict] | tuple = (),
     description: str = "",
     procedure: str = "",
+    overrides: list[dict] | tuple = (),
 ) -> dict[str, str]:
-    """Relative path → content for the skill package; symbolic links are SymlinkTarget values."""
+    """Relative path → content for the skill package; symbolic links are SymlinkTarget values.
+
+    ``rules`` are the effective rules, with the ``overrides`` the confirmed
+    contract shows; the confirmation is checked against that contract.
+    """
     part = decision.part(part_id)
     _refuse_blocked(part)
     if part["outcome"] == "reuse":
         raise BuilderUnavailable("a reused artifact stays read-only; it is checked once installed, never built")
     if part["outcome"] not in ("harness-only", "outside-alongside") or part["chosen"] not in BUILDABLE:
         raise BuilderUnavailable(f"builder unavailable for {part['chosen'] or part['outcome']} in this release")
-    _check_bindings(decision, part_id, revision, confirmation, worker_evidence)
+    _check_bindings(decision, part_id, revision, confirmation, worker_evidence, overrides)
 
     name = part["slug"]
     if not NAME.match(name) or len(name) > _limit(rules, "skills.name.format", "max_chars", 64):

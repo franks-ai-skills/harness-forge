@@ -699,7 +699,8 @@ def _build(arguments: argparse.Namespace) -> int:
         description = Path(arguments.description).read_text(encoding="utf-8")
         procedure = Path(arguments.procedure).read_text(encoding="utf-8")
         planned = plan_skill(decision, arguments.part, revision, pinned, confirmation=approval["confirmation"],
-                             worker_evidence=approval["worker_evidence"], description=description, procedure=procedure)
+                             worker_evidence=approval["worker_evidence"], description=description, procedure=procedure,
+                             overrides=overrides)
         written = write_skill(root, planned, replace=[item for item in (arguments.replace or "").split(",") if item])
     except BuilderUnavailable as error:
         emit({"command": "build", "built": False, "reason": str(error)})

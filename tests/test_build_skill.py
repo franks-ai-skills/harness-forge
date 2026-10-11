@@ -116,6 +116,19 @@ class PlanTest(unittest.TestCase):
         with self.assertRaises(ValueError):
             plan(stale)
 
+    def test_a_contract_with_an_adopted_override_is_checked_with_it(self):
+        from tests.test_contracts import OVERRIDE
+        record = reference_decision()
+        contract = render_contract(record, REVISION, [OVERRIDE], worker_evidence=EVIDENCE)
+        relay = {"choice": "confirm", "displayed_digest": contract.digest, "part_ids": ["A"], "run_id": "run-1"}
+        confirmation = confirm_contract(contract, relay, run_id="run-1")
+        arguments = {"worker_evidence": EVIDENCE, "confirmation": confirmation, "description": DESCRIPTION,
+                     "procedure": PROCEDURE}
+        self.assertIn(f".agents/skills/{NAME}/SKILL.md",
+                      plan_skill(record, "A", REVISION, PINNED, overrides=[OVERRIDE], **arguments))
+        with self.assertRaisesRegex(ValueError, "another contract"):
+            plan_skill(record, "A", REVISION, PINNED, **arguments)
+
     def test_non_skill_choice_is_builder_unavailable(self):
         record = reference_decision(recommended="hooks", chosen="hooks")
         with self.assertRaises(BuilderUnavailable):
