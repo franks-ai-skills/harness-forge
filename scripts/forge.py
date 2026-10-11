@@ -173,8 +173,10 @@ def _resolve_conflict(arguments: argparse.Namespace) -> int:
     """Record the user's answer to a part's goal-conflict question in the decision."""
     try:
         decision = load_decision(Path(arguments.decision))
+        # The repository's overrides apply as select --root applies them, before any confirmation.
+        overrides = _checked_overrides(Path(arguments.decision).resolve().parents[2])[0]
         result = resolve_goal_conflict(decision, arguments.part, arguments.choice, arguments.adjusted_goal,
-                                       arguments.reason, rules=_selection_rules(),
+                                       arguments.reason, rules=apply_overrides(_selection_rules(), overrides),
                                        date=datetime.date.today().isoformat())
     except (KeyError, StopIteration) as error:
         raise _InvalidInput(f"unknown part {arguments.part!r}") from error
@@ -444,13 +446,20 @@ def _report(arguments: argparse.Namespace) -> int:
     return 0
 
 
-def _earlier(root: Path, slug: str) -> tuple | None:
-    """The run and part results that .harness/reports/<slug>.md records, or None before the first report."""
+def _earlier(root: Path, slug: str, *, required: bool = False) -> tuple | None:
+    """The run and part results that .harness/reports/<slug>.md records, or None.
+
+    Only a Review needs them (``required``): an earlier report that cannot
+    be compared, such as one written before re-verification existed, rules
+    out a Review and leaves an Extensive review possible.
+    """
     try:
         path = safe_path(root, f".harness/reports/{slug}.md")
         return earlier_run(path.read_text(encoding="utf-8")) if path.is_file() else None
     except (OSError, ValueError) as error:
-        raise _InvalidInput(f"the earlier report cannot be compared: {error}") from error
+        if required:
+            raise _InvalidInput(f"the earlier report cannot be compared: {error}; run an Extensive review") from error
+        return None
 
 
 def _fixed(arguments: argparse.Namespace, decision: Decision) -> set[str]:
@@ -807,7 +816,7 @@ def _drift_issue(arguments: argparse.Namespace) -> int:
     search, _ = _issues()
     try:
         existing = find_issue(arguments.rule, search)
-    except ValueError as error:
+    except (OSError, ValueError) as error:
         raise _InvalidInput(f"searching the KB's issues failed: {error}") from error
     proposal = {**propose(entry, entry["finding"], existing, kb_version=_kb_version()), "run_id": arguments.run_id}
     try:
@@ -831,6 +840,9 @@ def _publish_issue(arguments: argparse.Namespace) -> int:
     _, publisher = _issues()
     try:
         result = publish(proposal, relay, publisher, run_id=proposal["run_id"])
+    except (OSError, ValueError) as error:
+        raise _InvalidInput(f"filing the KB issue failed: {error}") from error
+    try:
         path = root / ".harness" / "research" / f"{entry['slug']}.md"
         record = load_document(path, "research", root=root)
         for item in record["drift"]:
@@ -903,7 +915,7 @@ def _verify(arguments: argparse.Namespace) -> int:
     unresolved = [entry for entry in drift if drift_state(entry, decision.record, overrides) == "open"]
     rules = effective_rules(_pinned_rules(), overrides, approval["confirmation"])
     every = {part["id"] for part in decision.record["parts"]}
-    earlier = _earlier(root, arguments.slug)
+    earlier = _earlier(root, arguments.slug, required=arguments.scope == "review")
     fixed = _fixed(arguments, decision)
     scope, kept = None, {}
     if arguments.scope == "review":

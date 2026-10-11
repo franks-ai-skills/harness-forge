@@ -715,6 +715,42 @@ class LiveCommandsTest(unittest.TestCase):
         self.assertEqual(code, 0, stderr)
         self.assertEqual((output["changed"], output["options"][0]["parts"]), (["A"], ["A"]))
 
+    def test_a_report_from_before_re_verification_only_rules_out_a_review(self):
+        cli, arguments = self.build_ready(ResearchRunner([finding()]))
+        report = self.root / ".harness/reports/repro.md"
+        report.parent.mkdir(parents=True, exist_ok=True)
+        report.write_text("# Verification report\n\nWritten before T12.\n", encoding="utf-8")
+        code, _, stderr = cli("verify", *arguments, "--scope", "review", "--fixed", "A")
+        self.assertEqual(code, 2)
+        self.assertIn("earlier report cannot be compared", stderr)
+        code, output, stderr = cli("verify", *arguments)
+        self.assertEqual(code, 0, stderr)
+
+    def test_resolve_conflict_sees_the_overrides_select_sees(self):
+        cli, _ = self.build_ready(ResearchRunner([finding()]))
+        request = cli.write("override.json", {"rule_id": "selection.eligibility.own-context-skills", "finding_id": "F1",
+                                              "reason": "Skills can fork their own context.", "retired": True})
+        code, _, stderr = cli("override", "--root", self.root, "--input", request, "--write")
+        self.assertEqual(code, 0, stderr)
+        self.conflict()
+        code, _, stderr = cli("resolve-conflict", "--decision", self.decision, "--part", "A", "--choice", "keep",
+                              "--reason", "x")
+        self.assertEqual(code, 2)
+        self.assertIn("no goal conflict", stderr, "with the retired rule, select shows no conflict either")
+
+    def test_a_missing_github_cli_is_reported(self):
+        cli, _ = self.build_ready(ResearchRunner([finding()]))
+        self.record_drift(cli)
+
+        def missing(rule_id):
+            raise FileNotFoundError("gh")
+
+        cli.module.ISSUES = (missing, missing)
+        code, _, stderr = cli("drift-issue", "--root", self.root, "--rule", "skills.description.length",
+                              "--finding", "F1", "--run-id", "drift-1", "--out", self.root / ".scratch/p.json")
+        self.assertEqual(code, 2)
+        self.assertIn("searching the KB's issues failed", stderr)
+
     def test_case_ids_must_be_unique(self):
         import yaml
         cli, arguments = self.build_ready(ResearchRunner([finding()]))
