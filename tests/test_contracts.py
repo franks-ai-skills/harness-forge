@@ -145,9 +145,15 @@ class ConfirmTest(unittest.TestCase):
             with self.subTest(relay=case):
                 self.assertIsNone(confirm_contract(self.contract, case, run_id="run-1"))
 
-    def test_nonempty_overrides_block_until_their_adoption_flow(self):
+    def test_a_confirmation_binds_the_overrides_it_showed(self):
         contract = render_contract(decision(), None, [OVERRIDE], worker_evidence=EVIDENCE)
-        self.assertIsNone(confirm_contract(contract, relay(contract), run_id="run-1"))
+        self.assertIsNotNone(confirm_contract(contract, relay(contract), run_id="run-1"))
+        changed = render_contract(decision(), None, [{**OVERRIDE, "reason": "Changed."}], worker_evidence=EVIDENCE)
+        self.assertIsNone(confirm_contract(changed, relay(contract), run_id="run-1"))
+        shown = render_contract(decision(), None, [OVERRIDE], worker_evidence=EVIDENCE,
+                                described={OVERRIDE["rule_id"]: ["Pinned: error: old", "New: retired"]})
+        self.assertIn("      New: retired", shown.text)
+        self.assertEqual(shown.digest, contract.digest, "the description is shown; the record is what binds")
 
 
 class PrepareContractCliTest(unittest.TestCase):

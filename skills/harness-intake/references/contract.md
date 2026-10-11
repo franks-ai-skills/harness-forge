@@ -51,8 +51,23 @@ answer in this session. For `Leave pending` or anything unclear, relay
 `"choice": "pending"`. Parts that are not confirmed are blocked, and
 their goals are reported as not assessed.
 
-Nonempty rule overrides block confirmation until their adoption flow is
-available.
+## Rule overrides
+
+An override in `.harness/overrides/<rule-id>.yaml` replaces or retires
+one pinned rule for this repository, in selection, building and
+verification. The contract shows each one: the pinned and the new rule,
+the source quote it was adopted from, and a warning when it loosens or
+retires an error, security or eligibility rule. Read every warning to
+the user before asking for confirmation. Confirming the contract adopts
+the overrides it shows; a changed override needs a new confirmation.
+Pass `--root <repository>` to `select` so that its result uses them.
+
+After a Forge update with a new Harness KB, `scripts/forge.py overrides
+--root <repository>` compares each override with the new release. When
+the release contains the correction or drops the rule, propose removing
+the override (`--remove <rule-id>`); otherwise ask whether to keep it
+(`--keep <rule-id>`). Until the user answers, the override stops every
+command.
 
 ## Goal conflicts
 

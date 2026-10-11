@@ -88,7 +88,7 @@ def verify_live(
     environ: Mapping[str, str] | None = None, kb_version: str = "", login_answer: str | None = None,
     collect: Callable[[], tuple[dict[str, bytes], dict[str, str], Decision, AcceptedRevision | None]] | None = None,
     confirmed_exclusions: set[tuple[str, str, str]] | frozenset = frozenset(), drift: list[dict] | tuple = (),
-    selection: dict[str, list[dict]] | None = None,
+    selection: dict[str, list[dict]] | None = None, overrides: list[dict] | tuple = (),
 ):
     """Static checks, a fresh review worker, runtime cases, then results in the design's precedence.
 
@@ -106,7 +106,7 @@ def verify_live(
     """
     environ = os.environ if environ is None else environ
     run = prepare_run(decision, files, rules, confirmation, symlinks=symlinks, revision=revision,
-                      kb_version=kb_version, worker_evidence=worker_evidence)
+                      overrides=overrides, kb_version=kb_version, worker_evidence=worker_evidence)
     review = ReviewResponse(run_id=run.run_id, verdicts=[], goal_verdicts=[])
     observations = []
     if any(request["kind"] == "rule" or request["kind"] == "goal" for request in run.judged_requests):
@@ -135,7 +135,8 @@ def verify_live(
         current_files, current_links, current_decision, current_revision = (
             collect() if collect else (files, symlinks, decision, revision))
         current = bound_inputs(current_decision, current_files, rules, symlinks=current_links,
-                               revision=current_revision, kb_version=kb_version, worker_evidence=worker_evidence)
+                               revision=current_revision, overrides=overrides, kb_version=kb_version,
+                               worker_evidence=worker_evidence)
     except (OSError, ValueError):
         current = {**run.frozen_inputs, "idea": "unreadable"}
     for evidence in observations:

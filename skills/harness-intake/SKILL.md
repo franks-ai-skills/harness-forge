@@ -32,9 +32,11 @@ plugin README). Every command prints bounded JSON.
   asking for a contract confirmation.
 - **No unattended confirmation.** Without a user in the session, leave
   every part pending; its goal stays not assessed.
-- **Rule overrides block for now.** If `.harness/overrides/` holds any
-  file, show its content and hash in the contract and stop: their
-  adoption flow is not available yet.
+- **Overrides apply only through the contract.** `prepare-contract`
+  shows each file in `.harness/overrides/` with the old and new rule,
+  its source quote and its warnings; it applies once the user confirms
+  that contract. An override that cannot be adopted stops every command:
+  run `scripts/forge.py overrides --root <repository>` and show why.
 
 ## Procedure
 

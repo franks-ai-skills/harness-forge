@@ -202,8 +202,13 @@ def render_contract(
     *,
     worker_evidence: list[dict] | tuple = (),
     previous: list[dict] | None = None,
+    described: dict[str, list[str]] | None = None,
 ) -> Contract:
-    """The whole current contract with readable text and a binding digest."""
+    """The whole current contract with readable text and a binding digest.
+
+    ``described`` maps an override's rule id to its description (old and new
+    rule, source quote, warnings); without one the record itself is shown.
+    """
     validate(decision.record, "decision")
     duplicate = part_ids_problem(decision.record)
     if duplicate:
@@ -247,10 +252,11 @@ def render_contract(
         lines += _part_text(part) + [""]
     lines.append(f"Accepted Idea KB revision: {'sha256 ' + revision_digest if revision_digest else 'none yet'}")
     if override_entries:
-        lines.append("Rule overrides for this repository (they block the parts until their adoption flow exists):")
+        lines.append("Rule overrides for this repository (they apply once you confirm this contract):")
         for entry in override_entries:
             lines.append(f"  - {entry['rule_id']} (sha256 {entry['digest']}):")
-            lines.extend("      " + line for line in entry["content"].splitlines())
+            shown = (described or {}).get(entry["rule_id"]) or entry["content"].splitlines()
+            lines.extend("      " + line for line in shown)
     else:
         lines.append("Rule overrides: none")
     evidence_text = (
@@ -276,8 +282,6 @@ def confirmation_problem(
     """
     if confirmation is None:
         return "no live confirmation in this session"
-    if overrides:
-        return "rule overrides block confirmation until their adoption flow exists"
     try:
         current = render_contract(decision, revision, list(overrides), worker_evidence=worker_evidence)
     except ValueError as error:
@@ -305,7 +309,6 @@ def confirm_contract(contract: Contract, relay: dict | None, run_id: str) -> Con
         or not part_ids
         or len(set(part_ids)) != len(part_ids)
         or not set(part_ids) <= known
-        or contract.overrides
     ):
         return None
     return Confirmation(run_id=run_id, contract_digest=contract.digest, part_ids=sorted(part_ids))

@@ -271,7 +271,7 @@ class LiveCommandsTest(unittest.TestCase):
         self.assertEqual(code, 2)
         self.assertIn("researched for another brief", stderr)
 
-    def test_an_override_file_in_the_repository_blocks_without_being_named(self):
+    def test_an_override_file_applies_only_with_a_new_confirmation(self):
         cli, arguments = self.build_ready(ResearchRunner([finding()]))
         overrides = self.root / ".harness/overrides"
         overrides.mkdir(parents=True)
@@ -281,19 +281,109 @@ class LiveCommandsTest(unittest.TestCase):
         code, output, stderr = cli("prepare-contract", "--decision", self.decision, "--revision",
                                    self.root / ".harness/research/repro.rules.yaml")
         self.assertEqual(code, 0, stderr)
-        self.assertIn("Rule overrides for this repository", output["text"])
+        self.assertIn("Rule overrides for this repository (they apply once you confirm this contract):", output["text"])
         self.assertIn("The team prefers longer descriptions.", output["text"])
         code, _, stderr = cli("verify", *arguments)
         self.assertEqual(code, 2)
-        self.assertIn("rule overrides in .harness/overrides block", stderr)
+        self.assertIn("does not confirm the current contract", stderr)
         option = dict(zip(arguments[::2], arguments[1::2]))
         code, _, stderr = cli("check", "--decision", self.decision, "--root", self.root, "--revision", option["--revision"])
         self.assertEqual(code, 2)
-        self.assertIn("rule overrides", stderr)
+        self.assertIn("apply only after a contract confirmation", stderr)
         (overrides / "notes.txt").write_text("not an override", encoding="utf-8")
         code, _, stderr = cli("prepare-contract", "--decision", self.decision)
         self.assertEqual(code, 2)
         self.assertIn("notes.txt", stderr)
+
+    def test_an_adopted_override_is_checked_shown_and_bound_to_the_confirmation(self):
+        cli, arguments = self.build_ready(ResearchRunner([finding()]))
+        pinned = next(rule for rule in yaml.safe_load((FORGE / "snapshot/rules/skills.yaml").read_text())
+                      if rule["id"] == "skills.description.length")
+        request = cli.write("override.json", {
+            "rule_id": "skills.description.length", "finding_id": "F1", "reason": "The vendor raised the limit.",
+            "rule": {**pinned, "params": {"max_chars": 2048},
+                     "statement": "The description is present and at most 2,048 characters"}})
+        code, output, stderr = cli("override", "--root", self.root, "--input", request)
+        self.assertEqual(code, 0, stderr)
+        self.assertEqual(output["status"], "valid")
+        self.assertEqual(output["written"], None, "shown first; written only with --write")
+        self.assertIn("  Pinned: error: The description is present and at most 1,024 characters", "\n".join(output["text"]))
+        self.assertTrue(any("for the error rule skills.description.length" in w for w in output["warnings"]))
+        self.assertEqual(output["override"]["link"], "pending")
+        code, output, stderr = cli("override", "--root", self.root, "--input", request, "--write")
+        self.assertEqual(code, 0, stderr)
+        self.assertTrue((self.root / ".harness/overrides/skills.description.length.yaml").exists())
+
+        code, _, stderr = cli("verify", *arguments)
+        self.assertEqual(code, 2, "the old confirmation does not cover the override")
+        self.assertIn("does not confirm", stderr)
+        option = arguments.index("--relay") + 1
+        relay = cli.confirm(self.decision, "verify-2", "--revision", self.root / ".harness/research/repro.rules.yaml")
+        code, output, stderr = cli("verify", *arguments[:option], relay, *arguments[option + 1:])
+        self.assertEqual(code, 0, stderr)
+        report = (self.root / ".harness/reports/repro.md").read_text(encoding="utf-8")
+        self.assertIn("- Harness result: verified with 1 override (skills.description.length)", report)
+        self.assertIn("- Rule overrides: 1 adopted: `skills.description.length` (sha256 ", report)
+
+        code, output, _ = cli("overrides", "--root", self.root)
+        self.assertEqual([(item["rule_id"], item["status"]) for item in output["overrides"]],
+                         [("skills.description.length", "valid")])
+        path = self.root / ".harness/overrides/skills.description.length.yaml"
+        path.write_text(path.read_text(encoding="utf-8").replace("The vendor raised the limit.", "Changed."),
+                        encoding="utf-8")
+        code, _, stderr = cli("verify", *arguments[:option], relay, *arguments[option + 1:])
+        self.assertEqual(code, 2, "a changed override needs a new confirmation")
+        self.assertIn("does not confirm", stderr)
+
+    def test_after_a_kb_update_the_user_keeps_or_removes_an_override(self):
+        cli, arguments = self.build_ready(ResearchRunner([finding()]))
+        request = cli.write("override.json", {"rule_id": "skills.description.concise", "finding_id": "F1",
+                                              "reason": "Longer descriptions.", "retired": True})
+        code, output, stderr = cli("override", "--root", self.root, "--input", request, "--write")
+        self.assertEqual(code, 0, stderr)
+        path = self.root / ".harness/overrides/skills.description.concise.yaml"
+        path.write_text(path.read_text(encoding="utf-8").replace("pinned_kb_version: 0.1.0",
+                                                                 "pinned_kb_version: 0.0.9"), encoding="utf-8")
+        code, output, _ = cli("overrides", "--root", self.root)
+        self.assertEqual(code, 1)
+        self.assertEqual((output["overrides"][0]["status"], output["overrides"][0]["kb_comparison"]),
+                         ("kb-updated", "differs"))
+        code, _, stderr = cli("prepare-contract", "--decision", self.decision, "--revision",
+                              self.root / ".harness/research/repro.rules.yaml")
+        self.assertEqual(code, 2, "an override from another KB release applies nowhere until the user decides")
+        self.assertIn("ask whether to keep the override", stderr)
+        code, output, stderr = cli("overrides", "--root", self.root, "--keep", "skills.description.concise")
+        self.assertEqual(code, 0, stderr)
+        self.assertEqual(output["overrides"][0]["status"], "valid")
+        code, output, stderr = cli("overrides", "--root", self.root, "--remove", "skills.description.concise")
+        self.assertEqual((code, output["overrides"]), (0, []), stderr)
+        self.assertFalse(path.exists())
+
+    def test_an_override_of_unsupported_research_is_refused(self):
+        cli, arguments = self.build_ready(ResearchRunner([finding()]))
+        request = cli.write("override.json", {"rule_id": "skills.description.length", "finding_id": "F9",
+                                              "reason": "No such finding.", "retired": True})
+        code, _, stderr = cli("override", "--root", self.root, "--input", request, "--write")
+        self.assertEqual(code, 2)
+        self.assertIn("F9", stderr)
+        self.assertFalse((self.root / ".harness/overrides").exists())
+
+    def test_select_applies_the_repositorys_overrides_before_confirmation(self):
+        cli, _ = self.build_ready(ResearchRunner([finding()]))
+        request = cli.write("override.json", {"rule_id": "selection.eligibility.own-context-skills", "finding_id": "F1",
+                                              "reason": "Skills can fork their own context.", "retired": True})
+        code, _, stderr = cli("override", "--root", self.root, "--input", request, "--write")
+        self.assertEqual(code, 0, stderr)
+        record = load_decision(self.decision)
+        selection = cli.write("select.json", {"answers": {**record.part("A")["answers"], "own_context": True},
+                                              "whole_idea": record.record["facts"], "chosen": "skills"})
+        code, output, stderr = cli("select", "--input", selection)
+        self.assertEqual(output["goal_conflict"]["severity"], "error", "without --root the pinned rules decide")
+        code, output, stderr = cli("select", "--input", selection, "--root", self.root)
+        self.assertEqual(code, 0, stderr)
+        self.assertEqual(output["overrides"], [{"rule_id": "selection.eligibility.own-context-skills",
+                                                "applied": "pending: it binds once the contract that shows it is confirmed"}])
+        self.assertNotEqual((output["goal_conflict"] or {}).get("severity"), "error")
 
     def test_unresolved_compatibility_drift_blocks_the_affected_part(self):
         cli, arguments = self.build_ready(ResearchRunner([finding()]))

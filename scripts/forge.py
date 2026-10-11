@@ -29,9 +29,12 @@ from harness_forge.contracts import (  # noqa: E402
 from harness_forge.documents import load_document, parse_json, safe_path, validate, validate_kb  # noqa: E402
 from harness_forge.fetch import fetch_text  # noqa: E402
 from harness_forge.models import Decision, Finding, Rule  # noqa: E402
+from harness_forge.overrides import (  # noqa: E402
+    OverridesPending, apply_overrides, check_override, describe, effective_rules, load_overrides, write_override,
+)
 from harness_forge.report import render_report, write_report  # noqa: E402
 from harness_forge.research import (  # noqa: E402
-    accept_requirements, finding_problem, load_revision, make_brief, write_research, write_revision,
+    _catalog, accept_requirements, finding_problem, load_revision, make_brief, write_research, write_revision,
 )
 from harness_forge.runtime import load_cases  # noqa: E402
 from harness_forge.workflow import research_pass, verify_live  # noqa: E402
@@ -141,8 +144,13 @@ def _select(arguments: argparse.Namespace) -> int:
     _check_declared(answers, "part", declared)
     _check_declared(whole_idea, "idea", declared)
     rules = [Rule.from_dict(rule) for rule in selection["rules"]]
+    overrides = _checked_overrides(Path(arguments.root).resolve())[0] if arguments.root else []
+    rules = apply_overrides(rules, overrides)
     recommendation = recommend(answers, whole_idea, rules, candidates)
-    payload = {"command": "select", **asdict(recommendation), "question": None, "goal_conflict": None}
+    payload = {"command": "select", **asdict(recommendation), "question": None, "goal_conflict": None,
+               "overrides": [{"rule_id": override["rule_id"],
+                              "applied": "pending: it binds once the contract that shows it is confirmed"}
+                             for override in overrides]}
     if recommendation.pending_question:
         payload["question"] = next_question({"answers": answers}, whole_idea, selection, candidates)
     elif request.get("chosen") is not None:
@@ -174,10 +182,9 @@ def _resolve_conflict(arguments: argparse.Namespace) -> int:
     return 0
 
 
-def _selection_problem(decision: Decision, part_id: str) -> str | None:
+def _selection_problem(decision: Decision, part_id: str, rules: list[Rule]) -> str | None:
     """Why a part's recorded selection cannot be built: stale, open, or an unanswered goal conflict."""
     part = decision.part(part_id)
-    rules = _selection_rules()
     state = selection_state(part, decision.record["facts"], rules)
     if not state["current"]:
         return state["problem"]
@@ -189,27 +196,94 @@ def _selection_problem(decision: Decision, part_id: str) -> str | None:
     return None
 
 
-def _overrides(directory: Path) -> list[dict]:
-    """Every file in the repository's override directory; each must be a valid override."""
-    if not directory.is_dir():
-        return []
-    overrides = []
-    for path in sorted(directory.iterdir()):
-        if path.suffix != ".yaml" or path.is_symlink() or not path.is_file():
-            raise _InvalidInput(f"{path}: the override directory holds only <rule-id>.yaml override files")
+def _kb_version() -> str:
+    return parse_json((SNAPSHOT / "kb-manifest.json").read_text(encoding="utf-8"))["kb_version"]
+
+
+def _research_records(root: Path) -> list[dict]:
+    """Every research record in the repository."""
+    records = []
+    for path in sorted((root / ".harness" / "research").glob("*.md")):
         try:
-            overrides.append(load_document(path, "override"))
+            records.append(load_document(path, "research", root=root))
         except ValueError as error:
             raise _InvalidInput(str(error)) from error
-    return overrides
+    return records
 
 
-def _refuse_overrides(root: Path) -> None:
-    """Overrides on disk block every live command until their adoption flow exists, named or not."""
-    overrides = _overrides(root / ".harness" / "overrides")
-    if overrides:
-        raise _InvalidInput("rule overrides in .harness/overrides block this command until their adoption flow "
-                            f"exists: {', '.join(o['rule_id'] for o in overrides)}; show them with prepare-contract")
+def _check_all(root: Path) -> list[tuple[dict, dict]]:
+    """Each override of the repository with its check against the pinned rules, the KB version and the research."""
+    try:
+        overrides = load_overrides(root)
+    except ValueError as error:
+        raise _InvalidInput(str(error)) from error
+    pinned, records = _pinned_rules() + _selection_rules(), _research_records(root) if overrides else []
+    return [(override, check_override(override, pinned, kb_version=_kb_version(), catalog=_catalog(),
+                                      research=records)) for override in overrides]
+
+
+def _checked_overrides(root: Path) -> tuple[list[dict], dict[str, list[str]]]:
+    """The repository's overrides and their descriptions; any override that cannot be adopted refuses the command."""
+    checked = _check_all(root)
+    problems = [f"{override['rule_id']}: {problem}" for override, result in checked for problem in result["problems"]]
+    if problems:
+        raise _InvalidInput("rule overrides in .harness/overrides cannot apply: " + "; ".join(problems)
+                            + "; run forge.py overrides to see them")
+    return [override for override, _ in checked], {override["rule_id"]: describe(override, result)
+                                                   for override, result in checked}
+
+
+def _override(arguments: argparse.Namespace) -> int:
+    """Propose an override from a kept, supported finding; --write records it after the user agreed."""
+    root = Path(arguments.root).resolve()
+    request = _read_json(arguments.input)
+    unknown = set(request) - {"rule_id", "finding_id", "slug", "reason", "rule", "retired", "link"}
+    if unknown:
+        raise _InvalidInput(f"unknown input keys: {sorted(unknown)}")
+    records = [record for record in _research_records(root) if request.get("slug") in (None, record["slug"])]
+    found = [item for record in records for item in record["findings"] if item["id"] == request.get("finding_id")]
+    if len(found) != 1:
+        raise _InvalidInput(f"finding {request.get('finding_id')!r} is not in exactly one research record of this "
+                            "repository; name its record with slug")
+    override = {"rule_id": request.get("rule_id"), "pinned_kb_version": _kb_version(),
+                "drift": {"finding": found[0], "support_verdict": "supported"}, "reason": request.get("reason"),
+                "date": datetime.date.today().isoformat(), "link": request.get("link", "pending")}
+    override.update({"rule": request["rule"]} if "rule" in request else {"retired": request.get("retired")})
+    try:
+        validate(override, "override")
+        result = check_override(override, _pinned_rules() + _selection_rules(), kb_version=_kb_version(),
+                                catalog=_catalog(), research=_research_records(root))
+        written = (str(write_override(root, override).relative_to(root))
+                   if arguments.write and result["status"] == "valid" else None)
+    except ValueError as error:
+        raise _InvalidInput(str(error)) from error
+    emit({"command": "override", "status": result["status"], "warnings": result["warnings"],
+          "problems": result["problems"], "text": describe(override, result), "override": override,
+          "written": written})
+    return 0 if result["status"] == "valid" else 1
+
+
+def _overrides_command(arguments: argparse.Namespace) -> int:
+    """Each override's state; after a KB update, --keep or --remove records the user's answer."""
+    root = Path(arguments.root).resolve()
+    if arguments.keep or arguments.remove:
+        target = arguments.keep or arguments.remove
+        try:
+            matching = [override for override in load_overrides(root) if override["rule_id"] == target]
+            if not matching:
+                raise _InvalidInput(f"no override for {target}")
+            if arguments.remove:
+                safe_path(root, f".harness/overrides/{target}.yaml").unlink()
+            else:
+                write_override(root, {**matching[0], "pinned_kb_version": _kb_version()})
+        except ValueError as error:
+            raise _InvalidInput(str(error)) from error
+    checked = _check_all(root)
+    emit({"command": "overrides", "overrides": [
+        {"rule_id": override["rule_id"], "status": result["status"], "kb_comparison": result["kb_comparison"],
+         "warnings": result["warnings"], "problems": result["problems"], "text": describe(override, result)}
+        for override, result in checked]})
+    return 0 if all(result["status"] == "valid" for _, result in checked) else 1
 
 
 def _prepare_contract(arguments: argparse.Namespace) -> int:
@@ -219,8 +293,7 @@ def _prepare_contract(arguments: argparse.Namespace) -> int:
         revision = load_revision(Path(arguments.revision)) if arguments.revision else None
     except ValueError as error:
         raise _InvalidInput(str(error)) from error
-    repository = Path(arguments.decision).resolve().parents[2]
-    overrides = _overrides(Path(arguments.overrides) if arguments.overrides else repository / ".harness" / "overrides")
+    overrides, described = _checked_overrides(Path(arguments.decision).resolve().parents[2])
     evidence = []
     if arguments.evidence:
         value = _read_json(arguments.evidence)
@@ -231,7 +304,7 @@ def _prepare_contract(arguments: argparse.Namespace) -> int:
         except ValueError as error:
             raise _InvalidInput(str(error)) from error
     try:
-        contract = render_contract(decision, revision, overrides, worker_evidence=evidence)
+        contract = render_contract(decision, revision, overrides, worker_evidence=evidence, described=described)
     except ValueError as error:
         raise _InvalidInput(str(error)) from error
     problem = _revision_problem(decision, revision)
@@ -320,7 +393,12 @@ def _unattended(arguments: argparse.Namespace):
         rules += [Rule.from_dict(rule) for rule in load_document(SNAPSHOT / "rules" / f"{name}.yaml", "rules")]
     manifest = parse_json((SNAPSHOT / "kb-manifest.json").read_text(encoding="utf-8"))
     files, symlinks = collect_target(root, decision)
-    _refuse_overrides(root)
+    try:
+        effective_rules(rules, load_overrides(root), None)
+    except OverridesPending as error:
+        raise _InvalidInput(f"{error}: run verify") from error
+    except ValueError as error:
+        raise _InvalidInput(str(error)) from error
     run = prepare_run(decision, files, rules, None, symlinks=symlinks, revision=revision, kb_version=manifest["kb_version"])
     failures, _ = selection_failures(decision, _selection_rules())
     results = finish_run(run, ReviewResponse(run_id=run.run_id, verdicts=[], goal_verdicts=[]), [], run.frozen_inputs,
@@ -430,21 +508,24 @@ def _decision_and_revision(arguments: argparse.Namespace, root: Path | None = No
     return decision, revision
 
 
-def _approval(arguments: argparse.Namespace, decision: Decision, revision) -> dict:
-    """The contract the relay confirms, with the worker configurations it shows."""
-    _refuse_overrides(Path(arguments.root).resolve())
+def _approval(arguments: argparse.Namespace, decision: Decision, revision) -> tuple[dict, list[dict]]:
+    """The contract the relay confirms, with the worker configurations and the overrides it shows.
+
+    Returns the approval and the overrides it covers; they apply from here on.
+    """
+    overrides, _ = _checked_overrides(Path(arguments.root).resolve())
     evidence = _read_json(arguments.evidence).get("worker_evidence", [])
     relay = _read_json(arguments.relay)
     try:
         for record in evidence:
             validate(record, "worker-evidence")
-        contract = render_contract(decision, revision, [], worker_evidence=evidence)
+        contract = render_contract(decision, revision, overrides, worker_evidence=evidence)
     except ValueError as error:
         raise _InvalidInput(str(error)) from error
     confirmation = confirm_contract(contract, relay, run_id=str(relay.get("run_id", "")))
     if confirmation is None:
         raise _InvalidInput("the relay does not confirm the current contract; show it with prepare-contract and ask again")
-    return {"contract": contract, "confirmation": confirmation, "worker_evidence": evidence}
+    return {"contract": contract, "confirmation": confirmation, "worker_evidence": evidence}, overrides
 
 
 def _decision_name(path: Path) -> tuple[str, str]:
@@ -465,7 +546,7 @@ def _research(arguments: argparse.Namespace) -> int:
     """One research pass with live workers; --write merges it into .harness/research/<slug>.md."""
     root = Path(arguments.root).resolve()
     decision, revision = _decision_and_revision(arguments, root)
-    approval = _approval(arguments, decision, revision)
+    approval, _ = _approval(arguments, decision, revision)
     record_path = root / ".harness" / "research" / f"{arguments.slug}.md"
     existing = {"slug": arguments.slug, "search_mode": "live", "briefs": [], "findings": [], "support": [], "drift": []}
     if record_path.exists():
@@ -548,9 +629,11 @@ def _build(arguments: argparse.Namespace) -> int:
     """Build a confirmed skill part; conflicts are reported as a diff, never overwritten."""
     root = Path(arguments.root).resolve()
     decision, revision = _decision_and_revision(arguments, root)
-    approval = _approval(arguments, decision, revision)
+    approval, overrides = _approval(arguments, decision, revision)
+    pinned = effective_rules(_pinned_rules(), overrides, approval["confirmation"])
     try:
-        problem = _selection_problem(decision, arguments.part)
+        problem = _selection_problem(decision, arguments.part,
+                                     effective_rules(_selection_rules(), overrides, approval["confirmation"]))
     except KeyError as error:
         raise _InvalidInput(f"unknown part {arguments.part!r}") from error
     if problem:
@@ -563,7 +646,7 @@ def _build(arguments: argparse.Namespace) -> int:
     try:
         description = Path(arguments.description).read_text(encoding="utf-8")
         procedure = Path(arguments.procedure).read_text(encoding="utf-8")
-        planned = plan_skill(decision, arguments.part, revision, _pinned_rules(), confirmation=approval["confirmation"],
+        planned = plan_skill(decision, arguments.part, revision, pinned, confirmation=approval["confirmation"],
                              worker_evidence=approval["worker_evidence"], description=description, procedure=procedure)
         written = write_skill(root, planned, replace=[item for item in (arguments.replace or "").split(",") if item])
     except BuilderUnavailable as error:
@@ -594,15 +677,20 @@ def _drift(root: Path) -> list[dict]:
     return drift
 
 
-def _current_inputs(arguments: argparse.Namespace, root: Path, drift: list[dict]):
+def _current_inputs(arguments: argparse.Namespace, root: Path, drift: list[dict], overrides: list[dict]):
     """The target as it is now: files, links, decision record and requirements file, read again.
 
-    Overrides or a changed drift that appeared while the workers ran make
-    the inputs unusable, which invalidates every part.
+    Overrides or drift that changed while the workers ran make the inputs
+    unusable, which invalidates every part.
     """
     try:
         decision, revision = _decision_and_revision(arguments, root)
-        _refuse_overrides(root)
+        try:
+            current = load_overrides(root)
+        except ValueError as error:
+            raise _InvalidInput(str(error)) from error
+        if current != overrides:
+            raise _InvalidInput("the repository's rule overrides changed during verification")
         if _drift(root) != drift:
             raise _InvalidInput("the research records' drift changed during verification")
         return (*collect_target(root, decision), decision, revision)
@@ -614,7 +702,7 @@ def _verify(arguments: argparse.Namespace) -> int:
     """Live verification: static checks, a fresh review worker, runtime cases and the report."""
     root = Path(arguments.root).resolve()
     decision, revision = _decision_and_revision(arguments, root)
-    approval = _approval(arguments, decision, revision)
+    approval, overrides = _approval(arguments, decision, revision)
     stale = _stale_requirements(decision, revision, [part["id"] for part in decision.record["parts"]
                                                      if part_kind(part) in ("build", "local-reuse")])
     if stale:
@@ -640,11 +728,14 @@ def _verify(arguments: argparse.Namespace) -> int:
         exclusions.add(tuple(fields))
     manifest = parse_json((SNAPSHOT / "kb-manifest.json").read_text(encoding="utf-8"))
     drift = _drift(root)
-    failures, conflicts = selection_failures(decision, _selection_rules())
+    failures, conflicts = selection_failures(
+        decision, effective_rules(_selection_rules(), overrides, approval["confirmation"]))
     try:
-        run, results = verify_live(decision, files, symlinks, _pinned_rules(), revision, arguments.harness, **approval,
+        run, results = verify_live(decision, files, symlinks,
+                                   effective_rules(_pinned_rules(), overrides, approval["confirmation"]), revision,
+                                   arguments.harness, **approval, overrides=overrides,
                                    cases=cases, runner=RUNNER, environ=_environ(), kb_version=manifest["kb_version"],
-                                   login_answer=arguments.login_answer, collect=lambda: _current_inputs(arguments, root, drift),
+                                   login_answer=arguments.login_answer, collect=lambda: _current_inputs(arguments, root, drift, overrides),
                                    confirmed_exclusions=exclusions, drift=drift, selection=failures)
     except ValueError as error:
         raise _InvalidInput(str(error)) from error
@@ -674,8 +765,22 @@ def build_parser() -> argparse.ArgumentParser:
     validate.add_argument("--kb", required=True, help="KB root directory")
     validate.set_defaults(handler=_validate_kb)
     select = commands.add_parser("select", help="recommend from confirmed, normalized answers")
-    select.add_argument("--input", required=True, help="JSON file with answers, whole_idea and candidates")
+    select.add_argument("--input", required=True,
+                        help="JSON file with answers, whole_idea and candidates; chosen and goal for a goal conflict")
+    select.add_argument("--root", help="target repository whose rule overrides apply")
     select.set_defaults(handler=_select)
+    override = commands.add_parser("override", help="propose a rule override from a kept, supported finding")
+    override.add_argument("--root", required=True, help="target repository root")
+    override.add_argument("--input", required=True,
+                          help="JSON: rule_id, finding_id, reason, the new rule or retired: true, optional slug, link")
+    override.add_argument("--write", action="store_true", help="write .harness/overrides/<rule-id>.yaml")
+    override.set_defaults(handler=_override)
+    listing = commands.add_parser("overrides", help="show the repository's overrides and their state")
+    listing.add_argument("--root", required=True, help="target repository root")
+    answer = listing.add_mutually_exclusive_group()
+    answer.add_argument("--keep", metavar="RULE_ID", help="after a KB update: keep this override for the new release")
+    answer.add_argument("--remove", metavar="RULE_ID", help="remove this override")
+    listing.set_defaults(handler=_overrides_command)
     resolve = commands.add_parser("resolve-conflict", help="record the user's answer to a goal-conflict question")
     resolve.add_argument("--decision", required=True, help=".harness/decisions/<date>-<slug>.md")
     resolve.add_argument("--part", required=True)
@@ -686,7 +791,6 @@ def build_parser() -> argparse.ArgumentParser:
     prepare = commands.add_parser("prepare-contract", help="render the current contract for confirmation")
     prepare.add_argument("--decision", required=True, help=".harness/decisions/<date>-<slug>.md")
     prepare.add_argument("--revision", help=".harness/research/<slug>.rules.yaml")
-    prepare.add_argument("--overrides", help="directory with .harness/overrides/*.yaml")
     prepare.add_argument("--evidence", help="JSON object with worker_evidence records")
     prepare.set_defaults(handler=_prepare_contract)
     readme = commands.add_parser("readme", help="write the result README's Outside controls section")

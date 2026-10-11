@@ -19,7 +19,7 @@ def report_data(run: VerificationRun, results: list[PartResult]) -> dict:
         "run_id": run.run_id, "decision_digest": run.decision_digest, "contract_digest": run.contract_digest or None,
         "kb_version": run.kb_version or "unknown", "idea_digest": frozen["idea"], "rules_digest": frozen["rules"],
         "revision_digest": frozen["revision"], "confirmed_parts": list(run.confirmed_parts), "whole_idea": run.whole_idea,
-        "answers": {part["id"]: part["answers"] for part in run.parts}, "scope": run.scope, "overrides": [],
+        "answers": {part["id"]: part["answers"] for part in run.parts}, "scope": run.scope, "overrides": list(run.overrides),
         "parts": [result.to_dict() for result in results],
         "runtime_results": [asdict(result) for result in run.runtime_results],
         "worker_evidence": list(run.worker_evidence), "worker_violations": list(run.worker_violations),
@@ -43,7 +43,8 @@ def render_report(run: VerificationRun, results: list[PartResult]) -> str:
         f"- Rule content digest: {frozen['rules']}",
         f"- Accepted Idea KB revision: {frozen['revision'] or 'none'}",
         f"- Review scope: {run.scope}",
-        "- Rule overrides: none",
+        "- Rule overrides: " + (f"{len(run.overrides)} adopted: " + ", ".join(
+            f"`{item['rule_id']}` (sha256 {item['digest']})" for item in run.overrides) if run.overrides else "none"),
         f"- Checker versions digest: {frozen['checkers']}",
         "",
         "## Worker isolation", "",
@@ -67,7 +68,10 @@ def render_report(run: VerificationRun, results: list[PartResult]) -> str:
     for result in results:
         lines += [
             f"## Part {result.part_id}", "",
-            f"- Harness result: {result.harness_result}",
+            f"- Harness result: {result.harness_result}" + (
+                f" with {len(run.overrides)} override{'s' if len(run.overrides) > 1 else ''} "
+                f"({', '.join(item['rule_id'] for item in run.overrides)})"
+                if run.overrides and result.harness_result == "verified" else ""),
             f"- Goal result: {result.goal_result}",
             f"- Status: {result.status}",
             f"- Outside dependencies: {', '.join(result.outside_dependencies) or 'none'}",

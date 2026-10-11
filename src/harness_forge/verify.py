@@ -146,8 +146,6 @@ def prepare_run(
     scope: set[str] | None = None, scope_label: str = "Extensive review (rarely needed)",
 ) -> VerificationRun:
     """Decide applicability, run script rules and freeze the bound inputs."""
-    if overrides:
-        raise ValueError("rule overrides block verification until their adoption flow exists")
     duplicate = part_ids_problem(decision.record)
     if duplicate:
         raise ValueError(duplicate)
@@ -171,6 +169,7 @@ def prepare_run(
         parts=[dict(part) for part in record["parts"]], worker_evidence=list(worker_evidence),
         approved_workers=_approval_digests(worker_evidence), kb_version=kb_version,
         scope=scope_label, tool_versions={"harness-forge-checkers": inputs["checkers"]},
+        overrides=[{"rule_id": override["rule_id"], "digest": canonical_digest(override)} for override in overrides],
     )
     idea = _idea_rules(revision)
     rule_ids = [rule.id for rule in rules] + [rule.id for part_rules in idea.values() for rule in part_rules]

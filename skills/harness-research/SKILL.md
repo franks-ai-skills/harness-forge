@@ -70,3 +70,12 @@ drift with its source and support result. Drift on a security rule or a
 compatibility change blocks the affected parts until the user decides;
 other drift leaves the pinned rule in force. Never change a rule
 because of drift on your own.
+
+To adopt a correction for this repository, write the user's change as
+JSON (`rule_id`, `finding_id`, `reason`, and either the full new `rule`
+or `"retired": true`) and run `scripts/forge.py override --root
+<repository> --input <file>`. It may change only the statement,
+parameters, severity and applies_to, and only from a finding that
+passed both checks. Show its `text` with every warning, and when the
+user agrees, run it again with `--write`. The changed contract needs a
+new confirmation, which adopts the override.

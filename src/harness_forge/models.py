@@ -228,6 +228,7 @@ class VerificationRun:
     targets: list[str] = field(default_factory=list)
     whole_idea: dict = field(default_factory=dict)
     unconfirmed_reason: str = ""
+    overrides: list[dict] = field(default_factory=list)  # each adopted override's rule id and digest
 
 
 @dataclass(frozen=True)
