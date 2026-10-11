@@ -221,7 +221,80 @@
       }
     },
     "bound_inputs": {
-      "type": "object"
+      "type": "object",
+      "properties": {
+        "files": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$"
+          }
+        },
+        "symlinks": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          }
+        },
+        "kb_version": {
+          "type": "string"
+        },
+        "rules": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "overrides": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "revision": {
+          "oneOf": [
+            {
+              "type": "string",
+              "pattern": "^[0-9a-f]{64}$"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "idea": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "parts": {
+          "type": "object",
+          "propertyNames": {
+            "pattern": "^[A-Z][0-9]*$"
+          },
+          "additionalProperties": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$"
+          },
+          "minProperties": 1
+        },
+        "checkers": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "worker": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "files",
+        "symlinks",
+        "kb_version",
+        "rules",
+        "overrides",
+        "revision",
+        "idea",
+        "parts",
+        "checkers",
+        "worker"
+      ]
     },
     "part_map": {
       "type": "object",

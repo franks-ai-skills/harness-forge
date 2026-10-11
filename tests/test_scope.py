@@ -181,6 +181,38 @@ class LinkCheckTest(unittest.TestCase):
         self.assertIn("part Z does not exist", self.results(dangling, files)["B"].reason)
 
 
+class EarlierRunTest(unittest.TestCase):
+    """An earlier report is checked before a Review compares with it."""
+
+    def report(self):
+        from harness_forge.report import render_report
+        from harness_forge.verify import finish_run, validate_review
+        from tests.test_verify import passing_review
+        scenario = Scenario(skill_decision())
+        run = scenario.run
+        results = finish_run(run, validate_review(run, passing_review(run)), [], scenario.current())
+        return render_report(run, results)
+
+    def test_a_complete_report_is_read_back(self):
+        from harness_forge.scope import earlier_run
+        run, results = earlier_run(self.report())
+        self.assertEqual(set(results), {"A"})
+        self.assertIn("parts", run.frozen_inputs)
+
+    def test_edited_or_incomplete_history_is_refused(self):
+        import json
+        from harness_forge.scope import earlier_run
+        text = self.report()
+        start = text.index("```json\n") + len("```json\n")
+        data = json.loads(text[start:text.index("\n```", start)])
+        for change in ({"bound_inputs": {}}, {"bound_inputs": {**data["bound_inputs"], "parts": {"Z": "0" * 64}}},
+                       {"part_map": {**data["part_map"], "dirs": {"Z": ".agents/skills/z"}}}):
+            with self.subTest(change=list(change)):
+                edited = text[:start] + json.dumps({**data, **change}, indent=2) + text[text.index("\n```", start):]
+                with self.assertRaises(ValueError):
+                    earlier_run(edited)
+
+
 class CliTest(unittest.TestCase):
     def run_cli(self, *argv):
         import contextlib

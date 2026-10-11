@@ -90,11 +90,19 @@ def earlier_run(report_text: str) -> tuple[VerificationRun, dict[str, dict]]:
     blocks = re.findall(r"^## Report data\n\n```json\n(.*?)\n```", report_text, re.S | re.M)
     if len(blocks) != 1:
         raise ValueError("the earlier report has no single report data block")
-    data = json.loads(blocks[0])
+    try:
+        data = json.loads(blocks[0])
+    except ValueError as error:
+        raise ValueError(f"the earlier report's data is not JSON: {error}") from error
     validate(data, "report")
     if "bound_inputs" not in data or "part_map" not in data:
         raise ValueError("the earlier report predates re-verification; run an Extensive review")
     part_map = data["part_map"]
+    parts = set(data["bound_inputs"]["parts"])
+    named = set(part_map["files"]) | set(part_map["dirs"]) | set(part_map["links"]) | set(part_map["requirement_parts"])
+    named |= {result["part_id"] for result in data["parts"]} | set(data["answers"])
+    if not named <= parts:
+        raise ValueError(f"the earlier report names parts its bound inputs lack: {', '.join(sorted(named - parts))}")
     run = VerificationRun(run_id=data["run_id"], decision_digest=data["decision_digest"],
                           contract_digest=data["contract_digest"] or "", applicable_rules={},
                           frozen_inputs=data["bound_inputs"], confirmed_parts=list(data["confirmed_parts"]),
