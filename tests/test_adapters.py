@@ -324,6 +324,17 @@ class LaunchTest(unittest.TestCase):
         self.assertIn("failed to initialize in-process app-server client", response["reason"])
         self.assertIn("outside the session's sandbox", response["reason"])
 
+    def test_a_codex_worker_that_failed_its_turn_says_why(self):
+        request, files, _ = review_case()
+        message = "You've hit your usage limit. Try again at 5:37 PM."
+        stream = "\n".join(json.dumps(event) for event in (
+            {"type": "thread.started", "thread_id": "x"}, {"type": "error", "message": message},
+            {"type": "turn.failed", "error": {"message": message}})) + "\n"
+        runner = FakeRunner(worker=stream, returncode=1)
+        response = run_worker(request, "codex", **approval("codex", "review"), runner=runner, environ=PARENT, files=files)
+        self.assertEqual(response["status"], "failed")
+        self.assertEqual(response["reason"], f"the worker did not complete (exit 1); {message}")
+
     def test_out_of_scope_behavior_discards_the_output(self):
         request, files, verdicts = review_case()
         for harness, stream in (("claude-code", claude_stream(verdicts, calls=("Read", "Write"))),

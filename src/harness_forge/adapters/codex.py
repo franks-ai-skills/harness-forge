@@ -117,7 +117,7 @@ def allowed_calls(role: str) -> set[str]:
 
 def observe(stdout: str) -> dict:
     """Tool-like items and the final agent message from the JSON events."""
-    calls, behavior, text = [], [], None
+    calls, behavior, text, error = [], [], None, None
     completed = errored = False
     parse_errors = 0
     for line in stdout.splitlines():
@@ -145,7 +145,11 @@ def observe(stdout: str) -> dict:
             completed = True
         if event.get("type") in ("turn.failed", "error"):
             errored = True
+            # Codex reports a failed turn, such as a reached usage limit, here and not on stderr.
+            detail = event.get("error")
+            reported = event.get("message") or (detail.get("message") if isinstance(detail, dict) else detail)
+            error = error or (str(reported) if reported else None)
     if parse_errors:
         behavior.append(f"{parse_errors} unparseable event line(s)")
     return {"tools": None, "calls": calls, "text": text, "completed": completed, "errored": errored,
-            "behavior": behavior}
+            "behavior": behavior, "error": error}

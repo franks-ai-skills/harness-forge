@@ -233,7 +233,8 @@ def run_worker(request: dict, harness: str, *, contract: Contract, confirmation:
         return _response(request, "unavailable", evidence, reason=f"the worker timed out after {timeout} s")
     if completed.returncode or observation["errored"] or not observation["completed"]:
         lines = [line.strip() for line in completed.stderr.splitlines() if line.strip()]
-        details = [part for part in (lines[-1][:200] if lines else "", adapter.failure_hint(completed.stderr)) if part]
+        details = [part for part in (lines[-1][:200] if lines else "", str(observation.get("error") or "")[:200],
+                                     adapter.failure_hint(completed.stderr)) if part]
         return _response(request, "failed", evidence,
                          reason="; ".join([f"the worker did not complete (exit {completed.returncode})", *details]))
     try:
