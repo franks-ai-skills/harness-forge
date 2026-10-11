@@ -957,6 +957,17 @@ class LiveCommandsTest(unittest.TestCase):
         self.assertEqual((code, output["drift"][0]["blocking"], output["drift"][0]["category"]), (1, True, "security"))
         self.assertEqual(output["drift"][0]["blocking_parts"], ["A"])
 
+    def test_a_report_that_cannot_be_rendered_is_a_diagnostic(self):
+        cli, arguments = self.build_ready(ResearchRunner([finding()]))
+
+        def too_long(run, results):
+            raise ValueError("report: parts/0/rule_results/0/reason: too long")
+
+        cli.module.render_report = too_long
+        code, output, stderr = cli("verify", *arguments)
+        self.assertEqual((code, output), (2, None))
+        self.assertIn("the report could not be written: report: parts/0/rule_results/0/reason", stderr)
+
     def test_case_ids_must_be_unique(self):
         import yaml
         cli, arguments = self.build_ready(ResearchRunner([finding()]))

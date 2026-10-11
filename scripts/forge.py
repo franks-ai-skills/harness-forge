@@ -1058,13 +1058,13 @@ def _verify(arguments: argparse.Namespace) -> int:
                                    confirmed_exclusions=exclusions, drift=unresolved, selection=failures)
     except ValueError as error:
         raise _InvalidInput(str(error)) from error
-    rendered = render_report(run, results)
     written = None
-    if arguments.write:
-        try:
+    try:
+        rendered = render_report(run, results)
+        if arguments.write:
             written = str(write_report(root, arguments.slug, rendered))
-        except ValueError as error:
-            raise _InvalidInput(str(error)) from error
+    except ValueError as error:
+        raise _InvalidInput(f"the report could not be written: {error}") from error
     parts = [{"part_id": r.part_id, "status": r.status, "harness_result": r.harness_result, "goal_result": r.goal_result}
              for r in results]
     runtime = [{"case_id": r.case_id, "result": r.result, "reason": r.reason} for r in run.runtime_results]

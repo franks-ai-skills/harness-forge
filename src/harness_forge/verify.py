@@ -75,6 +75,9 @@ def _rules_for(part: dict, rules: list[Rule], idea: dict[str, list[Rule]]) -> li
     return selected
 
 
+# A report reason stays within the schema's bound: the drift result names this many, verify's output all.
+_NAMED_DRIFT = 50
+
 # Results Forge itself decides, beside the KB's rules; each is an error and keeps the part from verified.
 FORGE_RULES = {
     "selection.current": "The recorded selection is what the part's confirmed answers give under the effective rules",
@@ -589,10 +592,12 @@ def finish_run(
                     and entry["rule_id"] in affecting.get(part_id, [])]
         if blocking:
             _forge_rule(run, "research.drift", [entry["finding"]["source"] for entry in blocking if entry.get("finding")])
+            named = "; ".join(f"unresolved {drift_category(entry)} drift on {entry['rule_id']} "
+                              f"(finding {entry['finding_id']})" for entry in blocking[:_NAMED_DRIFT])
+            more = len(blocking) - _NAMED_DRIFT
             rule_results.append({"rule_id": "research.drift", "check": "script", "result": "fail",
-                                 "reason": "; ".join(f"unresolved {drift_category(entry)} drift on {entry['rule_id']} "
-                                                     f"(finding {entry['finding_id']})" for entry in blocking)
-                                 + " blocks the part until the user decides"})
+                                 "reason": named + (f"; and {more} more, all in verify's drift output" if more > 0
+                                                    else "") + " blocks the part until the user decides"})
         if part_id in changed:
             _forge_rule(run, "inputs.bound")
             rule_results.append({"rule_id": "inputs.bound", "check": "script", "result": "fail",

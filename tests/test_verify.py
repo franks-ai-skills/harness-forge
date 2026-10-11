@@ -157,6 +157,17 @@ class PrecedenceTest(unittest.TestCase):
         self.assertIn("security.secrets.none-in-files (finding F2)", entries[0]["reason"])
         earlier_run(render_report(scenario.run, list(results.values())))  # Forge reads its own report back
 
+    def test_a_part_with_hundreds_of_drifts_still_gets_a_valid_report(self):
+        from harness_forge.report import render_report
+        scenario = Scenario(skill_decision())
+        drift = [{"rule_id": "security.secrets.none-in-files", "finding_id": f"F{number}", "summary": "Secrets.",
+                  "category": "security"} for number in range(1, 301)]
+        results = scenario.finish(drift=drift)
+        [entry] = [r for r in results["A"].rule_results if r["rule_id"] == "research.drift"]
+        self.assertLess(len(entry["reason"]), 20000)
+        self.assertIn("and 250 more", entry["reason"])
+        render_report(scenario.run, list(results.values()))
+
     def test_confirmed_nothing_fits(self):
         nothing = part("B", "One-step task", outcome="nothing-fits", recommended=None, chosen=None, outside_controls=[])
         result = Scenario(skill_decision(nothing), confirmed=("A", "B")).finish()["B"]
