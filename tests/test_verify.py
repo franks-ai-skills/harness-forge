@@ -86,9 +86,9 @@ class Scenario:
         arguments.update(changes)
         return bound_inputs(self.record, arguments.pop("files"), RULES, **arguments)
 
-    def finish(self, review=None, runtime=(), current=None):
+    def finish(self, review=None, runtime=(), current=None, drift=()):
         review = validate_review(self.run, review if review is not None else passing_review(self.run))
-        return {r.part_id: r for r in finish_run(self.run, review, list(runtime), current or self.current())}
+        return {r.part_id: r for r in finish_run(self.run, review, list(runtime), current or self.current(), drift=drift)}
 
 
 def assert_result(test, result, harness_expected, goal_expected):
@@ -124,6 +124,23 @@ class PrecedenceTest(unittest.TestCase):
                        outside_controls=[GATE])
         result = Scenario(skill_decision(outside), confirmed=("A", "B")).finish()["B"]
         assert_result(self, result, "not applicable", "depends on outside controls")
+
+    def test_blocking_drift_stops_the_parts_its_rule_applies_to(self):
+        outside = part("B", "Never merge without review", outcome="outside-instead", recommended=None, chosen=None,
+                       outside_controls=[GATE])
+        scenario = Scenario(skill_decision(outside), confirmed=("A", "B"))
+        ordinary = {"rule_id": "skills.description.length", "finding_id": "F1", "summary": "The limit grew.",
+                    "category": "ordinary"}
+        self.assertEqual(scenario.finish(drift=[ordinary])["A"].status, "verified", "ordinary drift keeps the pinned rule")
+        results = scenario.finish(drift=[{**ordinary, "category": "compatibility"}])
+        self.assertEqual((results["A"].status, results["A"].harness_result), ("blocked", "not verified"))
+        self.assertIn("unresolved compatibility drift on skills.description.length", str(results["A"].rule_results))
+        self.assertEqual(results["B"].status, "decided", "the rule does not apply to B")
+
+        rule_id = next(r for r in scenario.run.applicable_rules["B"] if r.startswith("outside."))
+        results = scenario.finish(drift=[{**ordinary, "rule_id": rule_id}])
+        self.assertEqual((results["B"].status, results["B"].goal_result), ("blocked", "not assessed"))
+        self.assertIn(f"unresolved security drift on {rule_id}", str(results["B"].rule_results))
 
     def test_confirmed_nothing_fits(self):
         nothing = part("B", "One-step task", outcome="nothing-fits", recommended=None, chosen=None, outside_controls=[])

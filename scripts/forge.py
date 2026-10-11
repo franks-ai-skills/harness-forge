@@ -540,11 +540,16 @@ def _verify(arguments: argparse.Namespace) -> int:
             raise _InvalidInput(f"--confirm-not-applicable takes PART:RULE, not {item!r}")
         exclusions.add((part_id, rule_id))
     manifest = parse_json((SNAPSHOT / "kb-manifest.json").read_text(encoding="utf-8"))
+    research = root / ".harness" / "research" / f"{arguments.slug}.md"
+    try:
+        drift = load_document(research, "research", root=root)["drift"] if research.exists() else []
+    except ValueError as error:
+        raise _InvalidInput(str(error)) from error
     try:
         run, results = verify_live(decision, files, symlinks, _pinned_rules(), revision, arguments.harness, **approval,
                                    cases=cases, runner=RUNNER, environ=_environ(), kb_version=manifest["kb_version"],
                                    login_answer=arguments.login_answer, collect=lambda: _current_inputs(arguments, root),
-                                   confirmed_exclusions=exclusions)
+                                   confirmed_exclusions=exclusions, drift=drift)
     except ValueError as error:
         raise _InvalidInput(str(error)) from error
     rendered = render_report(run, results)

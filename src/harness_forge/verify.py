@@ -23,6 +23,7 @@ from harness_forge.models import (
     VerificationRun,
 )
 from harness_forge.predicates import UnknownFact
+from harness_forge.research import blocked_parts, drift_category
 from harness_forge.scope import affected_parts
 
 BUILDABLE = ("skills", "commands")
@@ -277,8 +278,13 @@ def finish_run(
     confirmed_exclusions: set[tuple[str, str]] | frozenset = frozenset(),
     worker_observations: list[dict] | tuple = (),
     required_activation: dict[str, set[str]] | None = None,
+    drift: list[dict] | tuple = (),
 ) -> list[PartResult]:
     """Each part's harness and goal result. confirmed_exclusions are live user confirmations.
+
+    drift is the research record's drift. Unresolved security or
+    compatibility drift on a rule that applies to a part blocks that part
+    until the user decides; the decision flow is not available yet.
 
     required_activation maps a part to its explicit runtime case ids: a live
     build is verified only when one of them passed. Offline runs leave it
@@ -302,6 +308,7 @@ def finish_run(
     verdicts = {} if run.worker_violations else {(v["part_id"], v["rule_id"]): v for v in review.verdicts}
     goal_verdicts = {} if run.worker_violations else {v["part_id"]: v for v in review.goal_verdicts}
     statics = {(r.part_id, r.rule_id): r for r in run.static_results}
+    drifted = blocked_parts(list(drift), run.applicable_rules)
     results = []
     for part in run.parts:
         part_id, kind = part["id"], part_kind(part)
@@ -334,7 +341,7 @@ def finish_run(
 
         goal_verdict = goal_verdicts.get(part_id)
         goal = {"verdict": goal_verdict["verdict"], "reason": goal_verdict["reason"]} if goal_verdict else None
-        blocked = part["status"] == "blocked"
+        blocked = part["status"] == "blocked" or part_id in drifted
         if kind in ("build", "local-reuse"):
             failures = [
                 r for r in rule_results
@@ -354,7 +361,12 @@ def finish_run(
             status = "verified" if ok else ("built" if confirmed and not blocked else "blocked")
         else:
             harness = "not checked" if kind == "remote-reuse" else "not applicable"
-            status = "blocked" if (not confirmed or kind == "unavailable") else part["status"]
+            status = "blocked" if (not confirmed or kind == "unavailable" or part_id in drifted) else part["status"]
+        for entry in drift if part_id in drifted else ():
+            if drift_category(entry) != "ordinary" and entry["rule_id"] in run.applicable_rules.get(part_id, []):
+                rule_results.append({"rule_id": "research.drift", "check": "script", "result": "fail",
+                                     "reason": f"unresolved {drift_category(entry)} drift on {entry['rule_id']} "
+                                               f"(finding {entry['finding_id']}) blocks the part until the user decides"})
         if part_id in changed:
             rule_results.append({"rule_id": "inputs.bound", "check": "script", "result": "fail",
                                  "reason": "a bound input changed after the run was prepared"})

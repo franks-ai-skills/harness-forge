@@ -87,7 +87,7 @@ def verify_live(
     worker_evidence: list[dict] | tuple, cases: list[dict], runner: Runner = run_command,
     environ: Mapping[str, str] | None = None, kb_version: str = "", login_answer: str | None = None,
     collect: Callable[[], tuple[dict[str, bytes], dict[str, str], Decision, AcceptedRevision | None]] | None = None,
-    confirmed_exclusions: set[tuple[str, str]] | frozenset = frozenset(),
+    confirmed_exclusions: set[tuple[str, str]] | frozenset = frozenset(), drift: list[dict] | tuple = (),
 ):
     """Static checks, a fresh review worker, runtime cases, then results in the design's precedence.
 
@@ -144,5 +144,6 @@ def verify_live(
                 for part in run.parts if part_kind(part) == "build" and part["id"] in run.confirmed_parts
                 and harness in run.targets}
     results = finish_run(run, review, runtime, current, worker_observations=observations,
-                         confirmed_exclusions=frozenset(confirmed_exclusions), required_activation=required)
+                         confirmed_exclusions=frozenset(confirmed_exclusions), required_activation=required,
+                         drift=drift)
     return run, results

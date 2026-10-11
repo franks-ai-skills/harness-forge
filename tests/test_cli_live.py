@@ -12,7 +12,7 @@ import yaml
 
 from harness_forge.contracts import load_decision, write_decision
 from harness_forge.documents import load_document
-from harness_forge.research import load_revision
+from harness_forge.research import load_revision, write_research
 from harness_forge.adapters.base import Completed
 from tests.test_adapters import CLAUDE_API_KEY, PARENT, FakeRunner, claude_stream
 from tests.test_build_skill import DESCRIPTION, NAME, PROCEDURE
@@ -282,6 +282,20 @@ class LiveCommandsTest(unittest.TestCase):
         code, _, stderr = cli("prepare-contract", "--decision", self.decision)
         self.assertEqual(code, 2)
         self.assertIn("notes.txt", stderr)
+
+    def test_unresolved_compatibility_drift_blocks_the_affected_part(self):
+        cli, arguments = self.build_ready(ResearchRunner([finding()]))
+        path = self.root / ".harness/research/repro.md"
+        record = load_document(path, "research")
+        record["drift"] = [{"rule_id": "skills.description.length", "finding_id": record["findings"][0]["id"],
+                            "summary": "The vendor raised the description limit.", "category": "compatibility"}]
+        write_research(self.root, record, "Drift recorded.\n")
+        code, output, stderr = cli("verify", *arguments)
+        self.assertEqual(code, 1, stderr)
+        self.assertEqual(output["parts"][0]["status"], "blocked")
+        self.assertEqual(output["parts"][0]["harness_result"], "not verified")
+        self.assertIn("unresolved compatibility drift on skills.description.length",
+                      (self.root / ".harness/reports/repro.md").read_text(encoding="utf-8"))
 
     def test_case_ids_must_be_unique(self):
         import yaml
