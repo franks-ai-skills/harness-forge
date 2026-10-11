@@ -50,12 +50,25 @@ def fixture_problem(path: str, candidate: Mapping[str, bytes] | None = None) -> 
     return None
 
 
+def _shared_id(cases: list[dict]) -> str | None:
+    """Results bind to a case by its id, so an id used twice lets one case stand in for another."""
+    seen = set()
+    for item in cases:
+        if item.get("id") in seen:
+            return f"case id {item['id']!r} is used twice"
+        seen.add(item.get("id"))
+    return None
+
+
 def load_cases(path: Path) -> list[dict]:
     """Cases from an evals/smoke file, checked for the keys a run needs."""
     value = yaml.safe_load(Path(path).read_text(encoding="utf-8"))
     cases = value.get("cases") if isinstance(value, dict) else None
     if not isinstance(cases, list) or not cases:
         raise ValueError(f"{path}: expected a non-empty cases list")
+    shared = _shared_id(cases)
+    if shared:
+        raise ValueError(f"{path}: {shared}")
     for item in cases:
         missing = {"id", "part_id", "mode", "prompt", "expected", "permitted_tools"} - set(item)
         if missing or item["mode"] not in MODES or item["expected"] not in EXPECTED:
@@ -282,6 +295,9 @@ def run_skill_runtime(
     """
     if harness not in run.targets:
         raise ValueError(f"{harness} is not a target of this run")
+    shared = _shared_id(cases)
+    if shared:
+        raise ValueError(shared)
     frozen = run.frozen_inputs["files"]
     for test_case in cases:
         directory = run.part_dirs.get(test_case["part_id"])

@@ -197,6 +197,10 @@ class RuntimeTest(unittest.TestCase):
                 self.assertIn(path, results[0].reason)
                 self.assertEqual(runner.worker_calls, [], "nothing launches with a fixture in a reserved place")
 
+    def test_runtime_refuses_cases_that_share_an_id(self):
+        with self.assertRaisesRegex(ValueError, "used twice"):
+            self.run_cases("claude-code", claude_run(), cases=[case(), case("implicit", id="repro-explicit")])
+
     def test_a_case_file_with_a_reserved_fixture_is_refused(self):
         import tempfile
         import yaml

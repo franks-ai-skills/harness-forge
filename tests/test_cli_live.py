@@ -230,6 +230,20 @@ class LiveCommandsTest(unittest.TestCase):
         self.assertEqual(code, 2)
         self.assertIn("accepted requirements", stderr)
 
+    def test_case_ids_must_be_unique(self):
+        import yaml
+        cli, arguments = self.build_ready(ResearchRunner([finding()]))
+        cases = yaml.safe_load((FORGE / "evals/smoke/vertical.yaml").read_text(encoding="utf-8"))["cases"]
+        explicit = next(c for c in cases if c["mode"] == "explicit")
+        for item in cases:
+            if item["mode"] == "implicit":
+                item["id"] = explicit["id"]
+        shared = cli.write("shared.yaml", yaml.safe_dump({"cases": cases}))
+        option = arguments.index("--cases") + 1
+        code, _, stderr = cli("verify", *arguments[:option], shared, *arguments[option + 1:])
+        self.assertEqual(code, 2)
+        self.assertIn(f"case id {explicit['id']!r} is used twice", stderr)
+
     def test_a_built_skill_needs_runtime_cases(self):
         cli, arguments = self.build_ready(ResearchRunner([finding()]))
         option = arguments.index("--cases")
