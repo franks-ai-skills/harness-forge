@@ -312,6 +312,20 @@ def _revision_problem(decision: Decision, revision) -> str | None:
     return None
 
 
+def _stale_requirements(decision: Decision, revision) -> str | None:
+    """Accepted requirements count only for the brief they were researched for and parts the decision has."""
+    for part_id in sorted({entry["part_id"] for entry in revision.rules} if revision else ()):
+        try:
+            brief = make_brief(decision, "deep", part_id)
+        except ValueError:
+            return f"the accepted requirements are for part {part_id}, which the decision does not have"
+        if brief.digest != revision.brief_digest:
+            return (f"the accepted requirements were researched for another brief: the goals, picture, targets, "
+                    f"reach or part {part_id}'s goal, answers or mechanism changed; research part {part_id} again "
+                    f"and accept its requirements")
+    return None
+
+
 def _decision_and_revision(arguments: argparse.Namespace, root: Path | None = None, *, matching: bool = True):
     try:
         decision = load_decision(Path(arguments.decision), root=root)
@@ -444,6 +458,9 @@ def _build(arguments: argparse.Namespace) -> int:
     approval = _approval(arguments, decision, revision)
     if revision is None:
         raise _InvalidInput("--revision is required: a skill is built from the accepted requirements")
+    stale = _stale_requirements(decision, revision)
+    if stale:
+        raise _InvalidInput(stale)
     try:
         description = Path(arguments.description).read_text(encoding="utf-8")
         procedure = Path(arguments.procedure).read_text(encoding="utf-8")
@@ -477,6 +494,9 @@ def _verify(arguments: argparse.Namespace) -> int:
     root = Path(arguments.root).resolve()
     decision, revision = _decision_and_revision(arguments, root)
     approval = _approval(arguments, decision, revision)
+    stale = _stale_requirements(decision, revision)
+    if stale:
+        raise _InvalidInput(stale)
     files, symlinks = collect_target(root, decision)
     try:
         cases = load_cases(Path(arguments.cases)) if arguments.cases else []

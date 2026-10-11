@@ -243,6 +243,18 @@ class LiveCommandsTest(unittest.TestCase):
         self.assertIn("idea.repro.b.platform belongs to part B, not A", stderr)
         self.assertFalse((self.root / ".harness/research/repro.rules.yaml").exists())
 
+    def test_requirements_researched_for_another_goal_are_stale(self):
+        cli, arguments = self.build_ready(ResearchRunner([finding()]))
+        text = Path(self.decision).read_text(encoding="utf-8")
+        Path(self.decision).write_text(text.replace("goal: Write a reproduction checklist when asked",
+                                                    "goal: Write a security vulnerability report"), encoding="utf-8")
+        self.assertEqual(load_decision(self.decision).part("A")["goal"], "Write a security vulnerability report")
+        option = arguments.index("--relay") + 1
+        relay = cli.confirm(self.decision, "verify-1", "--revision", self.root / ".harness/research/repro.rules.yaml")
+        code, _, stderr = cli("verify", *arguments[:option], relay, *arguments[option + 1:])
+        self.assertEqual(code, 2)
+        self.assertIn("researched for another brief", stderr)
+
     def test_case_ids_must_be_unique(self):
         import yaml
         cli, arguments = self.build_ready(ResearchRunner([finding()]))
