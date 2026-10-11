@@ -16,6 +16,7 @@ from harness_forge.research import load_revision, write_research
 from harness_forge.adapters.base import Completed
 from tests.test_adapters import CLAUDE_API_KEY, PARENT, FakeRunner, claude_stream
 from tests.test_build_skill import DESCRIPTION, NAME, PROCEDURE
+from tests.builders import part
 from tests.test_contracts import OVERRIDE
 from tests.test_verify import skill_decision
 from tests.test_workflow import ResearchRunner, fetch_page, finding
@@ -361,6 +362,28 @@ class LiveCommandsTest(unittest.TestCase):
         option = arguments.index("--relay") + 1
         code, _, stderr = cli("verify", *arguments[:option], relay, *arguments[option + 1:])
         self.assertEqual(code, 2)
+        self.assertIn("researched for another brief", stderr)
+
+    def test_another_parts_empty_revision_does_not_cover_a_built_part(self):
+        cli, arguments = self.build_ready(ResearchRunner([finding()]))
+        record = load_decision(self.decision)
+        record.record["parts"].append(part("B", "Never merge without review", outcome="outside-instead",
+                                           recommended=None, chosen=None))
+        write_decision(self.root, record, slug="repro", date="2026-10-10")
+        proposed = cli.write("proposed-empty.json", {"requirements": []})
+        choices = cli.write("choices-empty.json", {})
+        for part_id in ("A", "B"):
+            code, _, stderr = cli("accept", "--decision", self.decision, "--part", part_id, "--proposed", proposed,
+                                  "--choices", choices, "--root", self.root, "--slug", "repro")
+            self.assertEqual(code, 0, stderr)
+        text = Path(self.decision).read_text(encoding="utf-8")
+        Path(self.decision).write_text(text.replace("goal: Write a reproduction checklist when asked",
+                                                    "goal: Write a security vulnerability report"), encoding="utf-8")
+        relay = cli.confirm(self.decision, "verify-1", "--revision", self.root / ".harness/research/repro.rules.yaml")
+        option = arguments.index("--relay") + 1
+        code, _, stderr = cli("verify", *arguments[:option], relay, *arguments[option + 1:])
+        self.assertEqual(code, 2)
+        self.assertIn("part A", stderr)
         self.assertIn("researched for another brief", stderr)
 
     def test_case_ids_must_be_unique(self):

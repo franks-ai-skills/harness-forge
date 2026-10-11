@@ -334,25 +334,26 @@ def _revision_problem(decision: Decision, revision) -> str | None:
     return None
 
 
-def _stale_requirements(decision: Decision, revision) -> str | None:
-    """Accepted requirements count only for the brief they were researched for and parts the decision has.
+def _stale_requirements(decision: Decision, revision, covered: list[str]) -> str | None:
+    """Accepted requirements count only for the parts and the brief they were researched for.
 
-    The brief must still be some part's deep brief even when no requirement
-    was accepted, so an empty revision cannot outlive a changed goal.
+    ``covered`` are the parts the requirements must hold for: the part being
+    built, or each part verification checks. A revision covers one part's
+    deep brief, empty or not, so each covered part's brief must be the
+    revision's; a second skill part is refused until several parts can hold
+    requirements.
     """
-    for part_id in sorted({entry["part_id"] for entry in revision.rules} if revision else ()):
+    if revision is None:
+        return None
+    for part_id in sorted({entry["part_id"] for entry in revision.rules} | set(covered)):
         try:
             brief = make_brief(decision, "deep", part_id)
         except ValueError:
             return f"the accepted requirements are for part {part_id}, which the decision does not have"
         if brief.digest != revision.brief_digest:
-            return (f"the accepted requirements were researched for another brief: the goals, picture, targets, "
-                    f"reach or part {part_id}'s goal, answers or mechanism changed; research part {part_id} again "
-                    f"and accept its requirements")
-    if revision and not any(make_brief(decision, "deep", part["id"]).digest == revision.brief_digest
-                            for part in decision.record["parts"]):
-        return ("the accepted requirements were researched for another brief: no part's goals, picture, targets, "
-                "reach, answers or mechanism match it any more; research the part again and accept its requirements")
+            return (f"the accepted requirements were researched for another brief than part {part_id}'s: the goals, "
+                    f"picture, targets, reach or the part's goal, answers or mechanism changed, or they belong to "
+                    f"another part; research part {part_id} again and accept its requirements")
     return None
 
 
@@ -489,7 +490,7 @@ def _build(arguments: argparse.Namespace) -> int:
     approval = _approval(arguments, decision, revision)
     if revision is None:
         raise _InvalidInput("--revision is required: a skill is built from the accepted requirements")
-    stale = _stale_requirements(decision, revision)
+    stale = _stale_requirements(decision, revision, [arguments.part])
     if stale:
         raise _InvalidInput(stale)
     try:
@@ -547,7 +548,8 @@ def _verify(arguments: argparse.Namespace) -> int:
     root = Path(arguments.root).resolve()
     decision, revision = _decision_and_revision(arguments, root)
     approval = _approval(arguments, decision, revision)
-    stale = _stale_requirements(decision, revision)
+    stale = _stale_requirements(decision, revision, [part["id"] for part in decision.record["parts"]
+                                                     if part_kind(part) in ("build", "local-reuse")])
     if stale:
         raise _InvalidInput(stale)
     files, symlinks = collect_target(root, decision)
