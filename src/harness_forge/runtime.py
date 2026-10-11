@@ -14,6 +14,7 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import re
 import tempfile
 from pathlib import Path
 from typing import Mapping
@@ -131,16 +132,26 @@ def _observe_claude(stdout: str, name: str, baseline: set[str]) -> dict:
     return observed
 
 
+_SKILL_READ = re.compile(r"\.agents/skills/([^/\s'\"]+)/SKILL\.md")
+
+
 def _observe_codex(stdout: str, directory: str) -> dict:
+    """Activation is a read of the candidate's SKILL.md, unless another skill's SKILL.md was read first:
+    a later read of the candidate then follows that skill's pointer."""
     observed = {"activation": None, "calls": [], "unavailable": [], "competing": [], "loaded": None,
                 "completed": False, "errored": False}
+    name = directory.rsplit("/", 1)[-1]
+    first_skill = None
     for event in _events(stdout):
         item = event.get("item") if isinstance(event.get("item"), dict) else {}
         if (event.get("type") == "item.completed" and item.get("type") not in ("agent_message", "reasoning", "todo_list")
                 and not codex.empty_listing(item)):
             observed["calls"].append(str(item.get("type")))
-            if item.get("type") == "command_execution" and f"{directory}/SKILL.md" in str(item.get("command", "")):
-                observed["activation"] = f"read {directory}/SKILL.md"
+            if item.get("type") == "command_execution":
+                read = _SKILL_READ.findall(str(item.get("command", "")))
+                first_skill = first_skill or (read[0] if read else None)
+                if name in read and first_skill == name:
+                    observed["activation"] = f"read {directory}/SKILL.md"
         observed["completed"] = observed["completed"] or event.get("type") == "turn.completed"
         observed["errored"] = observed["errored"] or event.get("type") in ("turn.failed", "error")
     return observed

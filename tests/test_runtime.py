@@ -157,6 +157,18 @@ class RuntimeTest(unittest.TestCase):
                                    baseline_skills={"harness-verify"})[0][0]
         self.assertEqual(near_miss.result, "pass", near_miss.reason)
 
+    def test_a_codex_read_after_another_skill_is_that_skills_pointer(self):
+        def command(text):
+            return json.dumps({"type": "item.completed", "item": {"id": text[-9:], "type": "command_execution",
+                                                                 "command": text, "exit_code": 0}})
+
+        other_first = "\n".join([command("cat .agents/skills/harness-verify/SKILL.md"),
+                                  command(f"cat .agents/skills/harness-verify/references/x.md {SKILL_DIR}/SKILL.md")])
+        result = self.run_cases("codex", other_first + "\n" + codex_run(read_skill=False),
+                                cases=[case("implicit", "activates")])[0][0]
+        self.assertEqual(result.result, "not-run", "a pointer read after another skill is not the candidate activating")
+        self.assertIsNone(result.observed_activation)
+
     def test_a_codex_resource_listing_is_not_a_tool_outside_the_list(self):
         listing = json.dumps({"type": "item.completed", "item": {"id": "l", "type": "mcp_tool_call", "server": "codex",
                                                                 "tool": "list_mcp_resources", "status": "completed"}})
