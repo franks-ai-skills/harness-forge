@@ -9,9 +9,11 @@ Status: the workflow runs live in Claude Code and Codex from a local
 checkout, with research, source-support and review workers launched as
 separate CLI processes and runtime tests of the built skill. On
 2026-10-11 the automated live runs and one hands-on session per harness
-completed it. Overrides, drift and conflict handling, the reference
-checks and installation are not done yet, so no harness is supported
-for general use yet. The feasibility probes and their evidence remain in
+completed it. Goal conflicts, repository rule overrides, knowledge-base
+drift with its issue proposals, checks of the links between parts and
+re-verification with a Review or Extensive scope followed the same day.
+The reference checks and installation are not done yet, so no harness
+is supported for general use yet. The feasibility probes and their evidence remain in
 `evals/canaries/`.
 Implementation follows the sibling playground's
 [design](../playground/specs/2026-10-06-harness-forge-design.md) and
