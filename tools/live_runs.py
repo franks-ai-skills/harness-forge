@@ -39,7 +39,7 @@ if str(ROOT / "src") not in sys.path:
     sys.path.insert(0, str(ROOT / "src"))
 
 from harness_forge.adapters.base import preflight, run_command  # noqa: E402
-from harness_forge.contracts import load_decision, update_outside_section, write_decision  # noqa: E402
+from harness_forge.contracts import write_decision  # noqa: E402
 from harness_forge.documents import load_document  # noqa: E402
 from harness_forge.models import Decision  # noqa: E402
 from harness_forge.runtime import activation_case, claude_baseline  # noqa: E402
@@ -182,8 +182,9 @@ def vertical(harness: str, out: Path, *, forge: Forge | None = None,
                                    "--description", description, "--procedure", procedure))
     if code:
         return finish("stopped: the build was refused")
-    (repo / "README.md").write_text(update_outside_section((repo / "README.md").read_text(encoding="utf-8"),
-                                                           load_decision(decision)), encoding="utf-8")
+    code, _ = stage("readme", forge("readme", "--decision", decision, "--root", repo))
+    if code:
+        return finish("stopped: the README's outside controls were not written")
 
     verify_relay = confirm("vertical-verify", "--revision", revision)
     verify = ["verify", "--decision", decision, "--root", repo, "--revision", revision, "--evidence", evidence,

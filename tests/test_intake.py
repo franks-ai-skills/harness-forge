@@ -129,6 +129,13 @@ class ReadmeTest(unittest.TestCase):
         self.assertIn("outside.merge.no-agent-bypass", readme)
         self.assertIn("availability unknown", readme)
 
+    def test_each_prerequisite_reads_as_its_condition(self):
+        condition = "The agent's identity is on no bypass or override list of the control"
+        readme = update_outside_section("# Repro\n", self.outside_only(),
+                                        conditions={"outside.merge.no-agent-bypass": condition})
+        self.assertIn(f"  - {condition} (`outside.merge.no-agent-bypass`)", readme)
+        self.assertIn("  - `outside.codeowners.agent-config`", readme)
+
     def test_unrelated_content_is_preserved_and_section_replaced(self):
         original = "# Repro\n\nIntro.\n\n## Outside controls\n\n- stale entry\n\n## Usage\n\nRun it.\n"
         updated = update_outside_section(original, self.outside_only())

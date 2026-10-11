@@ -90,9 +90,11 @@ plugin README). Every command prints bounded JSON.
 8. **Decision.** The user may choose another mechanism; record it with
    their reason in `override_reason`. A non-skill choice stays the
    recommendation even though only skills can be built in this release.
-9. **Record.** Write `.harness/decisions/<date>-<slug>.md` and update the
-   result README's `Outside controls` section, also for parts that build
-   nothing. Only the intake writes that section.
+9. **Record.** Write `.harness/decisions/<date>-<slug>.md`, then run
+   `scripts/forge.py readme --decision <record> --root <repository>`. It
+   writes the result README's `Outside controls` section, also for parts
+   that build nothing, with each control's conditions spelled out. Only
+   the intake writes that section.
 10. **Confirm the contract.** Render it with `prepare-contract` and ask
     for confirmation as [references/contract.md](references/contract.md)
     describes. Unconfirmed parts stay pending.

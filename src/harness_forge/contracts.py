@@ -382,7 +382,7 @@ def load_decision(path: Path, *, root: Path | None = None) -> Decision:
 # --- README hand-off --------------------------------------------------------
 
 
-def _outside_section(decision: Decision) -> str:
+def _outside_section(decision: Decision, conditions: dict[str, str]) -> str:
     lines = [f"## {OUTSIDE_HEADING}", ""]
     entries = []
     for part in decision.record["parts"]:
@@ -390,15 +390,22 @@ def _outside_section(decision: Decision) -> str:
             role = "required for the goal" if control["required_for_goal"] else "precaution"
             entries.append(
                 f"- `{control['control']}` (part {part['id']}): {OUTSIDE_STATUS}. {role.capitalize()}; "
-                f"availability {control['availability']}. Prerequisites: {', '.join(control['prerequisites'])}."
+                f"availability {control['availability']}. It works as a gate only when:"
             )
+            for rule_id in control["prerequisites"]:
+                condition = conditions.get(rule_id)
+                entries.append(f"  - {condition} (`{rule_id}`)" if condition else f"  - `{rule_id}`")
     lines += entries or ["None recommended."]
     return "\n".join(lines) + "\n"
 
 
-def update_outside_section(readme: str, decision: Decision) -> str:
-    """Replace or add the result README's Outside controls section only."""
-    section = _outside_section(decision)
+def update_outside_section(readme: str, decision: Decision, conditions: dict[str, str] | None = None) -> str:
+    """Replace or add the result README's Outside controls section only.
+
+    `conditions` maps a prerequisite rule id to its statement, so the user
+    reads what to configure instead of a rule id.
+    """
+    section = _outside_section(decision, conditions or {})
     match = re.search(rf"^## {re.escape(OUTSIDE_HEADING)}[ \t]*\n", readme, re.M)
     if not match:
         return readme.rstrip("\n") + "\n\n" + section

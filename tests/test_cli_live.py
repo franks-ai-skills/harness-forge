@@ -196,6 +196,16 @@ class LiveCommandsTest(unittest.TestCase):
         self.assertFalse(output["built"])
         self.assertIn("+5. Name the browser version.", output["diff"])
 
+    def test_readme_writes_the_outside_controls_with_their_conditions(self):
+        cli = Cli(FakeRunner(), self.root)
+        code, output, stderr = cli("readme", "--decision", self.decision, "--root", self.root)
+        self.assertEqual(code, 0, stderr)
+        readme = (self.root / "README.md").read_text(encoding="utf-8")
+        self.assertTrue(readme.startswith("# Repro\n"))
+        self.assertIn("`codeowners-agent-config` (part A): recommended, not verified", readme)
+        self.assertIn("together with the setting that requires code-owner review (`outside.codeowners.agent-config`)", readme)
+        self.assertEqual(output["written"], "README.md")
+
     def test_build_refuses_without_a_matching_confirmation(self):
         cli = Cli(FakeRunner(), self.root)
         _, workers, _ = cli("workers", "--harness", "claude-code")
