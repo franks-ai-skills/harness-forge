@@ -40,7 +40,8 @@ plugin README). Every command prints bounded JSON.
 
 1. **Existing contract first.** If `.harness/decisions/` already holds a
    record for this idea, run `scripts/forge.py prepare-contract --decision
-   <record>` and show the whole contract before anything else. For a new
+   <record>`, with `--revision` when it records accepted requirements, and
+   show the whole contract before anything else. For a new
    idea, say the contract is empty.
 2. **Goal and picture.** Ask what the idea should achieve, for whom, and
    how the user will know it works. Record the user's own description of

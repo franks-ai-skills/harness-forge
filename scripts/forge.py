@@ -154,6 +154,9 @@ def _prepare_contract(arguments: argparse.Namespace) -> int:
         contract = render_contract(decision, revision, overrides, worker_evidence=evidence)
     except ValueError as error:
         raise _InvalidInput(str(error)) from error
+    problem = _revision_problem(decision, revision)
+    if problem:
+        raise _InvalidInput(problem)
     emit({
         "command": "prepare-contract", "digest": contract.digest, "text": contract.text,
         "parts": contract.parts, "overrides": contract.overrides, "worker_policy": contract.worker_policy,
@@ -231,11 +234,7 @@ def collect_target(root: Path, decision) -> tuple[dict[str, bytes], dict[str, st
 
 def _unattended(arguments: argparse.Namespace):
     root = Path(arguments.root).resolve()
-    try:
-        decision = load_decision(Path(arguments.decision), root=root)
-        revision = load_revision(Path(arguments.revision), root=root) if arguments.revision else None
-    except ValueError as error:
-        raise _InvalidInput(str(error)) from error
+    decision, revision = _decision_and_revision(arguments, root)
     rules = []
     for name in ("skills", "security", "outside-controls"):
         rules += [Rule.from_dict(rule) for rule in load_document(SNAPSHOT / "rules" / f"{name}.yaml", "rules")]
@@ -304,12 +303,24 @@ def _workers(arguments: argparse.Namespace) -> int:
     return 0 if ready else 1
 
 
-def _decision_and_revision(arguments: argparse.Namespace, root: Path | None = None):
+def _revision_problem(decision: Decision, revision) -> str | None:
+    """The requirements file must be the one the decision records as accepted, never left out."""
+    recorded = (decision.record.get("accepted_revision") or {}).get("digest")
+    if recorded != (revision.digest if revision else None):
+        return (f"the decision records accepted requirements {recorded}; pass that rules file as --revision"
+                if recorded else "the decision records no accepted requirements; leave out --revision")
+    return None
+
+
+def _decision_and_revision(arguments: argparse.Namespace, root: Path | None = None, *, matching: bool = True):
     try:
         decision = load_decision(Path(arguments.decision), root=root)
         revision = load_revision(Path(arguments.revision), root=root) if getattr(arguments, "revision", None) else None
     except ValueError as error:
         raise _InvalidInput(str(error)) from error
+    problem = _revision_problem(decision, revision) if matching else None
+    if problem:
+        raise _InvalidInput(problem)
     return decision, revision
 
 
@@ -383,7 +394,7 @@ def _research(arguments: argparse.Namespace) -> int:
 def _accept(arguments: argparse.Namespace) -> int:
     """Write the accepted revision from the user's choices and record it in the decision."""
     root = Path(arguments.root).resolve()
-    decision, _ = _decision_and_revision(arguments, root)
+    decision, _ = _decision_and_revision(arguments, root, matching=False)
     previous = decision.record.get("accepted_revision") or {}
     others = [rule_id for rule_id in previous.get("rule_ids", []) if rule_id.split(".")[2:3] != [arguments.part.lower()]]
     if others:

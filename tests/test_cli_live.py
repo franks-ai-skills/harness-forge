@@ -195,6 +195,23 @@ class LiveCommandsTest(unittest.TestCase):
         self.assertEqual(code, 2)
         self.assertIn("part A needs an explicit invocation and a near miss", stderr)
 
+    def test_the_recorded_requirements_cannot_be_left_out(self):
+        cli, arguments = self.build_ready(ResearchRunner([finding()]))
+        option = arguments.index("--revision")
+        without = arguments[:option] + arguments[option + 2:]
+        code, _, stderr = cli("verify", *without)
+        self.assertEqual(code, 2)
+        self.assertIn("accepted requirements", stderr)
+        code, _, stderr = cli("prepare-contract", "--decision", self.decision)
+        self.assertEqual(code, 2)
+        self.assertIn("accepted requirements", stderr)
+
+        other = cli.write("other.rules.yaml", (self.root / ".harness/research/repro.rules.yaml").read_text(
+            encoding="utf-8").replace("names the platform", "names the operating system"))
+        code, _, stderr = cli("verify", *arguments[:option + 1], other, *arguments[option + 2:])
+        self.assertEqual(code, 2)
+        self.assertIn("accepted requirements", stderr)
+
     def test_a_rebuild_over_a_changed_skill_shows_the_diff(self):
         cli, arguments = self.build_ready(ResearchRunner([finding()]))
         option = dict(zip(arguments[::2], arguments[1::2]))
