@@ -37,7 +37,8 @@ from harness_forge.overrides import (  # noqa: E402
 )
 from harness_forge.report import render_report, write_report  # noqa: E402
 from harness_forge.research import (  # noqa: E402
-    _BLOCKING_DRIFT, _catalog, accept_requirements, drift_digest, drift_state, finding_problem, load_revision,
+    _BLOCKING_DRIFT, _catalog, accept_requirements, drift_category, drift_digest, drift_state, finding_problem,
+    load_revision,
     make_brief,
     record_drift, write_research, write_revision,
 )
@@ -45,8 +46,8 @@ from harness_forge.runtime import load_cases  # noqa: E402
 from harness_forge.workflow import research_pass, verify_live  # noqa: E402
 from harness_forge.scope import affected_parts, earlier_run, preserved_parts, review_scope  # noqa: E402
 from harness_forge.verify import (  # noqa: E402
-    NEEDS_CONFIRMATION, bound_inputs, exclusion_token, finish_run, part_kind, prepare_run, selection_citations,
-    selection_failures,
+    NEEDS_CONFIRMATION, affecting_rules, bound_inputs, exclusion_token, finish_run, open_blocking_drift, part_kind,
+    prepare_run, selection_citations, selection_failures,
 )
 from harness_forge.models import ReviewResponse  # noqa: E402
 from harness_forge.selection import (  # noqa: E402
@@ -778,12 +779,17 @@ def _build(arguments: argparse.Namespace) -> int:
     if problem:
         raise _InvalidInput(problem)
     selection_rules = effective_rules(_selection_rules(), overrides, approval["confirmation"])
-    relevant = set(selection_citations(decision, selection_rules)[arguments.part]) | {rule.id for rule in pinned}
-    for entry in _drift(root):
-        if (entry["category"] in _BLOCKING_DRIFT and entry["rule_id"] in relevant
-                and drift_state(entry, decision.record, overrides) == "open"):
-            raise _InvalidInput(f"part {arguments.part} is blocked by open {entry['category']} drift on "
-                                f"{entry['rule_id']} (finding {entry['finding_id']}); the user decides first")
+    # The same drift policy as verify: the rules that apply to the part now, and those its selection rests on.
+    files, symlinks = collect_target(root, decision)
+    try:
+        current = prepare_run(decision, files, pinned, None, symlinks=symlinks, revision=revision,
+                              kb_version=_kb_version())
+    except ValueError as error:
+        raise _InvalidInput(str(error)) from error
+    affecting = affecting_rules(current, selection_citations(decision, selection_rules))
+    for entry in open_blocking_drift(_drift(root), decision, overrides, affecting).get(arguments.part, []):
+        raise _InvalidInput(f"part {arguments.part} is blocked by open {drift_category(entry)} drift on "
+                            f"{entry['rule_id']} (finding {entry['finding_id']}); the user decides first")
     if revision is None:
         raise _InvalidInput("--revision is required: a skill is built from the accepted requirements")
     stale = _stale_requirements(decision, revision, [arguments.part])
@@ -835,8 +841,9 @@ def _drift_report(drift: list[dict], decision: Decision, overrides: list[dict]) 
     report = []
     for entry in drift:
         state = drift_state(entry, decision.record, overrides)
-        report.append({"rule_id": entry["rule_id"], "finding_id": entry["finding_id"], "category": entry["category"],
-                       "state": state, "blocking": state == "open" and entry["category"] in _BLOCKING_DRIFT,
+        category = drift_category(entry)
+        report.append({"rule_id": entry["rule_id"], "finding_id": entry["finding_id"], "category": category,
+                       "state": state, "blocking": state == "open" and category in _BLOCKING_DRIFT,
                        "issue": entry.get("issue")})
     return report
 

@@ -900,6 +900,30 @@ class LiveCommandsTest(unittest.TestCase):
         self.assertEqual(code, 2)
         self.assertIn(f"open compatibility drift on {winner}", stderr)
 
+    def test_build_and_verify_share_one_drift_policy(self):
+        cli, arguments = self.build_ready(ResearchRunner([finding()]))
+        option = dict(zip(arguments[::2], arguments[1::2]))
+        build = ["build", "--decision", self.decision, "--part", "A", "--root", self.root,
+                 *[item for key in ("--revision", "--evidence", "--relay") for item in (key, option[key])],
+                 "--description", cli.write("description.txt", DESCRIPTION),
+                 "--procedure", cli.write("procedure.md", PROCEDURE)]
+        # Drift on a rule that does not apply to A (it needs every_time: always) blocks neither step.
+        self.record_drift(cli, rule="skills.goal.no-must-hold-rule-in-skill")
+        self.assertEqual(cli(*build)[0], 0, "build agrees with verify that the rule does not apply")
+        code, output, stderr = cli("verify", *arguments)
+        self.assertEqual(code, 0, stderr)
+        # A security rule's drift is security drift whatever its recorded category says.
+        path = self.root / ".harness/research/repro.md"
+        record = load_document(path, "research")
+        record["drift"] = [{"rule_id": "security.secrets.none-in-files", "finding_id": "F1", "summary": "Edited.",
+                            "category": "ordinary"}]
+        write_research(self.root, record, "Edited.\n")
+        code, _, stderr = cli(*build)
+        self.assertEqual(code, 2)
+        self.assertIn("open security drift on security.secrets.none-in-files", stderr)
+        code, output, _ = cli("verify", *arguments)
+        self.assertEqual((code, output["drift"][0]["blocking"], output["drift"][0]["category"]), (1, True, "security"))
+
     def test_case_ids_must_be_unique(self):
         import yaml
         cli, arguments = self.build_ready(ResearchRunner([finding()]))

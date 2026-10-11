@@ -24,7 +24,7 @@ from harness_forge.models import (
     VerificationRun,
 )
 from harness_forge.predicates import UnknownFact
-from harness_forge.research import blocked_parts, drift_category
+from harness_forge.research import blocked_parts, drift_category, drift_state
 from harness_forge.selection import conflict_kept, goal_conflict, selection_state
 from harness_forge.scope import affected_parts
 
@@ -193,6 +193,30 @@ def selection_citations(decision: Decision, rules: list[Rule]) -> dict[str, list
                 ids |= set(row["rules"])
         cited[part["id"]] = sorted(ids)
     return cited
+
+
+def open_blocking_drift(drift: list[dict], decision: Decision, overrides: list[dict] | tuple,
+                        affecting: dict[str, list[str]]) -> dict[str, list[dict]]:
+    """Per part, the open drift that blocks it: one policy for build, verify and the drift report.
+
+    A security rule's drift is security drift whatever its record says
+    (drift_category); kept or adopted drift is not open; a drift affects a
+    part when its rule applies to the part or its selection rests on it.
+    """
+    blocking: dict[str, list[dict]] = {}
+    for entry in drift:
+        if drift_category(entry) == "ordinary" or drift_state(entry, decision.record, list(overrides)) != "open":
+            continue
+        for part_id, rule_ids in affecting.items():
+            if entry["rule_id"] in rule_ids:
+                blocking.setdefault(part_id, []).append(entry)
+    return blocking
+
+
+def affecting_rules(run: VerificationRun, cited: dict[str, list[str]]) -> dict[str, list[str]]:
+    """Per part, the rules drift can affect: those that apply to it and those its selection rests on."""
+    return {part["id"]: sorted(set(run.applicable_rules.get(part["id"], [])) | set(cited.get(part["id"], [])))
+            for part in run.parts}
 
 
 def bound_inputs(
