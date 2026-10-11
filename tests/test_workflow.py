@@ -166,6 +166,28 @@ class VerifyLiveTest(unittest.TestCase):
         self.assertTrue(run.worker_violations)
         self.assertEqual({r.part_id: r for r in results}["A"].harness_result, "not verified")
 
+    def test_a_reviewer_that_could_not_start_says_why(self):
+        record = skill_decision()
+        files, symlinks = build_files(record)
+        files["README.md"] = update_outside_section("# Repro\n", record).encode()
+
+        class Blocked(ScriptedRunner):
+            def __call__(self, command, *, cwd, env, stdin, timeout):
+                answer = super().__call__(command, cwd=cwd, env=env, stdin=stdin, timeout=timeout)
+                if self.roles and self.roles[-1] == "review" and stdin and "```json" in stdin:
+                    return Completed(1, "", "Error: the session's sandbox refused it\n", False)
+                return answer
+
+        runner = Blocked()
+        planned = [preflight("claude-code", role, runner=runner, environ=PARENT)["configuration"] for role in ROLES]
+        contract, confirmation = confirmed(record, REVISION, planned, "verify-1")
+        run, results = verify_live(record, files, symlinks, RULES, REVISION, "claude-code", contract=contract,
+                                   confirmation=confirmation, worker_evidence=planned, cases=[], runner=runner,
+                                   environ=PARENT, kb_version="0.1.0")
+        self.assertEqual(run.worker_violations,
+                         ["review worker: the worker did not complete (exit 1); Error: the session's sandbox refused it"])
+        self.assertEqual({r.part_id: r for r in results}["A"].harness_result, "not verified")
+
 
 if __name__ == "__main__":
     unittest.main()

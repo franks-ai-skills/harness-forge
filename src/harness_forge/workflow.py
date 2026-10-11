@@ -117,7 +117,8 @@ def verify_live(
                 review = validate_review(run, response["output"])
             except ValueError as error:
                 run.worker_violations.append(f"review output rejected: {error}")
-        elif response["reason"].startswith("out of scope"):
+        else:
+            # Out of scope voids the verdicts; any other failure leaves none, and the report says why.
             run.worker_violations.append(f"review worker: {response['reason']}")
     runtime = []
     built = {part["id"] for part in run.parts if part_kind(part) in ("build", "local-reuse")

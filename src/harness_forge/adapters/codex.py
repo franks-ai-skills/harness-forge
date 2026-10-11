@@ -99,6 +99,14 @@ def extra_problem(run) -> str | None:
     return f"the installed version cannot disable features {', '.join(missing)}" if missing else None
 
 
+def failure_hint(stderr: str) -> str:
+    """Codex run from inside a sandboxed Codex session cannot start its app-server (observed in codex-cli 0.162)."""
+    if "Operation not permitted" in stderr:
+        return ("the calling Codex session's sandbox blocked the worker; run this forge.py command outside the "
+                "session's sandbox (ask the user to approve running it with escalated permissions)")
+    return ""
+
+
 def empty_listing(item: dict) -> bool:
     return item.get("type") == "mcp_tool_call" and item.get("server") == "codex" and item.get("tool") in _EMPTY_LISTINGS
 

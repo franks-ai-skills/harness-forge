@@ -53,8 +53,8 @@ class FakeRunner:
     """Answers the CLI's metadata commands and one worker launch; records every call."""
 
     def __init__(self, *, login=CLAUDE_SUBSCRIPTION, codex_login="Logged in using ChatGPT", worker="",
-                 missing=(), help_without=(), returncode=0, timed_out=False):
-        self.login, self.codex_login, self.worker = login, codex_login, worker
+                 missing=(), help_without=(), returncode=0, timed_out=False, stderr=""):
+        self.login, self.codex_login, self.worker, self.stderr = login, codex_login, worker, stderr
         self.missing, self.help_without = set(missing), set(help_without)
         self.returncode, self.timed_out = returncode, timed_out
         self.calls, self.worker_calls = [], []
@@ -83,7 +83,7 @@ class FakeRunner:
         self.worker_calls.append({"command": list(command), "env": dict(env), "cwd": str(workspace), "stdin": stdin,
                                   "files": sorted(p.relative_to(workspace).as_posix() for p in workspace.rglob("*") if p.is_file()),
                                   "output_schema": json.loads(schema.read_text()) if schema.exists() else None})
-        return Completed(self.returncode, self.worker, "", self.timed_out)
+        return Completed(self.returncode, self.worker, self.stderr, self.timed_out)
 
 
 def review_case():
@@ -313,6 +313,16 @@ class LaunchTest(unittest.TestCase):
                               environ=PARENT, files=files)
         self.assertEqual(response["status"], "completed", response.get("reason"))
         self.assertEqual(response["evidence"]["observed_tools"], {"status": "unknown"})
+
+    def test_a_codex_worker_blocked_by_the_session_sandbox_says_what_to_do(self):
+        request, files, _ = review_case()
+        stderr = ("WARNING: proceeding, even though we could not create PATH aliases: Operation not permitted (os error 1)\n"
+                  "Error: failed to initialize in-process app-server client: Operation not permitted (os error 1)\n")
+        runner = FakeRunner(returncode=1, stderr=stderr)
+        response = run_worker(request, "codex", **approval("codex", "review"), runner=runner, environ=PARENT, files=files)
+        self.assertEqual(response["status"], "failed")
+        self.assertIn("failed to initialize in-process app-server client", response["reason"])
+        self.assertIn("outside the session's sandbox", response["reason"])
 
     def test_out_of_scope_behavior_discards_the_output(self):
         request, files, verdicts = review_case()

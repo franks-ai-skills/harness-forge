@@ -70,6 +70,10 @@ def extra_problem(run) -> str | None:
     return None
 
 
+def failure_hint(stderr: str) -> str:
+    return ""
+
+
 def allowed_calls(role: str) -> set[str]:
     return set(ROLE_TOOLS[role]) | {"StructuredOutput"}
 
