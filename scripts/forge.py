@@ -130,17 +130,38 @@ def _select(arguments: argparse.Namespace) -> int:
     return 0
 
 
+def _overrides(directory: Path) -> list[dict]:
+    """Every file in the repository's override directory; each must be a valid override."""
+    if not directory.is_dir():
+        return []
+    overrides = []
+    for path in sorted(directory.iterdir()):
+        if path.suffix != ".yaml" or path.is_symlink() or not path.is_file():
+            raise _InvalidInput(f"{path}: the override directory holds only <rule-id>.yaml override files")
+        try:
+            overrides.append(load_document(path, "override"))
+        except ValueError as error:
+            raise _InvalidInput(str(error)) from error
+    return overrides
+
+
+def _refuse_overrides(root: Path) -> None:
+    """Overrides on disk block every live command until their adoption flow exists, named or not."""
+    overrides = _overrides(root / ".harness" / "overrides")
+    if overrides:
+        raise _InvalidInput("rule overrides in .harness/overrides block this command until their adoption flow "
+                            f"exists: {', '.join(o['rule_id'] for o in overrides)}; show them with prepare-contract")
+
+
 def _prepare_contract(arguments: argparse.Namespace) -> int:
     """Render the current contract offline; confirmation needs a live relay."""
     try:
         decision = load_decision(Path(arguments.decision))
         revision = load_revision(Path(arguments.revision)) if arguments.revision else None
-        overrides = []
-        if arguments.overrides:
-            for path in sorted(Path(arguments.overrides).glob("*.yaml")):
-                overrides.append(load_document(path, "override"))
     except ValueError as error:
         raise _InvalidInput(str(error)) from error
+    repository = Path(arguments.decision).resolve().parents[2]
+    overrides = _overrides(Path(arguments.overrides) if arguments.overrides else repository / ".harness" / "overrides")
     evidence = []
     if arguments.evidence:
         value = _read_json(arguments.evidence)
@@ -240,6 +261,7 @@ def _unattended(arguments: argparse.Namespace):
         rules += [Rule.from_dict(rule) for rule in load_document(SNAPSHOT / "rules" / f"{name}.yaml", "rules")]
     manifest = parse_json((SNAPSHOT / "kb-manifest.json").read_text(encoding="utf-8"))
     files, symlinks = collect_target(root, decision)
+    _refuse_overrides(root)
     run = prepare_run(decision, files, rules, None, symlinks=symlinks, revision=revision, kb_version=manifest["kb_version"])
     results = finish_run(run, ReviewResponse(run_id=run.run_id, verdicts=[], goal_verdicts=[]), [], run.frozen_inputs)
     return root, run, results
@@ -340,6 +362,7 @@ def _decision_and_revision(arguments: argparse.Namespace, root: Path | None = No
 
 def _approval(arguments: argparse.Namespace, decision: Decision, revision) -> dict:
     """The contract the relay confirms, with the worker configurations it shows."""
+    _refuse_overrides(Path(arguments.root).resolve())
     evidence = _read_json(arguments.evidence).get("worker_evidence", [])
     relay = _read_json(arguments.relay)
     try:

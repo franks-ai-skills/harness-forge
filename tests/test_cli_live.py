@@ -8,11 +8,15 @@ import tempfile
 import unittest
 from pathlib import Path
 
+import yaml
+
 from harness_forge.contracts import load_decision, write_decision
+from harness_forge.documents import load_document
 from harness_forge.research import load_revision
 from harness_forge.adapters.base import Completed
 from tests.test_adapters import CLAUDE_API_KEY, PARENT, FakeRunner, claude_stream
 from tests.test_build_skill import DESCRIPTION, NAME, PROCEDURE
+from tests.test_contracts import OVERRIDE
 from tests.test_verify import skill_decision
 from tests.test_workflow import ResearchRunner, fetch_page, finding
 
@@ -254,6 +258,30 @@ class LiveCommandsTest(unittest.TestCase):
         code, _, stderr = cli("verify", *arguments[:option], relay, *arguments[option + 1:])
         self.assertEqual(code, 2)
         self.assertIn("researched for another brief", stderr)
+
+    def test_an_override_file_in_the_repository_blocks_without_being_named(self):
+        cli, arguments = self.build_ready(ResearchRunner([finding()]))
+        overrides = self.root / ".harness/overrides"
+        overrides.mkdir(parents=True)
+        research = load_document(self.root / ".harness/research/repro.md", "research")
+        override = {**OVERRIDE, "drift": {"finding": research["findings"][0], "support_verdict": "supported"}}
+        (overrides / "skills.description.concise.yaml").write_text(yaml.safe_dump(override), encoding="utf-8")
+        code, output, stderr = cli("prepare-contract", "--decision", self.decision, "--revision",
+                                   self.root / ".harness/research/repro.rules.yaml")
+        self.assertEqual(code, 0, stderr)
+        self.assertIn("Rule overrides for this repository", output["text"])
+        self.assertIn("The team prefers longer descriptions.", output["text"])
+        code, _, stderr = cli("verify", *arguments)
+        self.assertEqual(code, 2)
+        self.assertIn("rule overrides in .harness/overrides block", stderr)
+        option = dict(zip(arguments[::2], arguments[1::2]))
+        code, _, stderr = cli("check", "--decision", self.decision, "--root", self.root, "--revision", option["--revision"])
+        self.assertEqual(code, 2)
+        self.assertIn("rule overrides", stderr)
+        (overrides / "notes.txt").write_text("not an override", encoding="utf-8")
+        code, _, stderr = cli("prepare-contract", "--decision", self.decision)
+        self.assertEqual(code, 2)
+        self.assertIn("notes.txt", stderr)
 
     def test_case_ids_must_be_unique(self):
         import yaml

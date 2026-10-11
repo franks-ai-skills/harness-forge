@@ -11,8 +11,8 @@ key or unknown and can cost extra: ask the user `Continue` or `Stop`
 and run it again with `--login-answer`. Never log in, log out or switch
 accounts. Then run `scripts/forge.py prepare-contract --decision
 <record> --evidence <workers output>`, adding
-`--revision .harness/research/<slug>.rules.yaml`, `--overrides
-.harness/overrides` and `--evidence` when they exist. Show its `text` in
+`--revision .harness/research/<slug>.rules.yaml` when it exists; it
+reads the repository's `.harness/overrides/` itself. Show its `text` in
 full, unchanged: the idea's reach, hosting and confirmed facts; every
 part's name, goal, confirmed answers, outcome and mechanism, the reused
 artifact of a reuse part, outside controls, accepted requirements with the revision's
