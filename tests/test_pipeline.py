@@ -19,7 +19,7 @@ from harness_forge.report import report_data
 from harness_forge.research import (
     accept_requirements, finding_problem, make_brief, research_request, support_request, worker_finding,
 )
-from harness_forge.runtime import load_cases, run_skill_runtime
+from harness_forge.runtime import BASELINE_PROMPT, load_cases, run_skill_runtime
 from harness_forge.verify import bound_inputs, finish_run, prepare_run, review_request, validate_review
 from tests.test_adapters import PARENT, FakeRunner, claude_stream
 from tests.test_build_skill import DESCRIPTION, NAME, PROCEDURE, idea_rule
@@ -51,6 +51,9 @@ class ScriptedRunner(FakeRunner):
         answer = super().__call__(command, cwd=cwd, env=env, stdin=stdin, timeout=timeout)
         if len(self.worker_calls) == launched:
             return answer
+        if stdin == BASELINE_PROMPT:
+            self.roles.append("baseline")
+            return Completed(0, claude_run(skills=(), skill_call=None), "", False)
         if "```json" not in stdin:
             self.roles.append("runtime")
             near_miss = "do not need reproduction steps" in stdin
@@ -181,7 +184,7 @@ class VerticalWorkflowTest(unittest.TestCase):
 
         self.assertEqual(self.runner.roles,
                          ["research", "research", "source-support", "source-support", "review",
-                          "runtime", "runtime", "runtime"])
+                          "baseline", "runtime", "runtime", "runtime"])
         workspaces = [call["cwd"] for call in self.runner.worker_calls]
         self.assertEqual(len(workspaces), len(set(workspaces)), "each worker is a separate process and workspace")
         support_prompts = [call["stdin"] for call, role in zip(self.runner.worker_calls, self.runner.roles)

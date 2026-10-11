@@ -58,6 +58,25 @@ def _claude_command(tools: list[str]) -> list[str]:
     ]
 
 
+BASELINE_PROMPT = "Reply with OK."
+
+
+def claude_baseline(runner: Runner, environ: Mapping[str, str], *, timeout: int = RUNTIME_TIMEOUT,
+                    workspace_root: str | None = None) -> set[str]:
+    """The skills Claude lists with the runtime cases' settings in an empty workspace: its built-ins.
+
+    One tool-less launch; a skill it lists is part of every user's environment
+    and never competes with a candidate.
+    """
+    with tempfile.TemporaryDirectory(prefix="forge-baseline-", dir=workspace_root) as temporary:
+        completed = runner(_claude_command([]), cwd=temporary, env=worker_environment(environ, "claude-code"),
+                           stdin=BASELINE_PROMPT, timeout=timeout)
+    for event in _events(completed.stdout):
+        if event.get("type") == "system" and event.get("subtype") == "init":
+            return {str(skill) for skill in event.get("skills", [])}
+    return set()
+
+
 def _events(stdout: str) -> list[dict]:
     events = []
     for line in stdout.splitlines():
@@ -171,7 +190,7 @@ def activation_case(
                 link.symlink_to(f"../../{directory}")
             command = _claude_command(permitted)
         else:
-            command = codex.command("review", str(workspace))
+            command = codex.command("review", str(workspace), structured=False)
         try:
             completed = runner(command, cwd=str(workspace), env=worker_environment(environ, harness), stdin=prompt,
                                timeout=timeout)
@@ -192,13 +211,14 @@ def activation_case(
 def run_skill_runtime(
     run: VerificationRun, harness: str, cases: list[dict], *, files: Mapping[str, bytes], runner: Runner = run_command,
     environ: Mapping[str, str] | None = None, login_answer: str | None = None,
-    baseline_skills: set[str] | frozenset = frozenset(), timeout: int = RUNTIME_TIMEOUT,
+    baseline_skills: set[str] | frozenset | None = None, timeout: int = RUNTIME_TIMEOUT,
     workspace_root: str | None = None,
 ) -> list[RuntimeResult]:
     """One RuntimeResult per case, bound to the run and the part's frozen files.
 
-    baseline_skills are the harness's built-in skills, as a launch with all
-    customizations disabled lists them; they never count as competing.
+    baseline_skills are the harness's built-in skills; they never count as
+    competing. Left out, Claude's are taken from one empty launch with the
+    cases' own settings (claude_baseline).
     """
     if harness not in run.targets:
         raise ValueError(f"{harness} is not a target of this run")
@@ -214,6 +234,9 @@ def run_skill_runtime(
             raise ValueError(f"case {test_case['id']}: the files are not exactly the part's frozen files")
     environ = os.environ if environ is None else environ
     checked = preflight(harness, "review", runner=runner, environ=environ, login_answer=login_answer)
+    if baseline_skills is None:
+        baseline_skills = (claude_baseline(runner, environ, timeout=timeout, workspace_root=workspace_root)
+                           if harness == "claude-code" and checked["available"] else set())
     results = []
     for test_case in cases:
         directory = run.part_dirs[test_case["part_id"]]

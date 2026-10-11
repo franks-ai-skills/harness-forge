@@ -30,7 +30,6 @@ import io
 import json
 import os
 import sys
-import tempfile
 from pathlib import Path
 
 import yaml
@@ -39,12 +38,11 @@ ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT / "src") not in sys.path:
     sys.path.insert(0, str(ROOT / "src"))
 
-from harness_forge.adapters import claude_code  # noqa: E402
-from harness_forge.adapters.base import preflight, run_command, worker_environment  # noqa: E402
+from harness_forge.adapters.base import preflight, run_command  # noqa: E402
 from harness_forge.contracts import load_decision, update_outside_section, write_decision  # noqa: E402
 from harness_forge.documents import load_document  # noqa: E402
 from harness_forge.models import Decision  # noqa: E402
-from harness_forge.runtime import activation_case  # noqa: E402
+from harness_forge.runtime import activation_case, claude_baseline  # noqa: E402
 
 TEST_RELAY = "confirmed by the test runner it was started with, not by a user in a session"
 UNCLEAN = ("competing skill", "executable components")
@@ -217,17 +215,11 @@ def _routing_cases(skill: str) -> list[dict]:
 
 
 def _baseline(harness: str, runner, environ) -> tuple[set[str], list[str]]:
-    """Claude's built-in skills, from one tool-less safe-mode launch; Codex lists none."""
+    """Claude's built-in skills, from one empty launch with the cases' settings; Codex lists none."""
     if harness != "claude-code":
         return set(), []
-    with tempfile.TemporaryDirectory(prefix="forge-baseline-") as directory:
-        completed = runner(claude_code.command("source-support", directory), cwd=directory,
-                           env=worker_environment(environ, harness), stdin="Reply with OK.", timeout=300)
-    behavior = claude_code.observe(completed.stdout)["behavior"]
-    for line in behavior:
-        if line.startswith("skills listed: "):
-            return {name.strip() for name in line[len("skills listed: "):].split(",") if name.strip()}, behavior
-    return set(), behavior
+    skills = claude_baseline(runner, environ)
+    return skills, [f"skills listed: {', '.join(sorted(skills))}"]
 
 
 def routing_smoke(harness: str, out: Path, *, runner=run_command, environ=None) -> dict:

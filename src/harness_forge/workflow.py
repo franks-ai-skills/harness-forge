@@ -21,9 +21,6 @@ from harness_forge.research import (
 from harness_forge.runtime import run_skill_runtime
 from harness_forge.verify import bound_inputs, finish_run, part_kind, prepare_run, review_request, validate_review
 
-_BASELINE = re.compile(r"^skills listed: (.*)$")
-
-
 def _next_ids(existing: list[str], count: int) -> list[str]:
     numbers = [int(item[1:]) for item in existing if re.fullmatch(r"F[0-9]+", item)]
     start = max(numbers, default=0) + 1
@@ -84,14 +81,6 @@ def research_pass(
     return result
 
 
-def _baseline_skills(evidence: dict) -> set[str]:
-    for line in evidence.get("observed_behavior", []):
-        match = _BASELINE.match(line)
-        if match:
-            return {name.strip() for name in match.group(1).split(",") if name.strip()}
-    return set()
-
-
 def verify_live(
     decision: Decision, files: dict[str, bytes], symlinks: dict[str, str], rules: list[Rule],
     revision: AcceptedRevision | None, harness: str, *, contract: Contract, confirmation: Confirmation | None,
@@ -103,8 +92,8 @@ def verify_live(
     """Static checks, a fresh review worker, runtime cases, then results in the design's precedence.
 
     A reviewer seen acting outside its role voids every judged verdict of the
-    run. The built-in skills the review worker lists (all customizations
-    off) are the runtime cases' baseline, so they never count as competing.
+    run. Runtime cases measure competing skills against Claude's built-ins,
+    which run_skill_runtime observes with the cases' own settings.
     ``collect`` reads the target's files and links again after the workers
     ran, so a change made meanwhile invalidates the affected parts.
     ``confirmed_exclusions`` are (part, rule) pairs the user confirmed do not
@@ -116,7 +105,6 @@ def verify_live(
                       kb_version=kb_version, worker_evidence=worker_evidence)
     review = ReviewResponse(run_id=run.run_id, verdicts=[], goal_verdicts=[])
     observations = []
-    baseline: set[str] = set()
     if any(request["kind"] == "rule" or request["kind"] == "goal" for request in run.judged_requests):
         request = review_request(run, f"review-{run.run_id}")
         staged = {entry["path"]: files[entry["path"]] for entry in request["inputs"]["files"]}
@@ -124,7 +112,6 @@ def verify_live(
                               worker_evidence=worker_evidence, runner=runner, environ=environ, files=staged,
                               login_answer=login_answer)
         observations.append(response["evidence"])
-        baseline = _baseline_skills(response["evidence"])
         if response["status"] == "completed":
             try:
                 review = validate_review(run, response["output"])
@@ -138,7 +125,7 @@ def verify_live(
     part_cases = [case for case in cases if case["part_id"] in built]
     if part_cases and harness in run.targets:
         runtime = run_skill_runtime(run, harness, part_cases, files=files, runner=runner, environ=environ,
-                                    login_answer=login_answer, baseline_skills=baseline)
+                                    login_answer=login_answer)
     current_files, current_links = collect() if collect else (files, symlinks)
     current = bound_inputs(decision, current_files, rules, symlinks=current_links, revision=revision,
                            kb_version=kb_version, worker_evidence=worker_evidence)

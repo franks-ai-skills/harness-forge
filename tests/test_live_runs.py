@@ -8,6 +8,7 @@ import unittest
 from pathlib import Path
 
 from harness_forge.adapters.base import Completed
+from harness_forge.runtime import BASELINE_PROMPT
 from tests.test_adapters import PARENT, FakeRunner
 from tests.test_workflow import ResearchRunner, fetch_page, finding
 
@@ -46,7 +47,7 @@ class VerticalRunTest(unittest.TestCase):
         self.assertIn("not by a user", summary["confirmation"])
         self.assertEqual(on_disk["status"], "completed")
         self.assertEqual(runner.roles, ["research", "source-support", "research", "source-support", "review",
-                                        "runtime", "runtime", "runtime"])
+                                        "baseline", "runtime", "runtime", "runtime"])
 
     def test_every_worker_stream_is_kept_for_diagnosis(self):
         runner = ResearchRunner([finding()])
@@ -95,7 +96,7 @@ class RoutingRunner(FakeRunner):
         answer = super().__call__(command, cwd=cwd, env=env, stdin=stdin, timeout=timeout)
         if len(self.worker_calls) == launched:
             return answer
-        if "--safe-mode" in command:
+        if stdin == BASELINE_PROMPT:
             events = [init(["debug", "verify"])]
         else:
             events = [init(FORGE_SKILLS + ["debug", "verify"] + self.extra)]
@@ -115,7 +116,7 @@ class RoutingSmokeTest(unittest.TestCase):
         runner = RoutingRunner()
         summary = self.run_smoke(runner)
         self.assertEqual(summary["baseline"]["skills"], ["debug", "verify"])
-        self.assertIn("--safe-mode", runner.worker_calls[0]["command"])
+        self.assertEqual(runner.worker_calls[0]["stdin"], BASELINE_PROMPT)
         results = summary["results"]
         self.assertEqual(len(results), 12)
         by_mode = {}

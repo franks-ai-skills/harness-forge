@@ -161,7 +161,7 @@ class LiveCommandsTest(unittest.TestCase):
         self.assertEqual(output["parts"], [{"part_id": "A", "status": "verified", "harness_result": "verified",
                                             "goal_result": "met by the verified build"}])
         self.assertTrue((self.root / ".harness/reports/repro.md").exists())
-        self.assertEqual(runner.roles, ["research", "source-support", "review", "runtime", "runtime", "runtime"])
+        self.assertEqual(runner.roles, ["research", "source-support", "review", "baseline", "runtime", "runtime", "runtime"])
 
     def test_a_not_applicable_error_rule_waits_for_the_users_confirmation(self):
         rule = "skills.invocation.side-effects-user-invoked"
