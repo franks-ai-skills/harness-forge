@@ -125,6 +125,9 @@ def earlier_run(report_text: str) -> tuple[VerificationRun, dict[str, dict]]:
         complete = all(isinstance(item, dict) and all(isinstance(item.get(key), str)
                                                       for key in ("rule_id", "check", "result", "reason"))
                        for item in result.get("rule_results", []))
+        rule_ids = [item.get("rule_id") for item in result.get("rule_results", []) if isinstance(item, dict)]
+        if len(rule_ids) != len(set(rule_ids)):
+            raise ValueError(f"the earlier report judges a rule twice for part {result.get('part_id')}")
         goal = result.get("goal_verdict")
         if not complete or not (goal is None or (isinstance(goal, dict) and isinstance(goal.get("verdict"), str)
                                                  and isinstance(goal.get("reason"), str))):

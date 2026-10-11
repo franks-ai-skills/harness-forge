@@ -496,6 +496,11 @@ def finish_run(
 
         for item in entry["result"]["rule_results"]:
             if item["check"] == "judged":
+                if (part_id, item["rule_id"]) in kept_rules:
+                    # Two kept judgments of one rule: neither may silently replace the other.
+                    kept_rules[(part_id, item["rule_id"])] = {**item, "result": "error",
+                                                              "reason": "the earlier report judges this rule twice"}
+                    continue
                 kept_rules[(part_id, item["rule_id"])] = {**item, "reason": noted(item["reason"])}
         if entry["result"].get("goal_verdict"):
             goal = entry["result"]["goal_verdict"]

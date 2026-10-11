@@ -241,8 +241,11 @@ class EarlierRunTest(unittest.TestCase):
         data = json.loads(text[start:text.index("\n```", start)])
         partial = [{**result, "rule_results": [{k: v for k, v in r.items() if k != "reason"}
                                                 for r in result["rule_results"]]} for result in data["parts"]]
+        duplicated = [{**result, "rule_results": [{**result["rule_results"][-1], "result": "fail"}]
+                       + result["rule_results"]} for result in data["parts"]]
         for change in ({"bound_inputs": {}}, {"bound_inputs": {**data["bound_inputs"], "parts": {"Z": "0" * 64}}},
-                       {"part_map": {**data["part_map"], "dirs": {"Z": ".agents/skills/z"}}}, {"parts": partial}):
+                       {"part_map": {**data["part_map"], "dirs": {"Z": ".agents/skills/z"}}}, {"parts": partial},
+                       {"parts": duplicated}):
             with self.subTest(change=list(change)):
                 edited = text[:start] + json.dumps({**data, **change}, indent=2) + text[text.index("\n```", start):]
                 with self.assertRaises(ValueError):
