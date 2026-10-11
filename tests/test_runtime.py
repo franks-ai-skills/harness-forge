@@ -23,13 +23,21 @@ def case(mode="explicit", expected="activates", **extra):
     return value
 
 
-def claude_run(skills=(NAME,), plugins=BUILTIN_PLUGINS, mcp=(), skill_call=NAME, calls=()):
+def tool_result(tool_id, failed=False):
+    """The user event that carries a tool call's result, as Claude's stream-json reports it."""
+    return {"type": "user", "message": {"content": [
+        {"type": "tool_result", "tool_use_id": tool_id, "content": "Error" if failed else "ok", "is_error": failed}]}}
+
+
+def claude_run(skills=(NAME,), plugins=BUILTIN_PLUGINS, mcp=(), skill_call=NAME, calls=(), failed=()):
+    """``failed`` names the tool call ids whose result is an error; the Skill call's id is "s"."""
     events = [{"type": "system", "subtype": "init", "tools": ["Skill", "Read"], "skills": list(skills),
                "plugins": list(plugins), "mcp_servers": list(mcp), "model": "claude-opus-5-5", "apiKeySource": "none"}]
     blocks = [{"type": "tool_use", "id": "s", "name": "Skill", "input": {"skill": skill_call}}] if skill_call else []
     blocks += [{"type": "tool_use", "id": f"c{n}", "name": name, "input": {}} for n, name in enumerate(calls)]
     if blocks:
         events.append({"type": "assistant", "message": {"content": blocks}})
+        events += [tool_result(block["id"], block["id"] in failed) for block in blocks]
     events.append({"type": "result", "subtype": "success", "is_error": False, "result": "Checklist written."})
     return "\n".join(json.dumps(event) for event in events) + "\n"
 
@@ -96,6 +104,9 @@ class RuntimeTest(unittest.TestCase):
             (case("negative", "does-not-activate"), claude_run(skill_call=None), "pass"),
             (case("negative", "does-not-activate"), claude_run(), "fail"),
             (case(), claude_run(calls=("Bash",)), "fail"),
+            (case(), claude_run(failed={"s"}), "fail"),
+            (case(), claude_run(skill_call=None, calls=("Read",)), "fail"),
+            (case("negative", "does-not-activate"), claude_run(failed={"s"}), "fail"),
         ):
             with self.subTest(case=test_case["id"], expected=expected, stream=stream[-200:]):
                 result = self.run_cases("claude-code", stream, cases=[test_case])[0][0]
@@ -135,16 +146,19 @@ class RuntimeTest(unittest.TestCase):
 
     def test_a_claude_read_inside_the_skill_counts_as_activation(self):
         """A slash invocation in print mode leaves no event; reading the skill's own files shows it loaded."""
-        def read(path):
+        def read(path, failed=False):
             events = [json.loads(line) for line in claude_run(skill_call=None).splitlines()]
-            events.insert(1, {"type": "assistant", "message": {"content": [
-                {"type": "tool_use", "id": "r", "name": "Read", "input": {"file_path": path}}]}})
+            events[1:1] = [{"type": "assistant", "message": {"content": [
+                {"type": "tool_use", "id": "r", "name": "Read", "input": {"file_path": path}}]}},
+                tool_result("r", failed)]
             return "\n".join(json.dumps(event) for event in events) + "\n"
 
         inside = read(f"/tmp/forge-runtime-x/.claude/skills/{NAME}/references/requirements.md")
         result = self.run_cases("claude-code", inside)[0][0]
         self.assertEqual(result.result, "pass", result.reason)
         self.assertEqual(result.observed_activation, f"read references/requirements.md from the {NAME} skill")
+        missing = read(f"/tmp/forge-runtime-x/.claude/skills/{NAME}/references/absent.md", failed=True)
+        self.assertEqual(self.run_cases("claude-code", missing)[0][0].result, "fail", "a failed read loads nothing")
         outside = read("/tmp/forge-runtime-x/bug-report.md")
         self.assertEqual(self.run_cases("claude-code", outside)[0][0].result, "fail")
         near_miss = self.run_cases("claude-code", inside, cases=[case("implicit", "does-not-activate")])[0][0]

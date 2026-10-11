@@ -3,8 +3,9 @@
 Each case runs the target harness once in a fresh workspace that holds
 only the part's frozen files and the case's fixtures, with the existing
 login and the case's declared tools. Activation counts only when it is
-observed: Claude's Skill tool call, or Codex reading the skill's SKILL.md.
-No observable signal is `not-run`, never a pass. Executable components
+observed: a Skill tool call or skill-file read that Claude completed
+without an error, or Codex reading the skill's SKILL.md. No observable
+signal is `not-run`, never a pass. Executable components
 that stay loaded (user plugins, MCP servers) make a case unavailable; a
 competing skill makes its activation test `not-run`.
 """
@@ -127,10 +128,16 @@ def _events(stdout: str) -> list[dict]:
 
 
 def _observe_claude(stdout: str, name: str, baseline: set[str]) -> dict:
-    """Activation, tool calls and what else stayed loaded, from the init and assistant events."""
-    observed = {"activation": None, "calls": [], "unavailable": [], "competing": [], "loaded": None,
-                "completed": False, "errored": False}
+    """Activation, tool calls and what else stayed loaded, from the init, assistant and tool-result events.
+
+    A Skill or Read call activates only once its tool result arrives without
+    an error: a failed call loaded nothing. On a near miss the attempt alone
+    shows the skill was chosen (``attempted``).
+    """
+    observed = {"activation": None, "attempted": None, "calls": [], "unavailable": [], "competing": [],
+                "loaded": None, "completed": False, "errored": False}
     other_skill = False
+    pending: dict[str, str] = {}
     for event in _events(stdout):
         if event.get("type") == "system" and event.get("subtype") == "init":
             skills = [str(skill) for skill in event.get("skills", [])]
@@ -141,15 +148,17 @@ def _observe_claude(stdout: str, name: str, baseline: set[str]) -> dict:
             observed["unavailable"] += [f"MCP server {s.get('name', s) if isinstance(s, dict) else s}"
                                         for s in event.get("mcp_servers", [])]
         message = event.get("message")
-        if event.get("type") == "assistant" and isinstance(message, dict) and isinstance(message.get("content"), list):
-            for block in message["content"]:
+        blocks = message.get("content") if isinstance(message, dict) and isinstance(message.get("content"), list) else []
+        if event.get("type") == "assistant":
+            for block in blocks:
                 if not isinstance(block, dict) or block.get("type") != "tool_use":
                     continue
                 observed["calls"].append(str(block.get("name")))
                 arguments = block.get("input") if isinstance(block.get("input"), dict) else {}
+                signal = None
                 if block.get("name") == "Skill":
                     if name in (arguments.get("skill"), arguments.get("command")):
-                        observed["activation"] = f"Skill tool called for {name}"
+                        signal = f"Skill tool called for {name}"
                     else:
                         other_skill = True
                 elif block.get("name") == "Read" and observed["activation"] is None and not other_skill:
@@ -159,12 +168,21 @@ def _observe_claude(stdout: str, name: str, baseline: set[str]) -> dict:
                     path = str(arguments.get("file_path", ""))
                     for root in (f"/.claude/skills/{name}/", f"/.agents/skills/{name}/"):
                         if root in path:
-                            observed["activation"] = f"read {path.split(root, 1)[1]} from the {name} skill"
-        if event.get("type") == "user" and f"<command-name>/{name}</command-name>" in json.dumps(event):
-            observed["activation"] = observed["activation"] or f"/{name} was invoked"
+                            signal = f"read {path.split(root, 1)[1]} from the {name} skill"
+                if signal:
+                    observed["attempted"] = observed["attempted"] or signal
+                    pending[str(block.get("id"))] = signal
+        if event.get("type") == "user":
+            for block in blocks:
+                if (isinstance(block, dict) and block.get("type") == "tool_result" and block.get("is_error") is not True
+                        and str(block.get("tool_use_id")) in pending):
+                    observed["activation"] = observed["activation"] or pending[str(block["tool_use_id"])]
+            if f"<command-name>/{name}</command-name>" in json.dumps(event):
+                observed["activation"] = observed["activation"] or f"/{name} was invoked"
         if event.get("type") == "result":
             observed["completed"] = event.get("is_error") is False and event.get("subtype") == "success"
             observed["errored"] = not observed["completed"]
+    observed["attempted"] = observed["activation"] or observed["attempted"]
     return observed
 
 
@@ -183,8 +201,8 @@ def _skills_read(item: dict) -> list[str]:
 def _observe_codex(stdout: str, directory: str) -> dict:
     """Activation is a read of the candidate's SKILL.md, unless another skill's SKILL.md was read first:
     a later read of the candidate then follows that skill's pointer."""
-    observed = {"activation": None, "calls": [], "unavailable": [], "competing": [], "loaded": None,
-                "completed": False, "errored": False}
+    observed = {"activation": None, "attempted": None, "calls": [], "unavailable": [], "competing": [],
+                "loaded": None, "completed": False, "errored": False}
     name = directory.rsplit("/", 1)[-1]
     first_skill = None
     for event in _events(stdout):
@@ -221,8 +239,9 @@ def _decide(harness: str, test_case: dict, observed: dict, permitted: list[str])
         if harness == "codex":
             return "not-run", "Codex showed no observable activation signal"
         return "fail", "the skill was not activated"
-    if activated:
-        return "fail", f"activated on a near miss: {observed['activation']}"
+    attempted = observed.get("attempted") or observed["activation"]
+    if attempted:
+        return "fail", f"activated on a near miss: {attempted}"
     if harness == "codex":
         return "not-run", "Codex has no observable signal that proves non-activation"
     return "pass", "no Skill tool call for the candidate"
