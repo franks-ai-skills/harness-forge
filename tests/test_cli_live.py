@@ -163,6 +163,24 @@ class LiveCommandsTest(unittest.TestCase):
         self.assertTrue((self.root / ".harness/reports/repro.md").exists())
         self.assertEqual(runner.roles, ["research", "source-support", "review", "baseline", "runtime", "runtime", "runtime"])
 
+    def test_a_decision_edited_during_review_is_not_verified(self):
+        decision = self.decision
+
+        class Editing(ResearchRunner):
+            def __call__(self, command, *, cwd, env, stdin, timeout):
+                answer = super().__call__(command, cwd=cwd, env=env, stdin=stdin, timeout=timeout)
+                if self.roles and self.roles[-1] == "review" and stdin and "```json" in stdin:
+                    text = Path(decision).read_text(encoding="utf-8")
+                    Path(decision).write_text(text.replace("every_time: usually", "every_time: always"), encoding="utf-8")
+                return answer
+
+        cli, arguments = self.build_ready(Editing([finding()]))
+        self.assertIn("every_time: usually", Path(decision).read_text(encoding="utf-8"))
+        code, output, stderr = cli("verify", *arguments)
+        self.assertEqual(code, 1, stderr)
+        self.assertEqual(output["parts"][0]["harness_result"], "not verified")
+        self.assertIn("every_time: always", Path(decision).read_text(encoding="utf-8"))
+
     def test_a_not_applicable_error_rule_waits_for_the_users_confirmation(self):
         rule = "skills.invocation.side-effects-user-invoked"
         runner = NotApplicableRunner([finding()], rule)

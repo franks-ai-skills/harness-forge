@@ -1,5 +1,6 @@
 """Research passes and live verification as the CLI runs them, with scripted workers."""
 
+import copy
 import json
 import unittest
 from pathlib import Path
@@ -138,11 +139,35 @@ class VerifyLiveTest(unittest.TestCase):
         changed = {**files, f".agents/skills/{NAME}/SKILL.md": files[f".agents/skills/{NAME}/SKILL.md"] + b"\nMore."}
         run, results = verify_live(record, files, symlinks, RULES, REVISION, "claude-code", contract=contract,
                                    confirmation=confirmation, worker_evidence=planned, cases=[], runner=runner,
-                                   environ=PARENT, kb_version="0.1.0", collect=lambda: (changed, symlinks))
+                                   environ=PARENT, kb_version="0.1.0",
+                                   collect=lambda: (changed, symlinks, record, REVISION))
         part = {result.part_id: result for result in results}["A"]
         self.assertEqual(part.harness_result, "not verified")
         self.assertIn("inputs.bound", [r["rule_id"] for r in part.rule_results])
         self.assertEqual(runner.roles, ["review"], "the reviewer runs once")
+
+    def test_a_decision_changed_while_workers_ran_invalidates_the_part(self):
+        record = skill_decision()
+        files, symlinks = build_files(record)
+        files["README.md"] = update_outside_section("# Repro\n", record).encode()
+        changed = copy.deepcopy(record)
+        changed.part("A")["answers"]["every_time"] = "always"
+
+        def unreadable():
+            raise ValueError("the decision record is gone")
+
+        for name, collect in (("changed answer", lambda: (files, symlinks, changed, REVISION)),
+                              ("unreadable record", unreadable)):
+            with self.subTest(name):
+                runner = ScriptedRunner()
+                planned = [preflight("claude-code", role, runner=runner, environ=PARENT)["configuration"] for role in ROLES]
+                contract, confirmation = confirmed(record, REVISION, planned, "verify-1")
+                _, results = verify_live(record, files, symlinks, RULES, REVISION, "claude-code", contract=contract,
+                                         confirmation=confirmation, worker_evidence=planned, cases=[], runner=runner,
+                                         environ=PARENT, kb_version="0.1.0", collect=collect)
+                part = {result.part_id: result for result in results}["A"]
+                self.assertEqual(part.harness_result, "not verified")
+                self.assertIn("inputs.bound", [r["rule_id"] for r in part.rule_results])
 
     def test_an_out_of_scope_reviewer_voids_every_verdict(self):
         record = skill_decision()

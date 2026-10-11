@@ -86,7 +86,7 @@ def verify_live(
     revision: AcceptedRevision | None, harness: str, *, contract: Contract, confirmation: Confirmation | None,
     worker_evidence: list[dict] | tuple, cases: list[dict], runner: Runner = run_command,
     environ: Mapping[str, str] | None = None, kb_version: str = "", login_answer: str | None = None,
-    collect: Callable[[], tuple[dict[str, bytes], dict[str, str]]] | None = None,
+    collect: Callable[[], tuple[dict[str, bytes], dict[str, str], Decision, AcceptedRevision | None]] | None = None,
     confirmed_exclusions: set[tuple[str, str]] | frozenset = frozenset(),
 ):
     """Static checks, a fresh review worker, runtime cases, then results in the design's precedence.
@@ -94,8 +94,10 @@ def verify_live(
     A reviewer seen acting outside its role voids every judged verdict of the
     run. Runtime cases measure competing skills against Claude's built-ins,
     which run_skill_runtime observes with the cases' own settings.
-    ``collect`` reads the target's files and links again after the workers
-    ran, so a change made meanwhile invalidates the affected parts.
+    ``collect`` reads the target's files, links, decision record and
+    requirements file again after the workers ran, so a change made
+    meanwhile invalidates the affected parts; one that cannot be read
+    invalidates every part.
     ``confirmed_exclusions`` are (part, rule) pairs the user confirmed do not
     apply after seeing the reviewer's reason; a rule the reviewer now finds
     applicable keeps its verdict.
@@ -127,9 +129,13 @@ def verify_live(
     if part_cases and harness in run.targets:
         runtime = run_skill_runtime(run, harness, part_cases, files=files, runner=runner, environ=environ,
                                     login_answer=login_answer)
-    current_files, current_links = collect() if collect else (files, symlinks)
-    current = bound_inputs(decision, current_files, rules, symlinks=current_links, revision=revision,
-                           kb_version=kb_version, worker_evidence=worker_evidence)
+    try:
+        current_files, current_links, current_decision, current_revision = (
+            collect() if collect else (files, symlinks, decision, revision))
+        current = bound_inputs(current_decision, current_files, rules, symlinks=current_links,
+                               revision=current_revision, kb_version=kb_version, worker_evidence=worker_evidence)
+    except (OSError, ValueError):
+        current = {**run.frozen_inputs, "idea": "unreadable"}
     for evidence in observations:
         validate(evidence, "worker-evidence")
     results = finish_run(run, review, runtime, current, worker_observations=observations,

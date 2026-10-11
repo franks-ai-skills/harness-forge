@@ -462,6 +462,15 @@ def _build(arguments: argparse.Namespace) -> int:
     return 0
 
 
+def _current_inputs(arguments: argparse.Namespace, root: Path):
+    """The target as it is now: files, links, decision record and requirements file, read again."""
+    try:
+        decision, revision = _decision_and_revision(arguments, root)
+        return (*collect_target(root, decision), decision, revision)
+    except _InvalidInput as error:
+        raise ValueError(str(error)) from error
+
+
 def _verify(arguments: argparse.Namespace) -> int:
     """Live verification: static checks, a fresh review worker, runtime cases and the report."""
     root = Path(arguments.root).resolve()
@@ -486,7 +495,7 @@ def _verify(arguments: argparse.Namespace) -> int:
     try:
         run, results = verify_live(decision, files, symlinks, _pinned_rules(), revision, arguments.harness, **approval,
                                    cases=cases, runner=RUNNER, environ=_environ(), kb_version=manifest["kb_version"],
-                                   login_answer=arguments.login_answer, collect=lambda: collect_target(root, decision),
+                                   login_answer=arguments.login_answer, collect=lambda: _current_inputs(arguments, root),
                                    confirmed_exclusions=exclusions)
     except ValueError as error:
         raise _InvalidInput(str(error)) from error
