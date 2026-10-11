@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import copy
 import hashlib
+import re
 from dataclasses import asdict
 
 from harness_forge.checks import REGISTRY
@@ -72,6 +73,41 @@ def _rules_for(part: dict, rules: list[Rule], idea: dict[str, list[Rule]]) -> li
     if part["outside_controls"]:
         selected += [rule for rule in rules if rule.concept == "outside"]
     return selected
+
+
+# Links between parts are checked by Forge itself: a named part exists, and its artifact carries its name.
+LINK_RULE = {"id": "links.parts", "info": {
+    "severity": "error", "check": "script", "applicability": "script", "sources": [], "positions": [],
+    "statement": "Each part this part links to exists, and a linked part's artifact is installed under its name",
+    "digest": canonical_digest("links.parts v1")}}
+
+
+def _link_check(part: dict, record: dict, files: dict[str, bytes]) -> CheckResult | None:
+    """The part's links between parts, as one script result; None when it links to nothing."""
+    if not part["connects_to"]:
+        return None
+    parts = {item["id"]: item for item in record["parts"]}
+    problems = []
+    for link in part["connects_to"]:
+        target = parts.get(link["to"])
+        if target is None:
+            problems.append(f"part {link['to']} does not exist")
+            continue
+        directory = _skill_dir(target)
+        if directory is None:
+            continue
+        skill = files.get(f"{directory}/SKILL.md")
+        if skill is None:
+            problems.append(f"part {link['to']} has no {directory}/SKILL.md")
+            continue
+        match = re.search(r"^name:\s*['\"]?([^'\"\n]+?)['\"]?\s*$", skill.decode("utf-8", "replace"), re.M)
+        name = match.group(1) if match else None
+        if name != directory.rsplit("/", 1)[-1]:
+            problems.append(f"part {link['to']}'s skill names itself {name or 'nothing'}, not "
+                            f"{directory.rsplit('/', 1)[-1]}")
+    status = "fail" if problems else "pass"
+    reason = "; ".join(problems) or "every linked part exists under its recorded name"
+    return CheckResult(part["id"], LINK_RULE["id"], status, "error", reason, [], checker="forge.links", checker_version="1")
 
 
 def _approval_digests(worker_evidence: list[dict] | tuple) -> tuple[str, ...]:
@@ -170,6 +206,7 @@ def prepare_run(
         approved_workers=_approval_digests(worker_evidence), kb_version=kb_version,
         scope=scope_label, tool_versions={"harness-forge-checkers": inputs["checkers"]},
         overrides=[{"rule_id": override["rule_id"], "digest": canonical_digest(override)} for override in overrides],
+        scope_parts=sorted(scope) if scope is not None else None,
     )
     idea = _idea_rules(revision)
     rule_ids = [rule.id for rule in rules] + [rule.id for part_rules in idea.values() for rule in part_rules]
@@ -190,8 +227,12 @@ def prepare_run(
             run.part_dirs[part_id] = directory
             name = directory.rsplit("/", 1)[-1]
             run.part_links[part_id] = [link for link in symlinks if link == f".claude/skills/{name}"]
-        if scope is not None and part_id not in scope:
-            continue
+        in_scope = scope is None or part_id in scope
+        link = _link_check(part, record, files)
+        if link is not None:
+            run.rule_index[LINK_RULE["id"]] = dict(LINK_RULE["info"])
+            run.applicable_rules[part_id].append(LINK_RULE["id"])
+            run.static_results.append(link)
         facts = {
             **record["facts"], **part["answers"], "targets": record["targets"], "outcome": part["outcome"],
             "part_id": part_id, "symlinks": {k: v for k, v in symlinks.items() if k in run.part_links.get(part_id, [])},
@@ -224,10 +265,11 @@ def prepare_run(
                 run.not_applicable[part_id][rule.id] = reason
                 continue
             run.applicable_rules[part_id].append(rule.id)
-            run.judged_requests.append({"kind": "rule", "part_id": part_id, "rule_id": rule.id, "rule_kind": rule.kind,
-                                        "statement": rule.statement, "applicability": rule.applicability,
-                                        "severity": rule.severity})
-        if part_kind(part) in ("build", "local-reuse"):
+            if in_scope:
+                run.judged_requests.append({"kind": "rule", "part_id": part_id, "rule_id": rule.id,
+                                            "rule_kind": rule.kind, "statement": rule.statement,
+                                            "applicability": rule.applicability, "severity": rule.severity})
+        if in_scope and part_kind(part) in ("build", "local-reuse"):
             run.judged_requests.append({"kind": "goal", "part_id": part_id, "goal": part["goal"],
                                         "requirement_ids": [rule.id for rule in idea.get(part_id, [])]})
     return run
@@ -328,8 +370,15 @@ def finish_run(
     required_activation: dict[str, set[str]] | None = None,
     drift: list[dict] | tuple = (),
     selection: dict[str, list[dict]] | None = None,
+    kept: dict[str, dict] | None = None,
 ) -> list[PartResult]:
     """Each part's harness and goal result.
+
+    kept maps a part outside a Review run's scope to its earlier result,
+    ``{"run_id": ..., "result": PartResult.to_dict()}``, for a part whose
+    bound inputs and contract are unchanged. Its judged results and goal
+    verdict carry over, marked as kept; its script and link checks ran now
+    and must pass, and only an earlier ``verified`` can stay verified.
 
     confirmed_exclusions are live user confirmations as (part, rule, token):
     one counts only while exclusion_token still gives its token.
@@ -364,6 +413,21 @@ def finish_run(
     goal_verdicts = {} if run.worker_violations else {v["part_id"]: v for v in review.goal_verdicts}
     statics = {(r.part_id, r.rule_id): r for r in run.static_results}
     drifted = blocked_parts(list(drift), run.applicable_rules)
+    outside = set() if run.scope_parts is None else {part["id"] for part in run.parts} - set(run.scope_parts)
+    kept_rules, kept_goals, kept_verified = {}, {}, set()
+    for part_id, entry in (kept or {}).items():
+        if part_id not in outside:
+            continue
+        note = f" (kept from run {entry['run_id']})"
+        for item in entry["result"]["rule_results"]:
+            if item["check"] == "judged":
+                kept_rules[(part_id, item["rule_id"])] = {**item, "reason": item["reason"] + note}
+        if entry["result"].get("goal_verdict"):
+            goal = entry["result"]["goal_verdict"]
+            kept_goals[part_id] = {"part_id": part_id, "verdict": goal["verdict"], "reason": goal["reason"] + note}
+        if entry["result"]["harness_result"] == "verified":
+            kept_verified.add(part_id)
+    goal_verdicts.update(kept_goals)
     results = []
     for part in run.parts:
         part_id, kind = part["id"], part_kind(part)
@@ -375,6 +439,11 @@ def finish_run(
             if info["check"] == "script" or (part_id, rule_id) in statics:
                 static = statics[(part_id, rule_id)]
                 rule_results.append({"rule_id": rule_id, "check": "script", "result": static.status, "reason": static.reason})
+                continue
+            if part_id in outside:
+                rule_results.append(kept_rules.get((part_id, rule_id)) or {
+                    "rule_id": rule_id, "check": "judged", "result": "missing",
+                    "reason": "outside this Review run's scope, with no earlier result to keep"})
                 continue
             verdict = verdicts.get((part_id, rule_id))
             if verdict is None:
@@ -412,6 +481,7 @@ def finish_run(
                                      "reason": "the live build needs an observed explicit activation, and none passed"})
             ok = confirmed and not blocked and not failures and not runtime_failed and not no_activation \
                 and not (selection or {}).get(part_id) \
+                and (part_id not in outside or part_id in kept_verified) \
                 and goal is not None \
                 and goal["verdict"] == "met" and part_id not in changed and not run.worker_violations
             harness = "verified" if ok else "not verified"

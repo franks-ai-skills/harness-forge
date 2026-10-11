@@ -94,6 +94,93 @@ class PreservedResultsTest(unittest.TestCase):
         self.assertEqual(preserved_parts(scenario.run, scenario.current(kb_version="0.2.0"), same), set())
 
 
+def two_skills():
+    """Parts A and C, both built skills, confirmed together; C summarizes and is not linked to A."""
+    from harness_forge.contracts import confirm_contract, render_contract
+    from harness_forge.verify import prepare_run
+    from tests.builders import EVIDENCE
+    from tests.test_verify import build_files, readme
+
+    record = skill_decision(part("C", "Summarize a reproduction checklist", slug="checklist-summary"))
+    files_a, links_a = build_files(record, "A")
+    files_c, links_c = build_files(record, "C")
+    files = {**files_a, **files_c, "README.md": readme(record)}
+    contract = render_contract(record, REVISION, [], worker_evidence=EVIDENCE)
+    relay = {"choice": "confirm", "displayed_digest": contract.digest, "part_ids": ["A", "C"], "run_id": "run-1"}
+    confirmation = confirm_contract(contract, relay, run_id="run-1")
+
+    def prepare(scope=None, changed_files=None):
+        return prepare_run(record, {**files, **(changed_files or {})}, RULES, confirmation, symlinks={**links_a, **links_c},
+                           revision=REVISION, kb_version="0.1.0", worker_evidence=EVIDENCE, scope=scope,
+                           scope_label="Review (recommended)" if scope else "Extensive review (rarely needed)")
+    return record, prepare
+
+
+class ScopedRunTest(unittest.TestCase):
+    """A Review run judges only its scope; every part's scripts and links run, and kept results need them to pass."""
+
+    def finish(self, run, kept=None):
+        from harness_forge.verify import finish_run, validate_review
+        from tests.test_verify import passing_review
+        return {r.part_id: r for r in finish_run(run, validate_review(run, passing_review(run)), [], run.frozen_inputs,
+                                                 kept=kept)}
+
+    def test_out_of_scope_parts_run_scripts_but_are_not_judged(self):
+        _, prepare = two_skills()
+        run = prepare(scope={"A"})
+        self.assertEqual({r["part_id"] for r in run.judged_requests}, {"A"})
+        self.assertTrue(any(result.part_id == "C" for result in run.static_results), "C's scripts still run")
+        self.assertEqual(run.scope_parts, ["A"])
+
+    def test_an_unchanged_part_keeps_its_earlier_judged_results(self):
+        _, prepare = two_skills()
+        first = self.finish(prepare())
+        self.assertEqual({part_id: r.harness_result for part_id, r in first.items()}, {"A": "verified", "C": "verified"})
+        kept = {"C": {"run_id": "run-0", "result": first["C"].to_dict()}}
+        second = self.finish(prepare(scope={"A"}), kept=kept)
+        self.assertEqual(second["C"].harness_result, "verified")
+        judged = [r for r in second["C"].rule_results if r["check"] == "judged" and r["result"] != "not-applicable"]
+        self.assertTrue(judged and all(r["reason"].endswith("(kept from run run-0)") for r in judged))
+        self.assertEqual(second["C"].goal_verdict, {**first["C"].goal_verdict,
+                                                    "reason": first["C"].goal_verdict["reason"] + " (kept from run run-0)"})
+
+        failed = {"C": {"run_id": "run-0", "result": {**first["C"].to_dict(), "harness_result": "not verified"}}}
+        self.assertEqual(self.finish(prepare(scope={"A"}), kept=failed)["C"].harness_result, "not verified")
+        self.assertEqual(self.finish(prepare(scope={"A"}))["C"].harness_result, "not verified",
+                         "a part outside the scope without earlier results is not verified")
+        broken = {".agents/skills/checklist-summary/SKILL.md": b"---\nname: Bad_Name\ndescription: d\n---\nx\n"}
+        self.assertEqual(self.finish(prepare(scope={"A"}, changed_files=broken), kept=kept)["C"].harness_result,
+                         "not verified", "a kept result never outweighs a script failure now")
+
+
+class LinkCheckTest(unittest.TestCase):
+    """Each link names a part that exists, and a part with an artifact has it under its recorded name."""
+
+    def results(self, record, files):
+        from harness_forge.verify import prepare_run
+        run = prepare_run(record, files, RULES, None, kb_version="0.1.0")
+        return {r.part_id: r for r in run.static_results if r.rule_id == "links.parts"}
+
+    def test_links_to_built_parts_and_unknown_parts(self):
+        from tests.test_verify import build_files, readme
+        record = skill_decision(part("B", "Never merge without review", outcome="outside-instead", recommended=None,
+                                     chosen=None, connects_to=[{"to": "A", "how": "uses"}]))
+        files, _ = build_files(record)
+        files["README.md"] = readme(record)
+        self.assertEqual(self.results(record, files)["B"].status, "pass")
+        self.assertNotIn("A", self.results(record, files), "a part without links has no link check")
+        missing = {path: data for path, data in files.items() if not path.endswith("/SKILL.md")}
+        result = self.results(record, missing)["B"]
+        self.assertEqual(result.status, "fail")
+        self.assertIn(f"part A has no .agents/skills/{NAME}/SKILL.md", result.reason)
+        renamed = {**files, f".agents/skills/{NAME}/SKILL.md": files[f".agents/skills/{NAME}/SKILL.md"].replace(
+            f"name: {NAME}".encode(), b"name: other-name")}
+        self.assertIn("names itself other-name", self.results(record, renamed)["B"].reason)
+        dangling = skill_decision(part("B", "Never merge without review", outcome="outside-instead", recommended=None,
+                                       chosen=None, connects_to=[{"to": "Z", "how": "uses"}]))
+        self.assertIn("part Z does not exist", self.results(dangling, files)["B"].reason)
+
+
 class CliTest(unittest.TestCase):
     def run_cli(self, *argv):
         import contextlib
