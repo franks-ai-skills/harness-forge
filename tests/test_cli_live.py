@@ -625,7 +625,7 @@ class LiveCommandsTest(unittest.TestCase):
         self.assertEqual((code, output["parts"][0]["status"]), (1, "blocked"))
         self.assertEqual(output["drift"], [{"rule_id": "skills.description.length", "finding_id": "F1",
                                             "category": "compatibility", "state": "open", "blocking": True,
-                                            "issue": None}])
+                                            "blocking_parts": ["A"], "issue": None}])
 
         proposal_path = self.root / ".scratch/proposal.json"
         code, proposal, stderr = cli("drift-issue", "--root", self.root, "--rule", "skills.description.length",
@@ -942,6 +942,8 @@ class LiveCommandsTest(unittest.TestCase):
         self.assertEqual(cli(*build)[0], 0, "build agrees with verify that the rule does not apply")
         code, output, stderr = cli("verify", *arguments)
         self.assertEqual(code, 0, stderr)
+        self.assertEqual((output["drift"][0]["blocking"], output["drift"][0]["blocking_parts"]), (False, []),
+                         "the report agrees too")
         # A security rule's drift is security drift whatever its recorded category says.
         path = self.root / ".harness/research/repro.md"
         record = load_document(path, "research")
@@ -953,6 +955,7 @@ class LiveCommandsTest(unittest.TestCase):
         self.assertIn("open security drift on security.secrets.none-in-files", stderr)
         code, output, _ = cli("verify", *arguments)
         self.assertEqual((code, output["drift"][0]["blocking"], output["drift"][0]["category"]), (1, True, "security"))
+        self.assertEqual(output["drift"][0]["blocking_parts"], ["A"])
 
     def test_case_ids_must_be_unique(self):
         import yaml

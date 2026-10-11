@@ -840,15 +840,15 @@ def _drift_entry(root: Path, rule_id: str, finding_id: str) -> dict:
     return matching[0]
 
 
-def _drift_report(drift: list[dict], decision: Decision, overrides: list[dict]) -> list[dict]:
-    """Each drift entry's state for the agent: open, kept or adopted, and whether it blocks."""
+def _drift_report(drift: list[dict], decision: Decision, overrides: list[dict],
+                  blocking: dict[str, list[dict]]) -> list[dict]:
+    """Each drift entry's state for the agent: open, kept or adopted, and the parts it blocks (open_blocking_drift)."""
     report = []
     for entry in drift:
-        state = drift_state(entry, decision.record, overrides)
-        category = drift_category(entry)
-        report.append({"rule_id": entry["rule_id"], "finding_id": entry["finding_id"], "category": category,
-                       "state": state, "blocking": state == "open" and category in _BLOCKING_DRIFT,
-                       "issue": entry.get("issue")})
+        parts = sorted(part_id for part_id, entries in blocking.items() if entry in entries)
+        report.append({"rule_id": entry["rule_id"], "finding_id": entry["finding_id"],
+                       "category": drift_category(entry), "state": drift_state(entry, decision.record, overrides),
+                       "blocking": bool(parts), "blocking_parts": parts, "issue": entry.get("issue")})
     return report
 
 
@@ -1072,7 +1072,9 @@ def _verify(arguments: argparse.Namespace) -> int:
                    "confirmation": f"{r.part_id}:{rule['rule_id']}:{exclusion_token(run, r.part_id, rule['rule_id'])}"}
                   for r in results for rule in r.rule_results if rule["result"] == "unresolved"]
     emit({"command": "verify", "run_id": run.run_id, "parts": parts, "runtime": runtime, "unresolved": unresolved,
-          "goal_conflicts": conflicts, "drift": _drift_report(drift, decision, overrides),
+          "goal_conflicts": conflicts,
+          "drift": _drift_report(drift, decision, overrides,
+                                 open_blocking_drift(drift, decision, overrides, affecting_rules(run, cited))),
           "judged_parts": sorted(scope) if scope is not None else sorted(every), "kept_parts": sorted(kept),
           "worker_violations": list(run.worker_violations), "written": written})
     return 1 if any(part["harness_result"] == "not verified" for part in parts) else 0
