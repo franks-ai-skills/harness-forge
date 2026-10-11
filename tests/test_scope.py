@@ -153,6 +153,25 @@ class ScopedRunTest(unittest.TestCase):
                          "not verified", "a kept result never outweighs a script failure now")
 
 
+    def test_a_kept_verdict_meets_the_same_policy_as_a_fresh_one(self):
+        _, prepare = two_skills()
+        first = self.finish(prepare())
+        rule = "skills.invocation.side-effects-user-invoked"  # an error rule whose applicability is judged
+        edited = first["C"].to_dict()
+        edited["rule_results"] = [{**r, "result": "not-applicable"} if r["rule_id"] == rule else r
+                                  for r in edited["rule_results"]]
+        kept = {"C": {"run_id": "run-0", "result": edited}}
+        result = self.finish(prepare(scope={"A"}), kept=kept)["C"]
+        self.assertEqual(result.harness_result, "not verified")
+        self.assertEqual(next(r for r in result.rule_results if r["rule_id"] == rule)["result"], "unresolved",
+                         "a kept exclusion needs the user's confirmation again")
+        script_rule = "skills.description.what-and-when"
+        edited["rule_results"] = [{**r, "result": "not-applicable"} if r["rule_id"] == script_rule else r
+                                  for r in first["C"].to_dict()["rule_results"]]
+        result = self.finish(prepare(scope={"A"}), kept=kept)["C"]
+        self.assertEqual(next(r for r in result.rule_results if r["rule_id"] == script_rule)["result"], "error")
+
+
 class LinkCheckTest(unittest.TestCase):
     """Each link names a part that exists, and a part with an artifact has it under its recorded name."""
 
@@ -220,8 +239,10 @@ class EarlierRunTest(unittest.TestCase):
         text = self.report()
         start = text.index("```json\n") + len("```json\n")
         data = json.loads(text[start:text.index("\n```", start)])
+        partial = [{**result, "rule_results": [{k: v for k, v in r.items() if k != "reason"}
+                                                for r in result["rule_results"]]} for result in data["parts"]]
         for change in ({"bound_inputs": {}}, {"bound_inputs": {**data["bound_inputs"], "parts": {"Z": "0" * 64}}},
-                       {"part_map": {**data["part_map"], "dirs": {"Z": ".agents/skills/z"}}}):
+                       {"part_map": {**data["part_map"], "dirs": {"Z": ".agents/skills/z"}}}, {"parts": partial}):
             with self.subTest(change=list(change)):
                 edited = text[:start] + json.dumps({**data, **change}, indent=2) + text[text.index("\n```", start):]
                 with self.assertRaises(ValueError):
@@ -246,6 +267,7 @@ class CliTest(unittest.TestCase):
         return code, json.loads(stdout.getvalue()) if stdout.getvalue() else {}
 
     def test_check_report_and_scope_commands(self):
+        import json
         import os
         import tempfile
         from pathlib import Path
@@ -283,9 +305,14 @@ class CliTest(unittest.TestCase):
 
             evidence = root / "workers.json"
             evidence.write_text('{"worker_evidence": []}', encoding="utf-8")
+            code, contract = self.run_cli("prepare-contract", "--decision", str(decision_path), "--revision",
+                                          str(revision_path), "--evidence", str(evidence))
+            relay = root / "relay.json"
+            relay.write_text(json.dumps({"choice": "confirm", "displayed_digest": contract["digest"],
+                                         "part_ids": ["A"], "run_id": "scope-1"}), encoding="utf-8")
             code, output = self.run_cli("scope", "--decision", str(decision_path), "--root", str(root), "--revision",
-                                        str(revision_path), "--evidence", str(evidence), "--slug", "repro",
-                                        "--fixed", "A")
+                                        str(revision_path), "--evidence", str(evidence), "--relay", str(relay),
+                                        "--slug", "repro", "--fixed", "A")
             self.assertEqual(code, 0, output)
             self.assertEqual(output["options"][0]["parts"], ["A"])
             self.assertTrue(output["earlier_run"].startswith("unattended-"), "the report written above is the earlier run")

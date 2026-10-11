@@ -520,13 +520,18 @@ def _review_plan(earlier, decision: Decision, current: dict, fixed: set[str], co
     """
     run, results = earlier
     every = {part["id"] for part in decision.record["parts"]}
-    changed = affected_parts(run, current)
+    # A retired part's history stays behind; only current parts can be judged or kept.
+    changed = affected_parts(run, current) & every
     confirmation = Confirmation(run_id="", contract_digest=contract_digest, part_ids=sorted(confirmed_parts))
     preserved = preserved_parts(run, current, confirmation) & set(results)
     judged = review_scope(decision, fixed, changed) | (every - preserved)
     kept = {part_id: results[part_id] for part_id in sorted(every - judged)}
+    # The user's choice binds the parts, the kept results, the earlier inputs they rest on and the inputs now:
+    # anything that changes after the choice makes it another plan.
     digest = canonical_digest({"earlier_run": run.run_id, "judged": sorted(judged),
-                               "kept": {part_id: canonical_digest(result) for part_id, result in kept.items()}})
+                               "kept": {part_id: canonical_digest(result) for part_id, result in kept.items()},
+                               "earlier_inputs": run.frozen_inputs, "current_inputs": current,
+                               "contract": contract_digest, "confirmed": sorted(confirmed_parts)})
     return {"earlier_run": run.run_id, "changed": sorted(changed), "judged": sorted(judged), "kept": kept,
             "digest": digest}
 
@@ -540,15 +545,15 @@ def _scope(arguments: argparse.Namespace) -> int:
     """The two re-verification choices, each with its exact parts, kept results and judged-rule count."""
     root = Path(arguments.root).resolve()
     decision, revision = _decision_and_revision(arguments, root)
-    overrides = _checked_overrides(root)[0]
-    evidence = _read_json(arguments.evidence).get("worker_evidence", [])
-    rules = apply_overrides(_pinned_rules(), overrides)
+    # The scope is computed for the contract confirmed in this run, as verify then computes it.
+    approval, overrides = _approval(arguments, decision, revision)
+    confirmation, evidence = approval["confirmation"], approval["worker_evidence"]
+    rules = effective_rules(_pinned_rules(), overrides, confirmation)
     files, symlinks = collect_target(root, decision)
     fixed = _fixed(arguments, decision)
     try:
         run = prepare_run(decision, files, rules, None, symlinks=symlinks, revision=revision,
                           kb_version=_kb_version(), worker_evidence=evidence)
-        contract = render_contract(decision, revision, overrides, worker_evidence=evidence)
     except ValueError as error:
         raise _InvalidInput(str(error)) from error
     earlier = _earlier(root, arguments.slug)
@@ -558,13 +563,18 @@ def _scope(arguments: argparse.Namespace) -> int:
         counts[request["part_id"]] = counts.get(request["part_id"], 0) + 1
     options = []
     if earlier is not None:
-        # Assumes the user confirms the current contract for every part, as verify then checks.
         plan = _review_plan(earlier, decision, _current(decision, files, symlinks, rules, revision, overrides,
-                                                        evidence), fixed, contract.digest, every)
+                                                        evidence), fixed, confirmation.contract_digest,
+                            confirmation.part_ids)
         options.append({"label": "Review (recommended)", "parts": plan["judged"],
                         "judged_rules": sum(counts.get(p, 0) for p in plan["judged"]), "link_checks": True,
                         "kept": [{"part_id": part_id, "run_id": plan["earlier_run"], "status": result["status"],
-                                  "harness_result": result["harness_result"], "goal_result": result["goal_result"]}
+                                  "harness_result": result["harness_result"], "goal_result": result["goal_result"],
+                                  "goal_verdict": result.get("goal_verdict"),
+                                  # Every kept judgment, as the user must see what the choice keeps.
+                                  "judgments": [{key: item.get(key) for key in ("rule_id", "result", "reason",
+                                                                                 "citation")}
+                                                for item in result["rule_results"] if item["check"] == "judged"]}
                                  for part_id, result in plan["kept"].items()],
                         "digest": plan["digest"]})
     options.append({"label": "Extensive review (rarely needed)", "parts": every,
@@ -1005,7 +1015,7 @@ def _verify(arguments: argparse.Namespace) -> int:
                             fixed, confirmation.contract_digest, confirmation.part_ids)
         relay = _read_json(arguments.scope_relay)
         if (set(relay) != {"choice", "displayed_digest", "run_id"} or relay["choice"] != "review"
-                or relay["displayed_digest"] != plan["digest"]):
+                or relay["displayed_digest"] != plan["digest"] or relay["run_id"] != confirmation.run_id):
             raise _InvalidInput("this is not the Review the user chose: its parts or kept results differ from the "
                                 "options shown; run scope again and ask")
         scope = set(plan["judged"])
@@ -1193,6 +1203,7 @@ def build_parser() -> argparse.ArgumentParser:
     scope.add_argument("--root", required=True, help="target repository root")
     scope.add_argument("--revision", help=".harness/research/<slug>.rules.yaml")
     scope.add_argument("--evidence", required=True, help="JSON with the worker_evidence the contract shows")
+    scope.add_argument("--relay", required=True, help="JSON relay of the user's confirmation of the current contract")
     scope.add_argument("--slug", required=True, help="the report to compare with, .harness/reports/<slug>.md")
     scope.add_argument("--fixed", help="comma-separated ids of the parts the builder fixed")
     scope.set_defaults(handler=_scope)

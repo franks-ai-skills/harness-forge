@@ -38,17 +38,21 @@ this skill's folder; run it with the Forge environment's Python.
    policy disclosure).
 2. If this is a re-verification, run `scripts/forge.py scope --decision
    <record> --root <repository> --revision <rules file> --evidence
-   <workers output> --slug <slug> --fixed <parts the builder fixed>` and
-   ask once: `Review (recommended)` or `Extensive review (rarely
-   needed)`, showing each option's parts and judged-rule count. Review
-   judges the fixed parts, every part linked to them and every part
-   whose inputs or confirmation changed; show each part it keeps with
-   its earlier result and run, because those results come from the
-   earlier report, which the repository can hold in any form. Every
-   part's scripts and link checks run again either way. For Review, pass
-   `--scope review --fixed <parts> --scope-relay <file>` to step 3, the
-   relay holding `choice` review, the option's `displayed_digest` and
-   `run_id`; for Extensive review, pass `--scope extensive`.
+   <workers output> --relay <relay> --slug <slug> --fixed <parts the
+   builder fixed>` with the confirmation from step 1, and ask once:
+   `Review (recommended)` or `Extensive review (rarely needed)`, showing
+   each option's parts and judged-rule count. Review judges the fixed
+   parts, every part linked to them and every part whose inputs or
+   confirmation changed. For each part it keeps, show every kept
+   judgment and the goal verdict with its run: they come from the
+   earlier report, which the repository can hold in any form, and the
+   user's choice is what keeps them. Every part's scripts and link
+   checks run again either way. For Review, pass `--scope review --fixed
+   <parts> --scope-relay <file>` to step 3, the relay holding `choice`
+   review, the option's `displayed_digest` and the confirmation's
+   `run_id`; for Extensive review, pass `--scope extensive`. Each verify
+   run writes a new report, so ask the scope question again before
+   running step 3 again, also after confirming a rule as not applicable.
 3. For a built skill, write its runtime cases as a YAML file shaped like
    `evals/smoke/vertical.yaml` in the Forge plugin root: an `explicit`
    case that names the skill, an `implicit` case with a request a user

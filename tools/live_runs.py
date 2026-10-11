@@ -35,6 +35,7 @@ import importlib.util
 import io
 import json
 import os
+import re
 import sys
 from pathlib import Path
 
@@ -100,6 +101,22 @@ class Recorder:
                 "command": list(command), "stdin": stdin, "returncode": completed.returncode,
                 "stdout": completed.stdout, "stderr": completed.stderr, "timed_out": completed.timed_out})
         return completed
+
+
+def _reviewed_parts(streams: Path, start: int) -> set[str]:
+    """The parts the review workers launched after the first ``start`` recorded streams were asked to judge."""
+    parts = set()
+    for path in sorted(streams.glob("*.json"))[start:]:
+        stdin = json.loads(path.read_text(encoding="utf-8")).get("stdin") or ""
+        blocks = re.findall(r"```json\n(.*?)\n```", stdin, re.S)
+        try:
+            request = json.loads(blocks[-1]) if blocks else {}
+        except ValueError:
+            continue
+        if isinstance(request, dict) and request.get("role") == "review":
+            inputs = request.get("inputs", {})
+            parts |= {item["part_id"] for item in inputs.get("rules", []) + inputs.get("goals", [])}
+    return parts
 
 
 def _clean(reasons: list[str]) -> bool:
@@ -206,20 +223,25 @@ class _Session:
                            "--description", description, "--procedure", procedure, *extra)
         return code
 
-    def verify(self, run_id: str, name: str, *extra):
-        """verify with the runner's relay; error rules the reviewer found not applicable are confirmed and said so."""
+    def verify(self, run_id: str, name: str, *extra, refresh=None):
+        """verify with the runner's relay; error rules the reviewer found not applicable are confirmed and said so.
+
+        ``refresh`` gives arguments asked again before each attempt, such as the
+        scope choice, which every earlier run's report changes.
+        """
         relay = self.confirm(run_id, "--revision", self.revision)
         verify = ["verify", "--decision", self.decision, "--root", self.repo, "--revision", self.revision,
                   "--evidence", self.evidence, "--relay", relay, "--harness", self.harness, "--cases",
                   self.cases_path, "--slug", self.inputs["slug"], "--write", *extra]
-        code, verified = self.run(name, *verify)
+        code, verified = self.run(name, *verify, *(refresh(relay) if refresh else []))
         if verified is not None and verified["unresolved"]:
             # Like the contract: the runner confirms what a user would be asked, and says so.
             self.summary.setdefault("not_applicable_confirmed", {"by": TEST_RELAY, "rules": []})
             self.summary["not_applicable_confirmed"]["rules"] += verified["unresolved"]
             confirmations = [argument for rule in verified["unresolved"]
                              for argument in ("--confirm-not-applicable", rule["confirmation"])]
-            code, verified = self.run(f"{name} with confirmations", *verify, *confirmations)
+            code, verified = self.run(f"{name} with confirmations", *verify, *confirmations,
+                                      *(refresh(relay) if refresh else []))
         return code, verified
 
     def verified(self, code, verified) -> bool:
@@ -360,21 +382,32 @@ def flows(harness: str, out: Path, *, forge: Forge | None = None,
     checks["broken skill not verified"] = code == 1 and broken is not None and \
         broken["parts"][0]["harness_result"] == "not verified"
     session.build("flows-repair", "--replace", skill.relative_to(repo).as_posix())
-    _, scope = session.run("scope", "scope", "--decision", session.decision, "--root", repo, "--revision",
-                           session.revision, "--evidence", session.evidence, "--slug", inputs["slug"], "--fixed", "A")
-    review = next((option for option in (scope or {}).get("options", []) if option["label"].startswith("Review")), {})
-    # The runner answers the scope question as it confirms the contract (see TEST_RELAY).
-    chosen = _write_json(scratch / "scope-relay.json", {"choice": "review", "displayed_digest": review.get("digest"),
-                                                        "run_id": "flows-verify-3"})
-    code, reviewed = session.verify("flows-verify-3", "verify a Review", "--scope", "review", "--fixed", "A",
-                                    "--scope-relay", chosen)
+    def review_choice(relay):
+        """The scope question asked again before each attempt, answered by the runner (see TEST_RELAY)."""
+        _, scope = session.run("scope", "scope", "--decision", session.decision, "--root", repo, "--revision",
+                               session.revision, "--evidence", session.evidence, "--relay", relay, "--slug",
+                               inputs["slug"], "--fixed", "A")
+        review = next((option for option in (scope or {}).get("options", [])
+                       if option["label"].startswith("Review")), {})
+        chosen = _write_json(scratch / "scope-relay.json", {"choice": "review", "displayed_digest": review.get("digest"),
+                                                            "run_id": "flows-verify-3"})
+        return ["--scope", "review", "--fixed", "A", "--scope-relay", chosen]
+
+    streams = len(list((session.out / "streams").glob("*.json")))
+    code, reviewed = session.verify("flows-verify-3", "verify a Review", refresh=review_choice)
     checks["review verified the repair"] = session.verified(code, reviewed)
-    checks["review judged the repaired part and kept the other"] = reviewed is not None and (
-        reviewed.get("judged_parts"), reviewed.get("kept_parts")) == (["A"], ["B"])
+    # What the reviewers were actually asked, and B's results kept with their provenance, not the reported scope.
+    report = (repo / ".harness" / "reports" / f"{inputs['slug']}.md").read_text(encoding="utf-8")
+    checks["review judged the repaired part and kept the other"] = (
+        reviewed is not None and _reviewed_parts(session.out / "streams", streams) == {"A"}
+        and (reviewed.get("judged_parts"), reviewed.get("kept_parts")) == (["A"], ["B"])
+        and "(kept from run" in report.split("## Part B", 1)[-1].split("## Runtime tests", 1)[0])
+    streams = len(list((session.out / "streams").glob("*.json")))
     code, extensive = session.verify("flows-verify-4", "verify an Extensive review", "--scope", "extensive")
     checks["extensive review verified"] = session.verified(code, extensive)
     checks["extensive review judged every part"] = extensive is not None and (
-        extensive.get("judged_parts"), extensive.get("kept_parts")) == (["A", "B"], [])
+        extensive.get("judged_parts"), extensive.get("kept_parts")) == (["A", "B"], []) and \
+        _reviewed_parts(session.out / "streams", streams) == {"A", "B"}
 
     runtime = [case for result in (verified, reviewed, extensive) if result for case in result.get("runtime", [])]
     session.summary["parts"] = (extensive or {}).get("parts")

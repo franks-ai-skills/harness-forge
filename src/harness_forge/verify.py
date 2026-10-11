@@ -492,11 +492,19 @@ def finish_run(
                 rule_results.append({"rule_id": rule_id, "check": "script", "result": static.status, "reason": static.reason})
                 continue
             if part_id in outside:
-                rule_results.append(kept_rules.get((part_id, rule_id)) or {
-                    "rule_id": rule_id, "check": "judged", "result": "missing",
-                    "reason": "outside this Review run's scope, with no earlier result to keep"})
-                continue
-            verdict = verdicts.get((part_id, rule_id))
+                previous = kept_rules.get((part_id, rule_id))
+                if previous is None:
+                    rule_results.append({"rule_id": rule_id, "check": "judged", "result": "missing",
+                                         "reason": "outside this Review run's scope, with no earlier result to keep"})
+                    continue
+                if previous["result"] != "not-applicable":
+                    rule_results.append(previous)
+                    continue
+                # A kept exclusion meets the same policy as a fresh one, the user's confirmation included.
+                verdict = {"verdict": "not-applicable", "reason": previous["reason"],
+                           "citation": previous.get("citation", "-")}
+            else:
+                verdict = verdicts.get((part_id, rule_id))
             if verdict is None:
                 entry = {"result": "missing", "reason": "no valid verdict"}
             elif verdict["verdict"] == "not-applicable":

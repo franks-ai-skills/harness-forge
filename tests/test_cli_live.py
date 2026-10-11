@@ -718,9 +718,23 @@ class LiveCommandsTest(unittest.TestCase):
         finally:
             Cli.confirm = original_confirm
         revision = ["--revision", self.root / ".harness/research/repro.rules.yaml"]
+        workers = self.root / ".scratch/workers.json"
+
+        def scope(fixed="A"):
+            relay = arguments[arguments.index("--relay") + 1]
+            code, output, stderr = cli("scope", "--decision", self.decision, "--root", self.root, *revision,
+                                       "--evidence", workers, "--relay", relay, "--slug", "repro", "--fixed", fixed)
+            self.assertEqual(code, 0, stderr)
+            return output
+
+        def choose(option, run_id="verify-1"):
+            return cli.write(f"scope-{option['digest'][:8]}.json", {"choice": "review",
+                                                                    "displayed_digest": option["digest"],
+                                                                    "run_id": run_id})
 
         code, _, stderr = cli("verify", *arguments, "--scope", "review", "--fixed", "A", "--scope-relay",
-                              cli.write("none.json", {"choice": "review", "displayed_digest": "0" * 64, "run_id": "v"}))
+                              cli.write("none.json", {"choice": "review", "displayed_digest": "0" * 64,
+                                                      "run_id": "verify-1"}))
         self.assertEqual(code, 2, "a Review needs an earlier report to compare with")
         self.assertIn("no earlier report", stderr)
         code, output, stderr = cli("verify", *arguments)
@@ -734,13 +748,15 @@ class LiveCommandsTest(unittest.TestCase):
         self.assertEqual((code, output["parts"][0]["harness_result"]), (1, "not verified"))
         skill.write_text(original, encoding="utf-8")  # the builder's repair of the requested artifact
 
-        code, output, stderr = cli("scope", "--decision", self.decision, "--root", self.root, *revision,
-                                   "--evidence", self.root / ".scratch/workers.json", "--slug", "repro", "--fixed", "A")
-        self.assertEqual(code, 0, stderr)
-        review, extensive = output["options"]
+        code, _, stderr = cli("scope", "--decision", self.decision, "--root", self.root, *revision,
+                              "--evidence", workers, "--slug", "repro", "--fixed", "A")
+        self.assertEqual(code, 2, "the scope is computed for the confirmed contract")
+        review, extensive = scope()["options"]
         self.assertEqual((review["label"], review["parts"]), ("Review (recommended)", ["A"]))
-        self.assertEqual([(k["part_id"], k["run_id"], k["harness_result"]) for k in review["kept"]],
-                         [("B", "verify-1", "not applicable")])
+        [kept] = review["kept"]
+        self.assertEqual((kept["part_id"], kept["run_id"], kept["harness_result"]), ("B", "verify-1", "not applicable"))
+        self.assertTrue(kept["judgments"] and all({"rule_id", "result", "reason"} <= set(item)
+                                                  for item in kept["judgments"]), "the exact kept judgments")
         self.assertRegex(review["digest"], r"^[0-9a-f]{64}$")
         self.assertEqual((extensive["parts"], extensive["kept"]), (["A", "B"], []))
         self.assertGreater(review["judged_rules"], 0)
@@ -753,9 +769,21 @@ class LiveCommandsTest(unittest.TestCase):
         code, _, stderr = cli("verify", *arguments, "--scope", "review", "--fixed", "A", "--scope-relay", wrong)
         self.assertEqual(code, 2)
         self.assertIn("not the Review the user chose", stderr)
-        chosen = cli.write("scope.json", {"choice": "review", "displayed_digest": review["digest"], "run_id": "verify-1"})
+        code, _, stderr = cli("verify", *arguments, "--scope", "review", "--fixed", "A", "--scope-relay",
+                              choose(review, run_id="another-session"))
+        self.assertEqual(code, 2, "the scope answer belongs to this run's confirmation")
+        self.assertIn("not the Review the user chose", stderr)
+
+        readme = self.root / "README.md"
+        before = readme.read_text(encoding="utf-8")
+        readme.write_text(before + "\nChanged after the user chose.\n", encoding="utf-8")
+        code, _, stderr = cli("verify", *arguments, "--scope", "review", "--fixed", "A", "--scope-relay", choose(review))
+        self.assertEqual(code, 2, "an input changed after the choice changes the plan")
+        readme.write_text(before, encoding="utf-8")
+
         roles = len(runner.roles)
-        code, output, stderr = cli("verify", *arguments, "--scope", "review", "--fixed", "A", "--scope-relay", chosen)
+        code, output, stderr = cli("verify", *arguments, "--scope", "review", "--fixed", "A", "--scope-relay",
+                                   choose(review))
         self.assertEqual(code, 0, stderr)
         self.assertEqual((output["judged_parts"], output["kept_parts"]), (["A"], ["B"]))
         self.assertEqual([p["harness_result"] for p in output["parts"]], ["verified", "not applicable"])
@@ -775,15 +803,22 @@ class LiveCommandsTest(unittest.TestCase):
         record.part("B")["goal"] = "Never merge an agent's change without a review"
         write_decision(self.root, record, slug="repro", date="2026-10-10")
         cli.parts = ["A", "B"]
-        relay = cli.confirm(self.decision, "verify-3", *revision)
-        arguments[arguments.index("--relay") + 1] = relay
-        _, output, _ = cli("scope", "--decision", self.decision, "--root", self.root, *revision,
-                           "--evidence", self.root / ".scratch/workers.json", "--slug", "repro", "--fixed", "")
-        review = output["options"][0]
+        arguments[arguments.index("--relay") + 1] = cli.confirm(self.decision, "verify-3", *revision)
+        review = scope(fixed="")["options"][0]
         self.assertEqual((review["parts"], review["kept"]), (["A", "B"], []))
-        chosen = cli.write("scope-2.json", {"choice": "review", "displayed_digest": review["digest"], "run_id": "v"})
-        code, output, stderr = cli("verify", *arguments, "--scope", "review", "--fixed", "", "--scope-relay", chosen)
+        code, output, stderr = cli("verify", *arguments, "--scope", "review", "--fixed", "", "--scope-relay",
+                                   choose(review, run_id="verify-3"))
         self.assertEqual((code, output["judged_parts"]), (0, review["parts"]), stderr)
+
+        # A retired part leaves the earlier report's parts behind without breaking the comparison.
+        record = load_decision(self.decision)
+        record.record["parts"] = [item for item in record.record["parts"] if item["id"] != "B"]
+        record.record["retired_ids"] = ["B"]
+        write_decision(self.root, record, slug="repro", date="2026-10-10")
+        self.assertEqual(cli("readme", "--decision", self.decision, "--root", self.root)[0], 0)
+        cli.parts = ["A"]
+        arguments[arguments.index("--relay") + 1] = cli.confirm(self.decision, "verify-4", *revision)
+        self.assertEqual(scope(fixed="")["options"][0]["parts"], ["A"])
 
     def test_a_review_judges_every_part_whose_inputs_changed(self):
         cli, arguments = self.build_ready(ResearchRunner([finding()]))
@@ -793,7 +828,8 @@ class LiveCommandsTest(unittest.TestCase):
                                              encoding="utf-8")
         code, output, stderr = cli("scope", "--decision", self.decision, "--root", self.root, "--revision",
                                    self.root / ".harness/research/repro.rules.yaml", "--slug", "repro", "--fixed", "",
-                                   "--evidence", self.root / ".scratch/workers.json")
+                                   "--evidence", self.root / ".scratch/workers.json",
+                                   "--relay", arguments[arguments.index("--relay") + 1])
         self.assertEqual(code, 0, stderr)
         self.assertEqual((output["changed"], output["options"][0]["parts"]), (["A"], ["A"]))
 

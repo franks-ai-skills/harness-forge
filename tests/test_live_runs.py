@@ -133,6 +133,21 @@ class FlowsRunTest(unittest.TestCase):
         self.assertEqual(len(next(iter(runtime_parts.values()))), 3, "the Review ran A's three cases only")
         self.assertEqual(forge.module.ISSUES[0]("skills.description.length"), [], "the issue search is a fixture")
 
+    def test_the_review_check_reads_the_reviewer_requests_actually_sent(self):
+        runner = ResearchRunner([finding()])
+        forge = LIVE.Forge()
+        forge.module.RUNNER, forge.module.FETCH, forge.module.ENVIRON = runner, fetch_page, PARENT
+        original = forge.module.verify_live
+
+        def judge_everything(*arguments, **options):
+            return original(*arguments, **{**options, "scope": None, "kept": {}})
+
+        forge.module.verify_live = judge_everything
+        with tempfile.TemporaryDirectory(prefix="forge-flows-") as directory:
+            summary = LIVE.flows("claude-code", Path(directory) / "run", forge=forge)
+        self.assertFalse(summary["checks"]["review judged the repaired part and kept the other"])
+        self.assertEqual(summary["status"], "flows did not hold")
+
     def test_a_flow_that_does_not_hold_is_not_completed(self):
         class BrokenRepair(ResearchRunner):
             """The reviewer fails the goal from the third verification on: the repair is never verified."""

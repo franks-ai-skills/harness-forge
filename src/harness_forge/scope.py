@@ -103,6 +103,14 @@ def earlier_run(report_text: str) -> tuple[VerificationRun, dict[str, dict]]:
     named |= {result["part_id"] for result in data["parts"]} | set(data["answers"])
     if not named <= parts:
         raise ValueError(f"the earlier report names parts its bound inputs lack: {', '.join(sorted(named - parts))}")
+    for result in data["parts"]:
+        complete = all(isinstance(item, dict) and all(isinstance(item.get(key), str)
+                                                      for key in ("rule_id", "check", "result", "reason"))
+                       for item in result.get("rule_results", []))
+        goal = result.get("goal_verdict")
+        if not complete or not (goal is None or (isinstance(goal, dict) and isinstance(goal.get("verdict"), str)
+                                                 and isinstance(goal.get("reason"), str))):
+            raise ValueError(f"the earlier report's results for part {result.get('part_id')} are incomplete")
     run = VerificationRun(run_id=data["run_id"], decision_digest=data["decision_digest"],
                           contract_digest=data["contract_digest"] or "", applicable_rules={},
                           frozen_inputs=data["bound_inputs"], confirmed_parts=list(data["confirmed_parts"]),
