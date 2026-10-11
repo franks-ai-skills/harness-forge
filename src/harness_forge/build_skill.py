@@ -64,7 +64,7 @@ SKILL_LABELS = {"must": "", "must-not": "Never", "should": "Prefer to", "should-
 
 
 def _rule_line(rule: dict) -> str:
-    statement, label = rule["statement"], SKILL_LABELS[rule["kind"]]
+    statement, label = rule["statement"].rstrip().rstrip("."), SKILL_LABELS[rule["kind"]]
     if not label:
         return statement
     if len(statement) > 1 and statement[1].islower():
@@ -120,9 +120,12 @@ def plan_skill(
     title = name.replace("-", " ").capitalize()
     accepted = [entry["rule"] for entry in revision.rules if entry["part_id"] == part_id]
     body = _template("body.md.tmpl", title=title, procedure=procedure.rstrip() + "\n",
-                     rules="\n".join(f"- {_rule_line(rule)}." for rule in accepted) or "- None accepted.")
-    items = [f"- **{rule['id']}** ({KIND_LABELS[rule['kind']].lower()}): {rule['statement']}. Sources: {', '.join(rule['sources'])}"
-             for rule in accepted]
+                     rules="\n".join(f"{number}. {_rule_line(rule)}." for number, rule in enumerate(accepted, 1))
+                     or "None accepted.")
+    # Statements live only in SKILL.md; the reference adds what the agent
+    # rarely needs, by number (skills.references.load-conditions).
+    items = [f"{number}. `{rule['id']}` ({KIND_LABELS[rule['kind']].lower()}): {', '.join(rule['sources'])}"
+             for number, rule in enumerate(accepted, 1)]
     planned = {
         f"{base}/SKILL.md": "---\n" + yaml.dump(frontmatter, Dumper=_NoAliases, sort_keys=False, width=10_000) + "---\n" + body,
         f"{base}/references/requirements.md": _template("requirements.md.tmpl", digest=revision.digest,

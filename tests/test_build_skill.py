@@ -39,7 +39,7 @@ def idea_rule(name, statement, **extra):
 
 
 PROPOSED = [
-    idea_rule("environment", "The checklist names the environment"),
+    idea_rule("environment", "The checklist names the environment."),
     idea_rule("numbered-steps", "The checklist numbers each reproduction step"),
     idea_rule("expected-observed", "The checklist states expected and observed behavior"),
     idea_rule("attach-logs", "The checklist uploads logs to the tracker"),
@@ -78,11 +78,17 @@ class PlanTest(unittest.TestCase):
         references = planned[f".agents/skills/{NAME}/references/requirements.md"]
         self.assertIn(f"name: {NAME}", skill_md)
         self.assertIn("Do not run the reproducer", skill_md)
-        self.assertLess(skill_md.index("- The checklist numbers each reproduction step."), skill_md.index("## Procedure"))
-        self.assertIn("The checklist numbers each reproduction step", references)
-        self.assertIn("https://docs.example-vendor.com/bug-reports", references)
+        self.assertLess(skill_md.index("2. The checklist numbers each reproduction step."), skill_md.index("## Procedure"))
+        self.assertIn("2. `idea.repro.a.numbered-steps` (must): https://docs.example-vendor.com/bug-reports", references)
         self.assertNotIn("uploads logs", "".join(planned.values()))
         self.assertEqual(planned[f".claude/skills/{NAME}"], f"../../.agents/skills/{NAME}")
+
+    def test_each_requirement_is_stated_once_with_one_period(self):
+        planned = plan()
+        text = "".join(content for path, content in planned.items() if path.endswith(".md"))
+        self.assertNotIn("..", text)
+        for statement in ("The checklist names the environment", "The checklist numbers each reproduction step"):
+            self.assertEqual(text.count(statement), 1, "skills.references.load-conditions: a fact lives in one place")
 
     def test_requirements_claim_only_what_verification_checks(self):
         planned = plan()

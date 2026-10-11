@@ -48,8 +48,8 @@ class MustNotKindTest(unittest.TestCase):
                              confirmation=confirm_contract(contract, relay, run_id="run-1"),
                              description=DESCRIPTION, procedure=PROCEDURE)
         skill_md = planned[f".agents/skills/{NAME}/SKILL.md"]
-        self.assertIn("- Never: the checklist uploads logs to the tracker.", skill_md)
-        self.assertNotIn("- The checklist uploads logs to the tracker.", skill_md)
+        self.assertRegex(skill_md, r"\n\d+\. Never: the checklist uploads logs to the tracker\.\n")
+        self.assertNotRegex(skill_md, r"\n\d+\. The checklist uploads logs to the tracker")
 
     def test_review_request_carries_the_kind(self):
         requests = Scenario(skill_decision()).run.judged_requests
