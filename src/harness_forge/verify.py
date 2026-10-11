@@ -75,6 +75,24 @@ def _rules_for(part: dict, rules: list[Rule], idea: dict[str, list[Rule]]) -> li
     return selected
 
 
+# Results Forge itself decides, beside the KB's rules; each is an error and keeps the part from verified.
+FORGE_RULES = {
+    "selection.current": "The recorded selection is what the part's confirmed answers give under the effective rules",
+    "selection.goal-conflict": "No confirmed answer rules out the chosen mechanism",
+    "research.drift": "No open security or compatibility drift touches the part's rules",
+    "runtime.explicit-activation": "A live build's explicit invocation was observed to activate the skill",
+    "inputs.bound": "No bound input changed after the run was prepared",
+}
+
+
+def _forge_rule(run: VerificationRun, rule_id: str, sources: list[str] | tuple = ()) -> None:
+    """Index one of Forge's own results so the report shows its severity, statement and sources."""
+    entry = run.rule_index.setdefault(rule_id, {"severity": "error", "check": "script", "applicability": "script",
+                                                "statement": FORGE_RULES[rule_id], "sources": [], "positions": [],
+                                                "digest": canonical_digest(f"{rule_id} v1")})
+    entry["sources"] = sorted(set(entry["sources"]) | set(sources))
+
+
 # Links between parts are checked by Forge itself: a named part exists, and its artifact carries its name.
 LINK_RULE = {"id": "links.parts", "info": {
     "severity": "error", "check": "script", "applicability": "script", "sources": [], "positions": [],
@@ -129,7 +147,8 @@ def worker_configurations(worker_evidence: list[dict] | tuple) -> list[dict]:
     return [configurations[key] for key in sorted(configurations)]
 
 
-def selection_failures(decision: Decision, rules: list[Rule]) -> tuple[dict[str, list[dict]], list[dict]]:
+def selection_failures(decision: Decision, rules: list[Rule],
+                       domains: dict[str, list] | None = None) -> tuple[dict[str, list[dict]], list[dict]]:
     """Each part's selection problems as failing script results, and its goal conflicts to show.
 
     A recorded recommendation the answers no longer give, or an open
@@ -143,20 +162,22 @@ def selection_failures(decision: Decision, rules: list[Rule]) -> tuple[dict[str,
     for part in decision.record["parts"]:
         state = selection_state(part, facts, rules)
         if not state["current"]:
-            failures.setdefault(part["id"], []).append({"rule_id": "selection.current", "reason": state["problem"]})
+            failures.setdefault(part["id"], []).append({"rule_id": "selection.current", "reason": state["problem"],
+                                                        "sources": []})
             continue
-        conflict = goal_conflict(part, facts, rules)
+        conflict = goal_conflict(part, facts, rules, domains=domains)
         if conflict is None:
             continue
         kept = conflict_kept(part, conflict)
         ids = [item["rule_id"] for item in conflict["failing"]]
-        conflicts.append({"part_id": part["id"], "severity": conflict["severity"], "chosen": conflict["chosen"],
-                          "recommended": conflict["recommended"], "kept": kept, "rule_ids": ids})
+        # Everything the goal-conflict question shows, so the agent can ask it from here.
+        conflicts.append({**conflict, "kept": kept, "rule_ids": ids})
         if conflict["severity"] == "error":
             answer = "the user kept it" if kept else "the goal-conflict question is unanswered"
             failures.setdefault(part["id"], []).append({
                 "rule_id": "selection.goal-conflict",
-                "reason": f"{conflict['chosen']} is ruled out by {', '.join(ids)}; {answer}"})
+                "reason": f"{conflict['chosen']} is ruled out by {', '.join(ids)}; {answer}",
+                "sources": sorted({source for item in conflict["failing"] for source in item["sources"]})})
     return failures, conflicts
 
 
@@ -507,6 +528,7 @@ def finish_run(
                 r.part_id == part_id and r.case_id in required_activation[part_id] and r.result == "pass"
                 for r in runtime_results)
             if no_activation:
+                _forge_rule(run, "runtime.explicit-activation")
                 rule_results.append({"rule_id": "runtime.explicit-activation", "check": "script", "result": "fail",
                                      "reason": "the live build needs an observed explicit activation, and none passed"})
             ok = confirmed and not blocked and not failures and not runtime_failed and not no_activation \
@@ -522,14 +544,17 @@ def finish_run(
             status = ("blocked" if (not confirmed or kind == "unavailable" or part_id in drifted or stale)
                       else part["status"])
         for failure in (selection or {}).get(part_id, []):
+            _forge_rule(run, failure["rule_id"], failure.get("sources", []))
             rule_results.append({"rule_id": failure["rule_id"], "check": "script", "result": "fail",
                                  "reason": failure["reason"]})
         for entry in drift if part_id in drifted else ():
             if drift_category(entry) != "ordinary" and entry["rule_id"] in affecting.get(part_id, []):
+                _forge_rule(run, "research.drift", [entry["finding"]["source"]] if entry.get("finding") else [])
                 rule_results.append({"rule_id": "research.drift", "check": "script", "result": "fail",
                                      "reason": f"unresolved {drift_category(entry)} drift on {entry['rule_id']} "
                                                f"(finding {entry['finding_id']}) blocks the part until the user decides"})
         if part_id in changed:
+            _forge_rule(run, "inputs.bound")
             rule_results.append({"rule_id": "inputs.bound", "check": "script", "result": "fail",
                                  "reason": "a bound input changed after the run was prepared"})
         results.append(PartResult(

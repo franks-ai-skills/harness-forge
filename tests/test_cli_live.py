@@ -575,12 +575,19 @@ class LiveCommandsTest(unittest.TestCase):
         code, output, stderr = cli("verify", *arguments)
         self.assertEqual(code, 1, stderr)
         self.assertEqual(output["parts"][0]["harness_result"], "not verified")
-        self.assertEqual(output["goal_conflicts"], [{"part_id": "A", "severity": "error", "chosen": "skills",
-                                                     "recommended": "subagents", "kept": True,
-                                                     "rule_ids": ["selection.eligibility.own-context-skills"]}])
+        [conflict] = output["goal_conflicts"]
+        self.assertEqual({key: conflict[key] for key in ("part_id", "severity", "chosen", "recommended", "kept",
+                                                          "rule_ids", "choices")},
+                         {"part_id": "A", "severity": "error", "chosen": "skills", "recommended": "subagents",
+                          "kept": True, "rule_ids": ["selection.eligibility.own-context-skills"],
+                          "choices": ["recommended", "adjust-goal", "keep"]})
+        self.assertTrue(conflict["goal"] and conflict["pros"] and conflict["cons"] and conflict["adjust"])
+        self.assertTrue(conflict["failing"][0]["statement"] and conflict["failing"][0]["sources"])
         report = (self.root / ".harness/reports/repro.md").read_text(encoding="utf-8")
-        self.assertIn("`selection.goal-conflict` | - | script | fail | skills is ruled out by "
-                      "selection.eligibility.own-context-skills; the user kept it", report)
+        line = next(line for line in report.splitlines() if line.startswith("| `selection.goal-conflict`"))
+        self.assertIn("| error | script | fail | skills is ruled out by selection.eligibility.own-context-skills; "
+                      "the user kept it", line)
+        self.assertTrue(line.rstrip(" |").endswith(", ".join(conflict["failing"][0]["sources"])))
 
     def test_a_stale_recommendation_is_not_built(self):
         record = load_decision(self.decision)

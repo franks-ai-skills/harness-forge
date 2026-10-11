@@ -984,7 +984,7 @@ def _verify(arguments: argparse.Namespace) -> int:
     else:
         label = f"Extensive review (rarely needed): judged {', '.join(sorted(every))}"
     selection_rules = effective_rules(_selection_rules(), overrides, approval["confirmation"])
-    failures, conflicts = selection_failures(decision, selection_rules)
+    failures, conflicts = selection_failures(decision, selection_rules, domains=_domains(_selection_document()))
     cited = selection_citations(decision, selection_rules)
     try:
         run, results = verify_live(decision, files, symlinks, rules, revision,
