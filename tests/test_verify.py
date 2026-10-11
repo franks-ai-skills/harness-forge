@@ -142,6 +142,21 @@ class PrecedenceTest(unittest.TestCase):
         self.assertEqual((results["B"].status, results["B"].goal_result), ("blocked", "not assessed"))
         self.assertIn(f"unresolved security drift on {rule_id}", str(results["B"].rule_results))
 
+    def test_several_blocking_drifts_make_one_result_per_part(self):
+        from harness_forge.report import render_report
+        from harness_forge.scope import earlier_run
+        scenario = Scenario(skill_decision())
+        drift = [{"rule_id": "skills.description.length", "finding_id": "F1", "summary": "Limit.",
+                  "category": "compatibility"},
+                 {"rule_id": "security.secrets.none-in-files", "finding_id": "F2", "summary": "Secrets.",
+                  "category": "security"}]
+        results = scenario.finish(drift=drift)
+        entries = [r for r in results["A"].rule_results if r["rule_id"] == "research.drift"]
+        self.assertEqual(len(entries), 1)
+        self.assertIn("skills.description.length (finding F1)", entries[0]["reason"])
+        self.assertIn("security.secrets.none-in-files (finding F2)", entries[0]["reason"])
+        earlier_run(render_report(scenario.run, list(results.values())))  # Forge reads its own report back
+
     def test_confirmed_nothing_fits(self):
         nothing = part("B", "One-step task", outcome="nothing-fits", recommended=None, chosen=None, outside_controls=[])
         result = Scenario(skill_decision(nothing), confirmed=("A", "B")).finish()["B"]

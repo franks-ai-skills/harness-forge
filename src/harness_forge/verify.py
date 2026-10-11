@@ -584,12 +584,15 @@ def finish_run(
             _forge_rule(run, failure["rule_id"], failure.get("sources", []))
             rule_results.append({"rule_id": failure["rule_id"], "check": "script", "result": "fail",
                                  "reason": failure["reason"]})
-        for entry in drift if part_id in drifted else ():
-            if drift_category(entry) != "ordinary" and entry["rule_id"] in affecting.get(part_id, []):
-                _forge_rule(run, "research.drift", [entry["finding"]["source"]] if entry.get("finding") else [])
-                rule_results.append({"rule_id": "research.drift", "check": "script", "result": "fail",
-                                     "reason": f"unresolved {drift_category(entry)} drift on {entry['rule_id']} "
-                                               f"(finding {entry['finding_id']}) blocks the part until the user decides"})
+        # One result for all blocking drift of the part, so a rule id appears once per part in the report.
+        blocking = [entry for entry in drift if part_id in drifted and drift_category(entry) != "ordinary"
+                    and entry["rule_id"] in affecting.get(part_id, [])]
+        if blocking:
+            _forge_rule(run, "research.drift", [entry["finding"]["source"] for entry in blocking if entry.get("finding")])
+            rule_results.append({"rule_id": "research.drift", "check": "script", "result": "fail",
+                                 "reason": "; ".join(f"unresolved {drift_category(entry)} drift on {entry['rule_id']} "
+                                                     f"(finding {entry['finding_id']})" for entry in blocking)
+                                 + " blocks the part until the user decides"})
         if part_id in changed:
             _forge_rule(run, "inputs.bound")
             rule_results.append({"rule_id": "inputs.bound", "check": "script", "result": "fail",
