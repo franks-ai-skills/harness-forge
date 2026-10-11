@@ -11,6 +11,7 @@ from harness_forge.research import (
     accept_requirements,
     blocked_parts,
     can_adopt,
+    drift_digest,
     drift_state,
     make_brief,
     load_revision,
@@ -339,9 +340,16 @@ class DriftRecordTest(unittest.TestCase):
         entry = {**self.record_drift()["drift"][0], "finding": self.record["findings"][0], "issue": "pending"}
         decision_record = {"drift_decisions": []}
         self.assertEqual(drift_state(entry, decision_record, []), "open")
+        entry["slug"] = "repro"
         kept = {"drift_decisions": [{"rule_id": entry["rule_id"], "finding_id": "F1", "choice": "keep",
-                                     "reason": "The pinned limit is the portable one.", "date": "2026-10-12"}]}
+                                     "reason": "The pinned limit is the portable one.", "date": "2026-10-12",
+                                     "drift_digest": drift_digest(entry)}]}
         self.assertEqual(drift_state(entry, kept, []), "kept")
+        for change in ({"summary": "Something else changed."}, {"slug": "other-idea"},
+                       {"finding": {**entry["finding"], "claim": "Another claim"}}):
+            with self.subTest(change=list(change)):
+                self.assertEqual(drift_state({**entry, **change}, kept, []), "open",
+                                 "a keep decision covers only the drift it was given for")
         adopted = {"rule_id": entry["rule_id"], "drift": {"finding": self.record["findings"][0]}}
         self.assertEqual(drift_state(entry, decision_record, [adopted]), "adopted")
         other = {"rule_id": entry["rule_id"], "drift": {"finding": {**self.record["findings"][0], "id": "F2"}}}

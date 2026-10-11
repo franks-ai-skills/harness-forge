@@ -601,11 +601,18 @@ class LiveCommandsTest(unittest.TestCase):
         relay = cli.confirm(self.decision, "verify-2", "--revision", self.root / ".harness/research/repro.rules.yaml")
         code, output, stderr = cli("prepare-contract", "--decision", self.decision, "--revision",
                                    self.root / ".harness/research/repro.rules.yaml")
-        self.assertIn("Drift decisions:\n  - skills.description.length (finding F1): keep the pinned rule "
-                      "(The pinned limit is the portable one.)", output["text"])
+        self.assertIn("Drift decisions:\n  - skills.description.length (finding F1 of research repro): keep the "
+                      "pinned rule (The pinned limit is the portable one.). Drift: The vendor raised the limit. "
+                      "Source: https://docs.example-vendor.com/repro/platforms", output["text"])
         code, output, stderr = cli("verify", *arguments[:option], relay, *arguments[option + 1:])
         self.assertEqual(code, 0, stderr)
         self.assertEqual(output["drift"][0]["state"], "kept")
+        research = self.root / ".harness/research/repro.md"
+        research.write_text(research.read_text(encoding="utf-8").replace("The vendor raised the limit.",
+                                                                         "The vendor removed the limit."),
+                            encoding="utf-8")
+        code, output, _ = cli("verify", *arguments[:option], relay, *arguments[option + 1:])
+        self.assertEqual((code, output["drift"][0]["state"]), (1, "open"), "the keep covered the earlier drift only")
         request = cli.write("override.json", {"rule_id": "skills.description.length", "finding_id": "F1",
                                               "reason": "Adopt after all.", "retired": True})
         code, output, _ = cli("override", "--root", self.root, "--input", request)

@@ -37,7 +37,8 @@ from harness_forge.overrides import (  # noqa: E402
 )
 from harness_forge.report import render_report, write_report  # noqa: E402
 from harness_forge.research import (  # noqa: E402
-    _BLOCKING_DRIFT, _catalog, accept_requirements, drift_state, finding_problem, load_revision, make_brief,
+    _BLOCKING_DRIFT, _catalog, accept_requirements, drift_digest, drift_state, finding_problem, load_revision,
+    make_brief,
     record_drift, write_research, write_revision,
 )
 from harness_forge.runtime import load_cases  # noqa: E402
@@ -804,7 +805,9 @@ def _drift_decision(arguments: argparse.Namespace) -> int:
                  if (item["rule_id"], item["finding_id"]) != (arguments.rule, arguments.finding)]
     decision.record["drift_decisions"] = decisions + [{
         "rule_id": arguments.rule, "finding_id": arguments.finding, "choice": arguments.choice,
-        "reason": arguments.reason.strip(), "date": datetime.date.today().isoformat()}]
+        "reason": arguments.reason.strip(), "date": datetime.date.today().isoformat(), "slug": entry["slug"],
+        "summary": entry["summary"], "source": entry["finding"]["source"], "quote": entry["finding"]["quote"],
+        "drift_digest": drift_digest(entry)}]
     _save_decision(arguments, decision)
     emit({"command": "drift-decision", "rule_id": arguments.rule, "finding_id": arguments.finding,
           "choice": arguments.choice, "contract": "changed: show it with prepare-contract and ask for a new confirmation"})

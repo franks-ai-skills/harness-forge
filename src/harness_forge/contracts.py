@@ -263,8 +263,9 @@ def render_contract(
     drift_decisions = decision.record.get("drift_decisions", [])
     if drift_decisions:
         lines.append("Drift decisions:")
-        lines += [f"  - {entry['rule_id']} (finding {entry['finding_id']}): "
-                  f"{'keep the pinned rule' if entry['choice'] == 'keep' else 'adopt the override'} ({entry['reason']})"
+        lines += [f"  - {entry['rule_id']} (finding {entry['finding_id']} of research {entry['slug']}): "
+                  f"{'keep the pinned rule' if entry['choice'] == 'keep' else 'adopt the override'} "
+                  f"({entry['reason']}). Drift: {entry['summary']} Source: {entry['source']}: \"{entry['quote']}\""
                   for entry in drift_decisions]
     else:
         lines.append("Drift decisions: none")

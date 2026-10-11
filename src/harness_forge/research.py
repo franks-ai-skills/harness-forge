@@ -301,16 +301,23 @@ def record_drift(record: dict, *, finding_id: str, rule_id: str, category: str, 
     return updated
 
 
+def drift_digest(drift: dict) -> str:
+    """What a keep decision is given for: the drift entry, its finding and the research record holding it."""
+    return canonical_digest({key: drift.get(key) for key in
+                             ("rule_id", "finding_id", "summary", "category", "finding", "slug")})
+
+
 def drift_state(drift: dict, decision_record: dict, overrides: list[dict]) -> str:
     """``kept``, ``adopted`` or ``open``: what the user decided about one drift entry.
 
-    ``drift`` carries its ``finding``. Keeping the pinned rule is a decision
-    in the decision record; adopting is an override of that rule from that
-    finding. Both count only under a confirmation of the contract that shows
+    ``drift`` carries its ``finding`` and ``slug``. Keeping the pinned rule
+    is a decision in the decision record, bound to the drift's content by
+    drift_digest: a changed drift is open again. Adopting is an override of
+    that rule from that finding. Both count only under a confirmation of the contract that shows
     them, which the caller holds. A filed or pending issue decides nothing.
     """
     for entry in decision_record.get("drift_decisions", []):
-        if (entry["rule_id"], entry["finding_id"], entry["choice"]) == (drift["rule_id"], drift["finding_id"], "keep"):
+        if entry["choice"] == "keep" and entry.get("drift_digest") == drift_digest(drift):
             return "kept"
     for override in overrides:
         if override["rule_id"] == drift["rule_id"] and override["drift"]["finding"] == drift.get("finding"):
