@@ -17,7 +17,8 @@ full, unchanged: the idea's reach, hosting and confirmed facts; every
 part's name, goal, confirmed answers, outcome and mechanism, the reused
 artifact of a reuse part, outside controls, accepted requirements with the revision's
 sha256, every override with its content and sha256, the worker policy
-(`best-effort-v1`, isolation not certified) and the contract digest. A
+(`best-effort-v1`, isolation not certified), each planned worker's
+configuration and the contract digest. A
 line marked as a hint from an untrusted record only points at
 differences; it is not part of what the user confirms.
 

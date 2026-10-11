@@ -10,7 +10,10 @@ render the question but never confirm it.
 from __future__ import annotations
 
 import copy
+import hashlib
+import json
 import re
+import shlex
 from pathlib import Path
 
 import yaml
@@ -148,6 +151,40 @@ def _hint(previous: list[dict] | None, parts: list[dict]) -> list[str]:
     return ["Hint from an untrusted record (it can be edited like any file): " + "; ".join(changes) + "."]
 
 
+_LONG_VALUE = 120
+
+
+def _readable_control(control: str) -> str:
+    """A configured control as the user reads it: a command as its words, a long value by its size and hash."""
+    def short(value: str) -> str:
+        if len(value) <= _LONG_VALUE:
+            return value
+        return f"<{len(value)} characters, sha256 {hashlib.sha256(value.encode()).hexdigest()[:12]}>"
+
+    label, _, value = control.partition(": ")
+    if label == "command":
+        try:
+            words = json.loads(value)
+        except ValueError:
+            words = None
+        if isinstance(words, list):
+            return "command: " + " ".join(shlex.quote(str(word)) if len(str(word)) <= _LONG_VALUE
+                                          else short(str(word)) for word in words)
+    return short(control)
+
+
+def _worker_lines(worker_evidence: list[dict] | tuple) -> list[str]:
+    """Each planned worker's configuration, the review worker's included, so the user sees what they approve."""
+    if not worker_evidence:
+        return []
+    lines = ["Planned workers:"]
+    for evidence in worker_evidence:
+        lines.append(f"  - {evidence['role']}: {evidence['harness']} {evidence['harness_version']}, "
+                     f"model {evidence['model']}, {evidence['launcher']}")
+        lines += [f"      {_readable_control(control)}" for control in evidence["configured_controls"]]
+    return lines
+
+
 def render_contract(
     decision: Decision,
     revision: AcceptedRevision | None,
@@ -210,10 +247,9 @@ def render_contract(
         f"worker evidence sha256 {worker_policy['evidence_digest']}"
         if worker_policy["evidence_digest"] else "no worker evidence recorded yet"
     )
-    lines += [
-        f"Worker policy: {WORKER_POLICY}, isolation not-certified. {WORKER_DISCLOSURE} ({evidence_text})",
-        f"Contract digest: {digest}",
-    ]
+    lines.append(f"Worker policy: {WORKER_POLICY}, isolation not-certified. {WORKER_DISCLOSURE} ({evidence_text})")
+    lines += _worker_lines(worker_evidence)
+    lines.append(f"Contract digest: {digest}")
     lines += _hint(previous, parts)
     return Contract(parts=parts, overrides=override_entries, worker_policy=worker_policy,
                     text="\n".join(lines) + "\n", digest=digest)

@@ -1,5 +1,7 @@
 """Contract rendering and live, current-session confirmation."""
 
+import hashlib
+import json
 import tempfile
 import unittest
 from pathlib import Path
@@ -64,6 +66,19 @@ class RenderTest(unittest.TestCase):
         self.assertNotEqual(with_evidence.digest, changed.digest)
         self.assertIn("no worker evidence", without.text)
         self.assertNotEqual(with_evidence.digest, without.digest)
+
+    def test_contract_shows_each_planned_worker_configuration(self):
+        schema = '{"type":"object"' + ',"x":1' * 100 + "}"
+        command = ["claude", "--print", "--tools", "Read,Grep,Glob", "--json-schema", schema]
+        review = {**EVIDENCE[0], "configured_controls": [f"command: {json.dumps(command)}", "environment names: HOME, PATH"]}
+        codex = {**EVIDENCE[0], "role": "research", "harness": "codex", "harness_version": "0.162.1", "model": "gpt-6.1-sol",
+                 "configured_controls": ["sandbox: read-only"]}
+        text = render_contract(decision(), None, [], worker_evidence=[review, codex]).text
+        self.assertIn("Planned workers:\n  - review: claude-code 2.1.292, model claude-opus-5-5, independent-process\n"
+                      '      command: claude --print --tools Read,Grep,Glob --json-schema '
+                      f"<{len(schema)} characters, sha256 {hashlib.sha256(schema.encode()).hexdigest()[:12]}>\n"
+                      "      environment names: HOME, PATH\n", text)
+        self.assertIn("  - research: codex 0.162.1, model gpt-6.1-sol, independent-process\n      sandbox: read-only\n", text)
 
     def test_part_ids_must_be_unique(self):
         twice = decision(part("A", "Write a checklist"), part("A", "Write another checklist"))
