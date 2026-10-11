@@ -57,14 +57,19 @@ def _limit(rules: list[Rule], rule_id: str, key: str, default: int) -> int:
     return default
 
 
-SKILL_LABELS = {"must": "Always", "must-not": "Never", "should": "Prefer to", "should-not": "Avoid"}
+# A "must" statement already says what is required. No "Always:" label: a
+# reviewer reads it as a rule that must hold every time, which belongs in a
+# hook (skills.goal.no-must-hold-rule-in-skill).
+SKILL_LABELS = {"must": "", "must-not": "Never", "should": "Prefer to", "should-not": "Avoid"}
 
 
 def _rule_line(rule: dict) -> str:
-    statement = rule["statement"]
+    statement, label = rule["statement"], SKILL_LABELS[rule["kind"]]
+    if not label:
+        return statement
     if len(statement) > 1 and statement[1].islower():
         statement = statement[0].lower() + statement[1:]
-    return f"{SKILL_LABELS[rule['kind']]}: {statement}"
+    return f"{label}: {statement}"
 
 
 def _check_bindings(decision: Decision, part_id: str, revision: AcceptedRevision,

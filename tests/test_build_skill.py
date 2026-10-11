@@ -78,11 +78,18 @@ class PlanTest(unittest.TestCase):
         references = planned[f".agents/skills/{NAME}/references/requirements.md"]
         self.assertIn(f"name: {NAME}", skill_md)
         self.assertIn("Do not run the reproducer", skill_md)
-        self.assertLess(skill_md.index("Always: the checklist numbers each reproduction step"), skill_md.index("## Procedure"))
+        self.assertLess(skill_md.index("- The checklist numbers each reproduction step."), skill_md.index("## Procedure"))
         self.assertIn("The checklist numbers each reproduction step", references)
         self.assertIn("https://docs.example-vendor.com/bug-reports", references)
         self.assertNotIn("uploads logs", "".join(planned.values()))
         self.assertEqual(planned[f".claude/skills/{NAME}"], f"../../.agents/skills/{NAME}")
+
+    def test_requirements_claim_only_what_verification_checks(self):
+        planned = plan()
+        text = planned[f".agents/skills/{NAME}/SKILL.md"] + planned[f".agents/skills/{NAME}/references/requirements.md"]
+        for overclaim in ("every result", "Always:"):
+            self.assertNotIn(overclaim, text, "the skill.goal.no-must-hold-rule-in-skill reviewer reads this as an every-time rule")
+        self.assertIn("## Requirements", planned[f".agents/skills/{NAME}/SKILL.md"])
 
     def test_command_choice_sets_both_user_only_flags(self):
         planned = plan(reference_decision(recommended="commands", chosen="commands"))
