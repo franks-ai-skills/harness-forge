@@ -43,7 +43,9 @@ this skill's folder; run it with the Forge environment's Python.
    case that names the skill, an `implicit` case with a request a user
    would make (not for a user-invoked command), and a `negative` near
    miss, a neighboring request that must not activate it, each with the
-   fixtures its prompt needs. Run `scripts/forge.py verify --decision
+   fixtures its prompt needs. A Claude Code case may permit only `Skill`,
+   `Read`, `Grep` and `Glob`: it runs without a sandbox, so a case that
+   permits any other tool is unavailable. Run `scripts/forge.py verify --decision
    <record> --root <repository> --revision <rules file> --harness <this
    harness> --evidence <workers output> --relay <relay> --slug <slug>
    --write --cases <file>`. It runs the static checks, a fresh

@@ -112,6 +112,19 @@ class RuntimeTest(unittest.TestCase):
                 result = self.run_cases("claude-code", stream, cases=[test_case])[0][0]
                 self.assertEqual(result.result, expected, result.reason)
 
+    def test_a_claude_case_cannot_permit_tools_that_run_or_write_code(self):
+        """Claude's cases run without a sandbox, so only tools that neither execute nor write are contained."""
+        for tool in ("Bash", "Write", "WebFetch"):
+            with self.subTest(tool=tool):
+                permitted = {"claude-code": ["Skill", "Read", tool], "codex": ["command_execution"]}
+                results, runner = self.run_cases("claude-code", claude_run(), cases=[case(permitted_tools=permitted)])
+                self.assertEqual(results[0].result, "not-run")
+                self.assertIn(f"unavailable: Claude runs the case without a sandbox; {tool}", results[0].reason)
+                self.assertEqual([c for c in runner.worker_calls if c["stdin"] != BASELINE_PROMPT], [])
+        permitted = {"claude-code": ["Skill", "Read", "Grep", "Glob"], "codex": ["command_execution"]}
+        self.assertEqual(self.run_cases("claude-code", claude_run(), cases=[case(permitted_tools=permitted)])[0][0].result,
+                         "pass")
+
     def test_remaining_components_make_the_test_not_run(self):
         user_plugin = {"name": "helper", "path": "/home/u/.claude/plugins/helper", "source": "helper@market"}
         for stream, reason in ((claude_run(plugins=BUILTIN_PLUGINS + [user_plugin]), "executable components"),

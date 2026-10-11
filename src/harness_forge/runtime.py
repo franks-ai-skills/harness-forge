@@ -32,6 +32,10 @@ EXPECTED = ("activates", "does-not-activate")
 RUNTIME_TIMEOUT = 600
 
 
+# Claude's sandbox covers only Bash and is off unless configured, and its file
+# tools are outside it; a case may permit only tools that neither run code,
+# write nor reach the network. Codex cases run in its read-only sandbox.
+CLAUDE_CONTAINED = ("Skill", "Read", "Grep", "Glob")
 _HARNESS_DIRS = {".agents", ".claude", ".codex"}
 _INSTRUCTION_FILES = {"agents.md", "agents.override.md", "claude.md", "claude.local.md"}
 
@@ -353,6 +357,12 @@ def run_skill_runtime(
 
         if not checked["available"]:
             results.append(result("not-run", f"unavailable: {checked['reason']}"))
+            continue
+        uncontained = [tool for tool in permitted if harness == "claude-code" and tool not in CLAUDE_CONTAINED]
+        if uncontained:
+            results.append(result("not-run", f"unavailable: Claude runs the case without a sandbox; "
+                                             f"{', '.join(uncontained)} cannot be permitted, only "
+                                             f"{', '.join(CLAUDE_CONTAINED)}"))
             continue
         staged = {path: data for path, data in files.items() if path.startswith(directory + "/")}
         outcome, reason, activation = activation_case(
