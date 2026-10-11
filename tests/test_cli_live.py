@@ -185,6 +185,17 @@ class LiveCommandsTest(unittest.TestCase):
         self.assertEqual(code, 2)
         self.assertIn("PART:RULE", stderr)
 
+    def test_a_rebuild_over_a_changed_skill_shows_the_diff(self):
+        cli, arguments = self.build_ready(ResearchRunner([finding()]))
+        option = dict(zip(arguments[::2], arguments[1::2]))
+        procedure = cli.write("procedure-2.md", PROCEDURE + "\n5. Name the browser version.\n")
+        code, output, stderr = cli("build", "--decision", self.decision, "--part", "A", "--root", self.root,
+                                   *[item for key in ("--revision", "--evidence", "--relay") for item in (key, option[key])],
+                                   "--description", cli.write("description.txt", DESCRIPTION), "--procedure", procedure)
+        self.assertEqual(code, 1, stderr)
+        self.assertFalse(output["built"])
+        self.assertIn("+5. Name the browser version.", output["diff"])
+
     def test_build_refuses_without_a_matching_confirmation(self):
         cli = Cli(FakeRunner(), self.root)
         _, workers, _ = cli("workers", "--harness", "claude-code")

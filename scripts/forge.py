@@ -427,7 +427,7 @@ def _build(arguments: argparse.Namespace) -> int:
         emit({"command": "build", "built": False, "reason": str(error)})
         return 1
     except ConflictError as error:
-        emit({"command": "build", "built": False, "reason": str(error), "diff": error.args[1][:20000]})
+        emit({"command": "build", "built": False, "reason": str(error), "diff": error.diff[:20000]})
         return 1
     except (OSError, ValueError) as error:
         raise _InvalidInput(str(error)) from error
