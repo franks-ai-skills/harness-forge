@@ -27,3 +27,13 @@ pages rest on the sources those pages cite.
 | https://docs.github.com/en/repositories/configuring-branches-and-merges-in-your-repository/managing-rulesets/about-rulesets | rulesets on private repositories with "Pro, GitHub Team" |
 | https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/customizing-your-repository/about-code-owners | CODEOWNERS on the "base branch" |
 | https://developers.openai.com/api/docs/guides/deep-research#prompt-injection-and-exfiltration | "Apply schema or regex validation to tool arguments so the model cannot smuggle arbitrary payloads"; "stage the workflow (for example, run public-web research first, then run a second call that has access to the private MCP but no web access)"; "Log and review tool calls and model messages, especially those that will be sent to third-party endpoints"; private data sent "as a query parameter to the attacker's site". The rule security.outbound.minimal-data is an inference from these controls, not a quotation |
+
+## Re-checks
+
+- 2026-10-11, `skills.goal.no-must-hold-rule-in-skill`:
+  https://code.claude.com/docs/en/skills says Claude skipped "a rule
+  that must hold every time": "move the rule into a hook", and "Claude
+  Code runs a hook every time its event occurs, such as before each
+  file edit". The earlier quote "move rules into hooks if they must hold
+  every time" and "may drop entirely" are no longer on the page; older
+  skills "can be dropped entirely after compaction".

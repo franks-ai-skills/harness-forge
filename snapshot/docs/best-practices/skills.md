@@ -291,9 +291,9 @@ A skill fits a recurring procedure or specialized knowledge that the model lacks
 
 **Practice.** If a skill contains a rule that must never be skipped, enforce it with a hook. In Claude Code a skill can carry hooks that apply only while it is active.
 
-**Why.** Skills are context. After compaction only the most recent invocation of each skill is re-attached, and older skills "may drop entirely".
+**Why.** Skills are context. After compaction only the most recent invocation of each skill is re-attached, and older skills "can be dropped entirely after compaction".
 
-**How.** Claude Code: "move rules into hooks if they must hold every time"; skill-scoped `hooks` frontmatter. Codex has no skill-scoped hooks; use a regular hook ([concept: hooks](../concepts/hooks.md)).
+**How.** Claude Code: when Claude skipped "a rule that must hold every time", "move the rule into a hook"; "Claude Code runs a hook every time its event occurs, such as before each file edit, whether or not Claude is following the skill". Skill-scoped `hooks` frontmatter keeps the rule with the skill. Codex has no skill-scoped hooks; use a regular hook ([concept: hooks](../concepts/hooks.md)).
 
 **Evidence.** [Vendor] ([Claude Code skills](https://code.claude.com/docs/en/skills)).
 

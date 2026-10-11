@@ -60,7 +60,7 @@ A skill fits a recurring procedure or specialized knowledge that the model lacks
 | --- | --- | --- |
 | A fact or convention is needed in every session | [Instructions](instructions.md) | The skill may never load |
 | Knowledge must always be applied and its omission silently produces wrong output | A compressed index or a trigger pointer in [instructions](instructions.md) | Skill not invoked in 56% of cases in Vercel's eval ([Vercel](https://vercel.com/blog/agents-md-outperforms-skills-in-our-agent-evals)) |
-| A rule must hold every time an event occurs | [Hooks](hooks.md) | Skills are context; after compaction older skills "may drop entirely" |
+| A rule must hold every time an event occurs | [Hooks](hooks.md) | Skills are context; older skills "can be dropped entirely after compaction" |
 | The work should run isolated from the conversation or in the background | [Subagents](subagents.md); a subagent can use skills | The body and its output fill the main context |
 | The agent needs access to an external system or data | [MCP](mcp.md); a skill teaches what to do with it | "MCP connects to data; Skills teach Claude what to do with that data" ([Anthropic blog](https://claude.com/blog/skills-explained)) |
 | Several skills, or skills plus a connector, are shared across repositories | [Plugins](plugins.md) | A plugin adds versioned releases and namespacing ([Codex build skills](https://learn.chatgpt.com/docs/build-skills)) |
@@ -159,7 +159,7 @@ A skill fits a recurring procedure or specialized knowledge that the model lacks
 12. **Move rules that must hold every time into hooks.**
     - Why: skills are context and can drop out after compaction.
     - How: a regular [hook](hooks.md) in both leads. Claude Code also supports hooks scoped to a skill while it is active.
-    - Evidence: [Vendor] "move rules into hooks if they must hold every time" ([Claude Code skills](https://code.claude.com/docs/en/skills)).
+    - Evidence: [Vendor] "move the rule into a hook"; "Claude Code runs a hook every time its event occurs, such as before each file edit" ([Claude Code skills](https://code.claude.com/docs/en/skills)).
 
 ## Security
 

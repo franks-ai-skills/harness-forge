@@ -401,7 +401,7 @@
   kind: must-not
   severity: error
   check: judged
-  statement: A rule that the confirmed goal says must hold every time is enforced only by skill text
+  statement: A rule that the confirmed goal says must hold every time its event occurs, such as before each file edit, is enforced only by skill text
   applies_to: {harnesses: [claude-code, codex, opencode]}
   evidence: Vendor
   sources:
