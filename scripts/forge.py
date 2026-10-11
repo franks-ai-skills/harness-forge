@@ -511,10 +511,32 @@ def _build(arguments: argparse.Namespace) -> int:
     return 0
 
 
-def _current_inputs(arguments: argparse.Namespace, root: Path):
-    """The target as it is now: files, links, decision record and requirements file, read again."""
+def _drift(root: Path) -> list[dict]:
+    """The drift of every research record in the repository.
+
+    Drift contradicts a pinned KB rule, so it counts whichever idea's research
+    found it and whatever the report is named.
+    """
+    drift = []
+    for path in sorted((root / ".harness" / "research").glob("*.md")):
+        try:
+            drift += load_document(path, "research", root=root)["drift"]
+        except ValueError as error:
+            raise _InvalidInput(str(error)) from error
+    return drift
+
+
+def _current_inputs(arguments: argparse.Namespace, root: Path, drift: list[dict]):
+    """The target as it is now: files, links, decision record and requirements file, read again.
+
+    Overrides or a changed drift that appeared while the workers ran make
+    the inputs unusable, which invalidates every part.
+    """
     try:
         decision, revision = _decision_and_revision(arguments, root)
+        _refuse_overrides(root)
+        if _drift(root) != drift:
+            raise _InvalidInput("the research records' drift changed during verification")
         return (*collect_target(root, decision), decision, revision)
     except _InvalidInput as error:
         raise ValueError(str(error)) from error
@@ -548,15 +570,11 @@ def _verify(arguments: argparse.Namespace) -> int:
             raise _InvalidInput(f"--confirm-not-applicable takes PART:RULE:TOKEN as verify printed it, not {item!r}")
         exclusions.add(tuple(fields))
     manifest = parse_json((SNAPSHOT / "kb-manifest.json").read_text(encoding="utf-8"))
-    research = root / ".harness" / "research" / f"{arguments.slug}.md"
-    try:
-        drift = load_document(research, "research", root=root)["drift"] if research.exists() else []
-    except ValueError as error:
-        raise _InvalidInput(str(error)) from error
+    drift = _drift(root)
     try:
         run, results = verify_live(decision, files, symlinks, _pinned_rules(), revision, arguments.harness, **approval,
                                    cases=cases, runner=RUNNER, environ=_environ(), kb_version=manifest["kb_version"],
-                                   login_answer=arguments.login_answer, collect=lambda: _current_inputs(arguments, root),
+                                   login_answer=arguments.login_answer, collect=lambda: _current_inputs(arguments, root, drift),
                                    confirmed_exclusions=exclusions, drift=drift)
     except ValueError as error:
         raise _InvalidInput(str(error)) from error

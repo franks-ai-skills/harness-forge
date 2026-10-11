@@ -308,6 +308,44 @@ class LiveCommandsTest(unittest.TestCase):
         self.assertIn("unresolved compatibility drift on skills.description.length",
                       (self.root / ".harness/reports/repro.md").read_text(encoding="utf-8"))
 
+        option = arguments.index("--slug") + 1
+        code, output, stderr = cli("verify", *arguments[:option], "different-report", *arguments[option + 1:])
+        self.assertEqual(code, 1, stderr)
+        self.assertEqual(output["parts"][0]["status"], "blocked", "the report's name does not hide the drift")
+
+    def test_overrides_or_drift_added_during_review_invalidate_the_run(self):
+        root = self.root
+
+        def add_override():
+            research = load_document(root / ".harness/research/repro.md", "research")
+            override = {**OVERRIDE, "drift": {"finding": research["findings"][0], "support_verdict": "supported"}}
+            (root / ".harness/overrides").mkdir(parents=True, exist_ok=True)
+            (root / ".harness/overrides/skills.description.concise.yaml").write_text(yaml.safe_dump(override),
+                                                                                     encoding="utf-8")
+
+        def add_drift():
+            record = load_document(root / ".harness/research/repro.md", "research")
+            record["drift"] = [{"rule_id": "skills.description.length", "finding_id": record["findings"][0]["id"],
+                                "summary": "The vendor raised the description limit.", "category": "compatibility"}]
+            write_research(root, record, "Drift recorded.\n")
+
+        for change in (add_override, add_drift):
+            with self.subTest(change=change.__name__):
+                class Changing(ResearchRunner):
+                    def __call__(self, command, *, cwd, env, stdin, timeout):
+                        answer = super().__call__(command, cwd=cwd, env=env, stdin=stdin, timeout=timeout)
+                        if self.roles and self.roles[-1] == "review" and stdin and "```json" in stdin:
+                            change()
+                        return answer
+
+                self.tearDown()
+                self.setUp()
+                root = self.root
+                cli, arguments = self.build_ready(Changing([finding()]))
+                code, output, stderr = cli("verify", *arguments)
+                self.assertEqual(code, 1, stderr)
+                self.assertEqual(output["parts"][0]["harness_result"], "not verified")
+
     def test_an_empty_revision_still_binds_its_brief(self):
         cli, arguments = self.build_ready(ResearchRunner([finding()]))
         proposed = cli.write("proposed-empty.json", {"requirements": []})

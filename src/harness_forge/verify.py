@@ -300,7 +300,7 @@ def finish_run(
     confirmed_exclusions are live user confirmations as (part, rule, token):
     one counts only while exclusion_token still gives its token.
 
-    drift is the research record's drift. Unresolved security or
+    drift is the research records' drift. Unresolved security or
     compatibility drift on a rule that applies to a part blocks that part
     until the user decides; the decision flow is not available yet.
 
