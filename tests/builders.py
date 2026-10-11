@@ -17,7 +17,7 @@ EVIDENCE = [{
 def part(part_id: str, goal: str, **extra) -> dict:
     value = {
         "id": part_id, "slug": f"part-{part_id.lower()}", "goal": goal, "status": "decided",
-        "answers": {"job": "procedure"}, "outcome": "harness-only", "recommended": "skills", "chosen": "skills",
+        "answers": {"job": "procedure", "every_time": "usually"}, "outcome": "harness-only", "recommended": "skills", "chosen": "skills",
         "override_reason": None, "alternatives": [], "connects_to": [],
         "outside_controls": [{"control": "codeowners-agent-config",
                               "prerequisites": ["outside.codeowners.agent-config"],

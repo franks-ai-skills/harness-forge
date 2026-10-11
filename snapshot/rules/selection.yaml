@@ -222,7 +222,7 @@ questions:
   - true
   - false
 - id: bypass_mode
-  text: Will the agent run in a bypass or no-prompt mode?
+  text: 'Will the agent run without permission prompts: unattended (Claude Code dontAsk, Codex approval policy never) or without limits (bypassPermissions, --yolo)? This asks about the agent''s permission prompts, not whether a skill asks the user questions.'
   choices:
   - true
   - false

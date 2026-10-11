@@ -151,6 +151,25 @@ class PrecedenceTest(unittest.TestCase):
         self.assertEqual(result.status, "blocked")
 
 
+class EveryTimeAnswerTest(unittest.TestCase):
+    """The must-hold rule follows the user's every-time answer, not a reviewer's reading of the goal."""
+
+    RULE = "skills.goal.no-must-hold-rule-in-skill"
+
+    def judged(self, every_time):
+        run = Scenario(skill_decision(answers={"job": "procedure", "every_time": every_time})).run
+        return [r["rule_id"] for r in run.judged_requests if r["kind"] == "rule"], run.not_applicable["A"]
+
+    def test_a_part_that_may_be_skipped_does_not_ask_the_reviewer(self):
+        judged, not_applicable = self.judged("usually")
+        self.assertNotIn(self.RULE, judged)
+        self.assertEqual(not_applicable[self.RULE], "a condition in applies_to.when does not hold")
+
+    def test_a_part_that_must_hold_every_time_is_judged(self):
+        judged, _ = self.judged("always")
+        self.assertIn(self.RULE, judged)
+
+
 class VerdictTest(unittest.TestCase):
     def setUp(self):
         self.scenario = Scenario(skill_decision())

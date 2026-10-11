@@ -20,7 +20,7 @@ decision:
     slug: reproduction-checklist
     goal: Write a reproduction checklist when asked
     status: decided
-    answers: {job: procedure}
+    answers: {job: procedure, every_time: usually}
     outcome: harness-only
     recommended: skills
     chosen: skills

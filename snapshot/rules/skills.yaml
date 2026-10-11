@@ -402,7 +402,10 @@
   severity: error
   check: judged
   statement: A rule that the confirmed goal says must hold every time its event occurs, such as before each file edit, is enforced only by skill text
-  applies_to: {harnesses: [claude-code, codex, opencode]}
+  applies_to:
+    harnesses: [claude-code, codex, opencode]
+    # The user's confirmed every-time answer decides it, not a reviewer's reading of the goal text.
+    when: [{eq: [every_time, always]}]
   evidence: Vendor
   sources:
     - docs/best-practices/skills.md#13-move-rules-that-must-hold-every-time-into-hooks
