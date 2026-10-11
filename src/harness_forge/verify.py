@@ -122,7 +122,7 @@ def worker_configurations(worker_evidence: list[dict] | tuple) -> list[dict]:
 
 
 def selection_failures(decision: Decision, rules: list[Rule]) -> tuple[dict[str, list[dict]], list[dict]]:
-    """Each built part's selection problems as failing script results, and its goal conflicts to show.
+    """Each part's selection problems as failing script results, and its goal conflicts to show.
 
     A recorded recommendation the answers no longer give, or an open
     question, fails as ``selection.current``. A chosen mechanism a confirmed
@@ -133,8 +133,6 @@ def selection_failures(decision: Decision, rules: list[Rule]) -> tuple[dict[str,
     conflicts = []
     facts = decision.record["facts"]
     for part in decision.record["parts"]:
-        if part["outcome"] not in ("harness-only", "outside-alongside"):
-            continue
         state = selection_state(part, facts, rules)
         if not state["current"]:
             failures.setdefault(part["id"], []).append({"rule_id": "selection.current", "reason": state["problem"]})
@@ -491,7 +489,9 @@ def finish_run(
             status = "verified" if ok else ("built" if confirmed and not blocked else "blocked")
         else:
             harness = "not checked" if kind == "remote-reuse" else "not applicable"
-            status = "blocked" if (not confirmed or kind == "unavailable" or part_id in drifted) else part["status"]
+            stale = bool((selection or {}).get(part_id))
+            status = ("blocked" if (not confirmed or kind == "unavailable" or part_id in drifted or stale)
+                      else part["status"])
         for failure in (selection or {}).get(part_id, []):
             rule_results.append({"rule_id": failure["rule_id"], "check": "script", "result": "fail",
                                  "reason": failure["reason"]})

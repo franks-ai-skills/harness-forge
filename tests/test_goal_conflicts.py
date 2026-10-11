@@ -62,6 +62,75 @@ class DetectionTest(unittest.TestCase):
         self.assertIn("still has an open question", state["problem"])
 
 
+class RecordedSelectionTest(unittest.TestCase):
+    """The recorded outcome, mechanism, reuse and controls must be what the answers give now."""
+
+    def state(self, part_record):
+        return selection_state(part_record, decision().record["facts"], RULES)
+
+    def test_outside_controls_must_match_the_computed_ones(self):
+        guarded = {**ANSWERS, "must_survive_compromise": "required"}
+        computed = {control["id"]: control for control in selection_state(
+            part("A", "Goal", answers=guarded, outcome="outside-alongside"), decision().record["facts"],
+            RULES)["recommendation"].controls}
+        recorded = [{"control": c["id"], "prerequisites": c["prerequisites"], "availability": "available",
+                     "required_for_goal": c["required_for_goal"]} for c in computed.values()]
+        self.assertTrue(self.state(part("A", "Goal", answers=guarded, outcome="outside-alongside",
+                                        outside_controls=recorded))["current"])
+        omitted = self.state(part("A", "Goal", answers=guarded, outcome="outside-alongside",
+                                  outside_controls=[c for c in recorded if c["control"] != "compromise-resistant-gate"]))
+        self.assertIn("omits compromise-resistant-gate", omitted["problem"])
+        downgraded = [{**c, "required_for_goal": False} for c in recorded]
+        self.assertIn("records compromise-resistant-gate as a precaution",
+                      self.state(part("A", "Goal", answers=guarded, outcome="outside-alongside",
+                                      outside_controls=downgraded))["problem"])
+        weakened = [{**c, "prerequisites": c["prerequisites"][:1]} for c in recorded]
+        self.assertIn("drops prerequisites", self.state(part("A", "Goal", answers=guarded, outcome="outside-alongside",
+                                                             outside_controls=weakened))["problem"])
+        extra = recorded + [{"control": "merge-rules", "prerequisites": [], "availability": "available",
+                             "required_for_goal": False}]
+        self.assertIn("merge-rules", self.state(part("A", "Goal", answers=guarded, outcome="outside-alongside",
+                                                     outside_controls=extra))["problem"])
+
+    def test_a_local_reuse_is_checked_with_its_recorded_candidate(self):
+        reuse = {"name": "repro-steps", "source": "https://example.com/repro", "license": "MIT",
+                 "maintenance": "maintained", "path": ".agents/skills/repro-steps"}
+        fitting = part("A", "Goal", outcome="reuse", recommended="skills", chosen="skills", reuse=reuse)
+        self.assertTrue(self.state(fitting)["current"], self.state(fitting)["problem"])
+        ruled_out = part("A", "Goal", answers=OWN_CONTEXT, outcome="reuse", recommended="skills", chosen="skills",
+                         reuse=reuse)
+        self.assertFalse(self.state(ruled_out)["current"], "own context rules the reused skill out")
+
+
+class VerificationSelectionTest(unittest.TestCase):
+    """Verification checks every part's recorded selection, reuse and outside-only parts included."""
+
+    def test_reuse_and_outside_parts_are_checked_too(self):
+        from harness_forge.verify import selection_failures
+        reuse = {"name": "repro-steps", "source": "https://example.com/repro", "license": "MIT",
+                 "maintenance": "maintained", "path": ".agents/skills/repro-steps"}
+        record = decision(part("A", "Goal", answers=OWN_CONTEXT, outcome="reuse", recommended="skills",
+                               chosen="skills", reuse=reuse),
+                          part("B", "Publish it", answers={**ANSWERS, "irreversible": True}, outcome="outside-instead",
+                               recommended=None, chosen=None, outside_controls=[]))
+        failures, _ = selection_failures(record, RULES)
+        self.assertEqual(sorted(failures), ["A", "B"])
+        self.assertIn("omits compromise-resistant-gate", failures["B"][0]["reason"])
+
+    def test_a_stale_selection_blocks_a_part_that_builds_nothing(self):
+        from harness_forge.verify import finish_run, selection_failures, validate_review
+        from tests.test_verify import Scenario, passing_review, skill_decision
+        outside = part("B", "Publish it", answers={**ANSWERS, "irreversible": True}, outcome="outside-instead",
+                       recommended=None, chosen=None, outside_controls=[])
+        record = skill_decision(outside)
+        scenario = Scenario(record, confirmed=("A", "B"))
+        failures, _ = selection_failures(record, RULES)
+        results = {r.part_id: r for r in finish_run(scenario.run, validate_review(scenario.run, passing_review(
+            scenario.run)), [], scenario.current(), selection=failures)}
+        self.assertEqual((results["B"].status, results["B"].goal_result), ("blocked", "not assessed"))
+        self.assertIn("selection.current", [r["rule_id"] for r in results["B"].rule_results])
+
+
 class ResolutionTest(unittest.TestCase):
     def resolve(self, record, choice, adjusted=None, reason="Decided after seeing the conflict."):
         return resolve_goal_conflict(record, "A", choice, adjusted, reason, rules=RULES, date="2026-10-12")

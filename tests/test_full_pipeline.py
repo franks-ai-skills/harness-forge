@@ -61,15 +61,17 @@ class FullPipelineTest(unittest.TestCase):
         publishing = self.select({**ANSWERS, "irreversible": True})
         self.assertEqual((publishing["outcome"], publishing["mechanism"]), ("outside-instead", None))
         record = load_decision(decision_path)
+        def recorded(controls):
+            return [{"control": control["id"], "prerequisites": control["prerequisites"],
+                     "availability": control["availability"], "required_for_goal": control["required_for_goal"]}
+                    for control in controls]
+
         record.part("A1").update(slug=NAME, answers=dict(ANSWERS), outcome="harness-only", recommended="skills",
-                                 chosen="skills", outside_controls=[])
+                                 chosen="skills", outside_controls=recorded(checklist["controls"]))
         record.part("A2").update(slug="publish-checklist", answers={**ANSWERS, "irreversible": True},
                                  outcome="outside-instead", recommended=None, chosen=None, connects_to=[
                                      {"to": "A1", "how": "uses"}],
-                                 outside_controls=[{"control": control["id"], "prerequisites": control["prerequisites"],
-                                                    "availability": control["availability"],
-                                                    "required_for_goal": control["required_for_goal"]}
-                                                   for control in publishing["controls"]])
+                                 outside_controls=recorded(publishing["controls"]))
         write_decision(root, record, slug="repro", date="2026-10-12")
         self.run_ok("readme", "--decision", decision_path, "--root", root)
 

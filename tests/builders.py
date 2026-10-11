@@ -30,7 +30,7 @@ def part(part_id: str, goal: str, **extra) -> dict:
         "answers": dict(ANSWERS), "outcome": "harness-only", "recommended": "skills", "chosen": "skills",
         "override_reason": None, "alternatives": [], "connects_to": [],
         "outside_controls": [{"control": "codeowners-agent-config",
-                              "prerequisites": ["outside.codeowners.agent-config"],
+                              "prerequisites": ["outside.ci.workflow-protected", "outside.codeowners.agent-config"],
                               "availability": "available", "required_for_goal": False}],
     }
     value.update(extra)

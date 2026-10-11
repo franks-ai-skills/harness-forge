@@ -475,16 +475,43 @@ def next_question(part: dict, whole_idea: dict, selection: dict, candidates: Ite
 CONFLICT_CHOICES = ("recommended", "adjust-goal", "keep")
 
 
-def selection_state(part: dict, whole_idea: dict, rules: list[Rule], candidates: Iterable[dict] = ()) -> dict:
-    """Whether a part's recorded outcome and recommendation are what its confirmed answers give now.
+def recorded_candidates(part: dict) -> list[dict]:
+    """A reused part's candidate as the intake confirmed it: fit, license and maintenance from its record."""
+    reuse = part.get("reuse")
+    if part.get("outcome") != "reuse" or not reuse or not part.get("chosen"):
+        return []
+    return [{**reuse, "fit": "confirmed", "concept": part["chosen"]}]
+
+
+def _controls_problem(part: dict, recommendation: Recommendation) -> str | None:
+    """Recorded controls must be the computed ones: none omitted or added, no requirement or prerequisite dropped."""
+    computed = {control["id"]: control for control in recommendation.controls}
+    recorded = {control["control"]: control for control in part["outside_controls"]}
+    problems = [f"omits {control_id}" for control_id in sorted(set(computed) - set(recorded))]
+    problems += [f"adds {control_id}, which the answers do not call for" for control_id in sorted(set(recorded) - set(computed))]
+    for control_id in sorted(set(computed) & set(recorded)):
+        if computed[control_id]["required_for_goal"] and not recorded[control_id]["required_for_goal"]:
+            problems.append(f"records {control_id} as a precaution although the goal needs it")
+        dropped = set(computed[control_id]["prerequisites"]) - set(recorded[control_id]["prerequisites"])
+        if dropped:
+            problems.append(f"drops prerequisites of {control_id}: {', '.join(sorted(dropped))}")
+    return "; ".join(problems) or None
+
+
+def selection_state(part: dict, whole_idea: dict, rules: list[Rule], candidates: Iterable[dict] | None = None) -> dict:
+    """Whether a part's recorded selection is what its confirmed answers give now.
 
     A recorded recommendation is data: an edited record, a changed override
     or an answer cleared by a goal adjustment makes it stale, and a stale or
-    open selection must be decided again before anything is built.
+    open selection must be decided again before anything is built. The
+    outcome, the mechanism and the outside controls are compared; a reused
+    part is checked with its recorded candidate.
     """
-    recommendation = recommend(part["answers"], whole_idea, rules, list(candidates))
+    candidates = recorded_candidates(part) if candidates is None else list(candidates)
+    recommendation = recommend(part["answers"], whole_idea, rules, candidates)
     state = {"recommendation": recommendation, "pending_question": recommendation.pending_question,
              "current": False, "problem": None}
+    controls = None if recommendation.pending_question else _controls_problem(part, recommendation)
     if recommendation.pending_question:
         state["problem"] = (f"part {part['id']} still has an open question ({recommendation.pending_question}); "
                             "ask it and run select again")
@@ -492,6 +519,9 @@ def selection_state(part: dict, whole_idea: dict, rules: list[Rule], candidates:
         state["problem"] = (f"part {part['id']}'s recorded {part['outcome']}/{part['recommended'] or 'no mechanism'} "
                             f"is not what its answers give now ({recommendation.outcome}/"
                             f"{recommendation.mechanism or 'no mechanism'}); run select again and record its result")
+    elif controls:
+        state["problem"] = (f"part {part['id']}'s recorded outside controls are not what its answers give now: "
+                            f"it {controls}; run select again and record its controls")
     else:
         state["current"] = True
     return state
@@ -524,7 +554,8 @@ def goal_conflict(part: dict, whole_idea: dict, rules: list[Rule], candidates: I
     """
     chosen = part["chosen"]
     selection_rules = [rule for rule in rules if rule.checker == "selection.match"]
-    recommendation = recommend(part["answers"], whole_idea, selection_rules, list(candidates))
+    candidates = list(candidates) or recorded_candidates(part)
+    recommendation = recommend(part["answers"], whole_idea, selection_rules, candidates)
     if chosen is None or recommendation.pending_question or chosen == recommendation.mechanism:
         return None
     entry = next((row for row in recommendation.assessment if row["concept"] == chosen), None)
