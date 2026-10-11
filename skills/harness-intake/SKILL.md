@@ -16,8 +16,13 @@ plugin README). Every command prints bounded JSON.
 
 ## Rules that are easy to get wrong
 
-- **One question per message,** multiple choice where possible. Never
-  ask two questions at once, even when both are pending.
+- **One question per message, in the user's terms.** Forge's question
+  texts say what to find out, not how to word it: ask about the user's
+  own idea and say what the answer changes for it. Offer the choices as
+  A, B, C, recommended first, and accept a letter as the answer; use the
+  harness's multiple-choice tool where it has one. Don't cite this skill
+  or Forge as the reason for a question. Never ask two questions at once,
+  even when both are pending.
 - **Only confirmed answers count.** Facts you infer from the user's
   description are suggestions: show them and let the user confirm.
   Research findings are never answers until the user confirms them.
@@ -42,7 +47,8 @@ plugin README). Every command prints bounded JSON.
    how it should work word for word.
 3. **Whole-idea questions,** asked once: targets, reach, hosting plan and
    repository visibility, and whether an agent opens pull requests, runs
-   in a bypass mode, works in untrusted repositories, or combines
+   without permission prompts (the agent's prompts, not questions a skill
+   asks the user), works in untrusted repositories, or combines
    untrusted input with secrets and network access.
 4. **Survey.** Start the harness-research skill's survey pass with the
    goal, picture, targets and reach. Show its findings and ask which to
