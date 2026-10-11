@@ -38,4 +38,7 @@ Print one JSON object and nothing else:
  "goal_verdicts": [{"part_id": "A", "verdict": "met", "reason": "..."}]}
 ```
 
-Do not write files, run commands or use the network.
+Read the files with your read-only tools. Where reading goes through a
+shell, as in Codex, run only commands that read, such as `cat`, `sed -n`,
+`grep` and `ls`. Do not write or change files and do not use the
+network.
