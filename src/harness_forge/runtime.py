@@ -31,6 +31,18 @@ EXPECTED = ("activates", "does-not-activate")
 RUNTIME_TIMEOUT = 600
 
 
+_HARNESS_DIRS = {".agents", ".claude", ".codex"}
+_INSTRUCTION_FILES = {"agents.md", "agents.override.md", "claude.md", "claude.local.md"}
+
+
+def fixture_problem(path: str, candidate: Mapping[str, bytes] | None = None) -> str | None:
+    """A fixture may not replace a candidate file or add skills, settings or instructions the harness reads."""
+    parts = path.split("/")
+    if path in (candidate or {}) or parts[0] in _HARNESS_DIRS or parts[-1].lower() in _INSTRUCTION_FILES:
+        return f"fixture {path} would replace the candidate or change what the harness loads"
+    return None
+
+
 def load_cases(path: Path) -> list[dict]:
     """Cases from an evals/smoke file, checked for the keys a run needs."""
     value = yaml.safe_load(Path(path).read_text(encoding="utf-8"))
@@ -41,6 +53,10 @@ def load_cases(path: Path) -> list[dict]:
         missing = {"id", "part_id", "mode", "prompt", "expected", "permitted_tools"} - set(item)
         if missing or item["mode"] not in MODES or item["expected"] not in EXPECTED:
             raise ValueError(f"{path}: case {item.get('id')!r} is incomplete or has an unknown mode or expectation")
+        for fixture in item.get("fixtures") or {}:
+            problem = fixture_problem(fixture)
+            if problem:
+                raise ValueError(f"{path}: case {item['id']!r}: {problem}")
     return cases
 
 
@@ -135,6 +151,15 @@ def _observe_claude(stdout: str, name: str, baseline: set[str]) -> dict:
 _SKILL_READ = re.compile(r"\.agents/skills/([^/\s'\"]+)/SKILL\.md")
 
 
+def _skills_read(item: dict) -> list[str]:
+    """Skills whose SKILL.md a successful command named and printed: a mention or a failed read is no read."""
+    if item.get("status") != "completed" or str(item.get("exit_code")) != "0":
+        return []
+    output = str(item.get("aggregated_output", ""))
+    return [name for name in _SKILL_READ.findall(str(item.get("command", "")))
+            if re.search(rf"^name:\s*['\"]?{re.escape(name)}['\"]?\s*$", output, re.M)]
+
+
 def _observe_codex(stdout: str, directory: str) -> dict:
     """Activation is a read of the candidate's SKILL.md, unless another skill's SKILL.md was read first:
     a later read of the candidate then follows that skill's pointer."""
@@ -148,7 +173,7 @@ def _observe_codex(stdout: str, directory: str) -> dict:
                 and not codex.empty_listing(item)):
             observed["calls"].append(str(item.get("type")))
             if item.get("type") == "command_execution":
-                read = _SKILL_READ.findall(str(item.get("command", "")))
+                read = _skills_read(item)
                 first_skill = first_skill or (read[0] if read else None)
                 if name in read and first_skill == name:
                     observed["activation"] = f"read {directory}/SKILL.md"
@@ -197,6 +222,10 @@ def activation_case(
     """
     name = target.rsplit("/", 1)[-1]
     companions = {directory.rsplit("/", 1)[-1] for directory in skill_dirs} - {name}
+    for path in fixtures:
+        problem = fixture_problem(path, files)
+        if problem:
+            return "error", problem, None
     with tempfile.TemporaryDirectory(prefix="forge-runtime-", dir=workspace_root) as temporary:
         workspace = Path(temporary)
         for path, data in files.items():

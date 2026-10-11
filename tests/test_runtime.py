@@ -38,7 +38,9 @@ def codex_run(read_skill=True, items=()):
     events = [{"type": "thread.started", "thread_id": "x"}]
     if read_skill:
         events.append({"type": "item.completed", "item": {"id": "r", "type": "command_execution",
-                                                          "command": f"cat {SKILL_DIR}/SKILL.md", "exit_code": 0}})
+                                                          "command": f"cat {SKILL_DIR}/SKILL.md", "exit_code": 0,
+                                                          "status": "completed",
+                                                          "aggregated_output": f"---\nname: {NAME}\ndescription: x\n"}})
     events += [{"type": "item.completed", "item": {"id": f"i{n}", "type": kind}} for n, kind in enumerate(items)]
     events += [{"type": "item.completed", "item": {"id": "m", "type": "agent_message", "text": "Checklist written."}},
                {"type": "turn.completed"}]
@@ -158,16 +160,50 @@ class RuntimeTest(unittest.TestCase):
         self.assertEqual(near_miss.result, "pass", near_miss.reason)
 
     def test_a_codex_read_after_another_skill_is_that_skills_pointer(self):
-        def command(text):
+        def command(text, output):
             return json.dumps({"type": "item.completed", "item": {"id": text[-9:], "type": "command_execution",
-                                                                 "command": text, "exit_code": 0}})
+                                                                 "command": text, "exit_code": 0, "status": "completed",
+                                                                 "aggregated_output": output}})
 
-        other_first = "\n".join([command("cat .agents/skills/harness-verify/SKILL.md"),
-                                  command(f"cat .agents/skills/harness-verify/references/x.md {SKILL_DIR}/SKILL.md")])
+        other_first = "\n".join([command("cat .agents/skills/harness-verify/SKILL.md", "name: harness-verify\n"),
+                                  command(f"cat .agents/skills/harness-verify/references/x.md {SKILL_DIR}/SKILL.md",
+                                          f"# Contract\n---\nname: {NAME}\n")])
         result = self.run_cases("codex", other_first + "\n" + codex_run(read_skill=False),
                                 cases=[case("implicit", "activates")])[0][0]
         self.assertEqual(result.result, "not-run", "a pointer read after another skill is not the candidate activating")
         self.assertIsNone(result.observed_activation)
+
+    def test_a_codex_mention_or_failed_read_is_no_activation(self):
+        def command(text, exit_code, output):
+            return json.dumps({"type": "item.completed", "item": {"id": "c", "type": "command_execution", "command": text,
+                                                                 "exit_code": exit_code, "status": "completed",
+                                                                 "aggregated_output": output}})
+
+        for name, line in (("echo", command(f"echo {SKILL_DIR}/SKILL.md", 0, f"{SKILL_DIR}/SKILL.md\n")),
+                           ("failed cat", command(f"cat {SKILL_DIR}/SKILL.md", 1, "cat: No such file or directory\n"))):
+            with self.subTest(name):
+                result = self.run_cases("codex", line + "\n" + codex_run(read_skill=False))[0][0]
+                self.assertEqual(result.result, "not-run", result.reason)
+                self.assertIsNone(result.observed_activation)
+
+    def test_a_fixture_cannot_replace_the_candidate_or_steer_the_harness(self):
+        for path in (f"{SKILL_DIR}/SKILL.md", ".agents/skills/other/SKILL.md", ".claude/skills/x/SKILL.md",
+                     ".codex/config.toml", "AGENTS.md", "docs/CLAUDE.md"):
+            with self.subTest(path):
+                results, runner = self.run_cases("claude-code", claude_run(), cases=[case(fixtures={path: "Use the skill."})])
+                self.assertEqual(results[0].result, "error")
+                self.assertIn(path, results[0].reason)
+                self.assertEqual(runner.worker_calls, [], "nothing launches with a fixture in a reserved place")
+
+    def test_a_case_file_with_a_reserved_fixture_is_refused(self):
+        import tempfile
+        import yaml
+        with tempfile.TemporaryDirectory(prefix="forge-cases-") as directory:
+            path = Path(directory) / "cases.yaml"
+            path.write_text(yaml.safe_dump({"cases": [case(fixtures={"AGENTS.md": "Always read the skill."})]}),
+                            encoding="utf-8")
+            with self.assertRaisesRegex(ValueError, "AGENTS.md"):
+                load_cases(path)
 
     def test_a_codex_resource_listing_is_not_a_tool_outside_the_list(self):
         listing = json.dumps({"type": "item.completed", "item": {"id": "l", "type": "mcp_tool_call", "server": "codex",
