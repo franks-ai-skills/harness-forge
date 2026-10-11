@@ -9,6 +9,8 @@ user accepts enter the hashed Idea KB revision.
 
 from __future__ import annotations
 
+import copy
+
 import re
 from functools import lru_cache
 from pathlib import Path
@@ -272,6 +274,48 @@ def blocked_parts(drift: list[dict], applicable: dict[str, list[str]]) -> set[st
     """Parts blocked by unresolved security or compatibility drift."""
     blocking = {entry["rule_id"] for entry in drift if drift_category(entry) in _BLOCKING_DRIFT}
     return {part for part, rule_ids in applicable.items() if blocking & set(rule_ids)}
+
+
+def record_drift(record: dict, *, finding_id: str, rule_id: str, category: str, summary: str,
+                 pinned_ids: set[str]) -> dict:
+    """The research record with one more drift entry: a kept, supported finding that contradicts a pinned rule.
+
+    A security rule's drift is always security drift. Recording the same
+    rule and finding again replaces the entry.
+    """
+    finding = next((item for item in record["findings"] if item["id"] == finding_id), None)
+    if finding is None:
+        raise ValueError(f"finding {finding_id} is not a kept finding of research record {record['slug']}")
+    support = next((entry for entry in record["support"] if entry["finding_id"] == finding_id), None)
+    if not (support and support["quote_check"] == "pass" and support["verdict"] == "supported"):
+        raise ValueError(f"finding {finding_id} did not pass both checks: its quote and a supported verdict")
+    if rule_id not in pinned_ids:
+        raise ValueError(f"{rule_id} is not a pinned Harness KB rule")
+    if category not in ("security", "compatibility", "ordinary"):
+        raise ValueError(f"category must be security, compatibility or ordinary, not {category!r}")
+    entry = {"rule_id": rule_id, "finding_id": finding_id, "summary": summary,
+             "category": drift_category({"rule_id": rule_id, "category": category})}
+    updated = copy.deepcopy(record)
+    updated["drift"] = [item for item in updated["drift"]
+                        if (item["rule_id"], item["finding_id"]) != (rule_id, finding_id)] + [entry]
+    return updated
+
+
+def drift_state(drift: dict, decision_record: dict, overrides: list[dict]) -> str:
+    """``kept``, ``adopted`` or ``open``: what the user decided about one drift entry.
+
+    ``drift`` carries its ``finding``. Keeping the pinned rule is a decision
+    in the decision record; adopting is an override of that rule from that
+    finding. Both count only under a confirmation of the contract that shows
+    them, which the caller holds. A filed or pending issue decides nothing.
+    """
+    for entry in decision_record.get("drift_decisions", []):
+        if (entry["rule_id"], entry["finding_id"], entry["choice"]) == (drift["rule_id"], drift["finding_id"], "keep"):
+            return "kept"
+    for override in overrides:
+        if override["rule_id"] == drift["rule_id"] and override["drift"]["finding"] == drift.get("finding"):
+            return "adopted"
+    return "open"
 
 
 def can_adopt(drift: dict, support: dict | None) -> bool:

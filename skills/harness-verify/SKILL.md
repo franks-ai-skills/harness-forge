@@ -66,7 +66,9 @@ this skill's folder; run it with the Forge environment's Python.
    finds it applicable, its verdict stands.
 5. If `goal_conflicts` lists an error the user has not kept, ask the
    goal-conflict question as harness-intake's contract reference
-   describes; a kept conflict stays an error in the report.
+   describes; a kept conflict stays an error in the report. For each
+   `drift` entry that is `blocking`, offer the harness-research skill's
+   drift choices; the part stays blocked until the user decides.
 6. Show each part's harness and goal result, every failing rule with its
    source, and each runtime case that did not run, with its reason.
 

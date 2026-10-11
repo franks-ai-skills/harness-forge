@@ -12,6 +12,7 @@ import yaml
 
 from harness_forge.contracts import load_decision, write_decision
 from harness_forge.documents import load_document
+from harness_forge.overrides import load_overrides
 from harness_forge.research import load_revision, write_research
 from harness_forge.adapters.base import Completed
 from tests.test_adapters import CLAUDE_API_KEY, PARENT, FakeRunner, claude_stream
@@ -553,6 +554,96 @@ class LiveCommandsTest(unittest.TestCase):
                               "--procedure", cli.write("procedure.md", PROCEDURE), "--root", self.root)
         self.assertEqual(code, 2)
         self.assertIn("is not what its answers give now", stderr)
+
+    def record_drift(self, cli, rule="skills.description.length", category="compatibility"):
+        code, output, stderr = cli("drift", "--root", self.root, "--slug", "repro", "--finding", "F1", "--rule", rule,
+                                   "--category", category, "--summary", "The vendor raised the limit.")
+        self.assertEqual(code, 0, stderr)
+        return output
+
+    def test_drift_is_recorded_reported_upstream_and_decided(self):
+        cli, arguments = self.build_ready(ResearchRunner([finding()]))
+        filed = []
+        cli.module.ISSUES = (lambda rule_id: [], lambda proposal: filed.append(proposal) or "https://github.com/k/b/issues/3")
+        output = self.record_drift(cli)
+        self.assertEqual((output["entry"]["category"], output["blocking"]), ("compatibility", True))
+        code, output, _ = cli("verify", *arguments)
+        self.assertEqual((code, output["parts"][0]["status"]), (1, "blocked"))
+        self.assertEqual(output["drift"], [{"rule_id": "skills.description.length", "finding_id": "F1",
+                                            "category": "compatibility", "state": "open", "blocking": True,
+                                            "issue": None}])
+
+        proposal_path = self.root / ".scratch/proposal.json"
+        code, proposal, stderr = cli("drift-issue", "--root", self.root, "--rule", "skills.description.length",
+                                     "--finding", "F1", "--run-id", "drift-1", "--out", proposal_path)
+        self.assertEqual(code, 0, stderr)
+        self.assertEqual(proposal["kind"], "issue")
+        self.assertIn("Rule `skills.description.length`", proposal["body"])
+        for choice, expected in (("pending", "pending"), ("decline", "not published")):
+            relay = cli.write(f"issue-{choice}.json", {"choice": choice, "displayed_digest": proposal["digest"],
+                                                       "run_id": "drift-1"})
+            code, output, stderr = cli("publish-issue", "--root", self.root, "--proposal", proposal_path,
+                                       "--relay", relay)
+            self.assertEqual((code, output["issue"]), (0, expected), stderr)
+            code, output, _ = cli("verify", *arguments)
+            self.assertEqual(output["parts"][0]["status"], "blocked", "no issue answer unblocks the part")
+            self.assertEqual(output["drift"][0]["issue"], expected)
+        self.assertEqual(filed, [])
+
+        code, output, stderr = cli("drift-decision", "--decision", self.decision, "--root", self.root, "--rule",
+                                   "skills.description.length", "--finding", "F1", "--choice", "keep",
+                                   "--reason", "The pinned limit is the portable one.")
+        self.assertEqual(code, 0, stderr)
+        code, _, stderr = cli("verify", *arguments)
+        self.assertEqual(code, 2, "the decision changed the contract")
+        option = arguments.index("--relay") + 1
+        relay = cli.confirm(self.decision, "verify-2", "--revision", self.root / ".harness/research/repro.rules.yaml")
+        code, output, stderr = cli("prepare-contract", "--decision", self.decision, "--revision",
+                                   self.root / ".harness/research/repro.rules.yaml")
+        self.assertIn("Drift decisions:\n  - skills.description.length (finding F1): keep the pinned rule "
+                      "(The pinned limit is the portable one.)", output["text"])
+        code, output, stderr = cli("verify", *arguments[:option], relay, *arguments[option + 1:])
+        self.assertEqual(code, 0, stderr)
+        self.assertEqual(output["drift"][0]["state"], "kept")
+        request = cli.write("override.json", {"rule_id": "skills.description.length", "finding_id": "F1",
+                                              "reason": "Adopt after all.", "retired": True})
+        code, output, _ = cli("override", "--root", self.root, "--input", request)
+        self.assertEqual(output["override"]["link"], "not published", "the earlier issue answer carries over")
+
+    def test_adopting_drift_takes_a_confirmed_override_and_an_approved_issue_is_linked(self):
+        cli, arguments = self.build_ready(ResearchRunner([finding()]))
+        cli.module.ISSUES = (lambda rule_id: [], lambda proposal: "https://github.com/k/b/issues/3")
+        self.record_drift(cli)
+        code, _, stderr = cli("drift-decision", "--decision", self.decision, "--root", self.root, "--rule",
+                              "skills.description.length", "--finding", "F1", "--choice", "adopt", "--reason", "x")
+        self.assertEqual(code, 2)
+        self.assertIn("forge.py override", stderr)
+        pinned = next(rule for rule in yaml.safe_load((FORGE / "snapshot/rules/skills.yaml").read_text())
+                      if rule["id"] == "skills.description.length")
+        request = cli.write("override.json", {"rule_id": "skills.description.length", "finding_id": "F1",
+                                              "reason": "The vendor raised the limit.",
+                                              "rule": {**pinned, "params": {"max_chars": 2048}}})
+        code, _, stderr = cli("override", "--root", self.root, "--input", request, "--write")
+        self.assertEqual(code, 0, stderr)
+        code, _, stderr = cli("drift-decision", "--decision", self.decision, "--root", self.root, "--rule",
+                              "skills.description.length", "--finding", "F1", "--choice", "adopt",
+                              "--reason", "The vendor raised the limit.")
+        self.assertEqual(code, 0, stderr)
+
+        proposal_path = self.root / ".scratch/proposal.json"
+        _, proposal, _ = cli("drift-issue", "--root", self.root, "--rule", "skills.description.length",
+                             "--finding", "F1", "--run-id", "drift-1", "--out", proposal_path)
+        relay = cli.write("approve.json", {"choice": "approve", "displayed_digest": proposal["digest"],
+                                           "run_id": "drift-1"})
+        code, output, stderr = cli("publish-issue", "--root", self.root, "--proposal", proposal_path, "--relay", relay)
+        self.assertEqual((code, output["issue"]), (0, "https://github.com/k/b/issues/3"), stderr)
+        self.assertEqual(load_overrides(self.root)[0]["link"], "https://github.com/k/b/issues/3")
+
+        option = arguments.index("--relay") + 1
+        relay = cli.confirm(self.decision, "verify-2", "--revision", self.root / ".harness/research/repro.rules.yaml")
+        code, output, stderr = cli("verify", *arguments[:option], relay, *arguments[option + 1:])
+        self.assertEqual(code, 0, stderr)
+        self.assertEqual(output["drift"][0]["state"], "adopted")
 
     def test_case_ids_must_be_unique(self):
         import yaml

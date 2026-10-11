@@ -11,9 +11,11 @@ from harness_forge.research import (
     accept_requirements,
     blocked_parts,
     can_adopt,
+    drift_state,
     make_brief,
     load_revision,
     match_support,
+    record_drift,
     rejected_domains,
     research_matches_brief,
     source_rejection,
@@ -295,6 +297,55 @@ class DriftTest(unittest.TestCase):
                         None):
             with self.subTest(support=support):
                 self.assertFalse(can_adopt(drift, support))
+
+
+class DriftRecordTest(unittest.TestCase):
+    """Recording drift from a kept finding, and which answers resolve it."""
+
+    def setUp(self):
+        self.record = {"slug": "repro", "search_mode": "live",
+                       "briefs": [{"pass": "deep", "part_id": "A", "digest": BRIEF}], "findings": [finding().to_dict()],
+                       "support": [{"finding_id": "F1", "quote_check": "pass", "verdict": "supported",
+                                    "worker_ref": "support-f1"}], "drift": []}
+        self.pinned = {"skills.description.length", "security.secrets.none-in-files"}
+
+    def record_drift(self, record=None, **changes):
+        arguments = {"finding_id": "F1", "rule_id": "skills.description.length", "category": "compatibility",
+                     "summary": "The vendor raised the limit."}
+        arguments.update(changes)
+        return record_drift(record or self.record, pinned_ids=self.pinned, **arguments)
+
+    def test_drift_comes_from_a_kept_supported_finding_about_a_pinned_rule(self):
+        recorded = self.record_drift()
+        self.assertEqual(recorded["drift"], [{"rule_id": "skills.description.length", "finding_id": "F1",
+                                              "summary": "The vendor raised the limit.", "category": "compatibility"}])
+        self.assertEqual(self.record["drift"], [], "the input record is not changed")
+        validate(recorded, "research")
+        unsupported = copy.deepcopy(self.record)
+        unsupported["support"][0]["verdict"] = "unsupported"
+        for record, changes, message in ((unsupported, {}, "supported"), (None, {"finding_id": "F9"}, "F9"),
+                                         (None, {"rule_id": "skills.made-up"}, "not a pinned")):
+            with self.subTest(message=message):
+                with self.assertRaisesRegex(ValueError, message):
+                    self.record_drift(record, **changes)
+
+    def test_a_security_rule_is_always_security_drift_and_a_repeat_replaces(self):
+        recorded = self.record_drift(rule_id="security.secrets.none-in-files", category="ordinary")
+        self.assertEqual(recorded["drift"][0]["category"], "security")
+        again = self.record_drift(recorded, rule_id="security.secrets.none-in-files", summary="Restated.")
+        self.assertEqual([entry["summary"] for entry in again["drift"]], ["Restated."])
+
+    def test_keep_or_a_confirmed_adoption_resolves_drift_and_a_pending_issue_does_not(self):
+        entry = {**self.record_drift()["drift"][0], "finding": self.record["findings"][0], "issue": "pending"}
+        decision_record = {"drift_decisions": []}
+        self.assertEqual(drift_state(entry, decision_record, []), "open")
+        kept = {"drift_decisions": [{"rule_id": entry["rule_id"], "finding_id": "F1", "choice": "keep",
+                                     "reason": "The pinned limit is the portable one.", "date": "2026-10-12"}]}
+        self.assertEqual(drift_state(entry, kept, []), "kept")
+        adopted = {"rule_id": entry["rule_id"], "drift": {"finding": self.record["findings"][0]}}
+        self.assertEqual(drift_state(entry, decision_record, [adopted]), "adopted")
+        other = {"rule_id": entry["rule_id"], "drift": {"finding": {**self.record["findings"][0], "id": "F2"}}}
+        self.assertEqual(drift_state(entry, decision_record, [other]), "open")
 
 
 if __name__ == "__main__":

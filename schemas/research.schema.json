@@ -117,6 +117,21 @@
               "compatibility",
               "ordinary"
             ]
+          },
+          "issue": {
+            "anyOf": [
+              {
+                "type": "string",
+                "pattern": "^https://[^\\s]+$",
+                "maxLength": 2000
+              },
+              {
+                "enum": [
+                  "pending",
+                  "not published"
+                ]
+              }
+            ]
           }
         },
         "additionalProperties": false,

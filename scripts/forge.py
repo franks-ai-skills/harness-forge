@@ -26,7 +26,10 @@ from harness_forge.contracts import (  # noqa: E402
     RELAY_KEYS, confirm_contract, load_decision, render_contract, resolve_goal_conflict, update_outside_section,
     write_decision,
 )
-from harness_forge.documents import load_document, parse_json, safe_path, validate, validate_kb  # noqa: E402
+from harness_forge.documents import (  # noqa: E402
+    canonical_digest, load_document, parse_json, safe_path, split_frontmatter, validate, validate_kb,
+)
+from harness_forge.issues import find_issue, gh_publisher, gh_search, propose, publish  # noqa: E402
 from harness_forge.fetch import fetch_text  # noqa: E402
 from harness_forge.models import Decision, Finding, Rule  # noqa: E402
 from harness_forge.overrides import (  # noqa: E402
@@ -34,7 +37,8 @@ from harness_forge.overrides import (  # noqa: E402
 )
 from harness_forge.report import render_report, write_report  # noqa: E402
 from harness_forge.research import (  # noqa: E402
-    _catalog, accept_requirements, finding_problem, load_revision, make_brief, write_research, write_revision,
+    _BLOCKING_DRIFT, _catalog, accept_requirements, drift_state, finding_problem, load_revision, make_brief,
+    record_drift, write_research, write_revision,
 )
 from harness_forge.runtime import load_cases  # noqa: E402
 from harness_forge.workflow import research_pass, verify_live  # noqa: E402
@@ -57,6 +61,8 @@ ROLES = ("research", "source-support", "review")
 RUNNER = run_command
 FETCH = fetch_text
 ENVIRON = None
+# (search, publisher) for KB issues; None uses the GitHub CLI with the user's existing login.
+ISSUES = None
 
 
 class _InvalidInput(Exception):
@@ -245,9 +251,12 @@ def _override(arguments: argparse.Namespace) -> int:
     if len(found) != 1:
         raise _InvalidInput(f"finding {request.get('finding_id')!r} is not in exactly one research record of this "
                             "repository; name its record with slug")
+    # An issue answer given before adoption carries over to the override.
+    issue = next((entry.get("issue") for entry in _drift(root) if entry["rule_id"] == request.get("rule_id")
+                  and entry["finding"] == found[0] and entry.get("issue")), "pending")
     override = {"rule_id": request.get("rule_id"), "pinned_kb_version": _kb_version(),
                 "drift": {"finding": found[0], "support_verdict": "supported"}, "reason": request.get("reason"),
-                "date": datetime.date.today().isoformat(), "link": request.get("link", "pending")}
+                "date": datetime.date.today().isoformat(), "link": request.get("link", issue)}
     override.update({"rule": request["rule"]} if "rule" in request else {"retired": request.get("retired")})
     try:
         validate(override, "override")
@@ -663,18 +672,137 @@ def _build(arguments: argparse.Namespace) -> int:
 
 
 def _drift(root: Path) -> list[dict]:
-    """The drift of every research record in the repository.
+    """The drift of every research record in the repository, each entry with its finding and record slug.
 
     Drift contradicts a pinned KB rule, so it counts whichever idea's research
     found it and whatever the report is named.
     """
     drift = []
-    for path in sorted((root / ".harness" / "research").glob("*.md")):
+    for record in _research_records(root):
+        findings = {finding["id"]: finding for finding in record["findings"]}
+        drift += [{**entry, "finding": findings.get(entry["finding_id"]), "slug": record["slug"]}
+                  for entry in record["drift"]]
+    return drift
+
+
+def _drift_entry(root: Path, rule_id: str, finding_id: str) -> dict:
+    matching = [entry for entry in _drift(root) if (entry["rule_id"], entry["finding_id"]) == (rule_id, finding_id)]
+    if len(matching) != 1:
+        raise _InvalidInput(f"no single recorded drift of {rule_id} from finding {finding_id}; record it with drift")
+    return matching[0]
+
+
+def _drift_report(drift: list[dict], decision: Decision, overrides: list[dict]) -> list[dict]:
+    """Each drift entry's state for the agent: open, kept or adopted, and whether it blocks."""
+    report = []
+    for entry in drift:
+        state = drift_state(entry, decision.record, overrides)
+        report.append({"rule_id": entry["rule_id"], "finding_id": entry["finding_id"], "category": entry["category"],
+                       "state": state, "blocking": state == "open" and entry["category"] in _BLOCKING_DRIFT,
+                       "issue": entry.get("issue")})
+    return report
+
+
+def _record_drift(arguments: argparse.Namespace) -> int:
+    """Record a kept, supported finding that contradicts a pinned rule as drift in its research record."""
+    root = Path(arguments.root).resolve()
+    path = root / ".harness" / "research" / f"{arguments.slug}.md"
+    try:
+        record = load_document(path, "research", root=root)
+        updated = record_drift(record, finding_id=arguments.finding, rule_id=arguments.rule,
+                               category=arguments.category, summary=arguments.summary,
+                               pinned_ids={rule.id for rule in _pinned_rules() + _selection_rules()})
+        write_research(root, updated, split_frontmatter(path.read_text(encoding="utf-8"))[1])
+    except (OSError, ValueError) as error:
+        raise _InvalidInput(str(error)) from error
+    entry = next(item for item in updated["drift"] if (item["rule_id"], item["finding_id"]) == (arguments.rule,
+                                                                                                arguments.finding))
+    emit({"command": "drift", "entry": entry, "blocking": entry["category"] in _BLOCKING_DRIFT})
+    return 0
+
+
+def _drift_decision(arguments: argparse.Namespace) -> int:
+    """Record the user's answer to drift: keep the pinned rule, or adopt the override written for it."""
+    root = Path(arguments.root).resolve()
+    entry = _drift_entry(root, arguments.rule, arguments.finding)
+    if arguments.choice == "adopt":
         try:
-            drift += load_document(path, "research", root=root)["drift"]
+            overrides = load_overrides(root)
         except ValueError as error:
             raise _InvalidInput(str(error)) from error
-    return drift
+        if not any(drift_state(entry, {}, [override]) == "adopted" for override in overrides):
+            raise _InvalidInput(f"adopting needs the override of {arguments.rule} from finding {arguments.finding}: "
+                                "write it with forge.py override --write first")
+    try:
+        decision = load_decision(Path(arguments.decision))
+    except ValueError as error:
+        raise _InvalidInput(str(error)) from error
+    if not arguments.reason.strip():
+        raise _InvalidInput("record the user's reason for the answer")
+    decisions = [item for item in decision.record.get("drift_decisions", [])
+                 if (item["rule_id"], item["finding_id"]) != (arguments.rule, arguments.finding)]
+    decision.record["drift_decisions"] = decisions + [{
+        "rule_id": arguments.rule, "finding_id": arguments.finding, "choice": arguments.choice,
+        "reason": arguments.reason.strip(), "date": datetime.date.today().isoformat()}]
+    _save_decision(arguments, decision)
+    emit({"command": "drift-decision", "rule_id": arguments.rule, "finding_id": arguments.finding,
+          "choice": arguments.choice, "contract": "changed: show it with prepare-contract and ask for a new confirmation"})
+    return 0
+
+
+def _issues():
+    if ISSUES is not None:
+        return ISSUES
+    return gh_search(RUNNER, environ=_environ()), gh_publisher(RUNNER, environ=_environ())
+
+
+def _drift_issue(arguments: argparse.Namespace) -> int:
+    """Propose the KB issue or comment for a drift entry; the user approves its exact text before publish-issue."""
+    root = Path(arguments.root).resolve()
+    entry = _drift_entry(root, arguments.rule, arguments.finding)
+    search, _ = _issues()
+    try:
+        existing = find_issue(arguments.rule, search)
+    except ValueError as error:
+        raise _InvalidInput(f"searching the KB's issues failed: {error}") from error
+    proposal = {**propose(entry, entry["finding"], existing, kb_version=_kb_version()), "run_id": arguments.run_id}
+    try:
+        Path(arguments.out).write_text(json.dumps(proposal, indent=2), encoding="utf-8")
+    except OSError as error:
+        raise _InvalidInput(str(error)) from error
+    emit({"command": "drift-issue", **proposal})
+    return 0
+
+
+def _publish_issue(arguments: argparse.Namespace) -> int:
+    """File an approved proposal, or record a decline or open answer, in the drift entry and its override."""
+    root = Path(arguments.root).resolve()
+    proposal = _read_json(arguments.proposal)
+    relay = _read_json(arguments.relay)
+    fields = ("kind", "target", "title", "body")
+    if not set(fields) | {"digest", "run_id", "rule_id", "finding_id"} <= set(proposal) or proposal["digest"] != \
+            canonical_digest({key: proposal[key] for key in fields}):
+        raise _InvalidInput("the proposal file does not match its digest; propose the text again with drift-issue")
+    entry = _drift_entry(root, proposal["rule_id"], proposal["finding_id"])
+    _, publisher = _issues()
+    try:
+        result = publish(proposal, relay, publisher, run_id=proposal["run_id"])
+        path = root / ".harness" / "research" / f"{entry['slug']}.md"
+        record = load_document(path, "research", root=root)
+        for item in record["drift"]:
+            if (item["rule_id"], item["finding_id"]) == (entry["rule_id"], entry["finding_id"]):
+                item["issue"] = result
+        write_research(root, record, split_frontmatter(path.read_text(encoding="utf-8"))[1])
+        changed = False
+        for override in load_overrides(root):
+            if drift_state(entry, {}, [override]) == "adopted" and override["link"] != result:
+                write_override(root, {**override, "link": result})
+                changed = True
+    except (OSError, ValueError) as error:
+        raise _InvalidInput(str(error)) from error
+    emit({"command": "publish-issue", "issue": result,
+          "contract": "changed: the override's link changed; ask for a new confirmation" if changed else "unchanged"})
+    return 0
 
 
 def _current_inputs(arguments: argparse.Namespace, root: Path, drift: list[dict], overrides: list[dict]):
@@ -728,6 +856,7 @@ def _verify(arguments: argparse.Namespace) -> int:
         exclusions.add(tuple(fields))
     manifest = parse_json((SNAPSHOT / "kb-manifest.json").read_text(encoding="utf-8"))
     drift = _drift(root)
+    unresolved = [entry for entry in drift if drift_state(entry, decision.record, overrides) == "open"]
     failures, conflicts = selection_failures(
         decision, effective_rules(_selection_rules(), overrides, approval["confirmation"]))
     try:
@@ -736,7 +865,7 @@ def _verify(arguments: argparse.Namespace) -> int:
                                    arguments.harness, **approval, overrides=overrides,
                                    cases=cases, runner=RUNNER, environ=_environ(), kb_version=manifest["kb_version"],
                                    login_answer=arguments.login_answer, collect=lambda: _current_inputs(arguments, root, drift, overrides),
-                                   confirmed_exclusions=exclusions, drift=drift, selection=failures)
+                                   confirmed_exclusions=exclusions, drift=unresolved, selection=failures)
     except ValueError as error:
         raise _InvalidInput(str(error)) from error
     rendered = render_report(run, results)
@@ -753,7 +882,7 @@ def _verify(arguments: argparse.Namespace) -> int:
                    "confirmation": f"{r.part_id}:{rule['rule_id']}:{exclusion_token(run, r.part_id, rule['rule_id'])}"}
                   for r in results for rule in r.rule_results if rule["result"] == "unresolved"]
     emit({"command": "verify", "run_id": run.run_id, "parts": parts, "runtime": runtime, "unresolved": unresolved,
-          "goal_conflicts": conflicts,
+          "goal_conflicts": conflicts, "drift": _drift_report(drift, decision, overrides),
           "worker_violations": list(run.worker_violations), "written": written})
     return 1 if any(part["harness_result"] == "not verified" for part in parts) else 0
 
@@ -781,6 +910,36 @@ def build_parser() -> argparse.ArgumentParser:
     answer.add_argument("--keep", metavar="RULE_ID", help="after a KB update: keep this override for the new release")
     answer.add_argument("--remove", metavar="RULE_ID", help="remove this override")
     listing.set_defaults(handler=_overrides_command)
+    drift = commands.add_parser("drift", help="record a kept finding that contradicts a pinned rule")
+    drift.add_argument("--root", required=True, help="target repository root")
+    drift.add_argument("--slug", required=True, help="the research record, .harness/research/<slug>.md")
+    drift.add_argument("--finding", required=True, help="the kept finding's id, such as F3")
+    drift.add_argument("--rule", required=True, help="the pinned rule it contradicts")
+    drift.add_argument("--category", required=True, choices=("security", "compatibility", "ordinary"))
+    drift.add_argument("--summary", required=True, help="what changed, in one or two sentences")
+    drift.set_defaults(handler=_record_drift)
+    decide = commands.add_parser("drift-decision", help="record the user's answer to drift: keep or adopt")
+    decide.add_argument("--decision", required=True, help=".harness/decisions/<date>-<slug>.md")
+    decide.add_argument("--root", required=True, help="target repository root")
+    decide.add_argument("--rule", required=True)
+    decide.add_argument("--finding", required=True)
+    decide.add_argument("--choice", required=True, choices=("keep", "adopt"))
+    decide.add_argument("--reason", required=True, help="the user's reason")
+    decide.set_defaults(handler=_drift_decision)
+    issue = commands.add_parser("drift-issue", help="propose the KB issue or comment for a drift entry")
+    issue.add_argument("--root", required=True, help="target repository root")
+    issue.add_argument("--rule", required=True)
+    issue.add_argument("--finding", required=True)
+    issue.add_argument("--run-id", required=True, help="this run; the approval relay must name it")
+    issue.add_argument("--out", required=True, help="file for the proposal that publish-issue takes")
+    issue.set_defaults(handler=_drift_issue)
+    file_issue = commands.add_parser("publish-issue", help="file an approved issue proposal, or record the answer")
+    file_issue.add_argument("--root", required=True, help="target repository root")
+    file_issue.add_argument("--proposal", required=True, help="the drift-issue proposal file")
+    file_issue.add_argument("--relay", required=True,
+                            help="JSON relay of the user's answer: choice (approve|decline|pending), "
+                                 "displayed_digest, run_id")
+    file_issue.set_defaults(handler=_publish_issue)
     resolve = commands.add_parser("resolve-conflict", help="record the user's answer to a goal-conflict question")
     resolve.add_argument("--decision", required=True, help=".harness/decisions/<date>-<slug>.md")
     resolve.add_argument("--part", required=True)

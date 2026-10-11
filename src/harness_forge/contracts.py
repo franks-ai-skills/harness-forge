@@ -239,6 +239,7 @@ def render_contract(
         "parts": parts,
         "revision_digest": revision_digest,
         "overrides": [{"rule_id": o["rule_id"], "digest": o["digest"]} for o in override_entries],
+        "drift_decisions": [dict(entry) for entry in decision.record.get("drift_decisions", [])],
         "worker_policy": worker_policy,
     }
     digest = canonical_digest(content)
@@ -259,6 +260,14 @@ def render_contract(
             lines.extend("      " + line for line in shown)
     else:
         lines.append("Rule overrides: none")
+    drift_decisions = decision.record.get("drift_decisions", [])
+    if drift_decisions:
+        lines.append("Drift decisions:")
+        lines += [f"  - {entry['rule_id']} (finding {entry['finding_id']}): "
+                  f"{'keep the pinned rule' if entry['choice'] == 'keep' else 'adopt the override'} ({entry['reason']})"
+                  for entry in drift_decisions]
+    else:
+        lines.append("Drift decisions: none")
     evidence_text = (
         f"worker evidence sha256 {worker_policy['evidence_digest']}"
         if worker_policy["evidence_digest"] else "no worker evidence recorded yet"
