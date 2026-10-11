@@ -544,3 +544,10 @@ def goal_conflict(part: dict, whole_idea: dict, rules: list[Rule], candidates: I
             fact: [value for value in values if value is not _OTHER]
             for fact, values in _domains_from_rules(selection_rules).items()}) if failing else [],
     }
+
+
+def conflict_kept(part: dict, conflict: dict) -> bool:
+    """Whether the user answered keep for exactly this conflict: the same choice and the same failing rules."""
+    recorded = part.get("goal_conflict") or {}
+    return (recorded.get("choice") == "keep" and recorded.get("chosen") == conflict["chosen"]
+            and sorted(recorded.get("rule_ids", [])) == sorted(item["rule_id"] for item in conflict["failing"]))

@@ -24,6 +24,7 @@ from harness_forge.models import (
 )
 from harness_forge.predicates import UnknownFact
 from harness_forge.research import blocked_parts, drift_category
+from harness_forge.selection import conflict_kept, goal_conflict, selection_state
 from harness_forge.scope import affected_parts
 
 BUILDABLE = ("skills", "commands")
@@ -82,6 +83,39 @@ def worker_configurations(worker_evidence: list[dict] | tuple) -> list[dict]:
     configurations = {canonical_digest(c): c for c in
                       ({k: v for k, v in evidence.items() if k not in _OBSERVATIONS} for evidence in worker_evidence)}
     return [configurations[key] for key in sorted(configurations)]
+
+
+def selection_failures(decision: Decision, rules: list[Rule]) -> tuple[dict[str, list[dict]], list[dict]]:
+    """Each built part's selection problems as failing script results, and its goal conflicts to show.
+
+    A recorded recommendation the answers no longer give, or an open
+    question, fails as ``selection.current``. A chosen mechanism a confirmed
+    answer rules out fails as ``selection.goal-conflict``, also when the user
+    kept it: the error stays and the part is never verified.
+    """
+    failures: dict[str, list[dict]] = {}
+    conflicts = []
+    facts = decision.record["facts"]
+    for part in decision.record["parts"]:
+        if part["outcome"] not in ("harness-only", "outside-alongside"):
+            continue
+        state = selection_state(part, facts, rules)
+        if not state["current"]:
+            failures.setdefault(part["id"], []).append({"rule_id": "selection.current", "reason": state["problem"]})
+            continue
+        conflict = goal_conflict(part, facts, rules)
+        if conflict is None:
+            continue
+        kept = conflict_kept(part, conflict)
+        ids = [item["rule_id"] for item in conflict["failing"]]
+        conflicts.append({"part_id": part["id"], "severity": conflict["severity"], "chosen": conflict["chosen"],
+                          "recommended": conflict["recommended"], "kept": kept, "rule_ids": ids})
+        if conflict["severity"] == "error":
+            answer = "the user kept it" if kept else "the goal-conflict question is unanswered"
+            failures.setdefault(part["id"], []).append({
+                "rule_id": "selection.goal-conflict",
+                "reason": f"{conflict['chosen']} is ruled out by {', '.join(ids)}; {answer}"})
+    return failures, conflicts
 
 
 def bound_inputs(
@@ -294,11 +328,15 @@ def finish_run(
     worker_observations: list[dict] | tuple = (),
     required_activation: dict[str, set[str]] | None = None,
     drift: list[dict] | tuple = (),
+    selection: dict[str, list[dict]] | None = None,
 ) -> list[PartResult]:
     """Each part's harness and goal result.
 
     confirmed_exclusions are live user confirmations as (part, rule, token):
     one counts only while exclusion_token still gives its token.
+
+    selection maps a part to its selection failures (selection_failures):
+    each fails the part.
 
     drift is the research records' drift. Unresolved security or
     compatibility drift on a rule that applies to a part blocks that part
@@ -374,6 +412,7 @@ def finish_run(
                 rule_results.append({"rule_id": "runtime.explicit-activation", "check": "script", "result": "fail",
                                      "reason": "the live build needs an observed explicit activation, and none passed"})
             ok = confirmed and not blocked and not failures and not runtime_failed and not no_activation \
+                and not (selection or {}).get(part_id) \
                 and goal is not None \
                 and goal["verdict"] == "met" and part_id not in changed and not run.worker_violations
             harness = "verified" if ok else "not verified"
@@ -381,6 +420,9 @@ def finish_run(
         else:
             harness = "not checked" if kind == "remote-reuse" else "not applicable"
             status = "blocked" if (not confirmed or kind == "unavailable" or part_id in drifted) else part["status"]
+        for failure in (selection or {}).get(part_id, []):
+            rule_results.append({"rule_id": failure["rule_id"], "check": "script", "result": "fail",
+                                 "reason": failure["reason"]})
         for entry in drift if part_id in drifted else ():
             if drift_category(entry) != "ordinary" and entry["rule_id"] in run.applicable_rules.get(part_id, []):
                 rule_results.append({"rule_id": "research.drift", "check": "script", "result": "fail",

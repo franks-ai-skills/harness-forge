@@ -20,7 +20,9 @@ decision:
     slug: reproduction-checklist
     goal: Write a reproduction checklist when asked
     status: decided
-    answers: {job: procedure, every_time: usually}
+    answers: {job: procedure, event_without_agent: false, must_survive_compromise: not-required,
+              who_disables: contributor, every_time: usually, irreversible: false, own_context: false,
+              trigger: model, external_system: none}
     outcome: harness-only
     recommended: skills
     chosen: skills

@@ -97,6 +97,11 @@ plugin README). Every command prints bounded JSON.
 8. **Decision.** The user may choose another mechanism; record it with
    their reason in `override_reason`. A non-skill choice stays the
    recommendation even though only skills can be built in this release.
+   Run `select` again with the part's answers plus `chosen` and `goal`.
+   A `goal_conflict` with severity `warning` only means another
+   mechanism was recommended: say so. With severity `error`, a confirmed
+   answer rules the choice out, and you ask the goal-conflict question
+   described in [references/contract.md](references/contract.md#goal-conflicts).
 9. **Record.** Write `.harness/decisions/<date>-<slug>.md`, then run
    `scripts/forge.py readme --decision <record> --root <repository>`. It
    writes the result README's `Outside controls` section, also for parts

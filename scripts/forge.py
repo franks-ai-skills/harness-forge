@@ -16,13 +16,15 @@ if _SOURCE not in sys.path:
 
 from dataclasses import asdict  # noqa: E402
 
+import datetime  # noqa: E402
 import os  # noqa: E402
 import re  # noqa: E402
 
 from harness_forge.adapters.base import preflight, run_command  # noqa: E402
 from harness_forge.build_skill import BuilderUnavailable, ConflictError, mark_built, plan_skill, write_skill  # noqa: E402
 from harness_forge.contracts import (  # noqa: E402
-    RELAY_KEYS, confirm_contract, load_decision, render_contract, update_outside_section, write_decision,
+    RELAY_KEYS, confirm_contract, load_decision, render_contract, resolve_goal_conflict, update_outside_section,
+    write_decision,
 )
 from harness_forge.documents import load_document, parse_json, safe_path, validate, validate_kb  # noqa: E402
 from harness_forge.fetch import fetch_text  # noqa: E402
@@ -34,9 +36,13 @@ from harness_forge.research import (  # noqa: E402
 from harness_forge.runtime import load_cases  # noqa: E402
 from harness_forge.workflow import research_pass, verify_live  # noqa: E402
 from harness_forge.scope import scope_options  # noqa: E402
-from harness_forge.verify import NEEDS_CONFIRMATION, exclusion_token, finish_run, part_kind, prepare_run  # noqa: E402
+from harness_forge.verify import (  # noqa: E402
+    NEEDS_CONFIRMATION, exclusion_token, finish_run, part_kind, prepare_run, selection_failures,
+)
 from harness_forge.models import ReviewResponse  # noqa: E402
-from harness_forge.selection import next_question, recommend  # noqa: E402
+from harness_forge.selection import (  # noqa: E402
+    CONFLICT_CHOICES, conflict_kept, goal_conflict, next_question, recommend, selection_state,
+)
 
 MAX_OUTPUT_BYTES = 64 * 1024
 SNAPSHOT = Path(__file__).resolve().parents[1] / "snapshot"
@@ -108,12 +114,25 @@ def _check_declared(values: dict, scope: str, declared: dict) -> None:
             raise _InvalidInput(f"{fact}: {value!r} is not one of {declared[fact]['values']}")
 
 
+def _selection_document() -> dict:
+    return load_document(SNAPSHOT / "rules" / "selection.yaml", "selection")
+
+
+def _selection_rules() -> list[Rule]:
+    return [Rule.from_dict(rule) for rule in _selection_document()["rules"]]
+
+
+def _domains(selection: dict) -> dict[str, list]:
+    return {fact["id"]: list(fact["values"]) for fact in selection["facts"]}
+
+
 def _select(arguments: argparse.Namespace) -> int:
+    """Recommend from confirmed answers; with the user's ``chosen`` mechanism, also its goal conflict."""
     request = _read_json(arguments.input)
-    unknown = set(request) - {"answers", "whole_idea", "candidates"}
+    unknown = set(request) - {"answers", "whole_idea", "candidates", "chosen", "goal"}
     if unknown:
         raise _InvalidInput(f"unknown input keys: {sorted(unknown)}")
-    selection = load_document(SNAPSHOT / "rules" / "selection.yaml", "selection")
+    selection = _selection_document()
     declared = {fact["id"]: fact for fact in selection["facts"]}
     answers, whole_idea = request.get("answers", {}), request.get("whole_idea", {})
     candidates = request.get("candidates", [])
@@ -123,11 +142,51 @@ def _select(arguments: argparse.Namespace) -> int:
     _check_declared(whole_idea, "idea", declared)
     rules = [Rule.from_dict(rule) for rule in selection["rules"]]
     recommendation = recommend(answers, whole_idea, rules, candidates)
-    payload = {"command": "select", **asdict(recommendation), "question": None}
+    payload = {"command": "select", **asdict(recommendation), "question": None, "goal_conflict": None}
     if recommendation.pending_question:
         payload["question"] = next_question({"answers": answers}, whole_idea, selection, candidates)
+    elif request.get("chosen") is not None:
+        chosen = request["chosen"]
+        if not isinstance(chosen, str) or not isinstance(request.get("goal", ""), str):
+            raise _InvalidInput("chosen and goal must be strings")
+        part = {"id": "part", "goal": request.get("goal", ""), "answers": answers, "chosen": chosen}
+        payload["goal_conflict"] = goal_conflict(part, whole_idea, rules, candidates, domains=_domains(selection))
     emit(payload)
     return 0
+
+
+def _resolve_conflict(arguments: argparse.Namespace) -> int:
+    """Record the user's answer to a part's goal-conflict question in the decision."""
+    try:
+        decision = load_decision(Path(arguments.decision))
+        result = resolve_goal_conflict(decision, arguments.part, arguments.choice, arguments.adjusted_goal,
+                                       arguments.reason, rules=_selection_rules(),
+                                       date=datetime.date.today().isoformat())
+    except (KeyError, StopIteration) as error:
+        raise _InvalidInput(f"unknown part {arguments.part!r}") from error
+    except ValueError as error:
+        raise _InvalidInput(str(error)) from error
+    _save_decision(arguments, result["decision"])
+    emit({"command": "resolve-conflict", "part_id": arguments.part, "choice": arguments.choice,
+          "next_stage": result["next_stage"], "invalidated_parts": result["invalidated_parts"],
+          "remaining_error_ids": result["remaining_error_ids"],
+          "contract": "changed: show it with prepare-contract and ask for a new confirmation"})
+    return 0
+
+
+def _selection_problem(decision: Decision, part_id: str) -> str | None:
+    """Why a part's recorded selection cannot be built: stale, open, or an unanswered goal conflict."""
+    part = decision.part(part_id)
+    rules = _selection_rules()
+    state = selection_state(part, decision.record["facts"], rules)
+    if not state["current"]:
+        return state["problem"]
+    conflict = goal_conflict(part, decision.record["facts"], rules)
+    if conflict and conflict["severity"] == "error" and not conflict_kept(part, conflict):
+        return (f"part {part_id} has a goal conflict: {conflict['chosen']} is ruled out by "
+                f"{', '.join(item['rule_id'] for item in conflict['failing'])}; ask the goal-conflict question "
+                f"and record the answer with resolve-conflict")
+    return None
 
 
 def _overrides(directory: Path) -> list[dict]:
@@ -263,7 +322,9 @@ def _unattended(arguments: argparse.Namespace):
     files, symlinks = collect_target(root, decision)
     _refuse_overrides(root)
     run = prepare_run(decision, files, rules, None, symlinks=symlinks, revision=revision, kb_version=manifest["kb_version"])
-    results = finish_run(run, ReviewResponse(run_id=run.run_id, verdicts=[], goal_verdicts=[]), [], run.frozen_inputs)
+    failures, _ = selection_failures(decision, _selection_rules())
+    results = finish_run(run, ReviewResponse(run_id=run.run_id, verdicts=[], goal_verdicts=[]), [], run.frozen_inputs,
+                         selection=failures)
     return root, run, results
 
 
@@ -488,6 +549,12 @@ def _build(arguments: argparse.Namespace) -> int:
     root = Path(arguments.root).resolve()
     decision, revision = _decision_and_revision(arguments, root)
     approval = _approval(arguments, decision, revision)
+    try:
+        problem = _selection_problem(decision, arguments.part)
+    except KeyError as error:
+        raise _InvalidInput(f"unknown part {arguments.part!r}") from error
+    if problem:
+        raise _InvalidInput(problem)
     if revision is None:
         raise _InvalidInput("--revision is required: a skill is built from the accepted requirements")
     stale = _stale_requirements(decision, revision, [arguments.part])
@@ -573,11 +640,12 @@ def _verify(arguments: argparse.Namespace) -> int:
         exclusions.add(tuple(fields))
     manifest = parse_json((SNAPSHOT / "kb-manifest.json").read_text(encoding="utf-8"))
     drift = _drift(root)
+    failures, conflicts = selection_failures(decision, _selection_rules())
     try:
         run, results = verify_live(decision, files, symlinks, _pinned_rules(), revision, arguments.harness, **approval,
                                    cases=cases, runner=RUNNER, environ=_environ(), kb_version=manifest["kb_version"],
                                    login_answer=arguments.login_answer, collect=lambda: _current_inputs(arguments, root, drift),
-                                   confirmed_exclusions=exclusions, drift=drift)
+                                   confirmed_exclusions=exclusions, drift=drift, selection=failures)
     except ValueError as error:
         raise _InvalidInput(str(error)) from error
     rendered = render_report(run, results)
@@ -594,6 +662,7 @@ def _verify(arguments: argparse.Namespace) -> int:
                    "confirmation": f"{r.part_id}:{rule['rule_id']}:{exclusion_token(run, r.part_id, rule['rule_id'])}"}
                   for r in results for rule in r.rule_results if rule["result"] == "unresolved"]
     emit({"command": "verify", "run_id": run.run_id, "parts": parts, "runtime": runtime, "unresolved": unresolved,
+          "goal_conflicts": conflicts,
           "worker_violations": list(run.worker_violations), "written": written})
     return 1 if any(part["harness_result"] == "not verified" for part in parts) else 0
 
@@ -607,6 +676,13 @@ def build_parser() -> argparse.ArgumentParser:
     select = commands.add_parser("select", help="recommend from confirmed, normalized answers")
     select.add_argument("--input", required=True, help="JSON file with answers, whole_idea and candidates")
     select.set_defaults(handler=_select)
+    resolve = commands.add_parser("resolve-conflict", help="record the user's answer to a goal-conflict question")
+    resolve.add_argument("--decision", required=True, help=".harness/decisions/<date>-<slug>.md")
+    resolve.add_argument("--part", required=True)
+    resolve.add_argument("--choice", required=True, choices=CONFLICT_CHOICES)
+    resolve.add_argument("--adjusted-goal", help="the adjusted goal, for adjust-goal")
+    resolve.add_argument("--reason", required=True, help="the user's reason for the answer")
+    resolve.set_defaults(handler=_resolve_conflict)
     prepare = commands.add_parser("prepare-contract", help="render the current contract for confirmation")
     prepare.add_argument("--decision", required=True, help=".harness/decisions/<date>-<slug>.md")
     prepare.add_argument("--revision", help=".harness/research/<slug>.rules.yaml")

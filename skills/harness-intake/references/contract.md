@@ -53,3 +53,34 @@ their goals are reported as not assessed.
 
 Nonempty rule overrides block confirmation until their adoption flow is
 available.
+
+## Goal conflicts
+
+Ask one multiple-choice question per conflicting part. First show the
+current state from `goal_conflict`: the part's goal, the chosen
+mechanism, each failing rule id with its statement and sources, and
+the recommended mechanism with its pros and cons. Then offer, in this
+order:
+
+- A. **Use the recommended mechanism** (recommended).
+- B. **Adjust the goal.** Propose a concrete wording the chosen
+  mechanism can meet, built from `adjust` (the answers whose change
+  lifts the conflict), and accept the user's own wording.
+- C. **Keep as is.** The error stays in the report, and the part is
+  never verified.
+
+Record the answer and the user's reason with `scripts/forge.py
+resolve-conflict --decision <record> --part <id> --choice
+recommended|adjust-goal|keep --reason <reason>`, adding
+`--adjusted-goal <goal>` for B. Then follow its `next_stage`:
+
+| `next_stage` | Next |
+| --- | --- |
+| `build` | Build the part with the recommended mechanism |
+| `intake` | The recommended mechanism has no builder in this release: say "recommended; builder unavailable" |
+| `readme` | An outside control replaces the mechanism: run `scripts/forge.py readme` |
+| `questions` | Ask the part's questions again, run `select`, and research and accept again where the goal changed them |
+| `report` | Nothing changes |
+
+Every answer changes the contract: show it and ask for a new
+confirmation. The parts in `invalidated_parts` are verified again.

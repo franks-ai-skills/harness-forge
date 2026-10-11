@@ -386,6 +386,84 @@ class LiveCommandsTest(unittest.TestCase):
         self.assertIn("part A", stderr)
         self.assertIn("researched for another brief", stderr)
 
+    def conflict(self):
+        """Part A chose a skill although its own-context answer rules skills out (the Claude Code trial's case)."""
+        record = load_decision(self.decision)
+        record.part("A")["answers"]["own_context"] = True
+        record.part("A").update(recommended="subagents", override_reason="I prefer a skill")
+        write_decision(self.root, record, slug="repro", date="2026-10-10")
+
+    def test_select_reports_a_goal_conflict_for_the_chosen_mechanism(self):
+        cli = Cli(FakeRunner(), self.root)
+        record = load_decision(self.decision)
+        request = cli.write("select.json", {"answers": {**record.part("A")["answers"], "own_context": True},
+                                            "whole_idea": record.record["facts"], "chosen": "skills",
+                                            "goal": record.part("A")["goal"]})
+        code, output, stderr = cli("select", "--input", request)
+        self.assertEqual(code, 0, stderr)
+        self.assertEqual(output["mechanism"], "subagents")
+        self.assertEqual(output["goal_conflict"]["severity"], "error")
+        self.assertEqual(output["goal_conflict"]["choices"], ["recommended", "adjust-goal", "keep"])
+
+    def test_build_waits_for_the_goal_conflict_and_verify_keeps_its_error(self):
+        self.conflict()
+        cli = Cli(ResearchRunner([finding()]), self.root)
+        _, workers, _ = cli("workers", "--harness", "claude-code")
+        evidence = cli.write("workers.json", workers)
+        relay = cli.confirm(self.decision, "verify-1")
+        build = ["build", "--decision", self.decision, "--part", "A", "--evidence", evidence, "--relay", relay,
+                 "--description", cli.write("description.txt", DESCRIPTION),
+                 "--procedure", cli.write("procedure.md", PROCEDURE), "--root", self.root]
+        code, _, stderr = cli(*build)
+        self.assertEqual(code, 2)
+        self.assertIn("goal conflict", stderr)
+        self.assertIn("selection.eligibility.own-context-skills", stderr)
+
+        code, output, stderr = cli("resolve-conflict", "--decision", self.decision, "--part", "A", "--choice", "keep",
+                                   "--reason", "A skill is what my team knows.")
+        self.assertEqual(code, 0, stderr)
+        self.assertEqual((output["next_stage"], output["remaining_error_ids"]),
+                         ("report", ["selection.eligibility.own-context-skills"]))
+        self.assertEqual(load_decision(self.decision).part("A")["goal_conflict"]["choice"], "keep")
+        code, _, stderr = cli(*build)
+        self.assertEqual(code, 2, "the changed record needs a new confirmation")
+        self.assertIn("does not confirm", stderr)
+        relay = cli.confirm(self.decision, "verify-2")
+        build[build.index("--relay") + 1] = relay
+        code, _, stderr = cli(*build)
+        self.assertEqual(code, 2, "a build still needs the accepted requirements")
+        self.assertIn("--revision is required", stderr)
+
+    def test_verify_reports_a_kept_conflict_as_an_error(self):
+        self.conflict()
+        code, _, stderr = Cli(FakeRunner(), self.root)("resolve-conflict", "--decision", self.decision, "--part", "A",
+                                                       "--choice", "keep", "--reason", "A skill is what my team knows.")
+        self.assertEqual(code, 0, stderr)
+        cli, arguments = self.build_ready(ResearchRunner([finding()]))
+        code, output, stderr = cli("verify", *arguments)
+        self.assertEqual(code, 1, stderr)
+        self.assertEqual(output["parts"][0]["harness_result"], "not verified")
+        self.assertEqual(output["goal_conflicts"], [{"part_id": "A", "severity": "error", "chosen": "skills",
+                                                     "recommended": "subagents", "kept": True,
+                                                     "rule_ids": ["selection.eligibility.own-context-skills"]}])
+        report = (self.root / ".harness/reports/repro.md").read_text(encoding="utf-8")
+        self.assertIn("`selection.goal-conflict` | - | script | fail | skills is ruled out by "
+                      "selection.eligibility.own-context-skills; the user kept it", report)
+
+    def test_a_stale_recommendation_is_not_built(self):
+        record = load_decision(self.decision)
+        record.part("A")["recommended"] = "subagents"
+        write_decision(self.root, record, slug="repro", date="2026-10-10")
+        cli = Cli(FakeRunner(), self.root)
+        _, workers, _ = cli("workers", "--harness", "claude-code")
+        evidence = cli.write("workers.json", workers)
+        relay = cli.confirm(self.decision, "verify-1")
+        code, _, stderr = cli("build", "--decision", self.decision, "--part", "A", "--evidence", evidence,
+                              "--relay", relay, "--description", cli.write("description.txt", DESCRIPTION),
+                              "--procedure", cli.write("procedure.md", PROCEDURE), "--root", self.root)
+        self.assertEqual(code, 2)
+        self.assertIn("is not what its answers give now", stderr)
+
     def test_case_ids_must_be_unique(self):
         import yaml
         cli, arguments = self.build_ready(ResearchRunner([finding()]))
