@@ -67,6 +67,8 @@ def contract_parts(decision: Decision, revision: AcceptedRevision | None) -> lis
             "override_reason": part["override_reason"],
             "reuse": dict(part["reuse"]) if part.get("reuse") else None,
             "goal_conflict": dict(part["goal_conflict"]) if part.get("goal_conflict") else None,
+            # The links decide the Review scope, so an edit after confirmation must change the contract.
+            "connects_to": [dict(link) for link in part["connects_to"]],
             "outside_controls": [dict(control) for control in part["outside_controls"]],
             "requirements": requirements.get(part["id"], []),
         }
@@ -105,7 +107,8 @@ def _consistency_problem(record: dict) -> str | None:
 
 
 def _part_text(part: dict) -> list[str]:
-    lines = [f"Part {part['id']}: {part['goal']}", f"  Name: {part['name']}", f"  Answers: {_pairs(part['answers'])}"]
+    lines = [f"Part {part['id']}: {part['goal']}", f"  Name: {part['name']}", f"  Answers: {_pairs(part['answers'])}",
+             "  Linked to: " + (", ".join(f"{link['to']} ({link['how']})" for link in part["connects_to"]) or "none")]
     mechanism = part["mechanism"] or "no harness build"
     lines.append(f"  Outcome: {part['outcome']}; mechanism: {mechanism} (recommended: {part['recommended'] or 'none'})")
     if part["override_reason"]:

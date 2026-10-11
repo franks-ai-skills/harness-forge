@@ -80,6 +80,15 @@ class RenderTest(unittest.TestCase):
                       "      environment names: HOME, PATH\n", text)
         self.assertIn("  - research: codex 0.162.1, model gpt-6.1-sol, independent-process\n      sandbox: read-only\n", text)
 
+    def test_links_between_parts_are_part_of_the_contract(self):
+        linked = decision(part("A", "Write a checklist"), part("B", "Check it", connects_to=[{"to": "A", "how": "uses"}]))
+        unlinked = decision(part("A", "Write a checklist"), part("B", "Check it"))
+        contract = render_contract(linked, None, [], worker_evidence=EVIDENCE)
+        self.assertIn("  Linked to: A (uses)", contract.text)
+        self.assertIn("  Linked to: none", render_contract(unlinked, None, [], worker_evidence=EVIDENCE).text)
+        self.assertNotEqual(contract.digest, render_contract(unlinked, None, [], worker_evidence=EVIDENCE).digest,
+                            "an edit to the links after confirmation would narrow the Review scope")
+
     def test_part_ids_must_be_unique(self):
         twice = decision(part("A", "Write a checklist"), part("A", "Write another checklist"))
         with self.assertRaisesRegex(ValueError, "part id 'A' is used twice"):
