@@ -300,6 +300,17 @@ def flows(harness: str, out: Path, *, forge: Forge | None = None,
                                                   and code == 0 and again["mechanism"] == "skills")
     record["parts"][0].update(answers=answers, outcome=again["outcome"], recommended=again["mechanism"],
                               override_reason=None)
+    # A second, unlinked part an outside control owns, so a Review has a part to keep.
+    publishing = {**answers, "irreversible": True}
+    request = _write_json(scratch / "select-b.json", {"answers": publishing, "whole_idea": facts})
+    _, selected_b = session.run("select part B", "select", "--input", request)
+    record["parts"].append({
+        "id": "B", "slug": "publish-checklist", "goal": "Publish approved checklists to the tracker",
+        "status": "decided", "answers": publishing, "outcome": selected_b["outcome"], "recommended": None,
+        "chosen": None, "override_reason": None, "alternatives": [], "connects_to": [],
+        "outside_controls": [{"control": control["id"], "prerequisites": control["prerequisites"],
+                              "availability": control["availability"], "required_for_goal": control["required_for_goal"]}
+                             for control in selected_b["controls"]]})
     write_decision(repo, Decision(record=record, body="Recorded reference idea for the automated run.\n"),
                    slug=inputs["slug"], date=session.decision.name[:10])
 
@@ -358,8 +369,12 @@ def flows(harness: str, out: Path, *, forge: Forge | None = None,
     code, reviewed = session.verify("flows-verify-3", "verify a Review", "--scope", "review", "--fixed", "A",
                                     "--scope-relay", chosen)
     checks["review verified the repair"] = session.verified(code, reviewed)
+    checks["review judged the repaired part and kept the other"] = reviewed is not None and (
+        reviewed.get("judged_parts"), reviewed.get("kept_parts")) == (["A"], ["B"])
     code, extensive = session.verify("flows-verify-4", "verify an Extensive review", "--scope", "extensive")
     checks["extensive review verified"] = session.verified(code, extensive)
+    checks["extensive review judged every part"] = extensive is not None and (
+        extensive.get("judged_parts"), extensive.get("kept_parts")) == (["A", "B"], [])
 
     runtime = [case for result in (verified, reviewed, extensive) if result for case in result.get("runtime", [])]
     session.summary["parts"] = (extensive or {}).get("parts")

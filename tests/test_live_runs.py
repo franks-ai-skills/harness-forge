@@ -123,10 +123,14 @@ class FlowsRunTest(unittest.TestCase):
             "goal conflict asked": True, "goal adjusted and selected again": True, "drift recorded": True,
             "issue declined, nothing filed": True, "verified with the adopted override": True,
             "broken skill not verified": True, "review verified the repair": True,
-            "extensive review verified": True})
+            "review judged the repaired part and kept the other": True, "extensive review verified": True,
+            "extensive review judged every part": True})
         self.assertTrue(all("FIXTURE" in text for text in summary["fixtures"].values()))
         self.assertEqual(runner.roles.count("review"), 4, "four verifications, each with a fresh reviewer")
-        self.assertIn("- Review scope: Extensive review (rarely needed): judged A", self.report)
+        self.assertIn("- Review scope: Extensive review (rarely needed): judged A, B", self.report)
+        runtime_parts = {stage["stage"]: [case["case_id"] for case in (stage["output"] or {}).get("runtime", [])]
+                         for stage in summary["stages"] if stage["stage"].startswith("verify a Review")}
+        self.assertEqual(len(next(iter(runtime_parts.values()))), 3, "the Review ran A's three cases only")
         self.assertEqual(forge.module.ISSUES[0]("skills.description.length"), [], "the issue search is a fixture")
 
     def test_a_flow_that_does_not_hold_is_not_completed(self):
