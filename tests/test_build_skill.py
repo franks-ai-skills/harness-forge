@@ -125,6 +125,13 @@ class PlanTest(unittest.TestCase):
         self.assertEqual(record.part("A")["chosen"], "hooks")
         self.assertEqual(record.part("A")["status"], "decided")
 
+    def test_a_blocked_part_is_neither_built_nor_cleared(self):
+        record = reference_decision(status="blocked")
+        with self.assertRaisesRegex(ValueError, "part A is blocked"):
+            plan(record)
+        with self.assertRaisesRegex(ValueError, "part A is blocked"):
+            mark_built(record, "A")
+
     def test_remote_reuse_stays_read_only_and_unbuilt(self):
         record = reference_decision(outcome="reuse", reuse={"name": "repro-steps", "source": "https://example.com/repro",
                                                             "license": "MIT", "maintenance": "maintained"})

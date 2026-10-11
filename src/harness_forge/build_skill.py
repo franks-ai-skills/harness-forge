@@ -97,6 +97,7 @@ def plan_skill(
 ) -> dict[str, str]:
     """Relative path → content for the skill package; symbolic links are SymlinkTarget values."""
     part = decision.part(part_id)
+    _refuse_blocked(part)
     if part["outcome"] == "reuse":
         raise BuilderUnavailable("a reused artifact stays read-only; it is checked once installed, never built")
     if part["outcome"] not in ("harness-only", "outside-alongside") or part["chosen"] not in BUILDABLE:
@@ -208,8 +209,15 @@ def write_skill(root: Path, planned: dict[str, str], *, replace: list[str] | tup
     return written
 
 
+def _refuse_blocked(part: dict) -> None:
+    """A rebuild never clears a block: what blocked the part has to be resolved first."""
+    if part["status"] == "blocked":
+        raise ValueError(f"part {part['id']} is blocked; resolve what blocks it before building")
+
+
 def mark_built(decision: Decision, part_id: str) -> Decision:
     """A successful build sets the part to built; only verification sets verified."""
+    _refuse_blocked(decision.part(part_id))
     record = copy.deepcopy(decision.record)
     for part in record["parts"]:
         if part["id"] == part_id:
