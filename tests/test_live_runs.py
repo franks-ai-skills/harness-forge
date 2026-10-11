@@ -56,6 +56,15 @@ class VerticalRunTest(unittest.TestCase):
         for stream in self.streams:
             self.assertEqual(set(stream), {"command", "stdin", "returncode", "stdout", "stderr", "timed_out"})
 
+    def test_unresolved_rules_are_confirmed_by_the_runner_and_say_so(self):
+        from tests.test_cli_live import NotApplicableRunner
+        rule = "skills.invocation.side-effects-user-invoked"
+        summary, _ = self.run_vertical(NotApplicableRunner([finding()], rule))
+        self.assertEqual([stage["stage"] for stage in summary["stages"]][-2:], ["verify", "verify with confirmations"])
+        self.assertEqual(summary["not_applicable_confirmed"],
+                         {"by": LIVE.TEST_RELAY, "rules": [{"part_id": "A", "rule_id": rule, "reason": "It writes text only."}]})
+        self.assertEqual(summary["parts"][0]["harness_result"], "verified")
+
     def test_no_kept_deep_finding_stops_before_acceptance(self):
         summary, _ = self.run_vertical(ResearchRunner([finding(quote="Not on the page.")]))
         self.assertIn("kept no finding", summary["status"])

@@ -8,8 +8,10 @@ The vertical run goes through the same scripts/forge.py commands the skills
 use, in a throwaway repository, with the recorded inputs in
 evals/smoke/vertical-inputs.yaml. Nobody confirms its contract in a
 session: the runner relays the confirmation itself, and every summary says
-so. Its results show that the workers, research, build and verification
-work live; the confirmation ceremony is proven only by a real session.
+so. It also confirms each error rule the reviewer found not applicable,
+recorded under `not_applicable_confirmed`. Its results show that the
+workers, research, build and verification work live; the confirmation
+ceremony is proven only by a real session.
 
 Every worker and runtime launch's raw stream is kept under `streams/`
 next to the summary, in the git-ignored private results directory.
@@ -186,11 +188,19 @@ def vertical(harness: str, out: Path, *, forge: Forge | None = None,
                                                            load_decision(decision)), encoding="utf-8")
 
     verify_relay = confirm("vertical-verify", "--revision", revision)
-    code, verified = stage("verify", forge("verify", "--decision", decision, "--root", repo, "--revision", revision,
-                                           "--evidence", evidence, "--relay", verify_relay, "--harness", harness,
-                                           "--cases", cases_path, "--slug", inputs["slug"], "--write"))
+    verify = ["verify", "--decision", decision, "--root", repo, "--revision", revision, "--evidence", evidence,
+              "--relay", verify_relay, "--harness", harness, "--cases", cases_path, "--slug", inputs["slug"], "--write"]
+    code, verified = stage("verify", forge(*verify))
     if verified is None:
         return finish("stopped: verification did not run")
+    if verified["unresolved"]:
+        # Like the contract: the runner confirms what a user would be asked, and says so.
+        summary["not_applicable_confirmed"] = {"by": TEST_RELAY, "rules": verified["unresolved"]}
+        confirmations = [argument for rule in verified["unresolved"]
+                         for argument in ("--confirm-not-applicable", f"{rule['part_id']}:{rule['rule_id']}")]
+        code, verified = stage("verify with confirmations", forge(*verify, *confirmations))
+        if verified is None:
+            return finish("stopped: verification with confirmations did not run")
     summary["parts"] = verified["parts"]
     summary["runtime"] = verified.get("runtime", [])
     summary["clean"] = _clean([case["reason"] for case in summary["runtime"]])
