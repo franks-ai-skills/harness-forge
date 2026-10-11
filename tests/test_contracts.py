@@ -1,8 +1,13 @@
 """Contract rendering and live, current-session confirmation."""
 
+import tempfile
 import unittest
+from pathlib import Path
 
-from harness_forge.contracts import confirm_contract, render_contract
+import yaml
+
+from harness_forge.contracts import confirm_contract, load_decision, render_contract, write_decision
+from harness_forge.verify import prepare_run
 from harness_forge.models import Confirmation
 from tests.builders import EVIDENCE, decision, part, revision
 
@@ -59,6 +64,21 @@ class RenderTest(unittest.TestCase):
         self.assertNotEqual(with_evidence.digest, changed.digest)
         self.assertIn("no worker evidence", without.text)
         self.assertNotEqual(with_evidence.digest, without.digest)
+
+    def test_part_ids_must_be_unique(self):
+        twice = decision(part("A", "Write a checklist"), part("A", "Write another checklist"))
+        with self.assertRaisesRegex(ValueError, "part id 'A' is used twice"):
+            render_contract(twice, None, [], worker_evidence=EVIDENCE)
+        with self.assertRaisesRegex(ValueError, "part id 'A' is used twice"):
+            prepare_run(twice, {}, [], None)
+        with tempfile.TemporaryDirectory() as directory:
+            with self.assertRaisesRegex(ValueError, "part id 'A' is used twice"):
+                write_decision(Path(directory), twice, slug="repro", date="2026-10-11")
+            path = Path(directory) / ".harness/decisions/2026-10-11-repro.md"
+            path.parent.mkdir(parents=True)
+            path.write_text(f"---\n{yaml.safe_dump(twice.record)}---\nBody.\n", encoding="utf-8")
+            with self.assertRaisesRegex(ValueError, "part id 'A' is used twice"):
+                load_decision(path)
 
 
 class ConfirmTest(unittest.TestCase):

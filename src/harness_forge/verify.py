@@ -16,7 +16,7 @@ from dataclasses import asdict
 
 from harness_forge.checks import REGISTRY
 from harness_forge.checks.runner import evaluate_applicability, run_check
-from harness_forge.contracts import confirmation_problem
+from harness_forge.contracts import confirmation_problem, part_ids_problem
 from harness_forge.documents import canonical_digest, validate
 from harness_forge.models import (
     AcceptedRevision, CheckResult, Confirmation, Decision, PartResult, ReviewResponse, Rule, RuntimeResult,
@@ -113,6 +113,9 @@ def prepare_run(
     """Decide applicability, run script rules and freeze the bound inputs."""
     if overrides:
         raise ValueError("rule overrides block verification until their adoption flow exists")
+    duplicate = part_ids_problem(decision.record)
+    if duplicate:
+        raise ValueError(duplicate)
     for evidence in worker_evidence:
         validate(evidence, "worker-evidence")
     symlinks = dict(symlinks or {})

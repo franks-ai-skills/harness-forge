@@ -78,6 +78,16 @@ def _pairs(values: dict) -> str:
                      for key, value in sorted(values.items()))
 
 
+def part_ids_problem(record: dict) -> str | None:
+    """Results, evidence and requirements are keyed by part id, so one id used twice hides a part."""
+    seen = set()
+    for part in record["parts"]:
+        if part["id"] in seen:
+            return f"part id {part['id']!r} is used twice"
+        seen.add(part["id"])
+    return None
+
+
 def _consistency_problem(record: dict) -> str | None:
     """Facts stored twice must agree, or the contract would show both readings."""
     targets = set(record["targets"])
@@ -148,6 +158,9 @@ def render_contract(
 ) -> Contract:
     """The whole current contract with readable text and a binding digest."""
     validate(decision.record, "decision")
+    duplicate = part_ids_problem(decision.record)
+    if duplicate:
+        raise ValueError(duplicate)
     problem = _consistency_problem(decision.record)
     if problem:
         raise ValueError(f"the decision record contradicts itself: {problem}")
@@ -366,6 +379,9 @@ def write_decision(root: Path, decision: Decision, *, slug: str, date: str) -> P
     if not re.fullmatch(r"[a-z0-9][a-z0-9-]*", slug) or not re.fullmatch(r"\d{4}-\d{2}-\d{2}", date):
         raise ValueError(f"invalid slug {slug!r} or date {date!r}")
     validate(decision.record, "decision")
+    duplicate = part_ids_problem(decision.record)
+    if duplicate:
+        raise ValueError(duplicate)
     path = safe_path(root, f".harness/decisions/{date}-{slug}.md")
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(f"---\n{_dump(decision.record)}---\n{decision.body.rstrip()}\n", encoding="utf-8")
@@ -375,6 +391,9 @@ def write_decision(root: Path, decision: Decision, *, slug: str, date: str) -> P
 def load_decision(path: Path, *, root: Path | None = None) -> Decision:
     """Load a decision record as data; it never confirms anything."""
     record = load_document(path, "decision", root=root)
+    duplicate = part_ids_problem(record)
+    if duplicate:
+        raise ValueError(f"{path}: {duplicate}")
     _, body = split_frontmatter(Path(path).read_text(encoding="utf-8"))
     return Decision(record=record, body=body)
 
