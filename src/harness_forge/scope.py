@@ -2,6 +2,10 @@
 
 from __future__ import annotations
 
+import json
+import re
+
+from harness_forge.documents import validate
 from harness_forge.models import Decision, VerificationRun
 
 _GLOBAL_INPUTS = ("idea", "kb_version", "rules", "overrides", "checkers", "worker")
@@ -74,3 +78,26 @@ def preserved_parts(previous: VerificationRun, current: dict, confirmation) -> s
         return set()
     unchanged = set(previous.frozen_inputs["parts"]) - affected_parts(previous, current)
     return unchanged & set(confirmation.part_ids)
+
+
+def earlier_run(report_text: str) -> tuple[VerificationRun, dict[str, dict]]:
+    """The run a report records, enough to compare its bound inputs, and each part's result.
+
+    The report is a repository file like any other record: what it can do
+    is let a Review keep the judged results of parts whose bound inputs and
+    contract are unchanged; script and link checks always run again.
+    """
+    blocks = re.findall(r"^## Report data\n\n```json\n(.*?)\n```", report_text, re.S | re.M)
+    if len(blocks) != 1:
+        raise ValueError("the earlier report has no single report data block")
+    data = json.loads(blocks[0])
+    validate(data, "report")
+    if "bound_inputs" not in data or "part_map" not in data:
+        raise ValueError("the earlier report predates re-verification; run an Extensive review")
+    part_map = data["part_map"]
+    run = VerificationRun(run_id=data["run_id"], decision_digest=data["decision_digest"],
+                          contract_digest=data["contract_digest"] or "", applicable_rules={},
+                          frozen_inputs=data["bound_inputs"], confirmed_parts=list(data["confirmed_parts"]),
+                          part_files=part_map["files"], part_dirs=part_map["dirs"], part_links=part_map["links"],
+                          requirement_parts=part_map["requirement_parts"])
+    return run, {result["part_id"]: result for result in data["parts"]}

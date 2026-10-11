@@ -219,6 +219,64 @@
         "type": "string",
         "minLength": 1
       }
+    },
+    "bound_inputs": {
+      "type": "object"
+    },
+    "part_map": {
+      "type": "object",
+      "properties": {
+        "files": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "dirs": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          }
+        },
+        "links": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "requirement_parts": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "files",
+        "dirs",
+        "links",
+        "requirement_parts"
+      ]
+    },
+    "scope_parts": {
+      "oneOf": [
+        {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        {
+          "type": "null"
+        }
+      ]
     }
   },
   "additionalProperties": false,

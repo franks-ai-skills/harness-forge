@@ -51,6 +51,7 @@ class Cli:
         specification.loader.exec_module(self.module)
         self.module.RUNNER, self.module.FETCH, self.module.ENVIRON = runner, fetch_page, PARENT
         self.root = Path(root)
+        self.parts = ["A"]  # the parts a confirmation names
 
     def __call__(self, *arguments):
         stdout, stderr = io.StringIO(), io.StringIO()
@@ -69,7 +70,7 @@ class Cli:
                                       *extra)
         assert code == 0, stderr
         return self.write(f"relay-{run_id}.json", {"choice": "confirm", "displayed_digest": contract["digest"],
-                                                   "part_ids": ["A"], "run_id": run_id})
+                                                   "part_ids": self.parts, "run_id": run_id})
 
 
 class LiveCommandsTest(unittest.TestCase):
@@ -644,6 +645,75 @@ class LiveCommandsTest(unittest.TestCase):
         code, output, stderr = cli("verify", *arguments[:option], relay, *arguments[option + 1:])
         self.assertEqual(code, 0, stderr)
         self.assertEqual(output["drift"][0]["state"], "adopted")
+
+    def test_break_fix_and_review_scopes(self):
+        record = load_decision(self.decision)
+        record.record["parts"].append(part("B", "Never merge without review", outcome="outside-instead",
+                                           recommended=None, chosen=None))
+        write_decision(self.root, record, slug="repro", date="2026-10-10")
+        runner = ResearchRunner([finding()])
+        original_confirm = Cli.confirm
+
+        def confirm_both(cli, decision, run_id, *extra):
+            cli.parts = ["A", "B"]
+            return original_confirm(cli, decision, run_id, *extra)
+
+        Cli.confirm = confirm_both
+        try:
+            cli, arguments = self.build_ready(runner)
+        finally:
+            Cli.confirm = original_confirm
+        revision = ["--revision", self.root / ".harness/research/repro.rules.yaml"]
+
+        code, _, stderr = cli("verify", *arguments, "--scope", "review", "--fixed", "A")
+        self.assertEqual(code, 2, "a Review needs an earlier report to compare with")
+        self.assertIn("no earlier report", stderr)
+        code, output, stderr = cli("verify", *arguments)
+        self.assertEqual(code, 0, stderr)
+        self.assertEqual([p["harness_result"] for p in output["parts"]], ["verified", "not applicable"])
+
+        skill = self.root / f".agents/skills/{NAME}/SKILL.md"
+        original = skill.read_text(encoding="utf-8")
+        skill.write_text(original.replace(f"name: {NAME}", "name: Broken_Name"), encoding="utf-8")
+        code, output, _ = cli("verify", *arguments)
+        self.assertEqual((code, output["parts"][0]["harness_result"]), (1, "not verified"))
+        skill.write_text(original, encoding="utf-8")  # the builder's repair of the requested artifact
+
+        code, output, stderr = cli("scope", "--decision", self.decision, "--root", self.root, *revision,
+                                   "--evidence", self.root / ".scratch/workers.json", "--slug", "repro", "--fixed", "A")
+        self.assertEqual(code, 0, stderr)
+        review, extensive = output["options"]
+        self.assertEqual((review["label"], review["parts"]), ("Review (recommended)", ["A"]))
+        self.assertEqual(extensive["parts"], ["A", "B"])
+        self.assertGreater(review["judged_rules"], 0)
+        self.assertGreater(extensive["judged_rules"], review["judged_rules"])
+
+        roles = len(runner.roles)
+        code, output, stderr = cli("verify", *arguments, "--scope", "review", "--fixed", "A")
+        self.assertEqual(code, 0, stderr)
+        self.assertEqual([p["harness_result"] for p in output["parts"]], ["verified", "not applicable"])
+        self.assertEqual(runner.roles[roles:], ["review", "baseline", "runtime", "runtime", "runtime"])
+        report = (self.root / ".harness/reports/repro.md").read_text(encoding="utf-8")
+        self.assertIn("- Review scope: Review (recommended): judged A; kept from run verify-1: B", report)
+        self.assertIn("(kept from run verify-1)", report)
+
+        code, output, stderr = cli("verify", *arguments, "--scope", "extensive")
+        self.assertEqual(code, 0, stderr)
+        report = (self.root / ".harness/reports/repro.md").read_text(encoding="utf-8")
+        self.assertIn("- Review scope: Extensive review (rarely needed): judged A, B", report)
+        self.assertNotIn("(kept from run", report)
+
+    def test_a_review_judges_every_part_whose_inputs_changed(self):
+        cli, arguments = self.build_ready(ResearchRunner([finding()]))
+        code, _, stderr = cli("verify", *arguments)
+        self.assertEqual(code, 0, stderr)
+        (self.root / "README.md").write_text((self.root / "README.md").read_text(encoding="utf-8") + "\nMore.\n",
+                                             encoding="utf-8")
+        code, output, stderr = cli("scope", "--decision", self.decision, "--root", self.root, "--revision",
+                                   self.root / ".harness/research/repro.rules.yaml", "--slug", "repro", "--fixed", "",
+                                   "--evidence", self.root / ".scratch/workers.json")
+        self.assertEqual(code, 0, stderr)
+        self.assertEqual((output["changed"], output["options"][0]["parts"]), (["A"], ["A"]))
 
     def test_case_ids_must_be_unique(self):
         import yaml

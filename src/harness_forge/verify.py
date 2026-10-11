@@ -418,13 +418,16 @@ def finish_run(
     for part_id, entry in (kept or {}).items():
         if part_id not in outside:
             continue
-        note = f" (kept from run {entry['run_id']})"
+        def noted(reason: str) -> str:
+            """A result kept twice names the run that judged it."""
+            return reason if "(kept from run " in reason else f"{reason} (kept from run {entry['run_id']})"
+
         for item in entry["result"]["rule_results"]:
             if item["check"] == "judged":
-                kept_rules[(part_id, item["rule_id"])] = {**item, "reason": item["reason"] + note}
+                kept_rules[(part_id, item["rule_id"])] = {**item, "reason": noted(item["reason"])}
         if entry["result"].get("goal_verdict"):
             goal = entry["result"]["goal_verdict"]
-            kept_goals[part_id] = {"part_id": part_id, "verdict": goal["verdict"], "reason": goal["reason"] + note}
+            kept_goals[part_id] = {"part_id": part_id, "verdict": goal["verdict"], "reason": noted(goal["reason"])}
         if entry["result"]["harness_result"] == "verified":
             kept_verified.add(part_id)
     goal_verdicts.update(kept_goals)

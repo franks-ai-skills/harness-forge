@@ -24,6 +24,10 @@ def report_data(run: VerificationRun, results: list[PartResult]) -> dict:
         "runtime_results": [asdict(result) for result in run.runtime_results],
         "worker_evidence": list(run.worker_evidence), "worker_violations": list(run.worker_violations),
         "tool_versions": dict(run.tool_versions), "file_hashes": dict(frozen["files"]), "symlinks": dict(frozen["symlinks"]),
+        # What a later Review run compares with to find the parts whose inputs changed.
+        "bound_inputs": dict(frozen), "scope_parts": run.scope_parts,
+        "part_map": {"files": dict(run.part_files), "dirs": dict(run.part_dirs), "links": dict(run.part_links),
+                     "requirement_parts": list(run.requirement_parts)},
     }
     validate(data, "report")
     return data

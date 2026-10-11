@@ -234,6 +234,11 @@ class CliTest(unittest.TestCase):
             self.assertTrue(report.is_file())
             self.assertIn("none run", report.read_text(encoding="utf-8"))
 
-            code, output = self.run_cli("scope", "--decision", str(decision_path), "--fixed", "A")
+            evidence = root / "workers.json"
+            evidence.write_text('{"worker_evidence": []}', encoding="utf-8")
+            code, output = self.run_cli("scope", "--decision", str(decision_path), "--root", str(root), "--revision",
+                                        str(revision_path), "--evidence", str(evidence), "--slug", "repro",
+                                        "--fixed", "A")
             self.assertEqual(code, 0, output)
             self.assertEqual(output["options"][0]["parts"], ["A"])
+            self.assertTrue(output["earlier_run"].startswith("unattended-"), "the report written above is the earlier run")

@@ -89,6 +89,8 @@ def verify_live(
     collect: Callable[[], tuple[dict[str, bytes], dict[str, str], Decision, AcceptedRevision | None]] | None = None,
     confirmed_exclusions: set[tuple[str, str, str]] | frozenset = frozenset(), drift: list[dict] | tuple = (),
     selection: dict[str, list[dict]] | None = None, overrides: list[dict] | tuple = (),
+    scope: set[str] | None = None, scope_label: str = "Extensive review (rarely needed)",
+    kept: dict[str, dict] | None = None,
 ):
     """Static checks, a fresh review worker, runtime cases, then results in the design's precedence.
 
@@ -106,7 +108,8 @@ def verify_live(
     """
     environ = os.environ if environ is None else environ
     run = prepare_run(decision, files, rules, confirmation, symlinks=symlinks, revision=revision,
-                      overrides=overrides, kb_version=kb_version, worker_evidence=worker_evidence)
+                      overrides=overrides, kb_version=kb_version, worker_evidence=worker_evidence, scope=scope,
+                      scope_label=scope_label)
     review = ReviewResponse(run_id=run.run_id, verdicts=[], goal_verdicts=[])
     observations = []
     if any(request["kind"] == "rule" or request["kind"] == "goal" for request in run.judged_requests):
@@ -125,8 +128,9 @@ def verify_live(
             # Out of scope voids the verdicts; any other failure leaves none, and the report says why.
             run.worker_violations.append(f"review worker: {response['reason']}")
     runtime = []
+    # A Review run tests the parts in its scope; a kept part's earlier result stands for its runtime tests.
     built = {part["id"] for part in run.parts if part_kind(part) in ("build", "local-reuse")
-             and part["id"] in run.confirmed_parts}
+             and part["id"] in run.confirmed_parts and (scope is None or part["id"] in scope)}
     part_cases = [case for case in cases if case["part_id"] in built]
     if part_cases and harness in run.targets:
         runtime = run_skill_runtime(run, harness, part_cases, files=files, runner=runner, environ=environ,
@@ -145,8 +149,8 @@ def verify_live(
     required = {part["id"]: {case["id"] for case in cases if case["part_id"] == part["id"]
                              and case["mode"] == "explicit" and case["expected"] == "activates"}
                 for part in run.parts if part_kind(part) == "build" and part["id"] in run.confirmed_parts
-                and harness in run.targets}
+                and harness in run.targets and (scope is None or part["id"] in scope)}
     results = finish_run(run, review, runtime, current, worker_observations=observations,
                          confirmed_exclusions=frozenset(confirmed_exclusions), required_activation=required,
-                         drift=drift, selection=selection)
+                         drift=drift, selection=selection, kept=kept)
     return run, results

@@ -35,9 +35,15 @@ this skill's folder; run it with the Forge environment's Python.
 
 1. Confirm the contract (goal, requirements, overrides and the worker
    policy disclosure).
-2. If this is a re-verification, run `scripts/forge.py scope` and ask
-   once: `Review (recommended)` or `Extensive review (rarely needed)`,
-   showing each option's parts and judged-rule count.
+2. If this is a re-verification, run `scripts/forge.py scope --decision
+   <record> --root <repository> --revision <rules file> --evidence
+   <workers output> --slug <slug> --fixed <parts the builder fixed>` and
+   ask once: `Review (recommended)` or `Extensive review (rarely
+   needed)`, showing each option's parts and judged-rule count. Review
+   judges the fixed parts, every part linked to them and every part
+   whose inputs changed; other parts keep their earlier judged results,
+   and every part's scripts and link checks run again. Pass the answer
+   to step 3 as `--scope review|extensive --fixed <parts>`.
 3. For a built skill, write its runtime cases as a YAML file shaped like
    `evals/smoke/vertical.yaml` in the Forge plugin root: an `explicit`
    case that names the skill, an `implicit` case with a request a user
