@@ -308,6 +308,23 @@ class LiveCommandsTest(unittest.TestCase):
         self.assertIn("unresolved compatibility drift on skills.description.length",
                       (self.root / ".harness/reports/repro.md").read_text(encoding="utf-8"))
 
+    def test_an_empty_revision_still_binds_its_brief(self):
+        cli, arguments = self.build_ready(ResearchRunner([finding()]))
+        proposed = cli.write("proposed-empty.json", {"requirements": []})
+        choices = cli.write("choices-empty.json", {})
+        code, output, stderr = cli("accept", "--decision", self.decision, "--part", "A", "--proposed", proposed,
+                                   "--choices", choices, "--root", self.root, "--slug", "repro")
+        self.assertEqual((code, output["rule_ids"]), (0, []), stderr)
+        text = Path(self.decision).read_text(encoding="utf-8")
+        Path(self.decision).write_text(text.replace("goal: Write a reproduction checklist when asked",
+                                                    "goal: Write a security vulnerability report"), encoding="utf-8")
+        revision = self.root / ".harness/research/repro.rules.yaml"
+        relay = cli.confirm(self.decision, "verify-1", "--revision", revision)
+        option = arguments.index("--relay") + 1
+        code, _, stderr = cli("verify", *arguments[:option], relay, *arguments[option + 1:])
+        self.assertEqual(code, 2)
+        self.assertIn("researched for another brief", stderr)
+
     def test_case_ids_must_be_unique(self):
         import yaml
         cli, arguments = self.build_ready(ResearchRunner([finding()]))

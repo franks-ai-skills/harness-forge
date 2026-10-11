@@ -335,7 +335,11 @@ def _revision_problem(decision: Decision, revision) -> str | None:
 
 
 def _stale_requirements(decision: Decision, revision) -> str | None:
-    """Accepted requirements count only for the brief they were researched for and parts the decision has."""
+    """Accepted requirements count only for the brief they were researched for and parts the decision has.
+
+    The brief must still be some part's deep brief even when no requirement
+    was accepted, so an empty revision cannot outlive a changed goal.
+    """
     for part_id in sorted({entry["part_id"] for entry in revision.rules} if revision else ()):
         try:
             brief = make_brief(decision, "deep", part_id)
@@ -345,6 +349,10 @@ def _stale_requirements(decision: Decision, revision) -> str | None:
             return (f"the accepted requirements were researched for another brief: the goals, picture, targets, "
                     f"reach or part {part_id}'s goal, answers or mechanism changed; research part {part_id} again "
                     f"and accept its requirements")
+    if revision and not any(make_brief(decision, "deep", part["id"]).digest == revision.brief_digest
+                            for part in decision.record["parts"]):
+        return ("the accepted requirements were researched for another brief: no part's goals, picture, targets, "
+                "reach, answers or mechanism match it any more; research the part again and accept its requirements")
     return None
 
 
