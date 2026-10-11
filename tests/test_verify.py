@@ -232,6 +232,12 @@ class VerdictTest(unittest.TestCase):
         self.assertNotEqual(exclusion_token(scenario.run, "A", rule), exclusion_token(changed.run, "A", rule))
         self.assertNotEqual(exclusion_token(scenario.run, "A", rule),
                             exclusion_token(scenario.run, "A", "skills.description.length"))
+        resourced = [Rule.from_dict({**r.to_dict(), "sources": ["https://code.claude.com/docs/en/skills"]})
+                     if r.id == rule else r for r in RULES]
+        rerun = prepare_run(scenario.record, scenario.files, resourced, scenario.confirmation, symlinks=scenario.symlinks,
+                            revision=REVISION, kb_version="0.1.0", worker_evidence=EVIDENCE)
+        self.assertNotEqual(exclusion_token(scenario.run, "A", rule), exclusion_token(rerun, "A", rule),
+                            "the token binds the whole rule, its sources included")
 
     def test_not_applicable_only_for_judged_applicability(self):
         review = copy.deepcopy(self.review)

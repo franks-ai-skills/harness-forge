@@ -171,7 +171,7 @@ def prepare_run(
         for rule in _rules_for(part, rules, idea):
             run.rule_index[rule.id] = {"severity": rule.severity, "check": rule.check, "statement": rule.statement,
                                        "applicability": rule.applicability, "sources": list(rule.sources),
-                                       "positions": rule.positions or []}
+                                       "positions": rule.positions or [], "digest": canonical_digest(rule.to_dict())}
             if rule.check == "script":
                 result = run_check(rule, part_files, facts)
                 if result.status == "not-applicable":
@@ -274,7 +274,7 @@ def _goal_result(kind: str, status: str, harness: str, dependencies: list[str], 
 
 
 def exclusion_token(run: VerificationRun, part_id: str, rule_id: str) -> str:
-    """What the user's "does not apply" was given for: the rule, the idea, the part's record, files and requirements.
+    """What the user's "does not apply" was given for: the whole rule, the idea, the part's record, files and requirements.
 
     Not the reviewer's wording: a fresh reviewer words its reason anew on every
     run, so a token bound to it would never carry over to the next run.
@@ -282,7 +282,7 @@ def exclusion_token(run: VerificationRun, part_id: str, rule_id: str) -> str:
     """
     inputs = run.frozen_inputs
     return canonical_digest({
-        "part_id": part_id, "rule_id": rule_id, "statement": run.rule_index.get(rule_id, {}).get("statement"),
+        "part_id": part_id, "rule_id": rule_id, "rule": run.rule_index.get(rule_id, {}).get("digest"),
         "idea": inputs["idea"], "part": inputs["parts"].get(part_id), "revision": inputs["revision"],
         "files": {path: inputs["files"][path] for path in run.part_files.get(part_id, [])},
     })[:16]
