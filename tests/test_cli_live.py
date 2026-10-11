@@ -426,6 +426,12 @@ class LiveCommandsTest(unittest.TestCase):
         code, output, _ = cli("override", "--root", self.root, "--input", request)
         self.assertEqual(code, 1)
         self.assertTrue(any("made_up_fact, which no intake question asks" in p for p in output["problems"]))
+        wrong_value = {**pinned, "params": {**pinned["params"], "when": {"eq": ["script_checkable", "yes"]}}}
+        request = cli.write("override-3.json", {"rule_id": winner, "finding_id": "F1", "reason": "Wrong value.",
+                                                "rule": wrong_value})
+        code, output, _ = cli("override", "--root", self.root, "--input", request)
+        self.assertEqual(code, 1)
+        self.assertTrue(any("script_checkable is never 'yes'" in p for p in output["problems"]), output["problems"])
 
     def test_unresolved_compatibility_drift_blocks_the_affected_part(self):
         cli, arguments = self.build_ready(ResearchRunner([finding()]))

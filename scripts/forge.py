@@ -263,9 +263,12 @@ def _check_all(root: Path) -> list[tuple[dict, dict]]:
                                       research=records, answerable=_answerable())) for override in overrides]
 
 
-def _answerable() -> set[str]:
-    """The facts an intake question asks, and those Forge derives."""
-    return {question["id"] for question in _selection_document()["questions"]} | {"reuse_confirmed"}
+def _answerable() -> dict[str, list]:
+    """Each fact an intake question asks, and each Forge derives, with its possible answers."""
+    selection = _selection_document()
+    asked = {question["id"] for question in selection["questions"]}
+    return {**{fact["id"]: list(fact["values"]) for fact in selection["facts"] if fact["id"] in asked},
+            "reuse_confirmed": [True, False]}
 
 
 def _checked_overrides(root: Path) -> tuple[list[dict], dict[str, list[str]]]:

@@ -81,22 +81,25 @@ def _supported(finding: dict, research: list[dict]) -> bool:
     return False
 
 
-def _when_facts(predicate: dict) -> set[str]:
+def _when_values(predicate: dict) -> list[tuple[str, list]]:
+    """Each (fact, values tested) of a selection predicate."""
     (operator, operand), = predicate.items()
     if operator in ("all", "any"):
-        return set().union(*(_when_facts(item) for item in operand))
+        return [pair for item in operand for pair in _when_values(item)]
     if operator == "not":
-        return _when_facts(operand)
-    return {operand[0]}
+        return _when_values(operand)
+    fact, value = operand
+    return [(fact, list(value) if operator == "in" else [value])]
 
 
 def check_override(override: dict, pinned: list[Rule], *, kb_version: str, catalog: dict[str, dict],
-                   research: list[dict], answerable: set[str] | None = None) -> dict:
+                   research: list[dict], answerable: dict[str, list] | None = None) -> dict:
     """Whether an override can be adopted, with what it changes and the warnings to show before deciding.
 
-    ``answerable`` are the facts an intake question asks (and derived
-    ones); a selection rule's override may test no other fact, or
-    selection would wait for an answer nobody can give.
+    ``answerable`` maps each fact an intake question asks (and each derived
+    one) to its possible answers; a selection rule's override may test no
+    other fact and no other value, or selection would wait for an answer
+    nobody can give.
 
     ``status`` is ``valid``, ``invalid`` or ``kb-updated``; a KB update also
     sets ``kb_comparison``: ``incorporated`` or ``removed`` (propose removing
@@ -151,8 +154,13 @@ def check_override(override: dict, pinned: list[Rule], *, kb_version: str, catal
                     problems.append(f"invalid params for {new.checker}: {errors[0]}")
         if answerable is not None and new.checker == "selection.match" and isinstance(new.params, dict) \
                 and isinstance(new.params.get("when"), dict):
-            for fact in sorted(_when_facts(new.params["when"]) - answerable):
-                problems.append(f"the new rule tests {fact}, which no intake question asks")
+            for fact, values in _when_values(new.params["when"]):
+                if fact not in answerable:
+                    problems.append(f"the new rule tests {fact}, which no intake question asks")
+                    continue
+                for value in values:
+                    if not any(value == allowed and type(value) is type(allowed) for allowed in answerable[fact]):
+                        problems.append(f"the new rule tests {fact} for {value!r}, but {fact} is never {value!r}")
         if not result["changes"] and not problems:
             problems.append("the new rule is the pinned rule; an override must change it")
     guard = _guarding(old) if old else None
