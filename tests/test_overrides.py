@@ -108,6 +108,14 @@ class ValidationTest(unittest.TestCase):
         self.assertEqual(checked["status"], "invalid")
         self.assertIn("selection does not evaluate applies_to", " ".join(checked["problems"]))
 
+    def test_a_malformed_selection_predicate_is_a_problem_not_a_crash(self):
+        preference = next(rule for rule in PINNED if rule.id == "selection.mechanism.procedure")
+        malformed = {**preference.to_dict(), "params": {**preference.params, "when": {"all": ["not a predicate"]}}}
+        checked = check_override(override(rule=malformed, rule_id=preference.id), PINNED, kb_version=KB_VERSION,
+                                 catalog=_catalog(), research=RESEARCH, answerable={"job": ["procedure"]})
+        self.assertEqual(checked["status"], "invalid")
+        self.assertTrue(any("invalid params for selection.match" in problem for problem in checked["problems"]))
+
     def test_after_a_kb_update_it_proposes_removal_or_asks(self):
         differs = check(override(), kb_version="0.2.0")
         self.assertEqual((differs["status"], differs["kb_comparison"]), ("kb-updated", "differs"))

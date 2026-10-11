@@ -88,8 +88,10 @@ drift with its source, quote and support result, and offer:
   `"retired": true`) and run `scripts/forge.py override --root
   <repository> --input <file>`. It may change only the statement,
   parameters, severity and applies_to, and only from a finding that
-  passed both checks. Show its `text` with every warning; when the user
-  agrees, run it again with `--write`.
+  passed both checks; a selection rule's conditions change in its
+  `params.when`, never its applies_to, which selection does not read.
+  Show its `text` with every warning; when the user agrees, run it
+  again with `--write`.
 - **Keep the pinned rule.** Every applicable check and the stated goal
   must still pass against it.
 

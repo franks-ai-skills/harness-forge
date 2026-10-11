@@ -5,8 +5,10 @@ that holds it, in every stage: selection, building and verification. It is
 a committed file at ``.harness/overrides/<rule-id>.yaml`` and data like any
 other repository record: it applies only after the user confirmed the
 contract that shows it in the current session. It may change a rule's
-statement, parameters, severity and applies_to, or retire the rule; it can
-only refer to catalog checkers and never adds executable code. Goal-fit
+statement, parameters, severity and applies_to, or retire the rule; a
+selection rule's conditions change only in its params.when, since selection
+never reads applies_to. It can only refer to catalog checkers and never
+adds executable code. Goal-fit
 checks come from the decision record, so retiring a rule never removes the
 check that a part meets its accepted goal.
 """
@@ -156,8 +158,9 @@ def check_override(override: dict, pinned: list[Rule], *, kb_version: str, catal
                 errors = schema_errors(new.params or {}, checker["params"])
                 if errors:
                     problems.append(f"invalid params for {new.checker}: {errors[0]}")
-        if answerable is not None and new.checker == "selection.match" and isinstance(new.params, dict) \
-                and isinstance(new.params.get("when"), dict):
+        params_valid = not any(problem.startswith("invalid params") for problem in problems)
+        if answerable is not None and params_valid and new.checker == "selection.match" \
+                and isinstance(new.params, dict) and isinstance(new.params.get("when"), dict):
             for fact, values in _when_values(new.params["when"]):
                 if fact not in answerable:
                     problems.append(f"the new rule tests {fact}, which no intake question asks")
