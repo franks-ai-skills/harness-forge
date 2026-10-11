@@ -968,6 +968,25 @@ class LiveCommandsTest(unittest.TestCase):
         self.assertEqual((code, output), (2, None))
         self.assertIn("the report could not be written: report: parts/0/rule_results/0/reason", stderr)
 
+    def test_a_file_that_cannot_be_written_is_a_diagnostic(self):
+        cli = Cli(FakeRunner(), self.root)
+        readme = self.root / "README.md"
+        readme.chmod(0o444)
+        try:
+            code, output, stderr = cli("readme", "--decision", self.decision, "--root", self.root)
+        finally:
+            readme.chmod(0o644)
+        self.assertEqual((code, output), (2, None))
+        self.assertIn("forge.py:", stderr)
+        self.assertIn("README.md", stderr)
+
+    def test_a_report_path_that_cannot_be_written_is_a_diagnostic(self):
+        cli, arguments = self.build_ready(ResearchRunner([finding()]))
+        (self.root / ".harness/reports/repro.md").mkdir(parents=True)
+        code, output, stderr = cli("verify", *arguments)
+        self.assertEqual((code, output), (2, None))
+        self.assertIn("the report could not be written", stderr)
+
     def test_case_ids_must_be_unique(self):
         import yaml
         cli, arguments = self.build_ready(ResearchRunner([finding()]))

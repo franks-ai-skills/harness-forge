@@ -481,8 +481,8 @@ def _report(arguments: argparse.Namespace) -> int:
     if arguments.write:
         try:
             path = write_report(root, arguments.slug, rendered)
-        except ValueError as error:
-            raise _InvalidInput(str(error)) from error
+        except (OSError, ValueError) as error:
+            raise _InvalidInput(f"the report could not be written: {error}") from error
     emit({"command": "report", "run_id": run.run_id, "written": str(path) if path else None,
           "bytes": len(rendered.encode("utf-8"))})
     return 0
@@ -1063,7 +1063,7 @@ def _verify(arguments: argparse.Namespace) -> int:
         rendered = render_report(run, results)
         if arguments.write:
             written = str(write_report(root, arguments.slug, rendered))
-    except ValueError as error:
+    except (OSError, ValueError) as error:
         raise _InvalidInput(f"the report could not be written: {error}") from error
     parts = [{"part_id": r.part_id, "status": r.status, "harness_result": r.harness_result, "goal_result": r.goal_result}
              for r in results]
@@ -1236,6 +1236,10 @@ def main(argv: list[str] | None = None) -> int:
         arguments = build_parser().parse_args(argv)
         return arguments.handler(arguments)
     except _InvalidInput as error:
+        print(f"forge.py: {error}", file=sys.stderr)
+        return 2
+    except OSError as error:
+        # A file Forge reads or writes failed, such as a read-only record: a diagnostic, never a traceback.
         print(f"forge.py: {error}", file=sys.stderr)
         return 2
 
