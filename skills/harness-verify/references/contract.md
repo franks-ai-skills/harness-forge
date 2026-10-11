@@ -6,7 +6,7 @@ Read this before explaining a verification result.
 
 | Result | When |
 | --- | --- |
-| `verified` | Confirmed in this session; every applicable rule has a result; no error rule failed, errored or stayed unresolved; the goal verdict is met; executed runtime tests passed; no bound input changed |
+| `verified` | Confirmed in this session; every applicable rule has a result; no error rule failed, errored or stayed unresolved; the goal verdict is met; executed runtime tests passed; a built skill's explicit activation was observed live; no bound input changed |
 | `not verified` | Something was built or vendored, and at least one condition above fails |
 | `not applicable` | Nothing is built: an outside-only or nothing-fits part, or a mechanism without a builder in this release |
 | `not checked` | A reused artifact that is not available locally |
