@@ -90,7 +90,7 @@ def verify_live(
     confirmed_exclusions: set[tuple[str, str, str]] | frozenset = frozenset(), drift: list[dict] | tuple = (),
     selection: dict[str, list[dict]] | None = None, overrides: list[dict] | tuple = (),
     scope: set[str] | None = None, scope_label: str = "Extensive review (rarely needed)",
-    kept: dict[str, dict] | None = None,
+    kept: dict[str, dict] | None = None, cited: dict[str, list[str]] | None = None,
 ):
     """Static checks, a fresh review worker, runtime cases, then results in the design's precedence.
 
@@ -152,5 +152,5 @@ def verify_live(
                 and harness in run.targets and (scope is None or part["id"] in scope)}
     results = finish_run(run, review, runtime, current, worker_observations=observations,
                          confirmed_exclusions=frozenset(confirmed_exclusions), required_activation=required,
-                         drift=drift, selection=selection, kept=kept)
+                         drift=drift, selection=selection, kept=kept, cited=cited)
     return run, results

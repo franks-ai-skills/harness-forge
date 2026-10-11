@@ -152,6 +152,20 @@ def selection_failures(decision: Decision, rules: list[Rule]) -> tuple[dict[str,
     return failures, conflicts
 
 
+def selection_citations(decision: Decision, rules: list[Rule]) -> dict[str, list[str]]:
+    """The selection rules each part's selection rests on: those its recommendation cites and those that
+    rule its chosen or recommended mechanism in or out. Drift on any of them affects the part."""
+    cited = {}
+    for part in decision.record["parts"]:
+        recommendation = selection_state(part, decision.record["facts"], rules)["recommendation"]
+        ids = set(recommendation.rule_ids)
+        for row in recommendation.assessment:
+            if row["concept"] in (part["chosen"], recommendation.mechanism):
+                ids |= set(row["rules"])
+        cited[part["id"]] = sorted(ids)
+    return cited
+
+
 def bound_inputs(
     decision: Decision, files: dict[str, bytes], rules: list[Rule], *, symlinks: dict[str, str] | None = None,
     revision: AcceptedRevision | None = None, overrides: list[dict] | tuple = (), kb_version: str = "",
@@ -369,6 +383,7 @@ def finish_run(
     drift: list[dict] | tuple = (),
     selection: dict[str, list[dict]] | None = None,
     kept: dict[str, dict] | None = None,
+    cited: dict[str, list[str]] | None = None,
 ) -> list[PartResult]:
     """Each part's harness and goal result.
 
@@ -383,6 +398,10 @@ def finish_run(
 
     selection maps a part to its selection failures (selection_failures):
     each fails the part.
+
+    cited maps a part to the selection rules its selection rests on
+    (selection_citations); drift on them affects the part like drift on
+    its applicable rules.
 
     drift is the research records' drift. Unresolved security or
     compatibility drift on a rule that applies to a part blocks that part
@@ -410,7 +429,9 @@ def finish_run(
     verdicts = {} if run.worker_violations else {(v["part_id"], v["rule_id"]): v for v in review.verdicts}
     goal_verdicts = {} if run.worker_violations else {v["part_id"]: v for v in review.goal_verdicts}
     statics = {(r.part_id, r.rule_id): r for r in run.static_results}
-    drifted = blocked_parts(list(drift), run.applicable_rules)
+    affecting = {part_id: list(run.applicable_rules.get(part_id, [])) + list((cited or {}).get(part_id, []))
+                 for part_id in {part["id"] for part in run.parts}}
+    drifted = blocked_parts(list(drift), affecting)
     outside = set() if run.scope_parts is None else {part["id"] for part in run.parts} - set(run.scope_parts)
     kept_rules, kept_goals, kept_verified = {}, {}, set()
     for part_id, entry in (kept or {}).items():
@@ -496,7 +517,7 @@ def finish_run(
             rule_results.append({"rule_id": failure["rule_id"], "check": "script", "result": "fail",
                                  "reason": failure["reason"]})
         for entry in drift if part_id in drifted else ():
-            if drift_category(entry) != "ordinary" and entry["rule_id"] in run.applicable_rules.get(part_id, []):
+            if drift_category(entry) != "ordinary" and entry["rule_id"] in affecting.get(part_id, []):
                 rule_results.append({"rule_id": "research.drift", "check": "script", "result": "fail",
                                      "reason": f"unresolved {drift_category(entry)} drift on {entry['rule_id']} "
                                                f"(finding {entry['finding_id']}) blocks the part until the user decides"})

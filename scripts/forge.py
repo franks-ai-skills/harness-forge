@@ -44,7 +44,8 @@ from harness_forge.runtime import load_cases  # noqa: E402
 from harness_forge.workflow import research_pass, verify_live  # noqa: E402
 from harness_forge.scope import affected_parts, earlier_run, preserved_parts, review_scope  # noqa: E402
 from harness_forge.verify import (  # noqa: E402
-    NEEDS_CONFIRMATION, bound_inputs, exclusion_token, finish_run, part_kind, prepare_run, selection_failures,
+    NEEDS_CONFIRMATION, bound_inputs, exclusion_token, finish_run, part_kind, prepare_run, selection_citations,
+    selection_failures,
 )
 from harness_forge.models import ReviewResponse  # noqa: E402
 from harness_forge.selection import (  # noqa: E402
@@ -699,6 +700,13 @@ def _build(arguments: argparse.Namespace) -> int:
         raise _InvalidInput(f"unknown part {arguments.part!r}") from error
     if problem:
         raise _InvalidInput(problem)
+    selection_rules = effective_rules(_selection_rules(), overrides, approval["confirmation"])
+    relevant = set(selection_citations(decision, selection_rules)[arguments.part]) | {rule.id for rule in pinned}
+    for entry in _drift(root):
+        if (entry["category"] in _BLOCKING_DRIFT and entry["rule_id"] in relevant
+                and drift_state(entry, decision.record, overrides) == "open"):
+            raise _InvalidInput(f"part {arguments.part} is blocked by open {entry['category']} drift on "
+                                f"{entry['rule_id']} (finding {entry['finding_id']}); the user decides first")
     if revision is None:
         raise _InvalidInput("--revision is required: a skill is built from the accepted requirements")
     stale = _stale_requirements(decision, revision, [arguments.part])
@@ -936,12 +944,13 @@ def _verify(arguments: argparse.Namespace) -> int:
         label = f"First run: judged {', '.join(sorted(every))}"
     else:
         label = f"Extensive review (rarely needed): judged {', '.join(sorted(every))}"
-    failures, conflicts = selection_failures(
-        decision, effective_rules(_selection_rules(), overrides, approval["confirmation"]))
+    selection_rules = effective_rules(_selection_rules(), overrides, approval["confirmation"])
+    failures, conflicts = selection_failures(decision, selection_rules)
+    cited = selection_citations(decision, selection_rules)
     try:
         run, results = verify_live(decision, files, symlinks, rules, revision,
                                    arguments.harness, **approval, overrides=overrides, scope=scope,
-                                   scope_label=label, kept=kept,
+                                   scope_label=label, kept=kept, cited=cited,
                                    cases=cases, runner=RUNNER, environ=_environ(), kb_version=manifest["kb_version"],
                                    login_answer=arguments.login_answer, collect=lambda: _current_inputs(arguments, root, drift, overrides),
                                    confirmed_exclusions=exclusions, drift=unresolved, selection=failures)

@@ -751,6 +751,26 @@ class LiveCommandsTest(unittest.TestCase):
         self.assertEqual(code, 2)
         self.assertIn("searching the KB's issues failed", stderr)
 
+    def test_drift_on_a_selection_rule_blocks_the_parts_it_selected(self):
+        cli, arguments = self.build_ready(ResearchRunner([finding()]))
+        record = load_decision(self.decision)
+        request = cli.write("select.json", {"answers": record.part("A")["answers"],
+                                            "whole_idea": record.record["facts"]})
+        _, selected, _ = cli("select", "--input", request)
+        winner = next(row["rules"][0] for row in selected["assessment"] if row["state"] == "recommended")
+        self.record_drift(cli, rule=winner)
+        code, output, _ = cli("verify", *arguments)
+        self.assertEqual((code, output["parts"][0]["status"]), (1, "blocked"))
+        self.assertIn(f"unresolved compatibility drift on {winner}",
+                      (self.root / ".harness/reports/repro.md").read_text(encoding="utf-8"))
+        option = dict(zip(arguments[::2], arguments[1::2]))
+        code, _, stderr = cli("build", "--decision", self.decision, "--part", "A", "--root", self.root,
+                              *[item for key in ("--revision", "--evidence", "--relay") for item in (key, option[key])],
+                              "--description", cli.write("description.txt", DESCRIPTION),
+                              "--procedure", cli.write("procedure.md", PROCEDURE))
+        self.assertEqual(code, 2)
+        self.assertIn(f"open compatibility drift on {winner}", stderr)
+
     def test_case_ids_must_be_unique(self):
         import yaml
         cli, arguments = self.build_ready(ResearchRunner([finding()]))
