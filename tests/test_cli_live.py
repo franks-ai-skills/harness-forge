@@ -10,12 +10,32 @@ from pathlib import Path
 
 from harness_forge.contracts import load_decision, write_decision
 from harness_forge.research import load_revision
-from tests.test_adapters import CLAUDE_API_KEY, PARENT, FakeRunner
+from harness_forge.adapters.base import Completed
+from tests.test_adapters import CLAUDE_API_KEY, PARENT, FakeRunner, claude_stream
 from tests.test_build_skill import DESCRIPTION, NAME, PROCEDURE
 from tests.test_verify import skill_decision
 from tests.test_workflow import ResearchRunner, fetch_page, finding
 
 FORGE = Path(__file__).resolve().parents[1]
+
+
+class NotApplicableRunner(ResearchRunner):
+    """The reviewer answers "not applicable" for one rule and passes the rest."""
+
+    def __init__(self, findings, rule_id):
+        super().__init__(findings)
+        self.rule_id = rule_id
+
+    def __call__(self, command, *, cwd, env, stdin, timeout):
+        answer = super().__call__(command, cwd=cwd, env=env, stdin=stdin, timeout=timeout)
+        if self.roles and self.roles[-1] == "review" and stdin and "```json" in stdin:
+            event = json.loads(answer.stdout.splitlines()[-1])
+            output = json.loads(event["result"])
+            for verdict in output["verdicts"]:
+                if verdict["rule_id"] == self.rule_id:
+                    verdict.update(verdict="not-applicable", reason="It writes text only.")
+            return Completed(0, claude_stream(output, calls=("Read",)), "", False)
+        return answer
 
 
 class Cli:
@@ -86,8 +106,8 @@ class LiveCommandsTest(unittest.TestCase):
         self.assertIn("does not confirm", stderr)
         self.assertEqual(cli.module.RUNNER.worker_calls, [])
 
-    def test_research_accept_build_and_verify(self):
-        runner = ResearchRunner([finding()])
+    def build_ready(self, runner):
+        """Workers, research, acceptance and build, as the skills run them; returns what verify needs."""
         cli = Cli(runner, self.root)
         _, workers, _ = cli("workers", "--harness", "claude-code")
         evidence = cli.write("workers.json", workers)
@@ -128,15 +148,42 @@ class LiveCommandsTest(unittest.TestCase):
         (self.root / "README.md").write_text(update_outside_section("# Repro\n", load_decision(self.decision)),
                                              encoding="utf-8")
         relay = cli.confirm(self.decision, "verify-1", "--revision", revision_path)
-        code, output, stderr = cli("verify", "--decision", self.decision, "--root", self.root,
-                                   "--revision", revision_path, "--evidence", evidence, "--relay", relay,
-                                   "--harness", "claude-code", "--cases", FORGE / "evals/smoke/vertical.yaml",
-                                   "--slug", "repro", "--write")
+        return cli, ["--decision", self.decision, "--root", self.root, "--revision", revision_path,
+                     "--evidence", evidence, "--relay", relay, "--harness", "claude-code",
+                     "--cases", FORGE / "evals/smoke/vertical.yaml", "--slug", "repro", "--write"]
+
+    def test_research_accept_build_and_verify(self):
+        runner = ResearchRunner([finding()])
+        cli, arguments = self.build_ready(runner)
+        code, output, stderr = cli("verify", *arguments)
         self.assertEqual(code, 0, stderr)
+        self.assertEqual(output["unresolved"], [])
         self.assertEqual(output["parts"], [{"part_id": "A", "status": "verified", "harness_result": "verified",
                                             "goal_result": "met by the verified build"}])
         self.assertTrue((self.root / ".harness/reports/repro.md").exists())
         self.assertEqual(runner.roles, ["research", "source-support", "review", "runtime", "runtime", "runtime"])
+
+    def test_a_not_applicable_error_rule_waits_for_the_users_confirmation(self):
+        rule = "skills.invocation.side-effects-user-invoked"
+        runner = NotApplicableRunner([finding()], rule)
+        cli, arguments = self.build_ready(runner)
+        code, output, _ = cli("verify", *arguments)
+        self.assertEqual(code, 1)
+        self.assertEqual(output["unresolved"], [{"part_id": "A", "rule_id": rule, "reason": "It writes text only."}])
+        self.assertEqual(output["parts"][0]["harness_result"], "not verified")
+
+        code, output, stderr = cli("verify", *arguments, "--confirm-not-applicable", f"A:{rule}")
+        self.assertEqual(code, 0, stderr)
+        self.assertEqual(output["unresolved"], [])
+        self.assertEqual(output["parts"][0]["harness_result"], "verified")
+        self.assertIn(f"`{rule}` | error | judged | not-applicable",
+                      (self.root / ".harness/reports/repro.md").read_text(encoding="utf-8"))
+
+    def test_a_confirmation_needs_a_part_and_a_rule(self):
+        cli, arguments = self.build_ready(ResearchRunner([finding()]))
+        code, _, stderr = cli("verify", *arguments, "--confirm-not-applicable", "skills.invocation.side-effects-user-invoked")
+        self.assertEqual(code, 2)
+        self.assertIn("PART:RULE", stderr)
 
     def test_build_refuses_without_a_matching_confirmation(self):
         cli = Cli(FakeRunner(), self.root)

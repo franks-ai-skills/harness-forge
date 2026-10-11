@@ -31,6 +31,9 @@ _BLOCKING = ("missing", "error", "unresolved")
 _OBSERVATIONS = ("observed_tools", "observed_behavior", "unknowns", "evidence_refs")
 
 
+# Appended to the reviewer's reason when an error rule's "not applicable" awaits the user.
+NEEDS_CONFIRMATION = " (needs the user's confirmation)"
+
 def part_kind(part: dict) -> str:
     """build, local-reuse, remote-reuse, outside-only, nothing-fits or unavailable."""
     if part["outcome"] == "reuse":
@@ -310,7 +313,7 @@ def finish_run(
                 if info["applicability"] != "judged":
                     entry = {"result": "error", "reason": "not applicable is allowed only for judged applicability"}
                 elif info["severity"] == "error" and (part_id, rule_id) not in confirmed_exclusions:
-                    entry = {"result": "unresolved", "reason": verdict["reason"] + " (needs the user's confirmation)"}
+                    entry = {"result": "unresolved", "reason": verdict["reason"] + NEEDS_CONFIRMATION}
                 else:
                     entry = {"result": "not-applicable", "reason": verdict["reason"]}
             else:

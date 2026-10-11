@@ -98,6 +98,7 @@ def verify_live(
     worker_evidence: list[dict] | tuple, cases: list[dict], runner: Runner = run_command,
     environ: Mapping[str, str] | None = None, kb_version: str = "", login_answer: str | None = None,
     collect: Callable[[], tuple[dict[str, bytes], dict[str, str]]] | None = None,
+    confirmed_exclusions: set[tuple[str, str]] | frozenset = frozenset(),
 ):
     """Static checks, a fresh review worker, runtime cases, then results in the design's precedence.
 
@@ -106,6 +107,9 @@ def verify_live(
     off) are the runtime cases' baseline, so they never count as competing.
     ``collect`` reads the target's files and links again after the workers
     ran, so a change made meanwhile invalidates the affected parts.
+    ``confirmed_exclusions`` are (part, rule) pairs the user confirmed do not
+    apply after seeing the reviewer's reason; a rule the reviewer now finds
+    applicable keeps its verdict.
     """
     environ = os.environ if environ is None else environ
     run = prepare_run(decision, files, rules, confirmation, symlinks=symlinks, revision=revision,
@@ -140,5 +144,6 @@ def verify_live(
                            kb_version=kb_version, worker_evidence=worker_evidence)
     for evidence in observations:
         validate(evidence, "worker-evidence")
-    results = finish_run(run, review, runtime, current, worker_observations=observations)
+    results = finish_run(run, review, runtime, current, worker_observations=observations,
+                         confirmed_exclusions=frozenset(confirmed_exclusions))
     return run, results

@@ -47,7 +47,14 @@ this skill's folder; run it with the Forge environment's Python.
    verified; a reviewer seen acting outside its role voids its verdicts.
    Without a confirmation, `scripts/forge.py check` runs the static
    checks alone.
-4. Show each part's harness and goal result, every failing rule with its
+4. If the output lists `unresolved` rules, the reviewer found an error
+   rule not applicable. Show each with its reason and ask the user
+   whether the rule does not apply to that part. Your own opinion does
+   not settle it. Then run step 3 again with one
+   `--confirm-not-applicable <part>:<rule>` per rule the user confirmed.
+   The confirmation settles only whether a rule applies: if the new
+   reviewer finds it applicable, its verdict stands.
+5. Show each part's harness and goal result, every failing rule with its
    source, and each runtime case that did not run, with its reason.
 
 Result meanings and the goal-result precedence are in
