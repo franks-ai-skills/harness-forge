@@ -14,10 +14,20 @@ EVIDENCE = [{
 }]
 
 
+# The whole-idea answers of a public repository on a plan with merge controls.
+FACTS = {"target_set": "both", "reach": "repository", "plan_controls": "available", "opens_prs": False,
+         "bypass_mode": False, "untrusted_repo": False, "lethal_trifecta": False}
+
+# Every answer selection needs for a model-started procedure skill, as the Codex trial confirmed them.
+ANSWERS = {"job": "procedure", "event_without_agent": False, "must_survive_compromise": "not-required",
+           "who_disables": "contributor", "every_time": "usually", "irreversible": False, "own_context": False,
+           "trigger": "model", "external_system": "none"}
+
+
 def part(part_id: str, goal: str, **extra) -> dict:
     value = {
         "id": part_id, "slug": f"part-{part_id.lower()}", "goal": goal, "status": "decided",
-        "answers": {"job": "procedure", "every_time": "usually"}, "outcome": "harness-only", "recommended": "skills", "chosen": "skills",
+        "answers": dict(ANSWERS), "outcome": "harness-only", "recommended": "skills", "chosen": "skills",
         "override_reason": None, "alternatives": [], "connects_to": [],
         "outside_controls": [{"control": "codeowners-agent-config",
                               "prerequisites": ["outside.codeowners.agent-config"],
@@ -34,7 +44,7 @@ def decision(*parts: dict, **extra) -> Decision:
         "goals": ["Reproduction checklists from approved bug reports"],
         "targets": ["claude-code", "codex"], "reach": "repository",
         "hosting": {"platform": "github", "plan": "free", "visibility": "public"},
-        "kb_version": "0.1.0", "facts": {"target_set": "both"},
+        "kb_version": "0.1.0", "facts": dict(FACTS),
         "parts": list(parts) or [part("A", "Write a reproduction checklist when asked")],
         "retired_ids": [], "research": {"survey_digest": None, "deep_digests": {}},
         "accepted_revision": None,

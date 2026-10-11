@@ -468,3 +468,79 @@ def next_question(part: dict, whole_idea: dict, selection: dict, candidates: Ite
     if pending not in questions:
         raise ValueError(f"fact {pending!r} decides the result but has no question")
     return dict(questions[pending])
+
+
+# --- Recorded choices -------------------------------------------------------------------------------------------------
+
+CONFLICT_CHOICES = ("recommended", "adjust-goal", "keep")
+
+
+def selection_state(part: dict, whole_idea: dict, rules: list[Rule], candidates: Iterable[dict] = ()) -> dict:
+    """Whether a part's recorded outcome and recommendation are what its confirmed answers give now.
+
+    A recorded recommendation is data: an edited record, a changed override
+    or an answer cleared by a goal adjustment makes it stale, and a stale or
+    open selection must be decided again before anything is built.
+    """
+    recommendation = recommend(part["answers"], whole_idea, rules, list(candidates))
+    state = {"recommendation": recommendation, "pending_question": recommendation.pending_question,
+             "current": False, "problem": None}
+    if recommendation.pending_question:
+        state["problem"] = (f"part {part['id']} still has an open question ({recommendation.pending_question}); "
+                            "ask it and run select again")
+    elif (recommendation.outcome, recommendation.mechanism) != (part["outcome"], part["recommended"]):
+        state["problem"] = (f"part {part['id']}'s recorded {part['outcome']}/{part['recommended'] or 'no mechanism'} "
+                            f"is not what its answers give now ({recommendation.outcome}/"
+                            f"{recommendation.mechanism or 'no mechanism'}); run select again and record its result")
+    else:
+        state["current"] = True
+    return state
+
+
+def _lifting_values(rules: list[Rule], chosen: str, facts: dict, domains: dict[str, list]) -> list[dict]:
+    """Single answer changes after which no confirmed answer rules the chosen mechanism out."""
+    excluding = [rule for rule in _of_kind(rules, "excludes")
+                 if rule.params["implies"]["excludes"] == chosen and _matches(rule, facts) is True]
+    changes = []
+    for fact in dict.fromkeys(fact for rule in excluding for fact, _ in _predicate_facts(rule.params["when"])):
+        if fact not in facts:
+            continue
+        values = [value for value in domains.get(fact, []) if value != facts[fact]
+                  and _eligible(rules, chosen, {**facts, fact: value}) is not False]
+        if values:
+            changes.append({"fact": fact, "current": facts[fact], "values": values})
+    return changes
+
+
+def goal_conflict(part: dict, whole_idea: dict, rules: list[Rule], candidates: Iterable[dict] = (),
+                  domains: dict[str, list] | None = None) -> dict | None:
+    """The conflict between a part's chosen mechanism and its recommendation, or None when they agree.
+
+    A mechanism that a confirmed answer rules out cannot meet a goal the user
+    stated: an error with the goal-conflict question's three choices. Any
+    other difference only means another mechanism was recommended: a warning.
+    ``adjust`` lists single answer changes after which the chosen mechanism is
+    no longer ruled out, for wording an adjusted goal.
+    """
+    chosen = part["chosen"]
+    selection_rules = [rule for rule in rules if rule.checker == "selection.match"]
+    recommendation = recommend(part["answers"], whole_idea, selection_rules, list(candidates))
+    if chosen is None or recommendation.pending_question or chosen == recommendation.mechanism:
+        return None
+    entry = next((row for row in recommendation.assessment if row["concept"] == chosen), None)
+    by_id = {rule.id: rule for rule in selection_rules}
+    failing = []
+    if entry and entry["state"] == "ruled out":
+        failing = [{"rule_id": rule_id, "statement": by_id[rule_id].statement, "sources": list(by_id[rule_id].sources)}
+                   for rule_id in entry["rules"]]
+    facts = {**normalize(whole_idea), **normalize(part["answers"])}
+    return {
+        "part_id": part["id"], "severity": "error" if failing else "warning", "goal": part["goal"],
+        "chosen": chosen, "chosen_state": entry["state"] if entry else "unknown",
+        "recommended": recommendation.mechanism, "recommended_outcome": recommendation.outcome,
+        "pros": list(recommendation.pros), "cons": list(recommendation.cons), "failing": failing,
+        "choices": list(CONFLICT_CHOICES) if failing else [],
+        "adjust": _lifting_values(selection_rules, chosen, facts, domains or {
+            fact: [value for value in values if value is not _OTHER]
+            for fact, values in _domains_from_rules(selection_rules).items()}) if failing else [],
+    }

@@ -20,7 +20,7 @@ import yaml
 
 from harness_forge.documents import canonical_digest, load_document, safe_path, split_frontmatter, validate
 from harness_forge.models import AcceptedRevision, Confirmation, Contract, Decision
-from harness_forge.selection import next_question
+from harness_forge.selection import BUILDABLE, CONFLICT_CHOICES, goal_conflict, next_question
 
 WORKER_POLICY = "best-effort-v1"
 WORKER_DISCLOSURE = (
@@ -66,6 +66,7 @@ def contract_parts(decision: Decision, revision: AcceptedRevision | None) -> lis
             "recommended": part["recommended"],
             "override_reason": part["override_reason"],
             "reuse": dict(part["reuse"]) if part.get("reuse") else None,
+            "goal_conflict": dict(part["goal_conflict"]) if part.get("goal_conflict") else None,
             "outside_controls": [dict(control) for control in part["outside_controls"]],
             "requirements": requirements.get(part["id"], []),
         }
@@ -109,6 +110,12 @@ def _part_text(part: dict) -> list[str]:
     lines.append(f"  Outcome: {part['outcome']}; mechanism: {mechanism} (recommended: {part['recommended'] or 'none'})")
     if part["override_reason"]:
         lines.append(f"  Override reason: {part['override_reason']}")
+    conflict = part.get("goal_conflict")
+    if conflict:
+        answers = {"keep": "kept", "recommended": "switched to the recommended mechanism",
+                   "adjust-goal": "goal adjusted"}
+        lines.append(f"  Goal conflict: {conflict['chosen']} is ruled out by {', '.join(conflict['rule_ids'])}; "
+                     f"{answers[conflict['choice']]} ({conflict['reason']})")
     if part["reuse"]:
         reuse = part["reuse"]
         lines.append(f"  Reused artifact: {reuse['name']} from {reuse['source']}; license {reuse['license']}; "
@@ -299,6 +306,85 @@ def confirm_contract(contract: Contract, relay: dict | None, run_id: str) -> Con
     ):
         return None
     return Confirmation(run_id=run_id, contract_digest=contract.digest, part_ids=sorted(part_ids))
+
+
+# --- Goal conflicts ---------------------------------------------------------
+
+
+def _linked(record: dict, part_id: str) -> list[str]:
+    """The part and every part linked to it through connects_to, transitively."""
+    graph = {part["id"]: set() for part in record["parts"]}
+    for part in record["parts"]:
+        for link in part["connects_to"]:
+            if link["to"] in graph:
+                graph[part["id"]].add(link["to"])
+                graph[link["to"]].add(part["id"])
+    seen, queue = set(), [part_id]
+    while queue:
+        current = queue.pop()
+        if current not in seen:
+            seen.add(current)
+            queue.extend(graph[current] - seen)
+    return sorted(seen)
+
+
+def resolve_goal_conflict(decision: Decision, part_id: str, choice: str, adjusted_goal: str | None, reason: str, *,
+                          rules: list, date: str) -> dict:
+    """Apply the user's answer to a part's goal-conflict question.
+
+    ``recommended`` switches to the recommended mechanism: its builder, the
+    intake when this release cannot build it, or the README hand-off when
+    an outside control replaces any mechanism. ``adjust-goal`` keeps the old
+    goal as history and clears the answers the conflict rests on, so the
+    part goes back through its questions, selection and research before
+    anything is rebuilt. ``keep`` changes nothing: the error stays, and the
+    part is never verified. Each answer is recorded with its reason; the
+    changed record needs a new contract confirmation.
+    """
+    if choice not in CONFLICT_CHOICES:
+        raise ValueError(f"choice must be one of {', '.join(CONFLICT_CHOICES)}, not {choice!r}")
+    if not reason or not reason.strip():
+        raise ValueError("record the user's reason for the answer")
+    record = copy.deepcopy(decision.record)
+    part = next(item for item in record["parts"] if item["id"] == part_id)
+    conflict = goal_conflict(part, record["facts"], rules)
+    if conflict is None or conflict["severity"] != "error":
+        raise ValueError(f"part {part_id} has no goal conflict to resolve")
+    failing = [item["rule_id"] for item in conflict["failing"]]
+    part["goal_conflict"] = {"choice": choice, "reason": reason.strip(), "date": date, "chosen": part["chosen"],
+                             "rule_ids": failing}
+    result = {"invalidated_parts": [], "next_stage": "report", "remaining_error_ids": failing}
+    if choice == "recommended":
+        mechanism = conflict["recommended"]
+        part.update(chosen=mechanism, override_reason=None)
+        if mechanism in BUILDABLE:
+            stage = "build"
+        else:
+            stage = "intake" if mechanism else "readme"
+        result.update(invalidated_parts=_linked(record, part_id), next_stage=stage, remaining_error_ids=[])
+    elif choice == "adjust-goal":
+        adjusted = (adjusted_goal or "").strip()
+        if not adjusted or adjusted == part["goal"]:
+            raise ValueError("adjust-goal needs the adjusted goal, different from the current one")
+        part["goal_history"] = list(part.get("goal_history", [])) + [
+            {"goal": part["goal"], "replaced": date, "reason": reason.strip()}]
+        part["goal"] = adjusted
+        resting = {fact for rule in rules if rule.id in failing for fact in _when_facts(rule.params["when"])}
+        part["answers"] = {key: value for key, value in part["answers"].items() if key not in resting}
+        record["research"]["deep_digests"].pop(part_id, None)
+        result.update(invalidated_parts=_linked(record, part_id), next_stage="questions", remaining_error_ids=[])
+    if choice != "keep" and part["status"] != "blocked":
+        part["status"] = "decided"
+    return {"decision": Decision(record=record, body=decision.body), **result}
+
+
+def _when_facts(predicate: dict) -> list[str]:
+    (operator, operand), = predicate.items()
+    if operator in ("all", "any"):
+        return [fact for item in operand for fact in _when_facts(item)]
+    if operator == "not":
+        return _when_facts(operand)
+    return [operand[0]]
 
 
 # --- Intake state ---------------------------------------------------------
