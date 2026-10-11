@@ -703,7 +703,9 @@ def _research(arguments: argparse.Namespace) -> int:
         result = research_pass(decision, arguments.pass_name, part_id, arguments.harness, **approval,
                                run_id=approval["confirmation"].run_id, runner=RUNNER, environ=_environ(), fetch=FETCH,
                                login_answer=arguments.login_answer,
-                               existing_ids=[finding["id"] for finding in existing["findings"]])
+                               # Every id the record ever issued, dropped findings' support entries included.
+                               existing_ids=list(dict.fromkeys([finding["id"] for finding in existing["findings"]]
+                                                               + [entry["finding_id"] for entry in existing["support"]])))
     except ValueError as error:
         raise _InvalidInput(str(error)) from error
     written = None

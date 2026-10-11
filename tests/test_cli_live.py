@@ -987,6 +987,32 @@ class LiveCommandsTest(unittest.TestCase):
         self.assertEqual((code, output), (2, None))
         self.assertIn("the report could not be written", stderr)
 
+    def test_finding_ids_never_repeat_a_dropped_findings_id(self):
+        runner = ResearchRunner([finding(quote="This sentence is not on the page.")])
+        cli = Cli(runner, self.root)
+        _, workers, _ = cli("workers", "--harness", "claude-code")
+        evidence = cli.write("workers.json", workers)
+        relay = cli.confirm(self.decision, "intake-1")
+        research = ["research", "--decision", self.decision, "--harness", "claude-code", "--evidence", evidence,
+                    "--relay", relay, "--root", self.root, "--slug", "repro", "--write"]
+        code, output, stderr = cli(*research, "--pass", "survey")
+        self.assertEqual((code, output["kept"]), (0, []), stderr)
+        runner.findings = [finding()]
+        code, output, stderr = cli(*research, "--pass", "deep", "--part", "A")
+        self.assertEqual(code, 0, stderr)
+        record = load_document(self.root / ".harness/research/repro.md", "research")
+        ids = [entry["finding_id"] for entry in record["support"]]
+        self.assertEqual(len(ids), len(set(ids)), "one support entry per finding id")
+        self.assertEqual([f["id"] for f in record["findings"]], ["F2"], "the dropped survey finding was F1")
+        self.assertEqual(self.record_drift_for("F2")["entry"]["finding_id"], "F2")
+
+    def record_drift_for(self, finding_id):
+        cli = Cli(FakeRunner(), self.root)
+        code, output, stderr = cli("drift", "--root", self.root, "--slug", "repro", "--finding", finding_id, "--rule",
+                                   "skills.description.length", "--category", "compatibility", "--summary", "x")
+        self.assertEqual(code, 0, stderr)
+        return output
+
     def test_case_ids_must_be_unique(self):
         import yaml
         cli, arguments = self.build_ready(ResearchRunner([finding()]))

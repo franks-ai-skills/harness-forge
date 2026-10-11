@@ -345,6 +345,8 @@ def can_adopt(drift: dict, support: dict | None) -> bool:
 
 def write_research(root: Path, record: dict, body: str) -> Path:
     validate(record, "research")
+    _require_unique([finding["id"] for finding in record["findings"]], "research findings")
+    _require_unique([entry["finding_id"] for entry in record["support"]], "research support entries")
     path = safe_path(root, f".harness/research/{record['slug']}.md")
     path.parent.mkdir(parents=True, exist_ok=True)
     frontmatter = yaml.dump(record, Dumper=_NoAliases, sort_keys=False, allow_unicode=True, width=100)
