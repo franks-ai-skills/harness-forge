@@ -6,7 +6,7 @@ Read this before explaining a verification result.
 
 | Result | When |
 | --- | --- |
-| `verified` | Confirmed in this session; every applicable rule has a result; no error rule failed, errored or stayed unresolved; the goal verdict is met; executed runtime tests passed; a built skill's explicit activation was observed live; no bound input changed |
+| `verified` | Confirmed in this session; every applicable rule has a result; no error rule failed, errored or stayed unresolved; the links between parts hold; the recorded selection is current and no goal conflict remains, a kept one included; no security or compatibility drift is open; the goal verdict is met; executed runtime tests passed; a built skill's explicit activation was observed live; no bound input changed. With adopted overrides the report says "verified with N overrides" and names them |
 | `not verified` | Something was built or vendored, and at least one condition above fails |
 | `not applicable` | Nothing is built: an outside-only or nothing-fits part, or a mechanism without a builder in this release |
 | `not checked` | A reused artifact that is not available locally |
@@ -39,3 +39,14 @@ file such as the README affects every part that owns it.
 Allowed only for rules whose applicability needs judgment. For an error
 rule it stays unresolved until the user confirms the reason in this
 session; that confirmation settles only whether the rule applies.
+
+## Re-verification scope
+
+A Review run sends the reviewer only its scope: the fixed parts, the
+parts linked to them and every part whose bound inputs changed. Every
+part's script rules and link checks run again in every run. A part
+outside the scope keeps its earlier judged results and goal verdict,
+each marked "kept from run X", and stays verified only if it was
+verified then and its scripts pass now. Earlier results come from the
+earlier report, which is a repository file; an Extensive review judges
+every part again.

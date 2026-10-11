@@ -22,7 +22,8 @@ this skill's folder; run it with the Forge environment's Python.
   judges only the rules the run requests; it never sees or changes
   script results.
 - **Verified has a narrow meaning:** every applicable rule has a result,
-  no error rule failed or stayed unresolved, the goal verdict is met,
+  no error rule failed or stayed unresolved, no goal conflict or open
+  security or compatibility drift remains, the goal verdict is met,
   executed runtime tests passed, a built skill's explicit activation was
   observed, and no bound input changed. It never
   means outside controls are configured, and it never certifies worker
