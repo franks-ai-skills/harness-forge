@@ -180,6 +180,21 @@ class LinkCheckTest(unittest.TestCase):
                                        chosen=None, connects_to=[{"to": "Z", "how": "uses"}]))
         self.assertIn("part Z does not exist", self.results(dangling, files)["B"].reason)
 
+    def test_a_linked_part_whose_artifact_cannot_be_checked_is_an_error(self):
+        from tests.test_verify import build_files, readme
+        unbuilt = part("B", "Review the checklist in its own context", recommended="subagents", chosen="subagents",
+                       status="blocked")
+        remote = part("C", "Reuse a summary skill", outcome="reuse", recommended="skills", chosen="skills",
+                      reuse={"name": "summary", "source": "https://example.com/summary", "license": "MIT",
+                             "maintenance": "maintained"})
+        record = skill_decision(unbuilt, remote, connects_to=[{"to": "B", "how": "uses"}, {"to": "C", "how": "uses"}])
+        files, _ = build_files(record)
+        files["README.md"] = readme(record)
+        result = self.results(record, files)["A"]
+        self.assertEqual(result.status, "error")
+        self.assertIn("part B's subagents has no builder in this release, so its name cannot be checked", result.reason)
+        self.assertIn("part C is reused from https://example.com/summary and not installed here", result.reason)
+
 
 class EarlierRunTest(unittest.TestCase):
     """An earlier report is checked before a Review compares with it."""

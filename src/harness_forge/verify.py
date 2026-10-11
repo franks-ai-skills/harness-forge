@@ -87,15 +87,23 @@ def _link_check(part: dict, record: dict, files: dict[str, bytes]) -> CheckResul
     if not part["connects_to"]:
         return None
     parts = {item["id"]: item for item in record["parts"]}
-    problems = []
+    problems, unchecked = [], []
     for link in part["connects_to"]:
         target = parts.get(link["to"])
         if target is None:
             problems.append(f"part {link['to']} does not exist")
             continue
+        kind = part_kind(target)
+        if kind == "unavailable":
+            unchecked.append(f"part {link['to']}'s {target['chosen']} has no builder in this release, so its name "
+                             "cannot be checked")
+            continue
+        if kind == "remote-reuse":
+            unchecked.append(f"part {link['to']} is reused from {target['reuse']['source']} and not installed here")
+            continue
         directory = _skill_dir(target)
         if directory is None:
-            continue
+            continue  # an outside control or nothing-fits builds nothing that could be named
         skill = files.get(f"{directory}/SKILL.md")
         if skill is None:
             problems.append(f"part {link['to']} has no {directory}/SKILL.md")
@@ -105,8 +113,8 @@ def _link_check(part: dict, record: dict, files: dict[str, bytes]) -> CheckResul
         if name != directory.rsplit("/", 1)[-1]:
             problems.append(f"part {link['to']}'s skill names itself {name or 'nothing'}, not "
                             f"{directory.rsplit('/', 1)[-1]}")
-    status = "fail" if problems else "pass"
-    reason = "; ".join(problems) or "every linked part exists under its recorded name"
+    status = "fail" if problems else "error" if unchecked else "pass"
+    reason = "; ".join(problems + unchecked) or "every linked part exists under its recorded name"
     return CheckResult(part["id"], LINK_RULE["id"], status, "error", reason, [], checker="forge.links", checker_version="1")
 
 
