@@ -36,9 +36,16 @@ _INSTRUCTION_FILES = {"agents.md", "agents.override.md", "claude.md", "claude.lo
 
 
 def fixture_problem(path: str, candidate: Mapping[str, bytes] | None = None) -> str | None:
-    """A fixture may not replace a candidate file or add skills, settings or instructions the harness reads."""
+    """A fixture may not replace a candidate file or add skills, settings or instructions the harness reads.
+
+    Paths must be plain relative paths, compared without case: a "./" prefix
+    or a case variant reaches the same file on a case-insensitive file system.
+    """
     parts = path.split("/")
-    if path in (candidate or {}) or parts[0] in _HARNESS_DIRS or parts[-1].lower() in _INSTRUCTION_FILES:
+    if "\\" in path or any(part in ("", ".", "..") for part in parts):
+        return f"fixture {path} is not a plain relative path"
+    taken = {name.lower() for name in candidate or {}}
+    if path.lower() in taken or parts[0].lower() in _HARNESS_DIRS or parts[-1].lower() in _INSTRUCTION_FILES:
         return f"fixture {path} would replace the candidate or change what the harness loads"
     return None
 

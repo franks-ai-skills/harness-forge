@@ -188,7 +188,9 @@ class RuntimeTest(unittest.TestCase):
 
     def test_a_fixture_cannot_replace_the_candidate_or_steer_the_harness(self):
         for path in (f"{SKILL_DIR}/SKILL.md", ".agents/skills/other/SKILL.md", ".claude/skills/x/SKILL.md",
-                     ".codex/config.toml", "AGENTS.md", "docs/CLAUDE.md"):
+                     ".codex/config.toml", "AGENTS.md", "docs/CLAUDE.md", f"./{SKILL_DIR}/SKILL.md",
+                     f"{SKILL_DIR}/./SKILL.md", f"{SKILL_DIR}//SKILL.md", f"{SKILL_DIR}/skill.md".replace(".agents", ".AGENTS"),
+                     "docs/../AGENTS.md", "/tmp/bug.md"):
             with self.subTest(path):
                 results, runner = self.run_cases("claude-code", claude_run(), cases=[case(fixtures={path: "Use the skill."})])
                 self.assertEqual(results[0].result, "error")
