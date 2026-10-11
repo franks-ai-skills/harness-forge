@@ -51,33 +51,51 @@ def scope_options(decision: Decision, fixed: set[str], changed: set[str], judged
     return options
 
 
-def affected_parts(run: VerificationRun, current: dict) -> set[str]:
-    """Parts whose bound inputs differ between the frozen run and now."""
+def affected_parts(run: VerificationRun, current: dict, owners: VerificationRun | None = None) -> set[str]:
+    """Parts whose bound inputs differ between the frozen run and now.
+
+    ``owners`` is a run prepared from the current decision: its file
+    ownership maps changed paths too, so an earlier report's edited
+    ownership cannot hide a changed file.
+    """
     frozen = run.frozen_inputs
     parts = set(frozen["parts"]) | set(current["parts"])
     if any(frozen[key] != current[key] for key in _GLOBAL_INPUTS):
         return parts
     affected = {part_id for part_id in parts if frozen["parts"].get(part_id) != current["parts"].get(part_id)}
+    maps = [run] + ([owners] if owners is not None else [])
     if frozen["revision"] != current["revision"]:
-        affected |= set(run.requirement_parts)
+        affected |= {part_id for owner in maps for part_id in owner.requirement_parts}
     changed_paths = {path for path in set(frozen["files"]) | set(current["files"])
                      if frozen["files"].get(path) != current["files"].get(path)}
     changed_paths |= {path for path in set(frozen["symlinks"]) | set(current["symlinks"])
                       if frozen["symlinks"].get(path) != current["symlinks"].get(path)}
     for path in changed_paths:
-        for part_id, owned in run.part_files.items():
-            prefix = run.part_dirs.get(part_id)
-            if path in owned or (prefix and path.startswith(prefix + "/")) or path in run.part_links.get(part_id, []):
-                affected.add(part_id)
+        for owner in maps:
+            for part_id, owned in owner.part_files.items():
+                prefix = owner.part_dirs.get(part_id)
+                if (path in owned or (prefix and path.startswith(prefix + "/"))
+                        or path in owner.part_links.get(part_id, [])):
+                    affected.add(part_id)
     return affected
 
 
-def preserved_parts(previous: VerificationRun, current: dict, confirmation) -> set[str]:
+def preserved_parts(previous: VerificationRun, current: dict, confirmation,
+                    owners: VerificationRun | None = None) -> set[str]:
     """Parts whose earlier results may be kept: inputs unchanged and the same contract confirmed now."""
     if confirmation is None or confirmation.contract_digest != previous.contract_digest:
         return set()
-    unchanged = set(previous.frozen_inputs["parts"]) - affected_parts(previous, current)
+    unchanged = set(previous.frozen_inputs["parts"]) - affected_parts(previous, current, owners)
     return unchanged & set(confirmation.part_ids)
+
+
+_UNSETTLED = ("unresolved", "missing", "error")
+
+
+def settled(result: dict) -> bool:
+    """An earlier result a Review may keep: nothing left open, and a build that was verified."""
+    return (result["harness_result"] != "not verified"
+            and not any(item["result"] in _UNSETTLED for item in result["rule_results"]))
 
 
 def earlier_run(report_text: str) -> tuple[VerificationRun, dict[str, dict]]:

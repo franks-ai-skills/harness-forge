@@ -44,7 +44,7 @@ from harness_forge.research import (  # noqa: E402
 )
 from harness_forge.runtime import load_cases  # noqa: E402
 from harness_forge.workflow import research_pass, verify_live  # noqa: E402
-from harness_forge.scope import affected_parts, earlier_run, preserved_parts, review_scope  # noqa: E402
+from harness_forge.scope import affected_parts, earlier_run, preserved_parts, review_scope, settled  # noqa: E402
 from harness_forge.verify import (  # noqa: E402
     NEEDS_CONFIRMATION, affecting_rules, bound_inputs, exclusion_token, finish_run, open_blocking_drift, part_kind,
     prepare_run, selection_citations, selection_failures,
@@ -513,7 +513,7 @@ def _fixed(arguments: argparse.Namespace, decision: Decision) -> set[str]:
 
 
 def _review_plan(earlier, decision: Decision, current: dict, fixed: set[str], contract_digest: str,
-                 confirmed_parts) -> dict:
+                 confirmed_parts, owners) -> dict:
     """The Review a re-verification runs, computed the same way for scope and for verify.
 
     It judges the fixed parts, the parts linked to them and every part whose
@@ -521,13 +521,17 @@ def _review_plan(earlier, decision: Decision, current: dict, fixed: set[str], co
     (an unchanged contract confirmed for it) is judged too. The others keep
     their earlier results, which the user sees and chooses through the
     plan's digest: a repository report proves nothing on its own.
+    ``owners`` is a run prepared from the current decision, whose file
+    ownership counts beside the earlier report's. Only a settled earlier
+    result is kept; anything unresolved or failed is judged again.
     """
     run, results = earlier
     every = {part["id"] for part in decision.record["parts"]}
     # A retired part's history stays behind; only current parts can be judged or kept.
-    changed = affected_parts(run, current) & every
+    changed = affected_parts(run, current, owners) & every
     confirmation = Confirmation(run_id="", contract_digest=contract_digest, part_ids=sorted(confirmed_parts))
-    preserved = preserved_parts(run, current, confirmation) & set(results)
+    preserved = {part_id for part_id in preserved_parts(run, current, confirmation, owners) & set(results)
+                 if settled(results[part_id])}
     judged = review_scope(decision, fixed, changed) | (every - preserved)
     kept = {part_id: results[part_id] for part_id in sorted(every - judged)}
     # The user's choice binds the parts, the kept results, the earlier inputs they rest on and the inputs now:
@@ -569,7 +573,7 @@ def _scope(arguments: argparse.Namespace) -> int:
     if earlier is not None:
         plan = _review_plan(earlier, decision, _current(decision, files, symlinks, rules, revision, overrides,
                                                         evidence), fixed, confirmation.contract_digest,
-                            confirmation.part_ids)
+                            confirmation.part_ids, run)
         options.append({"label": "Review (recommended)", "parts": plan["judged"],
                         "judged_rules": sum(counts.get(p, 0) for p in plan["judged"]), "link_checks": True,
                         "kept": [{"part_id": part_id, "run_id": plan["earlier_run"], "status": result["status"],
@@ -1020,9 +1024,14 @@ def _verify(arguments: argparse.Namespace) -> int:
             raise _InvalidInput("a Review keeps earlier results only on the user's choice: show scope's options and "
                                 "pass the answer with --scope-relay")
         confirmation = approval["confirmation"]
+        try:
+            owners = prepare_run(decision, files, rules, None, symlinks=symlinks, revision=revision,
+                                 kb_version=_kb_version(), worker_evidence=approval["worker_evidence"])
+        except ValueError as error:
+            raise _InvalidInput(str(error)) from error
         plan = _review_plan(earlier, decision, _current(decision, files, symlinks, rules, revision, overrides,
                                                         approval["worker_evidence"]),
-                            fixed, confirmation.contract_digest, confirmation.part_ids)
+                            fixed, confirmation.contract_digest, confirmation.part_ids, owners)
         relay = _read_json(arguments.scope_relay)
         if (set(relay) != {"choice", "displayed_digest", "run_id"} or relay["choice"] != "review"
                 or relay["displayed_digest"] != plan["digest"] or relay["run_id"] != confirmation.run_id):

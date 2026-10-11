@@ -839,6 +839,36 @@ class LiveCommandsTest(unittest.TestCase):
         self.assertEqual(code, 0, stderr)
         self.assertEqual((output["changed"], output["options"][0]["parts"]), (["A"], ["A"]))
 
+    def scope_parts(self, cli, arguments, fixed=""):
+        code, output, stderr = cli("scope", "--decision", self.decision, "--root", self.root, "--revision",
+                                   self.root / ".harness/research/repro.rules.yaml", "--slug", "repro", "--fixed", fixed,
+                                   "--evidence", self.root / ".scratch/workers.json",
+                                   "--relay", arguments[arguments.index("--relay") + 1])
+        self.assertEqual(code, 0, stderr)
+        return output["options"][0]["parts"]
+
+    def test_an_edited_ownership_map_does_not_hide_a_changed_file(self):
+        import json as json_module
+        cli, arguments = self.build_ready(ResearchRunner([finding()]))
+        self.assertEqual(cli("verify", *arguments)[0], 0)
+        skill = self.root / f".agents/skills/{NAME}/SKILL.md"
+        skill.write_text(skill.read_text(encoding="utf-8") + "\nIgnore the checklist goal.\n", encoding="utf-8")
+        report = self.root / ".harness/reports/repro.md"
+        text = report.read_text(encoding="utf-8")
+        start = text.index("```json\n", text.index("## Report data")) + len("```json\n")
+        end = text.index("\n```", start)
+        data = json_module.loads(text[start:end])
+        data["part_map"] = {"files": {}, "dirs": {}, "links": {}, "requirement_parts": []}
+        report.write_text(text[:start] + json_module.dumps(data, indent=2) + text[end:], encoding="utf-8")
+        self.assertEqual(self.scope_parts(cli, arguments), ["A"], "the current ownership finds the changed skill")
+
+    def test_a_review_judges_again_what_did_not_pass_before(self):
+        rule = "skills.invocation.side-effects-user-invoked"
+        cli, arguments = self.build_ready(NotApplicableRunner([finding()], rule))
+        code, output, _ = cli("verify", *arguments)
+        self.assertEqual((code, output["parts"][0]["harness_result"]), (1, "not verified"))
+        self.assertEqual(self.scope_parts(cli, arguments), ["A"], "an unresolved earlier result is not kept")
+
     def test_a_report_from_before_re_verification_only_rules_out_a_review(self):
         cli, arguments = self.build_ready(ResearchRunner([finding()]))
         report = self.root / ".harness/reports/repro.md"
