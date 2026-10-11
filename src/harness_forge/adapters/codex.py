@@ -30,6 +30,9 @@ PROFILE = "forge-worker"
 SCHEMA_FILE = "output-schema.json"
 # Item types that are not tool use; anything else must be allowed for the role.
 _NEUTRAL_ITEMS = {"agent_message", "reasoning", "todo_list"}
+# Codex's own resource listing (server "codex"). Workers set mcp_servers={},
+# so it can only list nothing; it is recorded, not counted as tool use.
+_EMPTY_LISTINGS = {"list_mcp_resources", "list_mcp_resource_templates"}
 _ROLE_ITEMS = {"research": {"web_search"}, "source-support": set(), "review": {"command_execution"}}
 
 
@@ -96,6 +99,10 @@ def extra_problem(run) -> str | None:
     return f"the installed version cannot disable features {', '.join(missing)}" if missing else None
 
 
+def empty_listing(item: dict) -> bool:
+    return item.get("type") == "mcp_tool_call" and item.get("server") == "codex" and item.get("tool") in _EMPTY_LISTINGS
+
+
 def allowed_calls(role: str) -> set[str]:
     return set(_ROLE_ITEMS[role])
 
@@ -121,6 +128,9 @@ def observe(stdout: str) -> dict:
             kind = str(item.get("type"))
             if kind == "agent_message":
                 text = item.get("text")
+            elif empty_listing(item):
+                behavior.append(f"listed MCP {str(item['tool']).removeprefix('list_mcp_')} on server codex "
+                                "(none configured)")
             elif kind not in _NEUTRAL_ITEMS:
                 calls.append(kind)
         if event.get("type") == "turn.completed":

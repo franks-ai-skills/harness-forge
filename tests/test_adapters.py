@@ -329,6 +329,27 @@ class LaunchTest(unittest.TestCase):
                 self.assertTrue(any("out of scope" in line for line in response["evidence"]["observed_behavior"]))
                 self.assertEqual(len(runner.worker_calls), 1, "no silent retry")
 
+    def test_codex_listing_mcp_resources_with_none_configured_is_recorded_not_discarded(self):
+        request, files, verdicts = review_case()
+
+        def stream(tool, server="codex"):
+            item = {"id": "m", "type": "mcp_tool_call", "server": server, "tool": tool, "arguments": {},
+                    "status": "completed"}
+            lines = [json.dumps({"type": "item.completed", "item": item})]
+            return "\n".join(lines) + "\n" + codex_stream(verdicts)
+
+        for tool, server, status in (("list_mcp_resources", "codex", "completed"),
+                                     ("list_mcp_resource_templates", "codex", "completed"),
+                                     ("read_mcp_resource", "codex", "failed"),
+                                     ("list_mcp_resources", "other", "failed")):
+            with self.subTest(tool=tool, server=server):
+                response = run_worker(request, "codex", **approval("codex", "review"),
+                                      runner=FakeRunner(worker=stream(tool, server)), environ=PARENT, files=files)
+                self.assertEqual(response["status"], status, response.get("reason"))
+                if status == "completed":
+                    self.assertIn(f"listed MCP {tool.removeprefix('list_mcp_')} on server codex (none configured)",
+                                  response["evidence"]["observed_behavior"])
+
     def test_a_disclosed_extra_tool_alone_does_not_discard_the_output(self):
         request, files, verdicts = review_case()
         runner = FakeRunner(worker=claude_stream(verdicts, tools=("Read", "Grep", "Glob", "TodoWrite")))

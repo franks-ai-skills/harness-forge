@@ -111,6 +111,13 @@ def _observe_claude(stdout: str, name: str, baseline: set[str]) -> dict:
                 arguments = block.get("input") if isinstance(block.get("input"), dict) else {}
                 if block.get("name") == "Skill" and name in (arguments.get("skill"), arguments.get("command")):
                     observed["activation"] = f"Skill tool called for {name}"
+                elif block.get("name") == "Read" and observed["activation"] is None:
+                    # A slash invocation in print mode leaves no event; a read of
+                    # the skill's own files shows its content was loaded.
+                    path = str(arguments.get("file_path", ""))
+                    for root in (f"/.claude/skills/{name}/", f"/.agents/skills/{name}/"):
+                        if root in path:
+                            observed["activation"] = f"read {path.split(root, 1)[1]} from the {name} skill"
         if event.get("type") == "user" and f"<command-name>/{name}</command-name>" in json.dumps(event):
             observed["activation"] = observed["activation"] or f"/{name} was invoked"
         if event.get("type") == "result":
@@ -124,7 +131,8 @@ def _observe_codex(stdout: str, directory: str) -> dict:
                 "completed": False, "errored": False}
     for event in _events(stdout):
         item = event.get("item") if isinstance(event.get("item"), dict) else {}
-        if event.get("type") == "item.completed" and item.get("type") not in ("agent_message", "reasoning", "todo_list"):
+        if (event.get("type") == "item.completed" and item.get("type") not in ("agent_message", "reasoning", "todo_list")
+                and not codex.empty_listing(item)):
             observed["calls"].append(str(item.get("type")))
             if item.get("type") == "command_execution" and f"{directory}/SKILL.md" in str(item.get("command", "")):
                 observed["activation"] = f"read {directory}/SKILL.md"

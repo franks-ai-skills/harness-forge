@@ -131,6 +131,29 @@ class RuntimeTest(unittest.TestCase):
                          case_call["command"][:case_call["command"].index("--tools")])
         self.assertEqual(baseline["command"][baseline["command"].index("--tools") + 1], "")
 
+    def test_a_claude_read_inside_the_skill_counts_as_activation(self):
+        """A slash invocation in print mode leaves no event; reading the skill's own files shows it loaded."""
+        def read(path):
+            events = [json.loads(line) for line in claude_run(skill_call=None).splitlines()]
+            events.insert(1, {"type": "assistant", "message": {"content": [
+                {"type": "tool_use", "id": "r", "name": "Read", "input": {"file_path": path}}]}})
+            return "\n".join(json.dumps(event) for event in events) + "\n"
+
+        inside = read(f"/tmp/forge-runtime-x/.claude/skills/{NAME}/references/requirements.md")
+        result = self.run_cases("claude-code", inside)[0][0]
+        self.assertEqual(result.result, "pass", result.reason)
+        self.assertEqual(result.observed_activation, f"read references/requirements.md from the {NAME} skill")
+        outside = read("/tmp/forge-runtime-x/bug-report.md")
+        self.assertEqual(self.run_cases("claude-code", outside)[0][0].result, "fail")
+        near_miss = self.run_cases("claude-code", inside, cases=[case("implicit", "does-not-activate")])[0][0]
+        self.assertEqual(near_miss.result, "fail")
+
+    def test_a_codex_resource_listing_is_not_a_tool_outside_the_list(self):
+        listing = json.dumps({"type": "item.completed", "item": {"id": "l", "type": "mcp_tool_call", "server": "codex",
+                                                                "tool": "list_mcp_resources", "status": "completed"}})
+        result = self.run_cases("codex", listing + "\n" + codex_run())[0][0]
+        self.assertEqual(result.result, "pass", result.reason)
+
     def test_a_codex_case_answers_freely(self):
         _, runner = self.run_cases("codex", codex_run())
         command = runner.worker_calls[0]["command"]
