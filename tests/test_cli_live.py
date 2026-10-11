@@ -719,7 +719,8 @@ class LiveCommandsTest(unittest.TestCase):
             Cli.confirm = original_confirm
         revision = ["--revision", self.root / ".harness/research/repro.rules.yaml"]
 
-        code, _, stderr = cli("verify", *arguments, "--scope", "review", "--fixed", "A")
+        code, _, stderr = cli("verify", *arguments, "--scope", "review", "--fixed", "A", "--scope-relay",
+                              cli.write("none.json", {"choice": "review", "displayed_digest": "0" * 64, "run_id": "v"}))
         self.assertEqual(code, 2, "a Review needs an earlier report to compare with")
         self.assertIn("no earlier report", stderr)
         code, output, stderr = cli("verify", *arguments)
@@ -738,13 +739,25 @@ class LiveCommandsTest(unittest.TestCase):
         self.assertEqual(code, 0, stderr)
         review, extensive = output["options"]
         self.assertEqual((review["label"], review["parts"]), ("Review (recommended)", ["A"]))
-        self.assertEqual(extensive["parts"], ["A", "B"])
+        self.assertEqual([(k["part_id"], k["run_id"], k["harness_result"]) for k in review["kept"]],
+                         [("B", "verify-1", "not applicable")])
+        self.assertRegex(review["digest"], r"^[0-9a-f]{64}$")
+        self.assertEqual((extensive["parts"], extensive["kept"]), (["A", "B"], []))
         self.assertGreater(review["judged_rules"], 0)
         self.assertGreater(extensive["judged_rules"], review["judged_rules"])
 
+        code, _, stderr = cli("verify", *arguments, "--scope", "review", "--fixed", "A")
+        self.assertEqual(code, 2, "keeping earlier results needs the user's choice of the displayed scope")
+        self.assertIn("--scope-relay", stderr)
+        wrong = cli.write("scope-wrong.json", {"choice": "review", "displayed_digest": "0" * 64, "run_id": "verify-1"})
+        code, _, stderr = cli("verify", *arguments, "--scope", "review", "--fixed", "A", "--scope-relay", wrong)
+        self.assertEqual(code, 2)
+        self.assertIn("not the Review the user chose", stderr)
+        chosen = cli.write("scope.json", {"choice": "review", "displayed_digest": review["digest"], "run_id": "verify-1"})
         roles = len(runner.roles)
-        code, output, stderr = cli("verify", *arguments, "--scope", "review", "--fixed", "A")
+        code, output, stderr = cli("verify", *arguments, "--scope", "review", "--fixed", "A", "--scope-relay", chosen)
         self.assertEqual(code, 0, stderr)
+        self.assertEqual((output["judged_parts"], output["kept_parts"]), (["A"], ["B"]))
         self.assertEqual([p["harness_result"] for p in output["parts"]], ["verified", "not applicable"])
         self.assertEqual(runner.roles[roles:], ["review", "baseline", "runtime", "runtime", "runtime"])
         report = (self.root / ".harness/reports/repro.md").read_text(encoding="utf-8")
@@ -756,6 +769,21 @@ class LiveCommandsTest(unittest.TestCase):
         report = (self.root / ".harness/reports/repro.md").read_text(encoding="utf-8")
         self.assertIn("- Review scope: Extensive review (rarely needed): judged A, B", report)
         self.assertNotIn("(kept from run", report)
+
+        # A changed contract preserves nothing: the displayed Review is the executed one.
+        record = load_decision(self.decision)
+        record.part("B")["goal"] = "Never merge an agent's change without a review"
+        write_decision(self.root, record, slug="repro", date="2026-10-10")
+        cli.parts = ["A", "B"]
+        relay = cli.confirm(self.decision, "verify-3", *revision)
+        arguments[arguments.index("--relay") + 1] = relay
+        _, output, _ = cli("scope", "--decision", self.decision, "--root", self.root, *revision,
+                           "--evidence", self.root / ".scratch/workers.json", "--slug", "repro", "--fixed", "")
+        review = output["options"][0]
+        self.assertEqual((review["parts"], review["kept"]), (["A", "B"], []))
+        chosen = cli.write("scope-2.json", {"choice": "review", "displayed_digest": review["digest"], "run_id": "v"})
+        code, output, stderr = cli("verify", *arguments, "--scope", "review", "--fixed", "", "--scope-relay", chosen)
+        self.assertEqual((code, output["judged_parts"]), (0, review["parts"]), stderr)
 
     def test_a_review_judges_every_part_whose_inputs_changed(self):
         cli, arguments = self.build_ready(ResearchRunner([finding()]))

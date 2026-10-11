@@ -124,7 +124,9 @@ class FullPipelineTest(unittest.TestCase):
         options = self.run_ok("scope", "--decision", decision_path, "--root", root, "--revision", revision,
                               "--evidence", workers, "--slug", "repro", "--fixed", "A1")["options"]
         self.assertEqual(options[0]["parts"], ["A1", "A2"], "A2 links to the fixed A1")
-        output = self.run_ok(*verify, "--scope", "review", "--fixed", "A1")
+        chosen = cli.write("scope.json", {"choice": "review", "displayed_digest": options[0]["digest"],
+                                          "run_id": "verify-1"})
+        output = self.run_ok(*verify, "--scope", "review", "--fixed", "A1", "--scope-relay", chosen)
         self.assertEqual(output["parts"][0]["harness_result"], "verified")
 
         # A stricter description limit, adopted from drift: building and checking both apply it.

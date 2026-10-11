@@ -42,9 +42,13 @@ this skill's folder; run it with the Forge environment's Python.
    ask once: `Review (recommended)` or `Extensive review (rarely
    needed)`, showing each option's parts and judged-rule count. Review
    judges the fixed parts, every part linked to them and every part
-   whose inputs changed; other parts keep their earlier judged results,
-   and every part's scripts and link checks run again. Pass the answer
-   to step 3 as `--scope review|extensive --fixed <parts>`.
+   whose inputs or confirmation changed; show each part it keeps with
+   its earlier result and run, because those results come from the
+   earlier report, which the repository can hold in any form. Every
+   part's scripts and link checks run again either way. For Review, pass
+   `--scope review --fixed <parts> --scope-relay <file>` to step 3, the
+   relay holding `choice` review, the option's `displayed_digest` and
+   `run_id`; for Extensive review, pass `--scope extensive`.
 3. For a built skill, write its runtime cases as a YAML file shaped like
    `evals/smoke/vertical.yaml` in the Forge plugin root: an `explicit`
    case that names the skill, an `implicit` case with a request a user

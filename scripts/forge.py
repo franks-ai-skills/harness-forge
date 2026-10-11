@@ -31,7 +31,7 @@ from harness_forge.documents import (  # noqa: E402
 )
 from harness_forge.issues import find_issue, gh_publisher, gh_search, propose, publish  # noqa: E402
 from harness_forge.fetch import fetch_text  # noqa: E402
-from harness_forge.models import Decision, Finding, Rule  # noqa: E402
+from harness_forge.models import Confirmation, Decision, Finding, Rule  # noqa: E402
 from harness_forge.overrides import (  # noqa: E402
     OverridesPending, apply_overrides, check_override, describe, effective_rules, load_overrides, write_override,
 )
@@ -508,17 +508,36 @@ def _fixed(arguments: argparse.Namespace, decision: Decision) -> set[str]:
     return fixed
 
 
-def _changed(earlier, decision: Decision, files, symlinks, rules, revision, overrides, evidence) -> set[str]:
-    """The parts whose bound inputs differ from the earlier run's; every part before the first report."""
-    if earlier is None:
-        return {part["id"] for part in decision.record["parts"]}
-    current = bound_inputs(decision, files, rules, symlinks=symlinks, revision=revision, overrides=overrides,
-                           kb_version=_kb_version(), worker_evidence=evidence)
-    return affected_parts(earlier[0], current)
+def _review_plan(earlier, decision: Decision, current: dict, fixed: set[str], contract_digest: str,
+                 confirmed_parts) -> dict:
+    """The Review a re-verification runs, computed the same way for scope and for verify.
+
+    It judges the fixed parts, the parts linked to them and every part whose
+    bound inputs changed; any part that the confirmation does not preserve
+    (an unchanged contract confirmed for it) is judged too. The others keep
+    their earlier results, which the user sees and chooses through the
+    plan's digest: a repository report proves nothing on its own.
+    """
+    run, results = earlier
+    every = {part["id"] for part in decision.record["parts"]}
+    changed = affected_parts(run, current)
+    confirmation = Confirmation(run_id="", contract_digest=contract_digest, part_ids=sorted(confirmed_parts))
+    preserved = preserved_parts(run, current, confirmation) & set(results)
+    judged = review_scope(decision, fixed, changed) | (every - preserved)
+    kept = {part_id: results[part_id] for part_id in sorted(every - judged)}
+    digest = canonical_digest({"earlier_run": run.run_id, "judged": sorted(judged),
+                               "kept": {part_id: canonical_digest(result) for part_id, result in kept.items()}})
+    return {"earlier_run": run.run_id, "changed": sorted(changed), "judged": sorted(judged), "kept": kept,
+            "digest": digest}
+
+
+def _current(decision: Decision, files, symlinks, rules, revision, overrides, evidence) -> dict:
+    return bound_inputs(decision, files, rules, symlinks=symlinks, revision=revision, overrides=overrides,
+                        kb_version=_kb_version(), worker_evidence=evidence)
 
 
 def _scope(arguments: argparse.Namespace) -> int:
-    """The two re-verification choices, each with its exact parts and judged-rule count, computed by Forge."""
+    """The two re-verification choices, each with its exact parts, kept results and judged-rule count."""
     root = Path(arguments.root).resolve()
     decision, revision = _decision_and_revision(arguments, root)
     overrides = _checked_overrides(root)[0]
@@ -529,20 +548,28 @@ def _scope(arguments: argparse.Namespace) -> int:
     try:
         run = prepare_run(decision, files, rules, None, symlinks=symlinks, revision=revision,
                           kb_version=_kb_version(), worker_evidence=evidence)
+        contract = render_contract(decision, revision, overrides, worker_evidence=evidence)
     except ValueError as error:
         raise _InvalidInput(str(error)) from error
     earlier = _earlier(root, arguments.slug)
-    changed = _changed(earlier, decision, files, symlinks, rules, revision, overrides, evidence)
+    every = sorted(part["id"] for part in decision.record["parts"])
     counts: dict[str, int] = {}
     for request in run.judged_requests:
         counts[request["part_id"]] = counts.get(request["part_id"], 0) + 1
-    every = sorted(part["id"] for part in decision.record["parts"])
-    review = sorted(review_scope(decision, fixed, changed))
-    options = [{"label": "Review (recommended)", "parts": review, "judged_rules": sum(counts.get(p, 0) for p in review),
-                "link_checks": True, "available": earlier is not None},
-               {"label": "Extensive review (rarely needed)", "parts": every,
-                "judged_rules": sum(counts.get(p, 0) for p in every), "link_checks": True, "available": True}]
-    emit({"command": "scope", "fixed": sorted(fixed), "changed": sorted(changed),
+    options = []
+    if earlier is not None:
+        # Assumes the user confirms the current contract for every part, as verify then checks.
+        plan = _review_plan(earlier, decision, _current(decision, files, symlinks, rules, revision, overrides,
+                                                        evidence), fixed, contract.digest, every)
+        options.append({"label": "Review (recommended)", "parts": plan["judged"],
+                        "judged_rules": sum(counts.get(p, 0) for p in plan["judged"]), "link_checks": True,
+                        "kept": [{"part_id": part_id, "run_id": plan["earlier_run"], "status": result["status"],
+                                  "harness_result": result["harness_result"], "goal_result": result["goal_result"]}
+                                 for part_id, result in plan["kept"].items()],
+                        "digest": plan["digest"]})
+    options.append({"label": "Extensive review (rarely needed)", "parts": every,
+                    "judged_rules": sum(counts.get(p, 0) for p in every), "link_checks": True, "kept": []})
+    emit({"command": "scope", "fixed": sorted(fixed), "changed": plan["changed"] if earlier else every,
           "earlier_run": earlier[0].run_id if earlier else None, "options": options})
     return 0
 
@@ -969,13 +996,20 @@ def _verify(arguments: argparse.Namespace) -> int:
         if earlier is None:
             raise _InvalidInput("a Review compares with an earlier run, and there is no earlier report "
                                 f".harness/reports/{arguments.slug}.md; run an Extensive review")
-        changed = _changed(earlier, decision, files, symlinks, rules, revision, overrides,
-                           approval["worker_evidence"])
-        current = bound_inputs(decision, files, rules, symlinks=symlinks, revision=revision, overrides=overrides,
-                               kb_version=_kb_version(), worker_evidence=approval["worker_evidence"])
-        preserved = preserved_parts(earlier[0], current, approval["confirmation"]) & set(earlier[1])
-        scope = review_scope(decision, fixed, changed) | (every - preserved)
-        kept = {part_id: {"run_id": earlier[0].run_id, "result": earlier[1][part_id]} for part_id in every - scope}
+        if not arguments.scope_relay:
+            raise _InvalidInput("a Review keeps earlier results only on the user's choice: show scope's options and "
+                                "pass the answer with --scope-relay")
+        confirmation = approval["confirmation"]
+        plan = _review_plan(earlier, decision, _current(decision, files, symlinks, rules, revision, overrides,
+                                                        approval["worker_evidence"]),
+                            fixed, confirmation.contract_digest, confirmation.part_ids)
+        relay = _read_json(arguments.scope_relay)
+        if (set(relay) != {"choice", "displayed_digest", "run_id"} or relay["choice"] != "review"
+                or relay["displayed_digest"] != plan["digest"]):
+            raise _InvalidInput("this is not the Review the user chose: its parts or kept results differ from the "
+                                "options shown; run scope again and ask")
+        scope = set(plan["judged"])
+        kept = {part_id: {"run_id": plan["earlier_run"], "result": result} for part_id, result in plan["kept"].items()}
         label = f"Review (recommended): judged {', '.join(sorted(scope)) or 'no part'}"
         if kept:
             label += f"; kept from run {earlier[0].run_id}: {', '.join(sorted(kept))}"
@@ -1010,6 +1044,7 @@ def _verify(arguments: argparse.Namespace) -> int:
                   for r in results for rule in r.rule_results if rule["result"] == "unresolved"]
     emit({"command": "verify", "run_id": run.run_id, "parts": parts, "runtime": runtime, "unresolved": unresolved,
           "goal_conflicts": conflicts, "drift": _drift_report(drift, decision, overrides),
+          "judged_parts": sorted(scope) if scope is not None else sorted(every), "kept_parts": sorted(kept),
           "worker_violations": list(run.worker_violations), "written": written})
     return 1 if any(part["harness_result"] == "not verified" for part in parts) else 0
 
@@ -1149,6 +1184,9 @@ def build_parser() -> argparse.ArgumentParser:
     verify.add_argument("--scope", choices=("review", "extensive"), default="extensive",
                         help="the user's re-verification choice; review needs an earlier report")
     verify.add_argument("--fixed", help="comma-separated ids of the parts the builder fixed")
+    verify.add_argument("--scope-relay",
+                        help="JSON relay of the user's scope answer: choice review, displayed_digest of the "
+                             "Review option scope showed, run_id")
     verify.set_defaults(handler=_verify)
     scope = commands.add_parser("scope", help="show the re-verification choices with exact parts and judged counts")
     scope.add_argument("--decision", required=True)

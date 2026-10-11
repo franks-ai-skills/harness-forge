@@ -349,9 +349,14 @@ def flows(harness: str, out: Path, *, forge: Forge | None = None,
     checks["broken skill not verified"] = code == 1 and broken is not None and \
         broken["parts"][0]["harness_result"] == "not verified"
     session.build("flows-repair", "--replace", skill.relative_to(repo).as_posix())
-    session.run("scope", "scope", "--decision", session.decision, "--root", repo, "--revision", session.revision,
-                "--evidence", session.evidence, "--slug", inputs["slug"], "--fixed", "A")
-    code, reviewed = session.verify("flows-verify-3", "verify a Review", "--scope", "review", "--fixed", "A")
+    _, scope = session.run("scope", "scope", "--decision", session.decision, "--root", repo, "--revision",
+                           session.revision, "--evidence", session.evidence, "--slug", inputs["slug"], "--fixed", "A")
+    review = next((option for option in (scope or {}).get("options", []) if option["label"].startswith("Review")), {})
+    # The runner answers the scope question as it confirms the contract (see TEST_RELAY).
+    chosen = _write_json(scratch / "scope-relay.json", {"choice": "review", "displayed_digest": review.get("digest"),
+                                                        "run_id": "flows-verify-3"})
+    code, reviewed = session.verify("flows-verify-3", "verify a Review", "--scope", "review", "--fixed", "A",
+                                    "--scope-relay", chosen)
     checks["review verified the repair"] = session.verified(code, reviewed)
     code, extensive = session.verify("flows-verify-4", "verify an Extensive review", "--scope", "extensive")
     checks["extensive review verified"] = session.verified(code, extensive)
