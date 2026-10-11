@@ -158,7 +158,8 @@ class FullPipelineTest(unittest.TestCase):
                                                "reason": "The preference no longer holds.", "retired": True})
         self.run_ok("override", "--root", root, "--input", request, "--write")
         changed = self.select(dict(ANSWERS), root=True)
-        self.assertNotEqual(changed["mechanism"], "skills")
+        self.assertEqual(changed["mechanism"], "skills", "unconfirmed, the pinned rules decide")
+        self.assertNotEqual(changed["override_preview"]["mechanism"], "skills")
         relay = cli.confirm(decision_path, "build-3", "--revision", revision)
         build[build.index("--relay") + 1] = relay
         returned, _, stderr = cli(*build)

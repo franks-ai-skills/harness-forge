@@ -60,7 +60,11 @@ the source quote it was adopted from, and a warning when it loosens or
 retires an error, security or eligibility rule. Read every warning to
 the user before asking for confirmation. Confirming the contract adopts
 the overrides it shows; a changed override needs a new confirmation.
-Pass `--root <repository>` to `select` so that its result uses them.
+Pass `--root <repository>` to `select` and `resolve-conflict`, with
+`--decision`, `--evidence` and the confirming `--relay`, so that their
+result uses the adopted overrides; without a confirmation they decide
+with the pinned rules, and `select` shows what the overrides would
+change as `override_preview`.
 
 After a Forge update with a new Harness KB, `scripts/forge.py overrides
 --root <repository>` compares each override with the new release. When

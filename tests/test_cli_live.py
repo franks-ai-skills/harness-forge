@@ -370,7 +370,7 @@ class LiveCommandsTest(unittest.TestCase):
         self.assertIn("F9", stderr)
         self.assertFalse((self.root / ".harness/overrides").exists())
 
-    def test_select_applies_the_repositorys_overrides_before_confirmation(self):
+    def test_select_applies_overrides_only_under_a_confirmation(self):
         cli, _ = self.build_ready(ResearchRunner([finding()]))
         request = cli.write("override.json", {"rule_id": "selection.eligibility.own-context-skills", "finding_id": "F1",
                                               "reason": "Skills can fork their own context.", "retired": True})
@@ -379,13 +379,53 @@ class LiveCommandsTest(unittest.TestCase):
         record = load_decision(self.decision)
         selection = cli.write("select.json", {"answers": {**record.part("A")["answers"], "own_context": True},
                                               "whole_idea": record.record["facts"], "chosen": "skills"})
-        code, output, stderr = cli("select", "--input", selection)
-        self.assertEqual(output["goal_conflict"]["severity"], "error", "without --root the pinned rules decide")
         code, output, stderr = cli("select", "--input", selection, "--root", self.root)
         self.assertEqual(code, 0, stderr)
-        self.assertEqual(output["overrides"], [{"rule_id": "selection.eligibility.own-context-skills",
-                                                "applied": "pending: it binds once the contract that shows it is confirmed"}])
+        self.assertEqual(output["goal_conflict"]["severity"], "error", "unconfirmed, the pinned rules decide")
+        preview = output["override_preview"]
+        self.assertEqual(preview["overrides"], ["selection.eligibility.own-context-skills"])
+        self.assertIn("applies once the contract that shows these overrides is confirmed", preview["note"])
+        self.assertNotEqual((preview["goal_conflict"] or {}).get("severity"), "error")
+
+        revision = self.root / ".harness/research/repro.rules.yaml"
+        relay = cli.confirm(self.decision, "intake-3", "--revision", revision)
+        code, output, stderr = cli("select", "--input", selection, "--root", self.root, "--decision", self.decision,
+                                   "--revision", revision, "--evidence", self.root / ".scratch/workers.json",
+                                   "--relay", relay)
+        self.assertEqual(code, 0, stderr)
+        self.assertEqual(output["overrides"], ["selection.eligibility.own-context-skills"])
         self.assertNotEqual((output["goal_conflict"] or {}).get("severity"), "error")
+
+    def test_an_override_asks_its_own_new_question(self):
+        cli, _ = self.build_ready(ResearchRunner([finding()]))
+        record = load_decision(self.decision)
+        selection = cli.write("select.json", {"answers": record.part("A")["answers"],
+                                              "whole_idea": record.record["facts"]})
+        _, selected, _ = cli("select", "--input", selection)
+        winner = next(row["rules"][0] for row in selected["assessment"] if row["state"] == "recommended")
+        pinned = next(rule for rule in yaml.safe_load((FORGE / "snapshot/rules/selection.yaml").read_text())["rules"]
+                      if rule["id"] == winner)
+        stricter = {**pinned, "params": {**pinned["params"], "when": {"all": [pinned["params"]["when"],
+                                                                              {"eq": ["script_checkable", True]}]}}}
+        request = cli.write("override.json", {"rule_id": winner, "finding_id": "F1", "reason": "Narrower.",
+                                              "rule": stricter})
+        code, _, stderr = cli("override", "--root", self.root, "--input", request, "--write")
+        self.assertEqual(code, 0, stderr)
+        revision = self.root / ".harness/research/repro.rules.yaml"
+        relay = cli.confirm(self.decision, "intake-3", "--revision", revision)
+        code, output, stderr = cli("select", "--input", selection, "--root", self.root, "--decision", self.decision,
+                                   "--revision", revision, "--evidence", self.root / ".scratch/workers.json",
+                                   "--relay", relay)
+        self.assertEqual(code, 0, stderr)
+        self.assertEqual((output["pending_question"], (output["question"] or {}).get("id")),
+                         ("script_checkable", "script_checkable"))
+
+        unanswerable = {**pinned, "params": {**pinned["params"], "when": {"eq": ["made_up_fact", True]}}}
+        request = cli.write("override-2.json", {"rule_id": winner, "finding_id": "F1", "reason": "Unanswerable.",
+                                                "rule": unanswerable})
+        code, output, _ = cli("override", "--root", self.root, "--input", request)
+        self.assertEqual(code, 1)
+        self.assertTrue(any("made_up_fact, which no intake question asks" in p for p in output["problems"]))
 
     def test_unresolved_compatibility_drift_blocks_the_affected_part(self):
         cli, arguments = self.build_ready(ResearchRunner([finding()]))
@@ -733,7 +773,7 @@ class LiveCommandsTest(unittest.TestCase):
         code, output, stderr = cli("verify", *arguments)
         self.assertEqual(code, 0, stderr)
 
-    def test_resolve_conflict_sees_the_overrides_select_sees(self):
+    def test_resolve_conflict_applies_overrides_as_select_does(self):
         cli, _ = self.build_ready(ResearchRunner([finding()]))
         request = cli.write("override.json", {"rule_id": "selection.eligibility.own-context-skills", "finding_id": "F1",
                                               "reason": "Skills can fork their own context.", "retired": True})
@@ -742,8 +782,13 @@ class LiveCommandsTest(unittest.TestCase):
         self.conflict()
         code, _, stderr = cli("resolve-conflict", "--decision", self.decision, "--part", "A", "--choice", "keep",
                               "--reason", "x")
-        self.assertEqual(code, 2)
-        self.assertIn("no goal conflict", stderr, "with the retired rule, select shows no conflict either")
+        self.assertEqual(code, 0, "unconfirmed, the pinned rules still see the conflict")
+        relay = cli.confirm(self.decision, "intake-3", "--revision", self.root / ".harness/research/repro.rules.yaml")
+        code, _, stderr = cli("resolve-conflict", "--decision", self.decision, "--part", "A", "--choice", "keep",
+                              "--reason", "x", "--revision", self.root / ".harness/research/repro.rules.yaml",
+                              "--evidence", self.root / ".scratch/workers.json", "--relay", relay)
+        self.assertEqual(code, 2, "under a confirmation the retired rule leaves no conflict, as select shows")
+        self.assertIn("no goal conflict", stderr)
 
     def test_a_missing_github_cli_is_reported(self):
         cli, _ = self.build_ready(ResearchRunner([finding()]))

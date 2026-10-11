@@ -151,35 +151,66 @@ def _select(arguments: argparse.Namespace) -> int:
         raise _InvalidInput("answers and whole_idea must be objects, candidates a list")
     _check_declared(answers, "part", declared)
     _check_declared(whole_idea, "idea", declared)
-    rules = [Rule.from_dict(rule) for rule in selection["rules"]]
-    overrides = _checked_overrides(Path(arguments.root).resolve())[0] if arguments.root else []
-    rules = apply_overrides(rules, overrides)
-    recommendation = recommend(answers, whole_idea, rules, candidates)
-    payload = {"command": "select", **asdict(recommendation), "question": None, "goal_conflict": None,
-               "overrides": [{"rule_id": override["rule_id"],
-                              "applied": "pending: it binds once the contract that shows it is confirmed"}
-                             for override in overrides]}
-    if recommendation.pending_question:
-        payload["question"] = next_question({"answers": answers}, whole_idea, selection, candidates)
-    elif request.get("chosen") is not None:
-        chosen = request["chosen"]
-        if not isinstance(chosen, str) or not isinstance(request.get("goal", ""), str):
-            raise _InvalidInput("chosen and goal must be strings")
-        part = {"id": "part", "goal": request.get("goal", ""), "answers": answers, "chosen": chosen}
-        payload["goal_conflict"] = goal_conflict(part, whole_idea, rules, candidates, domains=_domains(selection))
+    pinned = [Rule.from_dict(rule) for rule in selection["rules"]]
+    rules, applied, pending = _selection_under_confirmation(arguments)
+    chosen = request.get("chosen")
+    if chosen is not None and (not isinstance(chosen, str) or not isinstance(request.get("goal", ""), str)):
+        raise _InvalidInput("chosen and goal must be strings")
+
+    def outcome(rules: list[Rule]) -> dict:
+        recommendation = recommend(answers, whole_idea, rules, candidates)
+        result = {**asdict(recommendation), "question": None, "goal_conflict": None}
+        if recommendation.pending_question:
+            effective = {**selection, "rules": [rule.to_dict() for rule in rules]}
+            result["question"] = next_question({"answers": answers}, whole_idea, effective, candidates)
+        elif chosen is not None:
+            part = {"id": "part", "goal": request.get("goal", ""), "answers": answers, "chosen": chosen}
+            result["goal_conflict"] = goal_conflict(part, whole_idea, rules, candidates, domains=_domains(selection))
+        return result
+
+    payload = {"command": "select", **outcome(rules), "overrides": [o["rule_id"] for o in applied],
+               "override_preview": None}
+    if pending:
+        preview = outcome(apply_overrides(pinned, pending))
+        payload["override_preview"] = {
+            "overrides": [o["rule_id"] for o in pending],
+            "note": "a preview only: it applies once the contract that shows these overrides is confirmed",
+            **{key: preview[key] for key in ("outcome", "mechanism", "pending_question", "question", "goal_conflict")}}
     emit(payload)
     return 0
+
+
+def _selection_under_confirmation(arguments: argparse.Namespace) -> tuple[list[Rule], list[dict], list[dict]]:
+    """The selection rules, with the repository's overrides only when a relay confirms the contract showing them.
+
+    Returns (rules, applied overrides, overrides left pending). Without a
+    confirmation the pinned rules decide; the overrides are only previewed.
+    """
+    pinned = _selection_rules()
+    if not arguments.root:
+        return pinned, [], []
+    root = Path(arguments.root).resolve()
+    overrides = _checked_overrides(root)[0]
+    if not overrides:
+        return pinned, [], []
+    if not arguments.relay:
+        return pinned, [], overrides
+    if not (arguments.decision and arguments.evidence):
+        raise _InvalidInput("a confirmation relay needs --decision and --evidence for the contract it confirms")
+    decision, revision = _decision_and_revision(arguments, root)
+    approval, confirmed = _approval(arguments, decision, revision)
+    return effective_rules(pinned, confirmed, approval["confirmation"]), confirmed, []
 
 
 def _resolve_conflict(arguments: argparse.Namespace) -> int:
     """Record the user's answer to a part's goal-conflict question in the decision."""
     try:
         decision = load_decision(Path(arguments.decision))
-        # The repository's overrides apply as select --root applies them, before any confirmation.
-        overrides = _checked_overrides(Path(arguments.decision).resolve().parents[2])[0]
+        # The repository's overrides apply as in select: only under a confirmation of the contract showing them.
+        arguments.root = str(Path(arguments.decision).resolve().parents[2])
+        rules, _, _ = _selection_under_confirmation(arguments)
         result = resolve_goal_conflict(decision, arguments.part, arguments.choice, arguments.adjusted_goal,
-                                       arguments.reason, rules=apply_overrides(_selection_rules(), overrides),
-                                       date=datetime.date.today().isoformat())
+                                       arguments.reason, rules=rules, date=datetime.date.today().isoformat())
     except (KeyError, StopIteration) as error:
         raise _InvalidInput(f"unknown part {arguments.part!r}") from error
     except ValueError as error:
@@ -229,7 +260,12 @@ def _check_all(root: Path) -> list[tuple[dict, dict]]:
         raise _InvalidInput(str(error)) from error
     pinned, records = _pinned_rules() + _selection_rules(), _research_records(root) if overrides else []
     return [(override, check_override(override, pinned, kb_version=_kb_version(), catalog=_catalog(),
-                                      research=records)) for override in overrides]
+                                      research=records, answerable=_answerable())) for override in overrides]
+
+
+def _answerable() -> set[str]:
+    """The facts an intake question asks, and those Forge derives."""
+    return {question["id"] for question in _selection_document()["questions"]} | {"reuse_confirmed"}
 
 
 def _checked_overrides(root: Path) -> tuple[list[dict], dict[str, list[str]]]:
@@ -265,7 +301,7 @@ def _override(arguments: argparse.Namespace) -> int:
     try:
         validate(override, "override")
         result = check_override(override, _pinned_rules() + _selection_rules(), kb_version=_kb_version(),
-                                catalog=_catalog(), research=_research_records(root))
+                                catalog=_catalog(), research=_research_records(root), answerable=_answerable())
         written = (str(write_override(root, override).relative_to(root))
                    if arguments.write and result["status"] == "valid" else None)
     except ValueError as error:
@@ -987,7 +1023,12 @@ def build_parser() -> argparse.ArgumentParser:
     select = commands.add_parser("select", help="recommend from confirmed, normalized answers")
     select.add_argument("--input", required=True,
                         help="JSON file with answers, whole_idea and candidates; chosen and goal for a goal conflict")
-    select.add_argument("--root", help="target repository whose rule overrides apply")
+    select.add_argument("--root", help="target repository; its rule overrides are previewed, or applied with --relay")
+    for command in (select,):
+        command.add_argument("--decision", help="the decision whose contract --relay confirms")
+        command.add_argument("--revision", help=".harness/research/<slug>.rules.yaml")
+        command.add_argument("--evidence", help="JSON with the worker_evidence the contract shows")
+        command.add_argument("--relay", help="JSON relay confirming the contract that shows the overrides")
     select.set_defaults(handler=_select)
     override = commands.add_parser("override", help="propose a rule override from a kept, supported finding")
     override.add_argument("--root", required=True, help="target repository root")
@@ -1037,6 +1078,9 @@ def build_parser() -> argparse.ArgumentParser:
     resolve.add_argument("--choice", required=True, choices=CONFLICT_CHOICES)
     resolve.add_argument("--adjusted-goal", help="the adjusted goal, for adjust-goal")
     resolve.add_argument("--reason", required=True, help="the user's reason for the answer")
+    resolve.add_argument("--revision", help=".harness/research/<slug>.rules.yaml")
+    resolve.add_argument("--evidence", help="JSON with the worker_evidence the contract shows")
+    resolve.add_argument("--relay", help="JSON relay confirming the contract; the repository's overrides apply only then")
     resolve.set_defaults(handler=_resolve_conflict)
     prepare = commands.add_parser("prepare-contract", help="render the current contract for confirmation")
     prepare.add_argument("--decision", required=True, help=".harness/decisions/<date>-<slug>.md")
