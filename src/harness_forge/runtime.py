@@ -93,6 +93,7 @@ def _observe_claude(stdout: str, name: str, baseline: set[str]) -> dict:
     """Activation, tool calls and what else stayed loaded, from the init and assistant events."""
     observed = {"activation": None, "calls": [], "unavailable": [], "competing": [], "loaded": None,
                 "completed": False, "errored": False}
+    other_skill = False
     for event in _events(stdout):
         if event.get("type") == "system" and event.get("subtype") == "init":
             skills = [str(skill) for skill in event.get("skills", [])]
@@ -109,11 +110,15 @@ def _observe_claude(stdout: str, name: str, baseline: set[str]) -> dict:
                     continue
                 observed["calls"].append(str(block.get("name")))
                 arguments = block.get("input") if isinstance(block.get("input"), dict) else {}
-                if block.get("name") == "Skill" and name in (arguments.get("skill"), arguments.get("command")):
-                    observed["activation"] = f"Skill tool called for {name}"
-                elif block.get("name") == "Read" and observed["activation"] is None:
+                if block.get("name") == "Skill":
+                    if name in (arguments.get("skill"), arguments.get("command")):
+                        observed["activation"] = f"Skill tool called for {name}"
+                    else:
+                        other_skill = True
+                elif block.get("name") == "Read" and observed["activation"] is None and not other_skill:
                     # A slash invocation in print mode leaves no event; a read of
-                    # the skill's own files shows its content was loaded.
+                    # the skill's own files shows its content was loaded. After
+                    # another skill ran, such a read follows that skill's pointer.
                     path = str(arguments.get("file_path", ""))
                     for root in (f"/.claude/skills/{name}/", f"/.agents/skills/{name}/"):
                         if root in path:

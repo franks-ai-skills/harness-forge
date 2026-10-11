@@ -148,6 +148,15 @@ class RuntimeTest(unittest.TestCase):
         near_miss = self.run_cases("claude-code", inside, cases=[case("implicit", "does-not-activate")])[0][0]
         self.assertEqual(near_miss.result, "fail")
 
+        # Another skill that points at the candidate's files is that skill's activation, not the candidate's.
+        events = [json.loads(line) for line in inside.splitlines()]
+        events.insert(1, {"type": "assistant", "message": {"content": [
+            {"type": "tool_use", "id": "o", "name": "Skill", "input": {"skill": "harness-verify"}}]}})
+        through_other = "\n".join(json.dumps(event) for event in events) + "\n"
+        near_miss = self.run_cases("claude-code", through_other, cases=[case("implicit", "does-not-activate")],
+                                   baseline_skills={"harness-verify"})[0][0]
+        self.assertEqual(near_miss.result, "pass", near_miss.reason)
+
     def test_a_codex_resource_listing_is_not_a_tool_outside_the_list(self):
         listing = json.dumps({"type": "item.completed", "item": {"id": "l", "type": "mcp_tool_call", "server": "codex",
                                                                 "tool": "list_mcp_resources", "status": "completed"}})
