@@ -37,10 +37,15 @@ this skill's folder; run it with the Forge environment's Python.
 2. If this is a re-verification, run `scripts/forge.py scope` and ask
    once: `Review (recommended)` or `Extensive review (rarely needed)`,
    showing each option's parts and judged-rule count.
-3. Run `scripts/forge.py verify --decision <record> --root <repository>
-   --revision <rules file> --harness <this harness> --evidence <workers
-   output> --relay <relay> --slug <slug> --write`, adding `--cases <file>`
-   when the part has runtime cases. It runs the static checks, a fresh
+3. For a built skill, write its runtime cases as a YAML file shaped like
+   `evals/smoke/vertical.yaml` in the Forge plugin root: an `explicit`
+   case that names the skill, an `implicit` case with a request a user
+   would make (not for a user-invoked command), and a `negative` near
+   miss, a neighboring request that must not activate it, each with the
+   fixtures its prompt needs. Run `scripts/forge.py verify --decision
+   <record> --root <repository> --revision <rules file> --harness <this
+   harness> --evidence <workers output> --relay <relay> --slug <slug>
+   --write --cases <file>`. It runs the static checks, a fresh
    review worker on the frozen files and each runtime case in a throwaway
    workspace, then writes `.harness/reports/<slug>.md`. A worker
    configuration other than the confirmed one leaves every part not

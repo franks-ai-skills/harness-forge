@@ -461,6 +461,10 @@ def _verify(arguments: argparse.Namespace) -> int:
         cases = load_cases(Path(arguments.cases)) if arguments.cases else []
     except (OSError, ValueError) as error:
         raise _InvalidInput(str(error)) from error
+    for part_id in sorted({case["part_id"] for case in cases}):
+        kinds = {(case["mode"], case["expected"]) for case in cases if case["part_id"] == part_id}
+        if not {("explicit", "activates"), ("negative", "does-not-activate")} <= kinds:
+            raise _InvalidInput(f"part {part_id} needs an explicit invocation and a near miss among its cases")
     exclusions = set()
     for item in arguments.confirm_not_applicable:
         part_id, _, rule_id = item.partition(":")

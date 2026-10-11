@@ -185,6 +185,16 @@ class LiveCommandsTest(unittest.TestCase):
         self.assertEqual(code, 2)
         self.assertIn("PART:RULE", stderr)
 
+    def test_cases_need_an_explicit_invocation_and_a_near_miss_per_part(self):
+        import yaml
+        cli, arguments = self.build_ready(ResearchRunner([finding()]))
+        cases = yaml.safe_load((FORGE / "evals/smoke/vertical.yaml").read_text(encoding="utf-8"))["cases"]
+        positives = cli.write("positives.yaml", yaml.safe_dump({"cases": [c for c in cases if c["mode"] != "negative"]}))
+        option = arguments.index("--cases") + 1
+        code, _, stderr = cli("verify", *arguments[:option], positives, *arguments[option + 1:])
+        self.assertEqual(code, 2)
+        self.assertIn("part A needs an explicit invocation and a near miss", stderr)
+
     def test_a_rebuild_over_a_changed_skill_shows_the_diff(self):
         cli, arguments = self.build_ready(ResearchRunner([finding()]))
         option = dict(zip(arguments[::2], arguments[1::2]))
