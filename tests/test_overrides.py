@@ -100,6 +100,14 @@ class ValidationTest(unittest.TestCase):
                 self.assertEqual(checked["status"], "invalid")
                 self.assertTrue(any(message in problem for problem in checked["problems"]), checked["problems"])
 
+    def test_a_selection_rule_changes_its_conditions_in_params_not_applies_to(self):
+        preference = next(rule for rule in PINNED if rule.id == "selection.mechanism.procedure")
+        changed = {**preference.to_dict(), "applies_to": {"harnesses": ["claude-code"],
+                                                          "when": [{"eq": ["script_checkable", True]}]}}
+        checked = check(override(rule=changed, rule_id=preference.id))
+        self.assertEqual(checked["status"], "invalid")
+        self.assertIn("selection does not evaluate applies_to", " ".join(checked["problems"]))
+
     def test_after_a_kb_update_it_proposes_removal_or_asks(self):
         differs = check(override(), kb_version="0.2.0")
         self.assertEqual((differs["status"], differs["kb_comparison"]), ("kb-updated", "differs"))

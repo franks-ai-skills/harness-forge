@@ -140,6 +140,10 @@ def check_override(override: dict, pinned: list[Rule], *, kb_version: str, catal
             if key not in CHANGEABLE:
                 problems.append(f"an override may not change {key}")
                 continue
+            if key == "applies_to" and old.checker == "selection.match":
+                # Selection decides from params.when alone; an applies_to it never reads would be ignored silently.
+                problems.append("selection does not evaluate applies_to: change the rule's conditions in params.when")
+                continue
             result["changes"].append({"field": key, "old": before.get(key), "new": after.get(key)})
         added = set(new.sources) - set(old.sources)
         if not set(old.sources) <= set(new.sources) or added - {override["drift"]["finding"]["source"]}:
