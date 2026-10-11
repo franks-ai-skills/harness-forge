@@ -52,13 +52,19 @@ Answer with one JSON object in this shape; the CLI enforces it:
 
 ```json
 {"findings": [{"claim": "...", "source": "https://...", "fetched": "YYYY-MM-DD",
-  "quote": "verbatim sentence", "context": "the surrounding sentences, verbatim",
+  "quote": "one sentence from the page", "context": "the sentence before, the quote, the sentence after",
   "source_role": "primary"}]}
 ```
 
-Forge numbers the findings and records the pass, part and brief they
-belong to.
+- `quote`: one sentence, copied exactly from the fetched page.
+- `context`: the quote together with the sentences around it, copied
+  exactly. It must contain the quote.
+- `claim`: only what the quote, read in its context, states. A separate
+  worker judges each claim against its quote and context alone, and
+  rejects a claim wider than its quote. Several points need several
+  findings, each with its own quote.
 
-Quote and context must appear verbatim on the fetched page; Forge fetches
-each source again and drops any finding whose quote it cannot find. Do
-not write files or run commands.
+Forge numbers the findings and records the pass, part and brief they
+belong to. It fetches each source again and drops any finding whose
+quote or context is not on the page, or whose context does not contain
+the quote. Do not write files or run commands.
