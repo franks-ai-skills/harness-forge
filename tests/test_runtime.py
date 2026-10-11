@@ -4,7 +4,8 @@ import json
 import unittest
 from pathlib import Path
 
-from harness_forge.runtime import load_cases, run_skill_runtime
+from harness_forge.adapters.base import Completed
+from harness_forge.runtime import BASELINE_PROMPT, load_cases, run_skill_runtime
 from harness_forge.verify import finish_run, validate_review
 from tests.test_adapters import CLAUDE_API_KEY, CLAUDE_LOGGED_OUT, PARENT, FakeRunner
 from tests.test_build_skill import NAME
@@ -51,6 +52,7 @@ class RuntimeTest(unittest.TestCase):
 
     def run_cases(self, harness, stream, cases=None, **options):
         runner = options.pop("runner", None) or FakeRunner(worker=stream, **options.pop("runner_options", {}))
+        options.setdefault("baseline_skills", frozenset())
         results = run_skill_runtime(self.scenario.run, harness, cases or [case()], files=self.files, runner=runner,
                                     environ=PARENT, **options)
         return results, runner
@@ -111,6 +113,29 @@ class RuntimeTest(unittest.TestCase):
         result = self.run_cases("claude-code", claude_run(skills=(NAME, "debug", "verify")),
                                 baseline_skills={"debug", "verify"})[0][0]
         self.assertEqual(result.result, "pass", result.reason)
+
+    def test_claude_built_ins_come_from_an_empty_launch_with_the_cases_settings(self):
+        class Baseline(FakeRunner):
+            def __call__(self, command, *, cwd, env, stdin, timeout):
+                answer = super().__call__(command, cwd=cwd, env=env, stdin=stdin, timeout=timeout)
+                if stdin == BASELINE_PROMPT:
+                    return Completed(0, claude_run(skills=("debug", "verify"), skill_call=None), "", False)
+                return answer
+
+        runner = Baseline(worker=claude_run(skills=(NAME, "debug", "verify")))
+        results, _ = self.run_cases("claude-code", None, runner=runner, baseline_skills=None)
+        self.assertEqual(results[0].result, "pass", results[0].reason)
+        baseline, case_call = runner.worker_calls
+        self.assertEqual(baseline["files"], [], "the baseline workspace holds no candidate")
+        self.assertEqual(baseline["command"][:baseline["command"].index("--tools")],
+                         case_call["command"][:case_call["command"].index("--tools")])
+        self.assertEqual(baseline["command"][baseline["command"].index("--tools") + 1], "")
+
+    def test_a_codex_case_answers_freely(self):
+        _, runner = self.run_cases("codex", codex_run())
+        command = runner.worker_calls[0]["command"]
+        self.assertNotIn("--output-schema", command, "a skill run is not a worker answering in JSON")
+        self.assertIn("--strict-config", command)
 
     def test_a_candidate_that_did_not_load_is_an_error(self):
         result = self.run_cases("claude-code", claude_run(skills=("debug",), skill_call=None),

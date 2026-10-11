@@ -41,8 +41,12 @@ def _literal(value) -> str:
     return json.dumps(value)
 
 
-def command(role: str, workspace: str) -> list[str]:
-    """The worker command; reads are limited to the workspace by the permission profile."""
+def command(role: str, workspace: str, *, structured: bool = True) -> list[str]:
+    """The worker command; reads are limited to the workspace by the permission profile.
+
+    ``structured=False`` leaves out the output schema, for a runtime case
+    that runs a skill rather than a worker.
+    """
     settings = {
         "approval_policy": "never",
         "project_doc_max_bytes": 0,
@@ -56,8 +60,9 @@ def command(role: str, workspace: str) -> list[str]:
     disabled = DISABLED_FEATURES + (NO_SHELL if role != "review" else ())
     settings.update({f"features.{feature}": False for feature in disabled})
     arguments = ["codex", "--no-daemon", "exec", "--ignore-user-config", "--ignore-rules", "--skip-git-repo-check",
-                 "--ephemeral", "--json", "--color", "never", "--strict-config", "-C", workspace,
-                 "--output-schema", f"{workspace}/{SCHEMA_FILE}"]
+                 "--ephemeral", "--json", "--color", "never", "--strict-config", "-C", workspace]
+    if structured:
+        arguments += ["--output-schema", f"{workspace}/{SCHEMA_FILE}"]
     for key, value in settings.items():
         arguments += ["-c", f"{key}={_literal(value)}"]
     return arguments + ["-"]
