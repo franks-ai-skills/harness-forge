@@ -59,9 +59,11 @@ this skill's folder; run it with the Forge environment's Python.
    rule not applicable. Show each with its reason and ask the user
    whether the rule does not apply to that part. Your own opinion does
    not settle it. Then run step 3 again with one
-   `--confirm-not-applicable <part>:<rule>` per rule the user confirmed.
-   The confirmation settles only whether a rule applies: if the new
-   reviewer finds it applicable, its verdict stands.
+   `--confirm-not-applicable <confirmation>` per rule the user confirmed,
+   passing the entry's `confirmation` value as printed. It is bound to
+   the part's current inputs: after any change to them, ask again. The
+   confirmation settles only whether a rule applies: if the new reviewer
+   finds it applicable, its verdict stands.
 5. Show each part's harness and goal result, every failing rule with its
    source, and each runtime case that did not run, with its reason.
 

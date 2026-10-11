@@ -191,21 +191,32 @@ class LiveCommandsTest(unittest.TestCase):
         cli, arguments = self.build_ready(runner)
         code, output, _ = cli("verify", *arguments)
         self.assertEqual(code, 1)
-        self.assertEqual(output["unresolved"], [{"part_id": "A", "rule_id": rule, "reason": "It writes text only."}])
+        [unresolved] = output["unresolved"]
+        self.assertEqual({key: unresolved[key] for key in ("part_id", "rule_id", "reason")},
+                         {"part_id": "A", "rule_id": rule, "reason": "It writes text only."})
+        self.assertRegex(unresolved["confirmation"], rf"^A:{rule}:[0-9a-f]{{16}}$")
         self.assertEqual(output["parts"][0]["harness_result"], "not verified")
 
-        code, output, stderr = cli("verify", *arguments, "--confirm-not-applicable", f"A:{rule}")
+        code, output, stderr = cli("verify", *arguments, "--confirm-not-applicable", unresolved["confirmation"])
         self.assertEqual(code, 0, stderr)
         self.assertEqual(output["unresolved"], [])
         self.assertEqual(output["parts"][0]["harness_result"], "verified")
         self.assertIn(f"`{rule}` | error | judged | not-applicable",
                       (self.root / ".harness/reports/repro.md").read_text(encoding="utf-8"))
 
-    def test_a_confirmation_needs_a_part_and_a_rule(self):
+    def test_a_confirmation_holds_only_for_the_inputs_it_was_given_for(self):
+        rule = "skills.invocation.side-effects-user-invoked"
+        cli, arguments = self.build_ready(NotApplicableRunner([finding()], rule))
+        code, output, _ = cli("verify", *arguments, "--confirm-not-applicable", f"A:{rule}:{'0' * 16}")
+        self.assertEqual(code, 1)
+        self.assertEqual([item["rule_id"] for item in output["unresolved"]], [rule])
+
+    def test_a_confirmation_needs_a_part_a_rule_and_its_token(self):
         cli, arguments = self.build_ready(ResearchRunner([finding()]))
-        code, _, stderr = cli("verify", *arguments, "--confirm-not-applicable", "skills.invocation.side-effects-user-invoked")
-        self.assertEqual(code, 2)
-        self.assertIn("PART:RULE", stderr)
+        for value in ("skills.invocation.side-effects-user-invoked", "A:skills.invocation.side-effects-user-invoked"):
+            code, _, stderr = cli("verify", *arguments, "--confirm-not-applicable", value)
+            self.assertEqual(code, 2)
+            self.assertIn("PART:RULE:TOKEN", stderr)
 
     def test_cases_need_an_explicit_invocation_and_a_near_miss_per_part(self):
         import yaml

@@ -87,7 +87,7 @@ def verify_live(
     worker_evidence: list[dict] | tuple, cases: list[dict], runner: Runner = run_command,
     environ: Mapping[str, str] | None = None, kb_version: str = "", login_answer: str | None = None,
     collect: Callable[[], tuple[dict[str, bytes], dict[str, str], Decision, AcceptedRevision | None]] | None = None,
-    confirmed_exclusions: set[tuple[str, str]] | frozenset = frozenset(), drift: list[dict] | tuple = (),
+    confirmed_exclusions: set[tuple[str, str, str]] | frozenset = frozenset(), drift: list[dict] | tuple = (),
 ):
     """Static checks, a fresh review worker, runtime cases, then results in the design's precedence.
 
@@ -98,9 +98,10 @@ def verify_live(
     requirements file again after the workers ran, so a change made
     meanwhile invalidates the affected parts; one that cannot be read
     invalidates every part.
-    ``confirmed_exclusions`` are (part, rule) pairs the user confirmed do not
-    apply after seeing the reviewer's reason; a rule the reviewer now finds
-    applicable keeps its verdict.
+    ``confirmed_exclusions`` are (part, rule, token) triples the user confirmed
+    do not apply after seeing the reviewer's reason, each bound to the inputs
+    by its exclusion_token; a rule the reviewer now finds applicable keeps
+    its verdict.
     """
     environ = os.environ if environ is None else environ
     run = prepare_run(decision, files, rules, confirmation, symlinks=symlinks, revision=revision,

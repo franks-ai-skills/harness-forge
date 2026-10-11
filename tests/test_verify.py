@@ -9,7 +9,7 @@ from harness_forge.contracts import confirm_contract, render_contract
 from harness_forge.documents import canonical_digest
 from harness_forge.documents import load_document
 from harness_forge.models import Confirmation, Decision, RuntimeResult, Rule
-from harness_forge.verify import bound_inputs, finish_run, prepare_run, validate_review
+from harness_forge.verify import bound_inputs, exclusion_token, finish_run, prepare_run, validate_review
 from tests.builders import EVIDENCE, decision, part
 from tests.test_build_skill import DESCRIPTION, NAME, PROCEDURE, REVISION
 
@@ -222,6 +222,16 @@ class VerdictTest(unittest.TestCase):
         for response in (duplicate, unknown, other_run, {"run_id": "run-1"}):
             with self.assertRaises(ValueError):
                 validate_review(self.scenario.run, response)
+
+    def test_a_not_applicable_confirmation_binds_to_the_parts_inputs(self):
+        rule = "skills.invocation.side-effects-user-invoked"
+        scenario = Scenario(skill_decision())
+        changed = Scenario(skill_decision(), files={f".agents/skills/{NAME}/references/extra.md": b"More.\n"})
+        self.assertRegex(exclusion_token(scenario.run, "A", rule), r"^[0-9a-f]{16}$")
+        self.assertEqual(exclusion_token(scenario.run, "A", rule), exclusion_token(Scenario(skill_decision()).run, "A", rule))
+        self.assertNotEqual(exclusion_token(scenario.run, "A", rule), exclusion_token(changed.run, "A", rule))
+        self.assertNotEqual(exclusion_token(scenario.run, "A", rule),
+                            exclusion_token(scenario.run, "A", "skills.description.length"))
 
     def test_not_applicable_only_for_judged_applicability(self):
         review = copy.deepcopy(self.review)

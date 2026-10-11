@@ -34,7 +34,7 @@ from harness_forge.research import (  # noqa: E402
 from harness_forge.runtime import load_cases  # noqa: E402
 from harness_forge.workflow import research_pass, verify_live  # noqa: E402
 from harness_forge.scope import scope_options  # noqa: E402
-from harness_forge.verify import NEEDS_CONFIRMATION, finish_run, part_kind, prepare_run  # noqa: E402
+from harness_forge.verify import NEEDS_CONFIRMATION, exclusion_token, finish_run, part_kind, prepare_run  # noqa: E402
 from harness_forge.models import ReviewResponse  # noqa: E402
 from harness_forge.selection import next_question, recommend  # noqa: E402
 
@@ -535,10 +535,10 @@ def _verify(arguments: argparse.Namespace) -> int:
             raise _InvalidInput(f"part {part_id} needs an explicit invocation and a near miss among its cases")
     exclusions = set()
     for item in arguments.confirm_not_applicable:
-        part_id, _, rule_id = item.partition(":")
-        if not part_id or not rule_id:
-            raise _InvalidInput(f"--confirm-not-applicable takes PART:RULE, not {item!r}")
-        exclusions.add((part_id, rule_id))
+        fields = item.split(":")
+        if len(fields) != 3 or not all(fields):
+            raise _InvalidInput(f"--confirm-not-applicable takes PART:RULE:TOKEN as verify printed it, not {item!r}")
+        exclusions.add(tuple(fields))
     manifest = parse_json((SNAPSHOT / "kb-manifest.json").read_text(encoding="utf-8"))
     research = root / ".harness" / "research" / f"{arguments.slug}.md"
     try:
@@ -562,7 +562,8 @@ def _verify(arguments: argparse.Namespace) -> int:
     parts = [{"part_id": r.part_id, "status": r.status, "harness_result": r.harness_result, "goal_result": r.goal_result}
              for r in results]
     runtime = [{"case_id": r.case_id, "result": r.result, "reason": r.reason} for r in run.runtime_results]
-    unresolved = [{"part_id": r.part_id, "rule_id": rule["rule_id"], "reason": rule["reason"].removesuffix(NEEDS_CONFIRMATION)}
+    unresolved = [{"part_id": r.part_id, "rule_id": rule["rule_id"], "reason": rule["reason"].removesuffix(NEEDS_CONFIRMATION),
+                   "confirmation": f"{r.part_id}:{rule['rule_id']}:{exclusion_token(run, r.part_id, rule['rule_id'])}"}
                   for r in results for rule in r.rule_results if rule["result"] == "unresolved"]
     emit({"command": "verify", "run_id": run.run_id, "parts": parts, "runtime": runtime, "unresolved": unresolved,
           "worker_violations": list(run.worker_violations), "written": written})
@@ -638,8 +639,9 @@ def build_parser() -> argparse.ArgumentParser:
     build.add_argument("--replace", help="comma-separated paths the user agreed to replace")
     build.set_defaults(handler=_build)
     verify.add_argument("--cases", help="runtime cases, such as evals/smoke/vertical.yaml")
-    verify.add_argument("--confirm-not-applicable", action="append", default=[], metavar="PART:RULE",
-                        help="a rule the user confirmed does not apply, after seeing the reviewer's reason; repeatable")
+    verify.add_argument("--confirm-not-applicable", action="append", default=[], metavar="PART:RULE:TOKEN",
+                        help="an unresolved rule's confirmation as verify printed it, after the user confirmed "
+                             "that the rule does not apply; repeatable")
     verify.add_argument("--slug", required=True)
     verify.add_argument("--write", action="store_true", help="write .harness/reports/<slug>.md")
     verify.set_defaults(handler=_verify)

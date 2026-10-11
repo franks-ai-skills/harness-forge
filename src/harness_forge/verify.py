@@ -273,14 +273,32 @@ def _goal_result(kind: str, status: str, harness: str, dependencies: list[str], 
     return "met by the verified build"
 
 
+def exclusion_token(run: VerificationRun, part_id: str, rule_id: str) -> str:
+    """What the user's "does not apply" was given for: the rule, the idea, the part's record, files and requirements.
+
+    Not the reviewer's wording: a fresh reviewer words its reason anew on every
+    run, so a token bound to it would never carry over to the next run.
+    A change to any of these inputs makes the confirmation stale.
+    """
+    inputs = run.frozen_inputs
+    return canonical_digest({
+        "part_id": part_id, "rule_id": rule_id, "statement": run.rule_index.get(rule_id, {}).get("statement"),
+        "idea": inputs["idea"], "part": inputs["parts"].get(part_id), "revision": inputs["revision"],
+        "files": {path: inputs["files"][path] for path in run.part_files.get(part_id, [])},
+    })[:16]
+
+
 def finish_run(
     run: VerificationRun, review: ReviewResponse, runtime_results: list[RuntimeResult], current_inputs: dict, *,
-    confirmed_exclusions: set[tuple[str, str]] | frozenset = frozenset(),
+    confirmed_exclusions: set[tuple[str, str, str]] | frozenset = frozenset(),
     worker_observations: list[dict] | tuple = (),
     required_activation: dict[str, set[str]] | None = None,
     drift: list[dict] | tuple = (),
 ) -> list[PartResult]:
-    """Each part's harness and goal result. confirmed_exclusions are live user confirmations.
+    """Each part's harness and goal result.
+
+    confirmed_exclusions are live user confirmations as (part, rule, token):
+    one counts only while exclusion_token still gives its token.
 
     drift is the research record's drift. Unresolved security or
     compatibility drift on a rule that applies to a part blocks that part
@@ -327,7 +345,8 @@ def finish_run(
             elif verdict["verdict"] == "not-applicable":
                 if info["applicability"] != "judged":
                     entry = {"result": "error", "reason": "not applicable is allowed only for judged applicability"}
-                elif info["severity"] == "error" and (part_id, rule_id) not in confirmed_exclusions:
+                elif (info["severity"] == "error"
+                      and (part_id, rule_id, exclusion_token(run, part_id, rule_id)) not in confirmed_exclusions):
                     entry = {"result": "unresolved", "reason": verdict["reason"] + NEEDS_CONFIRMATION}
                 else:
                     entry = {"result": "not-applicable", "reason": verdict["reason"]}

@@ -196,7 +196,7 @@ def vertical(harness: str, out: Path, *, forge: Forge | None = None,
         # Like the contract: the runner confirms what a user would be asked, and says so.
         summary["not_applicable_confirmed"] = {"by": TEST_RELAY, "rules": verified["unresolved"]}
         confirmations = [argument for rule in verified["unresolved"]
-                         for argument in ("--confirm-not-applicable", f"{rule['part_id']}:{rule['rule_id']}")]
+                         for argument in ("--confirm-not-applicable", rule["confirmation"])]
         code, verified = stage("verify with confirmations", forge(*verify, *confirmations))
         if verified is None:
             return finish("stopped: verification with confirmations did not run")

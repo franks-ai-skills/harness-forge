@@ -62,8 +62,12 @@ class VerticalRunTest(unittest.TestCase):
         rule = "skills.invocation.side-effects-user-invoked"
         summary, _ = self.run_vertical(NotApplicableRunner([finding()], rule))
         self.assertEqual([stage["stage"] for stage in summary["stages"]][-2:], ["verify", "verify with confirmations"])
-        self.assertEqual(summary["not_applicable_confirmed"],
-                         {"by": LIVE.TEST_RELAY, "rules": [{"part_id": "A", "rule_id": rule, "reason": "It writes text only."}]})
+        confirmed = summary["not_applicable_confirmed"]
+        self.assertEqual(confirmed["by"], LIVE.TEST_RELAY)
+        [entry] = confirmed["rules"]
+        self.assertEqual(entry, {"part_id": "A", "rule_id": rule, "reason": "It writes text only.",
+                                 "confirmation": entry["confirmation"]})
+        self.assertRegex(entry["confirmation"], rf"^A:{rule}:[0-9a-f]{{16}}$")
         self.assertEqual(summary["parts"][0]["harness_result"], "verified")
 
     def test_a_failed_verification_is_not_a_completed_run(self):
