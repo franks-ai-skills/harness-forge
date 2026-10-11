@@ -5,12 +5,14 @@ run through their CLIs with your existing login: intake, research,
 mechanism selection, accepted requirements, portable builds and
 verification against a pinned knowledge base.
 
-Status: the offline workflow is implemented and tested with stubbed
-research and review workers: selection, contract confirmation, sourced
-research checks, skill builds and verification reports against a pinned
-KB snapshot. Live runs in Claude Code and Codex, the worker launchers and
-installation are not done yet, so no harness is supported yet. The
-feasibility probes and their evidence remain in `evals/canaries/`.
+Status: the workflow runs live in Claude Code and Codex from a local
+checkout, with research, source-support and review workers launched as
+separate CLI processes and runtime tests of the built skill. On
+2026-10-11 the automated live runs and one hands-on session per harness
+completed it. Overrides, drift and conflict handling, the reference
+checks and installation are not done yet, so no harness is supported
+for general use yet. The feasibility probes and their evidence remain in
+`evals/canaries/`.
 Implementation follows the sibling playground's
 [design](../playground/specs/2026-10-06-harness-forge-design.md) and
 [plan](../playground/plans/2026-10-07-harness-forge-thin-slice.md).
@@ -18,7 +20,7 @@ Implementation follows the sibling playground's
 ## Worker isolation limitations
 
 On 2026-10-09 the project owner accepted **automated workers with weaker
-isolation**, recorded as `best-effort-v1`. Both harnesses will run their
+isolation**, recorded as `best-effort-v1`. Both harnesses run their
 own research, source-support and review workers in independent CLI
 processes with explicit role inputs and the baseline controls below.
 Native subagents are excluded from this release's worker adapters.
