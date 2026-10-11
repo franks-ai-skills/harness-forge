@@ -74,7 +74,7 @@ class LiveCommandsTest(unittest.TestCase):
         self.assertEqual(code, 0)
 
     def test_research_refuses_a_relay_for_another_contract(self):
-        cli = Cli(ResearchRunner([finding(1)]), self.root)
+        cli = Cli(ResearchRunner([finding()]), self.root)
         _, workers, _ = cli("workers", "--harness", "claude-code")
         evidence = cli.write("workers.json", workers)
         relay = cli.write("relay.json", {"choice": "confirm", "displayed_digest": "0" * 64, "part_ids": ["A"],
@@ -87,7 +87,7 @@ class LiveCommandsTest(unittest.TestCase):
         self.assertEqual(cli.module.RUNNER.worker_calls, [])
 
     def test_research_accept_build_and_verify(self):
-        runner = ResearchRunner([finding(1)])
+        runner = ResearchRunner([finding()])
         cli = Cli(runner, self.root)
         _, workers, _ = cli("workers", "--harness", "claude-code")
         evidence = cli.write("workers.json", workers)

@@ -7,6 +7,7 @@ from pathlib import Path
 
 from harness_forge.adapters import claude_code, codex
 from harness_forge.adapters.base import Completed, preflight, run_worker, worker_environment
+from harness_forge.adapters.output import output_schema
 from harness_forge.documents import canonical_digest, validate
 from harness_forge.contracts import confirm_contract, render_contract
 from harness_forge.verify import review_request
@@ -23,13 +24,19 @@ PARENT = {"HOME": "/home/u", "PATH": "/usr/bin", "USER": "u", "LOGNAME": "u", "L
           "OPENAI_BASE_URL": "https://proxy", "GITHUB_TOKEN": "ghp", "CLAUDECODE": "1"}
 
 
-def claude_stream(result: dict | str, tools=("Read", "Grep", "Glob"), calls=(), model="claude-opus-5-5"):
+def claude_stream(result: dict | str, tools=("Read", "Grep", "Glob"), calls=(), model="claude-opus-5-5",
+                  structured=None):
+    """A stream-json run; ``structured`` adds the StructuredOutput call and the result's structured_output."""
     events = [{"type": "system", "subtype": "init", "tools": list(tools), "model": model, "apiKeySource": "none"}]
+    calls = tuple(calls) + (("StructuredOutput",) if structured is not None else ())
     for number, name in enumerate(calls):
         events.append({"type": "assistant", "message": {"content": [
             {"type": "tool_use", "id": f"t{number}", "name": name, "input": {}}]}})
     text = result if isinstance(result, str) else json.dumps(result)
-    events.append({"type": "result", "subtype": "success", "is_error": False, "result": text})
+    final = {"type": "result", "subtype": "success", "is_error": False, "result": text}
+    if structured is not None:
+        final["structured_output"] = structured
+    events.append(final)
     return "\n".join(json.dumps(event) for event in events) + "\n"
 
 
@@ -72,8 +79,10 @@ class FakeRunner:
         if tuple(command) in answers:
             return Completed(0, answers[tuple(command)], "", False)
         workspace = Path(cwd)
+        schema = workspace / "output-schema.json"
         self.worker_calls.append({"command": list(command), "env": dict(env), "cwd": str(workspace), "stdin": stdin,
-                                  "files": sorted(p.relative_to(workspace).as_posix() for p in workspace.rglob("*") if p.is_file())})
+                                  "files": sorted(p.relative_to(workspace).as_posix() for p in workspace.rglob("*") if p.is_file()),
+                                  "output_schema": json.loads(schema.read_text()) if schema.exists() else None})
         return Completed(self.returncode, self.worker, "", self.timed_out)
 
 
@@ -341,6 +350,57 @@ class LaunchTest(unittest.TestCase):
                 validate(response, "worker-response")
                 self.assertEqual(response["status"], status)
                 self.assertTrue(response["reason"])
+
+
+def _objects(schema):
+    if isinstance(schema, dict):
+        if schema.get("type") == "object":
+            yield schema
+        for value in schema.values():
+            yield from _objects(value)
+    elif isinstance(schema, list):
+        for value in schema:
+            yield from _objects(value)
+
+
+class StructuredOutputTest(unittest.TestCase):
+    def test_each_role_gets_a_structural_schema_both_clis_accept(self):
+        allowed = {"type", "properties", "required", "additionalProperties", "items", "enum"}
+        for role in ("research", "source-support", "review"):
+            with self.subTest(role=role):
+                schema = output_schema(role)
+                for node in _objects(schema):
+                    self.assertEqual(sorted(node["required"]), sorted(node["properties"]))
+                    self.assertIs(node["additionalProperties"], False)
+                keywords = {key for node in _objects(schema) for value in node["properties"].values() for key in value}
+                self.assertLessEqual(keywords, allowed)
+                claude = claude_code.command(role, "/w")
+                self.assertEqual(json.loads(claude[claude.index("--json-schema") + 1]), schema)
+                command = codex.command(role, "/w")
+                self.assertEqual(command[command.index("--output-schema") + 1], "/w/output-schema.json")
+
+    def test_the_research_worker_leaves_ids_and_brief_fields_to_forge(self):
+        finding = output_schema("research")["properties"]["findings"]["items"]
+        self.assertEqual(sorted(finding["properties"]), ["claim", "context", "fetched", "quote", "source", "source_role"])
+
+    def test_claude_structured_output_is_the_answer(self):
+        request, files, verdicts = review_case()
+        runner = FakeRunner(worker=claude_stream("Here is my review.", structured=verdicts))
+        response = run_worker(request, "claude-code", **approval("claude-code", "review"),
+                              runner=runner, environ=PARENT, files=files)
+        self.assertEqual(response["status"], "completed", response.get("reason"))
+        self.assertEqual(response["output"], verdicts)
+        self.assertFalse(any("out of scope" in line for line in response["evidence"]["observed_behavior"]))
+
+    def test_the_codex_worker_finds_its_schema_in_the_workspace(self):
+        request, files, verdicts = review_case()
+        runner = FakeRunner(worker=codex_stream(verdicts))
+        response = run_worker(request, "codex", **approval("codex", "review"), runner=runner, environ=PARENT,
+                              files=files)
+        self.assertEqual(response["status"], "completed", response.get("reason"))
+        call = runner.worker_calls[0]
+        self.assertEqual(call["output_schema"], output_schema("review"))
+        self.assertEqual(call["files"], sorted(["request.json", "output-schema.json", *files]))
 
 
 if __name__ == "__main__":

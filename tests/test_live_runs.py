@@ -33,10 +33,12 @@ class VerticalRunTest(unittest.TestCase):
         with tempfile.TemporaryDirectory(prefix="forge-vertical-") as directory:
             summary = LIVE.vertical("claude-code", Path(directory) / "run", forge=forge)
             on_disk = json.loads((Path(directory) / "run" / "summary.json").read_text(encoding="utf-8"))
+            self.streams = [json.loads(path.read_text(encoding="utf-8"))
+                            for path in sorted((Path(directory) / "run" / "streams").glob("*.json"))]
         return summary, on_disk
 
     def test_the_vertical_run_completes_without_input_and_says_who_confirmed(self):
-        runner = ResearchRunner([finding(1)])
+        runner = ResearchRunner([finding()])
         summary, on_disk = self.run_vertical(runner)
         self.assertEqual(summary["status"], "completed", [s for s in summary["stages"] if s["exit"]])
         self.assertTrue(summary["clean"])
@@ -46,8 +48,16 @@ class VerticalRunTest(unittest.TestCase):
         self.assertEqual(runner.roles, ["research", "source-support", "research", "source-support", "review",
                                         "runtime", "runtime", "runtime"])
 
+    def test_every_worker_stream_is_kept_for_diagnosis(self):
+        runner = ResearchRunner([finding()])
+        self.run_vertical(runner)
+        self.assertEqual(len(self.streams), len(runner.worker_calls))
+        self.assertEqual([stream["stdin"] for stream in self.streams], [call["stdin"] for call in runner.worker_calls])
+        for stream in self.streams:
+            self.assertEqual(set(stream), {"command", "stdin", "returncode", "stdout", "stderr", "timed_out"})
+
     def test_no_kept_deep_finding_stops_before_acceptance(self):
-        summary, _ = self.run_vertical(ResearchRunner([finding(1, quote="Not on the page.")]))
+        summary, _ = self.run_vertical(ResearchRunner([finding(quote="Not on the page.")]))
         self.assertIn("kept no finding", summary["status"])
         self.assertNotIn("accept", [stage["stage"] for stage in summary["stages"]])
 

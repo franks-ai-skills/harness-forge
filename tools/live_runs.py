@@ -11,6 +11,9 @@ session: the runner relays the confirmation itself, and every summary says
 so. Its results show that the workers, research, build and verification
 work live; the confirmation ceremony is proven only by a real session.
 
+Every worker and runtime launch's raw stream is kept under `streams/`
+next to the summary, in the git-ignored private results directory.
+
 A run is clean only when no user-level skill, plugin or MCP server stayed
 loaded in a runtime or routing case; otherwise it reports `clean: false`
 for the user to decide, never a clean result.
@@ -73,6 +76,26 @@ def _write_json(path: Path, value) -> Path:
     return path
 
 
+class Recorder:
+    """Keeps each worker and runtime launch's prompt, raw output and exit in ``directory`` for diagnosis.
+
+    Metadata calls (version, help, login status) carry no prompt and are not
+    kept; neither is the environment.
+    """
+
+    def __init__(self, runner, directory: Path):
+        self.runner, self.directory, self.count = runner, directory, 0
+
+    def __call__(self, command, *, cwd, env, stdin, timeout):
+        completed = self.runner(command, cwd=cwd, env=env, stdin=stdin, timeout=timeout)
+        if stdin is not None:
+            self.count += 1
+            _write_json(self.directory / f"{self.count:03d}.json", {
+                "command": list(command), "stdin": stdin, "returncode": completed.returncode,
+                "stdout": completed.stdout, "stderr": completed.stderr, "timed_out": completed.timed_out})
+        return completed
+
+
 def _clean(reasons: list[str]) -> bool:
     return not any(marker in reason for reason in reasons for marker in UNCLEAN)
 
@@ -82,6 +105,7 @@ def vertical(harness: str, out: Path, *, forge: Forge | None = None,
              cases_path: Path = ROOT / "evals" / "smoke" / "vertical.yaml") -> dict:
     """Intake record, both research passes, acceptance, build and verification in one throwaway repository."""
     forge = forge or Forge()
+    forge.module.RUNNER = Recorder(forge.module.RUNNER, out / "streams")
     inputs = yaml.safe_load(inputs_path.read_text(encoding="utf-8"))
     repo, scratch = out / "repo", out / "inputs"
     repo.mkdir(parents=True)
@@ -200,6 +224,7 @@ def routing_smoke(harness: str, out: Path, *, runner=run_command, environ=None) 
     """Forge's four skills installed together; per skill an explicit, an implicit and a near-miss prompt."""
     environ = os.environ if environ is None else environ
     out.mkdir(parents=True, exist_ok=True)
+    runner = Recorder(runner, out / "streams")
     summary = {"case": "routing-smoke", "harness": harness, "results": [], "status": "stopped", "clean": None}
     checked = preflight(harness, "review", runner=runner, environ=environ)
     summary["preflight"] = {key: checked[key] for key in ("available", "reason", "version", "login")}

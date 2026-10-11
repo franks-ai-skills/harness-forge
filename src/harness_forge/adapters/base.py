@@ -206,6 +206,8 @@ def run_worker(request: dict, harness: str, *, contract: Contract, confirmation:
     with tempfile.TemporaryDirectory(prefix=f"forge-{role}-", dir=workspace_root) as directory:
         workspace = Path(directory)
         (workspace / "request.json").write_text(json.dumps(request, indent=2, ensure_ascii=False), encoding="utf-8")
+        for name, data in adapter.workspace_files(role).items():
+            (workspace / name).write_bytes(data)
         for path, data in files.items():
             target = safe_path(workspace, path)
             target.parent.mkdir(parents=True, exist_ok=True)

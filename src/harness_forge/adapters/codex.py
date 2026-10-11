@@ -3,12 +3,16 @@
 Feature names are checked against `codex features list` of the installed
 version, flags against its help; a missing or removed one blocks launch.
 Codex does not report a tool inventory, so observed tools stay unknown.
+`--output-schema` points at the role's output shape, written into the
+workspace as `output-schema.json`.
 """
 
 from __future__ import annotations
 
 import json
 import re
+
+from harness_forge.adapters.output import output_schema
 
 HARNESS = "codex"
 EXECUTABLE = "codex"
@@ -18,11 +22,12 @@ HELP_COMMANDS = (["codex", "--help"], ["codex", "exec", "--help"])
 LOGIN_COMMAND = ["codex", "login", "status"]
 REQUIRED_FLAGS = ("--no-daemon",)
 REQUIRED_EXEC_FLAGS = ("--ignore-user-config", "--ignore-rules", "--skip-git-repo-check", "--ephemeral", "--json",
-                       "--color", "--strict-config", "--cd")
+                       "--color", "--strict-config", "--cd", "--output-schema")
 DISABLED_FEATURES = ("apps", "plugins", "hooks", "multi_agent", "browser_use", "browser_use_external", "computer_use",
                      "image_generation", "remote_plugin", "tool_suggest", "view_image")
 NO_SHELL = ("shell_tool", "unified_exec")
 PROFILE = "forge-worker"
+SCHEMA_FILE = "output-schema.json"
 # Item types that are not tool use; anything else must be allowed for the role.
 _NEUTRAL_ITEMS = {"agent_message", "reasoning", "todo_list"}
 _ROLE_ITEMS = {"research": {"web_search"}, "source-support": set(), "review": {"command_execution"}}
@@ -51,10 +56,15 @@ def command(role: str, workspace: str) -> list[str]:
     disabled = DISABLED_FEATURES + (NO_SHELL if role != "review" else ())
     settings.update({f"features.{feature}": False for feature in disabled})
     arguments = ["codex", "--no-daemon", "exec", "--ignore-user-config", "--ignore-rules", "--skip-git-repo-check",
-                 "--ephemeral", "--json", "--color", "never", "--strict-config", "-C", workspace]
+                 "--ephemeral", "--json", "--color", "never", "--strict-config", "-C", workspace,
+                 "--output-schema", f"{workspace}/{SCHEMA_FILE}"]
     for key, value in settings.items():
         arguments += ["-c", f"{key}={_literal(value)}"]
     return arguments + ["-"]
+
+
+def workspace_files(role: str) -> dict[str, bytes]:
+    return {SCHEMA_FILE: json.dumps(output_schema(role), indent=2).encode()}
 
 
 def parse_login(stdout: str, stderr: str, returncode: int) -> tuple[str, str]:

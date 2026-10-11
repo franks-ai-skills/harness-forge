@@ -14,9 +14,9 @@ from typing import Callable, Mapping
 from harness_forge.adapters.base import Runner, run_command, run_worker
 from harness_forge.documents import validate
 from harness_forge.fetch import FetchError, fetch_text
-from harness_forge.models import AcceptedRevision, Confirmation, Contract, Decision, Finding, ReviewResponse, Rule
+from harness_forge.models import AcceptedRevision, Confirmation, Contract, Decision, ReviewResponse, Rule
 from harness_forge.research import (
-    _normalized, finding_problem, make_brief, research_request, source_rejection, support_request,
+    _normalized, finding_problem, make_brief, research_request, source_rejection, support_request, worker_finding,
 )
 from harness_forge.runtime import run_skill_runtime
 from harness_forge.verify import bound_inputs, finish_run, part_kind, prepare_run, review_request, validate_review
@@ -38,7 +38,8 @@ def research_pass(
 ) -> dict:
     """One pass: the research worker, Forge's own fetch and quote check, then a support worker per quoted finding.
 
-    Finding ids continue after ``existing_ids`` so both passes share one record.
+    Forge numbers the findings after ``existing_ids``, so both passes share
+    one record, and adds the pass, part and brief digest it sent.
     A support worker runs only for findings whose quote the page contains;
     sources the policy rejects are never fetched.
     """
@@ -55,10 +56,7 @@ def research_pass(
         return result
     raw = response["output"]["findings"]
     for item, new_id in zip(raw, _next_ids(list(existing_ids), len(raw))):
-        finding = Finding.from_dict({**item, "id": new_id})
-        if (finding.pass_name, finding.part_id, finding.brief_digest) != (pass_name, part_id, brief.digest):
-            result["dropped"].append({"id": new_id, "reason": "the finding is not for this pass's brief"})
-            continue
+        finding = worker_finding(item, brief, new_id)
         rejection = source_rejection(finding.source)
         if rejection:
             result["dropped"].append({"id": new_id, "reason": rejection})

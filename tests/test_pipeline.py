@@ -15,10 +15,9 @@ from harness_forge.adapters.base import Completed, preflight, run_worker
 from harness_forge.build_skill import plan_skill
 from harness_forge.contracts import confirm_contract, render_contract, update_outside_section
 from harness_forge.documents import validate
-from harness_forge.models import Finding
 from harness_forge.report import report_data
 from harness_forge.research import (
-    accept_requirements, finding_problem, make_brief, research_request, support_request,
+    accept_requirements, finding_problem, make_brief, research_request, support_request, worker_finding,
 )
 from harness_forge.runtime import load_cases, run_skill_runtime
 from harness_forge.verify import bound_inputs, finish_run, prepare_run, review_request, validate_review
@@ -61,10 +60,8 @@ class ScriptedRunner(FakeRunner):
         inputs = request["inputs"]
         if request["role"] == "research":
             number = "1" if inputs["pass"] == "survey" else "2"
-            finding = {"id": f"F{number}", "pass": inputs["pass"], "part_id": inputs["part_id"],
-                       "claim": "The reproducer tool is supported only on Linux", "source": SOURCE,
-                       "fetched": "2026-10-10", "quote": QUOTE, "context": CONTEXT,
-                       "brief_digest": inputs["brief_digest"], "source_role": "primary"}
+            finding = {"claim": f"The reproducer tool is supported only on Linux ({number})", "source": SOURCE,
+                       "fetched": "2026-10-10", "quote": QUOTE, "context": CONTEXT, "source_role": "primary"}
             return Completed(0, claude_stream({"findings": [finding]}, tools=("WebFetch", "WebSearch"),
                                               calls=("WebFetch",)), "", False)
         if request["role"] == "source-support":
@@ -124,7 +121,7 @@ class VerticalWorkflowTest(unittest.TestCase):
             brief = make_brief(record, pass_name, part_id)
             response = self.launch(research_request(brief, "intake-1", f"{pass_name}-1"), contract, confirmation)
             self.assertEqual(response["status"], "completed", response.get("reason"))
-            findings += [Finding.from_dict(item) for item in response["output"]["findings"]]
+            findings += [worker_finding(item, brief, f"F{len(findings) + 1}") for item in response["output"]["findings"]]
         self.assertEqual([f.pass_name for f in findings], ["survey", "deep"])
 
         kept = []

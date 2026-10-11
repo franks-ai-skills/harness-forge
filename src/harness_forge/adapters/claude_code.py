@@ -3,13 +3,17 @@
 `--safe-mode` keeps the user's existing login (unlike `--bare`, which needs
 an API key) while disabling CLAUDE.md, skills, plugins, hooks and MCP
 servers; `--restricted` removes the command-running tools and ignores the
-settings files. These are starting settings verified against the installed
-version's help, not permanent vendor guarantees.
+settings files. `--json-schema` makes the answer a validated
+`StructuredOutput` call, reported as the result's `structured_output`.
+These are starting settings verified against the installed version's help,
+not permanent vendor guarantees.
 """
 
 from __future__ import annotations
 
 import json
+
+from harness_forge.adapters.output import output_schema
 
 HARNESS = "claude-code"
 EXECUTABLE = "claude"
@@ -20,7 +24,7 @@ LOGIN_COMMAND = ["claude", "auth", "status", "--json"]
 REQUIRED_FLAGS = (
     "--print", "--output-format", "--verbose", "--no-session-persistence", "--safe-mode", "--restricted",
     "--setting-sources", "--strict-mcp-config", "--mcp-config", "--disable-slash-commands", "--permission-mode",
-    "--permission-prompts", "--settings", "--tools", "--allowedTools",
+    "--permission-prompts", "--settings", "--tools", "--allowedTools", "--json-schema",
 )
 ROLE_TOOLS = {"research": ["WebFetch", "WebSearch"], "source-support": [], "review": ["Read", "Grep", "Glob"]}
 _API_KEY_METHODS = ("api_key", "apiKey", "api-key", "apiKeyHelper", "api_key_helper")
@@ -36,7 +40,12 @@ def command(role: str, workspace: str) -> list[str]:
         "--permission-mode", "dontAsk", "--permission-prompts", "none",
         "--settings", '{"disableAllHooks":true,"autoMemoryEnabled":false}',
         "--tools", tools, "--allowedTools", tools,
+        "--json-schema", json.dumps(output_schema(role), separators=(",", ":")),
     ]
+
+
+def workspace_files(role: str) -> dict[str, bytes]:
+    return {}
 
 
 def parse_login(stdout: str, stderr: str, returncode: int) -> tuple[str, str]:
@@ -62,7 +71,7 @@ def extra_problem(run) -> str | None:
 
 
 def allowed_calls(role: str) -> set[str]:
-    return set(ROLE_TOOLS[role])
+    return set(ROLE_TOOLS[role]) | {"StructuredOutput"}
 
 
 def observe(stdout: str) -> dict:
@@ -100,7 +109,9 @@ def observe(stdout: str) -> dict:
                       if isinstance(block, dict) and block.get("type") == "tool_use"]
         if event.get("type") == "result":
             if event.get("is_error") is False and event.get("subtype") == "success":
-                completed, text = True, event.get("result")
+                structured = event.get("structured_output")
+                completed = True
+                text = json.dumps(structured) if isinstance(structured, dict) else event.get("result")
             else:
                 errored = True
     if parse_errors:

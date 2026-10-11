@@ -37,10 +37,7 @@ class ResearchRunner(ScriptedRunner):
             if request["role"] == "research":
                 self.roles.append("research")
                 self.worker_calls.append({"command": command, "cwd": cwd, "stdin": stdin, "env": env, "files": []})
-                findings = [{**f, "brief_digest": request["inputs"]["brief_digest"], "pass": request["inputs"]["pass"],
-                             "part_id": request["inputs"]["part_id"]} if "brief_digest" not in f else f
-                            for f in self.findings]
-                return Completed(0, claude_stream({"findings": findings}, tools=("WebFetch",)), "", False)
+                return Completed(0, claude_stream({"findings": self.findings}, tools=("WebFetch",)), "", False)
             if request["role"] == "source-support":
                 self.roles.append("source-support")
                 self.support_ids.append(request["inputs"]["finding_id"])
@@ -51,8 +48,9 @@ class ResearchRunner(ScriptedRunner):
         return super().__call__(command, cwd=cwd, env=env, stdin=stdin, timeout=timeout)
 
 
-def finding(number=1, **changes):
-    value = {"id": f"F{number}", "claim": "The reproducer tool is supported only on Linux", "source": SOURCE,
+def finding(**changes):
+    """One finding as the research worker returns it: Forge adds the id and the brief fields."""
+    value = {"claim": "The reproducer tool is supported only on Linux", "source": SOURCE,
              "fetched": "2026-10-10", "quote": QUOTE, "context": CONTEXT, "source_role": "primary"}
     value.update(changes)
     return value
@@ -73,7 +71,7 @@ class ResearchPassTest(unittest.TestCase):
         return result, runner
 
     def test_kept_findings_passed_both_checks_and_ids_continue_the_record(self):
-        result, runner = self.run_pass([finding(1), finding(2, quote="A sentence the page does not contain.")],
+        result, runner = self.run_pass([finding(), finding(quote="A sentence the page does not contain.")],
                                        existing=["F1", "F2"])
         self.assertEqual([f["id"] for f in result["kept"]], ["F3"])
         self.assertEqual([d["id"] for d in result["dropped"]], ["F4"])
@@ -83,7 +81,7 @@ class ResearchPassTest(unittest.TestCase):
         self.assertEqual(len(result["worker_evidence"]), 2)
 
     def test_unsupported_findings_are_dropped(self):
-        result, _ = self.run_pass([finding(1)], support="unsupported")
+        result, _ = self.run_pass([finding()], support="unsupported")
         self.assertEqual(result["kept"], [])
         self.assertEqual(result["support"][0]["verdict"], "unsupported")
 
@@ -94,18 +92,18 @@ class ResearchPassTest(unittest.TestCase):
             fetched.append(url)
             return PAGE
 
-        result, runner = self.run_pass([finding(1, source="https://x.com/someone/status/1")], fetch=fetch)
+        result, runner = self.run_pass([finding(source="https://x.com/someone/status/1")], fetch=fetch)
         self.assertEqual(fetched, [])
         self.assertEqual(runner.support_ids, [])
         self.assertIn("X platform", result["dropped"][0]["reason"])
 
-    def test_a_finding_for_another_brief_is_dropped(self):
-        result, _ = self.run_pass([finding(1, brief_digest="0" * 64, **{"pass": "deep", "part_id": "A"})])
-        self.assertEqual(result["kept"], [])
-        self.assertIn("brief", result["dropped"][0]["reason"])
+    def test_forge_adds_the_pass_part_and_brief_digest(self):
+        result, _ = self.run_pass([finding()])
+        kept = result["kept"][0]
+        self.assertEqual((kept["pass"], kept["part_id"], kept["brief_digest"]), ("deep", "A", result["brief"]["digest"]))
 
     def test_an_unfetchable_source_is_dropped(self):
-        result, _ = self.run_pass([finding(1, source="https://docs.example-vendor.com/gone")])
+        result, _ = self.run_pass([finding(source="https://docs.example-vendor.com/gone")])
         self.assertEqual(result["kept"], [])
         self.assertIn("could not be fetched", result["dropped"][0]["reason"])
 

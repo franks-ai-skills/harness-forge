@@ -68,6 +68,12 @@ def research_request(brief: ResearchBrief, run_id: str, request_id: str) -> dict
     return request
 
 
+def worker_finding(item: dict, brief: ResearchBrief, finding_id: str) -> Finding:
+    """A research worker's finding with the id, pass, part and brief digest Forge sent it."""
+    return Finding.from_dict({**item, "id": finding_id, "pass": brief.pass_name, "part_id": brief.part_id,
+                              "brief_digest": brief.digest})
+
+
 def support_request(finding: Finding, run_id: str, request_id: str) -> dict:
     """The source-support worker's request: one finding's claim, quote and context, not its source or reasoning."""
     inputs = {"finding_id": finding.id, "claim": finding.claim, "quote": finding.quote, "context": finding.context}

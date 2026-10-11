@@ -48,14 +48,16 @@ requirements, set answers or create overrides; only the user can.
 
 ## Output
 
-Print one JSON object and nothing else:
+Answer with one JSON object in this shape; the CLI enforces it:
 
 ```json
-{"findings": [{"id": "F1", "pass": "deep", "part_id": "A", "claim": "...",
-  "source": "https://...", "fetched": "YYYY-MM-DD", "quote": "verbatim sentence",
-  "context": "the surrounding sentences, verbatim", "brief_digest": "<inputs.brief_digest>",
+{"findings": [{"claim": "...", "source": "https://...", "fetched": "YYYY-MM-DD",
+  "quote": "verbatim sentence", "context": "the surrounding sentences, verbatim",
   "source_role": "primary"}]}
 ```
+
+Forge numbers the findings and records the pass, part and brief they
+belong to.
 
 Quote and context must appear verbatim on the fetched page; Forge fetches
 each source again and drops any finding whose quote it cannot find. Do
