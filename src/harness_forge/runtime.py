@@ -44,10 +44,14 @@ def load_cases(path: Path) -> list[dict]:
 
 
 def _claude_command(tools: list[str]) -> list[str]:
+    """Project settings only: the candidate's skills load, the user's plugins, skills and hooks do not.
+
+    `--restricted` cannot be used here: it also drops the project's skills.
+    """
     listed = ",".join(tools)
     return [
         "claude", "--print", "--output-format", "stream-json", "--verbose", "--no-session-persistence",
-        "--restricted", "--strict-mcp-config", "--mcp-config", '{"mcpServers":{}}',
+        "--setting-sources", "project", "--strict-mcp-config", "--mcp-config", '{"mcpServers":{}}',
         "--permission-mode", "dontAsk", "--permission-prompts", "none",
         "--settings", '{"disableAllHooks":true,"autoMemoryEnabled":false}',
         "--tools", listed, "--allowedTools", listed,

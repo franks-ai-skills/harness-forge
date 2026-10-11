@@ -66,6 +66,13 @@ class RuntimeTest(unittest.TestCase):
                          {p: d for p, d in self.scenario.run.frozen_inputs["files"].items() if p.startswith(SKILL_DIR + "/")})
         self.assertIn("bug-report.md sha256", results[0].environment)
 
+    def test_claude_loads_project_skills_without_personal_settings(self):
+        _, runner = self.run_cases("claude-code", claude_run())
+        command = runner.worker_calls[0]["command"]
+        self.assertNotIn("--restricted", command, "--restricted also drops the project's own skills")
+        self.assertEqual(command[command.index("--setting-sources") + 1], "project")
+        self.assertEqual(command[command.index("--tools") + 1], "Skill,Read")
+
     def test_changed_files_or_a_non_target_harness_are_refused_before_launch(self):
         runner = FakeRunner(worker=claude_run())
         changed = {**self.files, f"{SKILL_DIR}/SKILL.md": b"changed"}
