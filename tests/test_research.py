@@ -343,13 +343,22 @@ class DriftRecordTest(unittest.TestCase):
         entry["slug"] = "repro"
         kept = {"drift_decisions": [{"rule_id": entry["rule_id"], "finding_id": "F1", "choice": "keep",
                                      "reason": "The pinned limit is the portable one.", "date": "2026-10-12",
-                                     "drift_digest": drift_digest(entry)}]}
+                                     "drift_digest": drift_digest(entry), "slug": "repro", "summary": entry["summary"],
+                                     "source": entry["finding"]["source"], "quote": entry["finding"]["quote"]}]}
         self.assertEqual(drift_state(entry, kept, []), "kept")
         for change in ({"summary": "Something else changed."}, {"slug": "other-idea"},
                        {"finding": {**entry["finding"], "claim": "Another claim"}}):
             with self.subTest(change=list(change)):
                 self.assertEqual(drift_state({**entry, **change}, kept, []), "open",
                                  "a keep decision covers only the drift it was given for")
+        shown = {"slug": "repro", "summary": entry["summary"], "source": entry["finding"]["source"],
+                 "quote": entry["finding"]["quote"]}
+        displayed = {"drift_decisions": [{**kept["drift_decisions"][0], **shown}]}
+        self.assertEqual(drift_state(entry, displayed, []), "kept")
+        other = {**entry, "summary": "A different drift.", "finding": {**entry["finding"], "quote": "Other words."}}
+        forged = {"drift_decisions": [{**displayed["drift_decisions"][0], "drift_digest": drift_digest(other)}]}
+        self.assertEqual(drift_state(other, forged, []), "open",
+                         "the contract showed other text than the drift the digest names")
         adopted = {"rule_id": entry["rule_id"], "drift": {"finding": self.record["findings"][0]}}
         self.assertEqual(drift_state(entry, decision_record, [adopted]), "adopted")
         other = {"rule_id": entry["rule_id"], "drift": {"finding": {**self.record["findings"][0], "id": "F2"}}}

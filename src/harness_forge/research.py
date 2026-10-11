@@ -316,8 +316,13 @@ def drift_state(drift: dict, decision_record: dict, overrides: list[dict]) -> st
     that rule from that finding. Both count only under a confirmation of the contract that shows
     them, which the caller holds. A filed or pending issue decides nothing.
     """
+    finding = drift.get("finding") or {}
+    shown = {"slug": drift.get("slug"), "summary": drift.get("summary"), "source": finding.get("source"),
+             "quote": finding.get("quote")}
     for entry in decision_record.get("drift_decisions", []):
-        if entry["choice"] == "keep" and entry.get("drift_digest") == drift_digest(drift):
+        # The contract shows the decision's copy of the drift: it must be the drift the digest names.
+        if (entry["choice"] == "keep" and entry.get("drift_digest") == drift_digest(drift)
+                and {key: entry.get(key) for key in shown} == shown):
             return "kept"
     for override in overrides:
         if override["rule_id"] == drift["rule_id"] and override["drift"]["finding"] == drift.get("finding"):
