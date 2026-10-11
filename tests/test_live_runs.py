@@ -9,7 +9,7 @@ from pathlib import Path
 
 from harness_forge.adapters.base import Completed
 from harness_forge.runtime import BASELINE_PROMPT
-from tests.test_adapters import PARENT, FakeRunner
+from tests.test_adapters import PARENT, FakeRunner, claude_stream
 from tests.test_workflow import ResearchRunner, fetch_page, finding
 
 FORGE = Path(__file__).resolve().parents[1]
@@ -65,6 +65,22 @@ class VerticalRunTest(unittest.TestCase):
         self.assertEqual(summary["not_applicable_confirmed"],
                          {"by": LIVE.TEST_RELAY, "rules": [{"part_id": "A", "rule_id": rule, "reason": "It writes text only."}]})
         self.assertEqual(summary["parts"][0]["harness_result"], "verified")
+
+    def test_a_failed_verification_is_not_a_completed_run(self):
+        class GoalNotMet(ResearchRunner):
+            def __call__(self, command, *, cwd, env, stdin, timeout):
+                answer = super().__call__(command, cwd=cwd, env=env, stdin=stdin, timeout=timeout)
+                if self.roles and self.roles[-1] == "review" and stdin and "```json" in stdin:
+                    output = json.loads(json.loads(answer.stdout.splitlines()[-1])["result"])
+                    for verdict in output["goal_verdicts"]:
+                        verdict.update(verdict="not-met", reason="It leaves out the platform.")
+                    return Completed(0, claude_stream(output, calls=("Read",)), "", False)
+                return answer
+
+        summary, on_disk = self.run_vertical(GoalNotMet([finding()]))
+        self.assertEqual(summary["parts"][0]["harness_result"], "not verified")
+        self.assertEqual(summary["status"], "not verified")
+        self.assertEqual(on_disk["status"], "not verified")
 
     def test_no_kept_deep_finding_stops_before_acceptance(self):
         summary, _ = self.run_vertical(ResearchRunner([finding(quote="Not on the page.")]))
@@ -125,6 +141,7 @@ class RoutingSmokeTest(unittest.TestCase):
                 result["result"])
         self.assertEqual(by_mode, {"explicit": ["pass"] * 4, "implicit": ["fail"] * 4, "near-miss": ["pass"] * 4})
         self.assertTrue(summary["clean"])
+        self.assertEqual(summary["status"], "completed with failures", "live_checks exits 1 on a failed case")
         self.assertEqual(len(runner.worker_calls[1]["files"]),
                          sum(1 for skill in FORGE_SKILLS for p in (FORGE / "skills" / skill).rglob("*") if p.is_file()))
 

@@ -203,7 +203,9 @@ def vertical(harness: str, out: Path, *, forge: Forge | None = None,
     summary["parts"] = verified["parts"]
     summary["runtime"] = verified.get("runtime", [])
     summary["clean"] = _clean([case["reason"] for case in summary["runtime"]])
-    return finish("completed")
+    # The vertical proves the workflow only when verification succeeded: verify exits 1 otherwise.
+    verified = code == 0 and all(part["harness_result"] == "verified" for part in summary["parts"])
+    return finish("completed" if verified else "not verified")
 
 
 def _routing_cases(skill: str) -> list[dict]:
@@ -256,6 +258,7 @@ def routing_smoke(harness: str, out: Path, *, runner=run_command, environ=None) 
                                        "expected": expected, "result": outcome, "reason": reason,
                                        "observed_activation": activation})
     summary["clean"] = _clean([result["reason"] for result in summary["results"]])
-    summary["status"] = "completed"
+    failed = any(result["result"] in ("fail", "error") for result in summary["results"])
+    summary["status"] = "completed with failures" if failed else "completed"
     _write_json(out / "summary.json", summary)
     return summary
