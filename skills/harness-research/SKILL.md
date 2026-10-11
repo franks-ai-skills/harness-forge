@@ -50,7 +50,10 @@ this skill's folder; run it with the Forge environment's Python.
    [references/contract.md](references/contract.md).
 5. **Present and accept.** Show kept findings grouped by pass and part,
    each with its source and quote. Then ask, one requirement at a time,
-   whether to accept, edit or reject it. Write the proposals as idea rules
+   whether to accept, edit or reject it. Word a `must-not` rule as the
+   forbidden behavior itself ("the skill asks the user a question while
+   it runs"): the built skill shows it as "Never: …", and the reviewer
+   passes it when that behavior is absent. Write the proposals as idea rules
    and the user's choices to JSON files and run `scripts/forge.py accept
    --decision <record> --root <repository> --part <id> --proposed <file>
    --choices <file> --slug <slug>`; it writes
