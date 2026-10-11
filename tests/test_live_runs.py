@@ -104,6 +104,49 @@ def init(skills):
             "apiKeySource": "none"}
 
 
+class FlowsRunTest(unittest.TestCase):
+    """T12's flows on top of the vertical: a goal conflict, fixture drift with an override, break, fix, both scopes."""
+
+    def run_flows(self, runner):
+        forge = LIVE.Forge()
+        forge.module.RUNNER, forge.module.FETCH, forge.module.ENVIRON = runner, fetch_page, PARENT
+        with tempfile.TemporaryDirectory(prefix="forge-flows-") as directory:
+            summary = LIVE.flows("claude-code", Path(directory) / "run", forge=forge)
+            self.report = (Path(directory) / "run/repo/.harness/reports/repro.md").read_text(encoding="utf-8")
+        return summary, forge
+
+    def test_the_flows_run_covers_every_t12_flow_and_labels_its_fixtures(self):
+        runner = ResearchRunner([finding()])
+        summary, forge = self.run_flows(runner)
+        self.assertEqual(summary["status"], "completed", [s for s in summary["stages"] if s["exit"]])
+        self.assertEqual(summary["checks"], {
+            "goal conflict asked": True, "goal adjusted and selected again": True, "drift recorded": True,
+            "issue declined, nothing filed": True, "verified with the adopted override": True,
+            "broken skill not verified": True, "review verified the repair": True,
+            "extensive review verified": True})
+        self.assertTrue(all("FIXTURE" in text for text in summary["fixtures"].values()))
+        self.assertEqual(runner.roles.count("review"), 4, "four verifications, each with a fresh reviewer")
+        self.assertIn("- Review scope: Extensive review (rarely needed): judged A", self.report)
+        self.assertEqual(forge.module.ISSUES[0]("skills.description.length"), [], "the issue search is a fixture")
+
+    def test_a_flow_that_does_not_hold_is_not_completed(self):
+        class BrokenRepair(ResearchRunner):
+            """The reviewer fails the goal from the third verification on: the repair is never verified."""
+
+            def __call__(self, command, *, cwd, env, stdin, timeout):
+                answer = super().__call__(command, cwd=cwd, env=env, stdin=stdin, timeout=timeout)
+                if self.roles and self.roles[-1] == "review" and self.roles.count("review") >= 3:
+                    output = json.loads(json.loads(answer.stdout.splitlines()[-1])["result"])
+                    for verdict in output["goal_verdicts"]:
+                        verdict["verdict"] = "not-met"
+                    return Completed(0, claude_stream(output, calls=("Read",)), "", False)
+                return answer
+
+        summary, _ = self.run_flows(BrokenRepair([finding()]))
+        self.assertEqual(summary["status"], "flows did not hold")
+        self.assertFalse(summary["checks"]["review verified the repair"])
+
+
 class RoutingRunner(FakeRunner):
     """Baseline lists two built-ins; a slash prompt shows its command marker; nothing else activates."""
 

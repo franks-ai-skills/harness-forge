@@ -1,4 +1,4 @@
-"""Automated live runs for T11: the vertical workflow and the routing smoke.
+"""Automated live runs: the vertical workflow and the routing smoke (T11), and T12's flows.
 
 Development tooling, not part of the product, run without user input. Both
 use the standard CLIs and the user's existing login; an API-key or unknown
@@ -12,6 +12,12 @@ so. It also confirms each error rule the reviewer found not applicable,
 recorded under `not_applicable_confirmed`. Its results show that the
 workers, research, build and verification work live; the confirmation
 ceremony is proven only by a real session.
+
+The flows run adds a goal conflict, drift with an adopted override, a
+broken skill, its repair and both re-verification scopes to the vertical.
+Its conflict, drift, override and issue answer are fixtures, labelled as
+such in the summary, and its issue search and publisher are stand-ins: it
+never touches a real KB issue.
 
 Every worker and runtime launch's raw stream is kept under `streams/`
 next to the summary, in the git-ignored private results directory.
@@ -100,112 +106,261 @@ def _clean(reasons: list[str]) -> bool:
     return not any(marker in reason for reason in reasons for marker in UNCLEAN)
 
 
+class _Session:
+    """One throwaway repository driven through scripts/forge.py, with every stage kept in the summary."""
+
+    def __init__(self, case: str, harness: str, out: Path, forge: Forge | None, inputs_path: Path,
+                 cases_path: Path):
+        self.forge = forge or Forge()
+        self.forge.module.RUNNER = Recorder(self.forge.module.RUNNER, out / "streams")
+        self.harness, self.out, self.cases_path = harness, out, cases_path
+        self.inputs = yaml.safe_load(inputs_path.read_text(encoding="utf-8"))
+        self.repo, self.scratch = out / "repo", out / "inputs"
+        self.repo.mkdir(parents=True)
+        self.summary = {"case": case, "harness": harness, "confirmation": TEST_RELAY, "stages": [],
+                        "status": "stopped", "clean": None, "repository": str(self.repo)}
+        self.decision = self.evidence = self.revision = None
+
+    def stage(self, name, result):
+        code, payload, stderr = result
+        self.summary["stages"].append({"stage": name, "exit": code, "output": payload, "stderr": stderr[-4000:]})
+        return code, payload
+
+    def run(self, name, *arguments):
+        return self.stage(name, self.forge(*arguments))
+
+    def finish(self, status):
+        self.summary["status"] = status
+        _write_json(self.out / "summary.json", self.summary)
+        return self.summary
+
+    def record(self, decision: dict) -> None:
+        manifest = json.loads((ROOT / "snapshot" / "kb-manifest.json").read_text(encoding="utf-8"))
+        record = {**decision, "kb_version": manifest["kb_version"]}
+        self.decision = write_decision(self.repo, Decision(record=record, body="Recorded reference idea for the "
+                                                                                "automated run.\n"),
+                                       slug=self.inputs["slug"], date=datetime.date.today().isoformat())
+        if not (self.repo / "README.md").exists():
+            (self.repo / "README.md").write_text("# Reproduction checklists\n", encoding="utf-8")
+
+    def confirm(self, run_id, *extra):
+        """The runner's own relay for the contract it just rendered (see TEST_RELAY)."""
+        code, contract = self.run(f"prepare-contract {run_id}", "prepare-contract", "--decision", self.decision,
+                                  "--evidence", self.evidence, *extra)
+        if code:
+            return None
+        return _write_json(self.scratch / f"relay-{run_id}.json", {
+            "choice": "confirm", "displayed_digest": contract["digest"],
+            "part_ids": [part["id"] for part in contract["parts"]], "run_id": run_id})
+
+    def through_build(self, run_prefix: str) -> str | None:
+        """Workers, both research passes, acceptance, build and README; the reason it stopped, or None."""
+        inputs, repo, scratch = self.inputs, self.repo, self.scratch
+        code, workers = self.run("workers", "workers", "--harness", self.harness)
+        if code:
+            return "stopped: a worker is unavailable or the login needs the cost question"
+        self.evidence = _write_json(scratch / "workers.json", workers)
+        intake = self.confirm(f"{run_prefix}-intake")
+        if intake is None:
+            return "stopped: the contract could not be prepared"
+        for pass_name, part_id in (("survey", None), ("deep", "A")):
+            arguments = ["research", "--decision", self.decision, "--root", repo, "--pass", pass_name, "--harness",
+                         self.harness, "--evidence", self.evidence, "--relay", intake, "--slug", inputs["slug"],
+                         "--write"]
+            if part_id:
+                arguments += ["--part", part_id]
+            code, _ = self.run(f"research {pass_name}", *arguments)
+            if code:
+                return f"stopped: the {pass_name} pass did not complete"
+        research = load_document(repo / ".harness" / "research" / f"{inputs['slug']}.md", "research")
+        sources = sorted({f["source"] for f in research["findings"] if (f["pass"], f["part_id"]) == ("deep", "A")})
+        if not sources:
+            return "stopped: the deep pass kept no finding a requirement could cite"
+        targets = inputs["decision"]["targets"]
+        proposed = [{**requirement, "concept": "idea", "severity": "error", "check": "judged",
+                     "applies_to": {"harnesses": targets}, "evidence": "Research", "sources": sources,
+                     "contested": False} for requirement in inputs["requirements"]]
+        code, _ = self.run("accept", "accept", "--decision", self.decision, "--root", repo, "--part", "A",
+                           "--proposed", _write_json(scratch / "proposed.json", {"requirements": proposed}),
+                           "--choices", _write_json(scratch / "choices.json", inputs["choices"]),
+                           "--slug", inputs["slug"])
+        if code:
+            return "stopped: the requirements were not accepted"
+        self.revision = repo / ".harness" / "research" / f"{inputs['slug']}.rules.yaml"
+        code = self.build(f"{run_prefix}-verify")
+        if code:
+            return "stopped: the build was refused"
+        code, _ = self.run("readme", "readme", "--decision", self.decision, "--root", repo)
+        if code:
+            return "stopped: the README's outside controls were not written"
+        return None
+
+    def build(self, run_id: str, *extra) -> int:
+        relay = self.confirm(run_id, "--revision", self.revision)
+        description = self.scratch / "description.txt"
+        description.write_text(self.inputs["description"].strip(), encoding="utf-8")
+        procedure = self.scratch / "procedure.md"
+        procedure.write_text(self.inputs["procedure"], encoding="utf-8")
+        code, _ = self.run("build", "build", "--decision", self.decision, "--root", self.repo, "--part", "A",
+                           "--revision", self.revision, "--evidence", self.evidence, "--relay", relay,
+                           "--description", description, "--procedure", procedure, *extra)
+        return code
+
+    def verify(self, run_id: str, name: str, *extra):
+        """verify with the runner's relay; error rules the reviewer found not applicable are confirmed and said so."""
+        relay = self.confirm(run_id, "--revision", self.revision)
+        verify = ["verify", "--decision", self.decision, "--root", self.repo, "--revision", self.revision,
+                  "--evidence", self.evidence, "--relay", relay, "--harness", self.harness, "--cases",
+                  self.cases_path, "--slug", self.inputs["slug"], "--write", *extra]
+        code, verified = self.run(name, *verify)
+        if verified is not None and verified["unresolved"]:
+            # Like the contract: the runner confirms what a user would be asked, and says so.
+            self.summary.setdefault("not_applicable_confirmed", {"by": TEST_RELAY, "rules": []})
+            self.summary["not_applicable_confirmed"]["rules"] += verified["unresolved"]
+            confirmations = [argument for rule in verified["unresolved"]
+                             for argument in ("--confirm-not-applicable", rule["confirmation"])]
+            code, verified = self.run(f"{name} with confirmations", *verify, *confirmations)
+        return code, verified
+
+    def verified(self, code, verified) -> bool:
+        return code == 0 and verified is not None and all(part["harness_result"] == "verified"
+                                                          for part in verified["parts"] if part["part_id"] == "A")
+
+
 def vertical(harness: str, out: Path, *, forge: Forge | None = None,
              inputs_path: Path = ROOT / "evals" / "smoke" / "vertical-inputs.yaml",
              cases_path: Path = ROOT / "evals" / "smoke" / "vertical.yaml") -> dict:
     """Intake record, both research passes, acceptance, build and verification in one throwaway repository."""
-    forge = forge or Forge()
-    forge.module.RUNNER = Recorder(forge.module.RUNNER, out / "streams")
-    inputs = yaml.safe_load(inputs_path.read_text(encoding="utf-8"))
-    repo, scratch = out / "repo", out / "inputs"
-    repo.mkdir(parents=True)
-    summary = {"case": "vertical", "harness": harness, "confirmation": TEST_RELAY, "stages": [], "status": "stopped",
-               "clean": None, "repository": str(repo)}
-
-    def stage(name, result):
-        code, payload, stderr = result
-        summary["stages"].append({"stage": name, "exit": code, "output": payload, "stderr": stderr[-4000:]})
-        return code, payload
-
-    def finish(status):
-        summary["status"] = status
-        _write_json(out / "summary.json", summary)
-        return summary
-
-    manifest = json.loads((ROOT / "snapshot" / "kb-manifest.json").read_text(encoding="utf-8"))
-    record = {**inputs["decision"], "kb_version": manifest["kb_version"]}
-    date = datetime.date.today().isoformat()
-    decision = write_decision(repo, Decision(record=record, body="Recorded reference idea for the automated run.\n"),
-                              slug=inputs["slug"], date=date)
-    (repo / "README.md").write_text("# Reproduction checklists\n", encoding="utf-8")
-
-    code, workers = stage("workers", forge("workers", "--harness", harness))
-    if code:
-        return finish("stopped: a worker is unavailable or the login needs the cost question")
-    evidence = _write_json(scratch / "workers.json", workers)
-
-    def confirm(run_id, *extra):
-        """The runner's own relay for the contract it just rendered (see TEST_RELAY)."""
-        code, contract = stage(f"prepare-contract {run_id}", forge("prepare-contract", "--decision", decision,
-                                                                      "--evidence", evidence, *extra))
-        if code:
-            return None
-        return _write_json(scratch / f"relay-{run_id}.json", {
-            "choice": "confirm", "displayed_digest": contract["digest"],
-            "part_ids": [part["id"] for part in contract["parts"]], "run_id": run_id})
-
-    intake = confirm("vertical-intake")
-    if intake is None:
-        return finish("stopped: the contract could not be prepared")
-    for pass_name, part_id in (("survey", None), ("deep", "A")):
-        arguments = ["research", "--decision", decision, "--root", repo, "--pass", pass_name, "--harness", harness,
-                     "--evidence", evidence, "--relay", intake, "--slug", inputs["slug"], "--write"]
-        if part_id:
-            arguments += ["--part", part_id]
-        code, _ = stage(f"research {pass_name}", forge(*arguments))
-        if code:
-            return finish(f"stopped: the {pass_name} pass did not complete")
-
-    research = load_document(repo / ".harness" / "research" / f"{inputs['slug']}.md", "research")
-    sources = sorted({f["source"] for f in research["findings"] if (f["pass"], f["part_id"]) == ("deep", "A")})
-    if not sources:
-        return finish("stopped: the deep pass kept no finding a requirement could cite")
-    targets = inputs["decision"]["targets"]
-    proposed = [{**requirement, "concept": "idea", "severity": "error", "check": "judged",
-                 "applies_to": {"harnesses": targets}, "evidence": "Research", "sources": sources, "contested": False}
-                for requirement in inputs["requirements"]]
-    code, _ = stage("accept", forge("accept", "--decision", decision, "--root", repo, "--part", "A",
-                                    "--proposed", _write_json(scratch / "proposed.json", {"requirements": proposed}),
-                                    "--choices", _write_json(scratch / "choices.json", inputs["choices"]),
-                                    "--slug", inputs["slug"]))
-    if code:
-        return finish("stopped: the requirements were not accepted")
-    revision = repo / ".harness" / "research" / f"{inputs['slug']}.rules.yaml"
-
-    verify_relay = confirm("vertical-verify", "--revision", revision)
-    description = scratch / "description.txt"
-    description.write_text(inputs["description"].strip(), encoding="utf-8")
-    procedure = scratch / "procedure.md"
-    procedure.write_text(inputs["procedure"], encoding="utf-8")
-    code, _ = stage("build", forge("build", "--decision", decision, "--root", repo, "--part", "A",
-                                   "--revision", revision, "--evidence", evidence, "--relay", verify_relay,
-                                   "--description", description, "--procedure", procedure))
-    if code:
-        return finish("stopped: the build was refused")
-    code, _ = stage("readme", forge("readme", "--decision", decision, "--root", repo))
-    if code:
-        return finish("stopped: the README's outside controls were not written")
-
-    verify_relay = confirm("vertical-verify", "--revision", revision)
-    verify = ["verify", "--decision", decision, "--root", repo, "--revision", revision, "--evidence", evidence,
-              "--relay", verify_relay, "--harness", harness, "--cases", cases_path, "--slug", inputs["slug"], "--write"]
-    code, verified = stage("verify", forge(*verify))
+    session = _Session("vertical", harness, out, forge, inputs_path, cases_path)
+    session.record(session.inputs["decision"])
+    stopped = session.through_build("vertical")
+    if stopped:
+        return session.finish(stopped)
+    code, verified = session.verify("vertical-verify", "verify")
     if verified is None:
-        return finish("stopped: verification did not run")
-    if verified["unresolved"]:
-        # Like the contract: the runner confirms what a user would be asked, and says so.
-        summary["not_applicable_confirmed"] = {"by": TEST_RELAY, "rules": verified["unresolved"]}
-        confirmations = [argument for rule in verified["unresolved"]
-                         for argument in ("--confirm-not-applicable", rule["confirmation"])]
-        code, verified = stage("verify with confirmations", forge(*verify, *confirmations))
-        if verified is None:
-            return finish("stopped: verification with confirmations did not run")
-    summary["parts"] = verified["parts"]
-    summary["runtime"] = verified.get("runtime", [])
-    summary["clean"] = _clean([case["reason"] for case in summary["runtime"]])
+        return session.finish("stopped: verification did not run")
+    session.summary["parts"] = verified["parts"]
+    session.summary["runtime"] = verified.get("runtime", [])
+    session.summary["clean"] = _clean([case["reason"] for case in session.summary["runtime"]])
     # The vertical proves the workflow only when verification succeeded: verify exits 1 otherwise.
-    verified = code == 0 and all(part["harness_result"] == "verified" for part in summary["parts"])
-    return finish("completed" if verified else "not verified")
+    return session.finish("completed" if session.verified(code, verified) else "not verified")
+
+
+FIXTURE = ("FIXTURE for Harness Forge's automated live check: synthetic, not a genuine finding about the Harness KB; "
+           "nothing is published")
+
+
+def _fixture_issues():
+    """A KB issue search that finds nothing and a publisher that must never be called: no real KB issue is touched."""
+    def publisher(proposal):
+        raise AssertionError("the flows run never files a KB issue")
+    return (lambda rule_id: []), publisher
+
+
+def flows(harness: str, out: Path, *, forge: Forge | None = None,
+          inputs_path: Path = ROOT / "evals" / "smoke" / "vertical-inputs.yaml",
+          cases_path: Path = ROOT / "evals" / "smoke" / "vertical.yaml") -> dict:
+    """T12's flows live: a goal conflict, drift with an adopted override, a break and repair, and both scopes.
+
+    The goal conflict, the drift, its override and the issue answer are
+    labelled fixtures in the summary; the issue search and publisher are
+    fixtures too, so nothing reaches the real KB. Research, review and
+    runtime cases run live, as in the vertical.
+    """
+    session = _Session("flows", harness, out, forge, inputs_path, cases_path)
+    session.forge.module.ISSUES = _fixture_issues()
+    inputs, repo, scratch = session.inputs, session.repo, session.scratch
+    checks = session.summary["checks"] = {}
+    session.summary["fixtures"] = {
+        "goal conflict": f"{FIXTURE}: the recorded part chose a skill although it needs its own context",
+        "drift": f"{FIXTURE}: drift recorded against skills.description.length from a kept deep finding",
+        "override": f"{FIXTURE}: the adopted override raises the description limit",
+        "issue": f"{FIXTURE}: the issue search and publisher are stand-ins, and the proposal is declined"}
+
+    # A goal conflict: the part chose a skill, but its own-context answer rules skills out.
+    decision = json.loads(json.dumps(inputs["decision"]))
+    part = decision["parts"][0]
+    part["answers"]["own_context"] = True
+    part.update(recommended="subagents", override_reason=session.summary["fixtures"]["goal conflict"])
+    session.record(decision)
+    facts = decision["facts"]
+    request = _write_json(scratch / "select-conflict.json", {"answers": part["answers"], "whole_idea": facts,
+                                                             "chosen": "skills", "goal": part["goal"]})
+    code, selected = session.run("select with the chosen mechanism", "select", "--input", request)
+    checks["goal conflict asked"] = code == 0 and (selected.get("goal_conflict") or {}).get("severity") == "error"
+    code, resolved = session.run("resolve-conflict", "resolve-conflict", "--decision", session.decision, "--part", "A",
+                                 "--choice", "adjust-goal", "--adjusted-goal",
+                                 "Write a reproduction checklist when asked, in the session's context",
+                                 "--reason", session.summary["fixtures"]["goal conflict"])
+    record = load_document(session.decision, "decision")
+    answers = {**record["parts"][0]["answers"], "own_context": False}  # the re-asked question, answered
+    request = _write_json(scratch / "select-again.json", {"answers": answers, "whole_idea": facts})
+    code, again = session.run("select again", "select", "--input", request)
+    checks["goal adjusted and selected again"] = (resolved is not None and resolved["next_stage"] == "questions"
+                                                  and code == 0 and again["mechanism"] == "skills")
+    record["parts"][0].update(answers=answers, outcome=again["outcome"], recommended=again["mechanism"],
+                              override_reason=None)
+    write_decision(repo, Decision(record=record, body="Recorded reference idea for the automated run.\n"),
+                   slug=inputs["slug"], date=session.decision.name[:10])
+
+    stopped = session.through_build("flows")
+    if stopped:
+        return session.finish(stopped)
+
+    # Drift from a kept deep finding, a declined issue, and an adopted override.
+    research = load_document(repo / ".harness" / "research" / f"{inputs['slug']}.md", "research")
+    finding = next(f["id"] for f in research["findings"] if (f["pass"], f["part_id"]) == ("deep", "A"))
+    code, _ = session.run("drift", "drift", "--root", repo, "--slug", inputs["slug"], "--finding", finding, "--rule",
+                          "skills.description.length", "--category", "compatibility", "--summary",
+                          session.summary["fixtures"]["drift"])
+    checks["drift recorded"] = code == 0
+    code, proposal = session.run("drift-issue", "drift-issue", "--root", repo, "--rule", "skills.description.length",
+                                 "--finding", finding, "--run-id", "flows-drift", "--out", scratch / "proposal.json")
+    issue = None
+    if proposal:
+        relay = _write_json(scratch / "issue-relay.json", {"choice": "decline", "displayed_digest": proposal["digest"],
+                                                           "run_id": "flows-drift"})
+        _, published = session.run("publish-issue", "publish-issue", "--root", repo, "--proposal",
+                                    scratch / "proposal.json", "--relay", relay)
+        issue = (published or {}).get("issue")
+    checks["issue declined, nothing filed"] = issue == "not published"
+    pinned = next(rule for rule in yaml.safe_load((ROOT / "snapshot/rules/skills.yaml").read_text(encoding="utf-8"))
+                  if rule["id"] == "skills.description.length")
+    request = _write_json(scratch / "override.json", {
+        "rule_id": "skills.description.length", "finding_id": finding, "reason": session.summary["fixtures"]["override"],
+        "rule": {**pinned, "params": {"max_chars": 2048},
+                 "statement": "The description is present and at most 2,048 characters"}})
+    session.run("override", "override", "--root", repo, "--input", request, "--write")
+    session.run("drift-decision", "drift-decision", "--decision", session.decision, "--root", repo, "--rule",
+                "skills.description.length", "--finding", finding, "--choice", "adopt", "--reason",
+                session.summary["fixtures"]["override"])
+
+    code, verified = session.verify("flows-verify-1", "verify with the override")
+    report = (repo / ".harness" / "reports" / f"{inputs['slug']}.md").read_text(encoding="utf-8") \
+        if (repo / ".harness" / "reports" / f"{inputs['slug']}.md").exists() else ""
+    checks["verified with the adopted override"] = (session.verified(code, verified)
+                                                    and "verified with 1 override" in report)
+
+    # Break the skill, then repair only that file and re-verify with each scope.
+    skill = repo / ".agents" / "skills" / record["parts"][0]["slug"] / "SKILL.md"
+    original = skill.read_text(encoding="utf-8")
+    skill.write_text(original.replace(f"name: {record['parts'][0]['slug']}", "name: Broken_Name"), encoding="utf-8")
+    code, broken = session.verify("flows-verify-2", "verify the broken skill")
+    checks["broken skill not verified"] = code == 1 and broken is not None and \
+        broken["parts"][0]["harness_result"] == "not verified"
+    session.build("flows-repair", "--replace", skill.relative_to(repo).as_posix())
+    session.run("scope", "scope", "--decision", session.decision, "--root", repo, "--revision", session.revision,
+                "--evidence", session.evidence, "--slug", inputs["slug"], "--fixed", "A")
+    code, reviewed = session.verify("flows-verify-3", "verify a Review", "--scope", "review", "--fixed", "A")
+    checks["review verified the repair"] = session.verified(code, reviewed)
+    code, extensive = session.verify("flows-verify-4", "verify an Extensive review", "--scope", "extensive")
+    checks["extensive review verified"] = session.verified(code, extensive)
+
+    runtime = [case for result in (verified, reviewed, extensive) if result for case in result.get("runtime", [])]
+    session.summary["parts"] = (extensive or {}).get("parts")
+    session.summary["runtime"] = runtime
+    session.summary["clean"] = _clean([case["reason"] for case in runtime])
+    return session.finish("completed" if all(checks.values()) else "flows did not hold")
 
 
 def _routing_cases(skill: str) -> list[dict]:

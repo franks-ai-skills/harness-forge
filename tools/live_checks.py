@@ -365,7 +365,8 @@ def run_live_case(harness, case):
 
     stamp = time.strftime("%Y%m%d-%H%M%S")
     out = ROOT / "evals/canaries/results/private" / f"{case}-{harness}-{stamp}"
-    summary = (live_runs.vertical(harness, out) if case == "vertical" else live_runs.routing_smoke(harness, out))
+    run = {"vertical": live_runs.vertical, "flows": live_runs.flows, "routing-smoke": live_runs.routing_smoke}[case]
+    summary = run(harness, out)
     print(json.dumps({key: summary.get(key) for key in ("case", "harness", "status", "clean", "parts")}
                      | {"summary": str(out / "summary.json")}), flush=True)
     return 0 if summary["status"] == "completed" and summary["clean"] else 1
@@ -374,7 +375,7 @@ def run_live_case(harness, case):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--harness", choices=("codex", "claude-code"), required=True)
-    parser.add_argument("--case", choices=("worker-boundaries", "vertical", "routing-smoke"), required=True)
+    parser.add_argument("--case", choices=("worker-boundaries", "vertical", "flows", "routing-smoke"), required=True)
     parser.add_argument("--launcher", choices=("native", "process"), help="worker-boundaries only")
     parser.add_argument("--role", choices=ROLES + ("all",), default="all")
     parser.add_argument("--baseline", action="store_true")
