@@ -8,7 +8,7 @@ from harness_forge.build_skill import plan_skill
 from harness_forge.contracts import confirm_contract, render_contract
 from harness_forge.documents import canonical_digest
 from harness_forge.documents import load_document
-from harness_forge.models import Confirmation, RuntimeResult, Rule
+from harness_forge.models import Confirmation, Decision, RuntimeResult, Rule
 from harness_forge.verify import bound_inputs, finish_run, prepare_run, validate_review
 from tests.builders import EVIDENCE, decision, part
 from tests.test_build_skill import DESCRIPTION, NAME, PROCEDURE, REVISION
@@ -26,6 +26,11 @@ GATE = {"control": "event-gate", "prerequisites": ["outside.merge.no-agent-bypas
 
 
 def build_files(record, part_id="A"):
+    """The files the builder wrote; a part blocked afterwards was built before its block."""
+    record = Decision(record=copy.deepcopy(record.record), body=record.body)
+    for part in record.record["parts"]:
+        if part["status"] == "blocked":
+            part["status"] = "built"
     contract = render_contract(record, REVISION, [], worker_evidence=EVIDENCE)
     relay = {"choice": "confirm", "displayed_digest": contract.digest, "part_ids": [part_id], "run_id": "run-1"}
     planned = plan_skill(record, part_id, REVISION, RULES, worker_evidence=EVIDENCE,
