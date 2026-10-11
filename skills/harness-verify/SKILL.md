@@ -23,7 +23,8 @@ this skill's folder; run it with the Forge environment's Python.
   script results.
 - **Verified has a narrow meaning:** every applicable rule has a result,
   no error rule failed or stayed unresolved, the goal verdict is met,
-  executed runtime tests passed and no bound input changed. It never
+  executed runtime tests passed, a built skill's explicit activation was
+  observed, and no bound input changed. It never
   means outside controls are configured, and it never certifies worker
   isolation; the report always says `not-certified`.
 - **Runtime tests are reported separately.** Without them the report

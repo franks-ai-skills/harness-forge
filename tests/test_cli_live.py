@@ -230,6 +230,13 @@ class LiveCommandsTest(unittest.TestCase):
         self.assertEqual(code, 2)
         self.assertIn("accepted requirements", stderr)
 
+    def test_a_built_skill_needs_runtime_cases(self):
+        cli, arguments = self.build_ready(ResearchRunner([finding()]))
+        option = arguments.index("--cases")
+        code, _, stderr = cli("verify", *arguments[:option], *arguments[option + 2:])
+        self.assertEqual(code, 2)
+        self.assertIn("part A is a built skill: pass its runtime cases with --cases", stderr)
+
     def test_a_rebuild_over_a_changed_skill_shows_the_diff(self):
         cli, arguments = self.build_ready(ResearchRunner([finding()]))
         option = dict(zip(arguments[::2], arguments[1::2]))

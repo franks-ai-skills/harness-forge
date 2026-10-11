@@ -273,8 +273,13 @@ def finish_run(
     run: VerificationRun, review: ReviewResponse, runtime_results: list[RuntimeResult], current_inputs: dict, *,
     confirmed_exclusions: set[tuple[str, str]] | frozenset = frozenset(),
     worker_observations: list[dict] | tuple = (),
+    required_activation: dict[str, set[str]] | None = None,
 ) -> list[PartResult]:
     """Each part's harness and goal result. confirmed_exclusions are live user confirmations.
+
+    required_activation maps a part to its explicit runtime case ids: a live
+    build is verified only when one of them passed. Offline runs leave it
+    out and report their runtime tests as none run.
 
     worker_observations are evidence records from workers that ran after the
     run was prepared. They join the report. A configuration that was not
@@ -333,7 +338,14 @@ def finish_run(
                 if r["result"] in _BLOCKING or (r["result"] == "fail" and run.rule_index[r["rule_id"]]["severity"] == "error")
             ]
             runtime_failed = any(r.part_id == part_id and r.result in ("fail", "error") for r in runtime_results)
-            ok = confirmed and not blocked and not failures and not runtime_failed and goal is not None \
+            no_activation = part_id in (required_activation or {}) and not any(
+                r.part_id == part_id and r.case_id in required_activation[part_id] and r.result == "pass"
+                for r in runtime_results)
+            if no_activation:
+                rule_results.append({"rule_id": "runtime.explicit-activation", "check": "script", "result": "fail",
+                                     "reason": "the live build needs an observed explicit activation, and none passed"})
+            ok = confirmed and not blocked and not failures and not runtime_failed and not no_activation \
+                and goal is not None \
                 and goal["verdict"] == "met" and part_id not in changed and not run.worker_violations
             harness = "verified" if ok else "not verified"
             status = "verified" if ok else ("built" if confirmed and not blocked else "blocked")

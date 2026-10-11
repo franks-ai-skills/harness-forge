@@ -481,7 +481,11 @@ def _verify(arguments: argparse.Namespace) -> int:
         cases = load_cases(Path(arguments.cases)) if arguments.cases else []
     except (OSError, ValueError) as error:
         raise _InvalidInput(str(error)) from error
-    for part_id in sorted({case["part_id"] for case in cases}):
+    covered = {case["part_id"] for case in cases}
+    for part in decision.record["parts"]:
+        if part_kind(part) == "build" and arguments.harness in decision.record["targets"] and part["id"] not in covered:
+            raise _InvalidInput(f"part {part['id']} is a built skill: pass its runtime cases with --cases")
+    for part_id in sorted(covered):
         kinds = {(case["mode"], case["expected"]) for case in cases if case["part_id"] == part_id}
         if not {("explicit", "activates"), ("negative", "does-not-activate")} <= kinds:
             raise _InvalidInput(f"part {part_id} needs an explicit invocation and a near miss among its cases")

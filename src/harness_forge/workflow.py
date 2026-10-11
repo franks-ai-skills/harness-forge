@@ -138,6 +138,11 @@ def verify_live(
         current = {**run.frozen_inputs, "idea": "unreadable"}
     for evidence in observations:
         validate(evidence, "worker-evidence")
+    # The spec's live build requires an observed explicit activation in each target harness.
+    required = {part["id"]: {case["id"] for case in cases if case["part_id"] == part["id"]
+                             and case["mode"] == "explicit" and case["expected"] == "activates"}
+                for part in run.parts if part_kind(part) == "build" and part["id"] in run.confirmed_parts
+                and harness in run.targets}
     results = finish_run(run, review, runtime, current, worker_observations=observations,
-                         confirmed_exclusions=frozenset(confirmed_exclusions))
+                         confirmed_exclusions=frozenset(confirmed_exclusions), required_activation=required)
     return run, results

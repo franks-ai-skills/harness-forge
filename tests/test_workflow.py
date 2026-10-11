@@ -129,6 +129,33 @@ class VerifyLiveTest(unittest.TestCase):
         self.assertTrue(any(e["role"] == "review" and e["observed_tools"]["status"] == "observed"
                             for e in run.worker_evidence))
 
+    def test_a_build_without_an_observed_explicit_activation_is_not_verified(self):
+        record = skill_decision()
+        files, symlinks = build_files(record)
+        files["README.md"] = update_outside_section("# Repro\n", record).encode()
+
+        class ExplicitTimesOut(ScriptedRunner):
+            def __call__(self, command, *, cwd, env, stdin, timeout):
+                answer = super().__call__(command, cwd=cwd, env=env, stdin=stdin, timeout=timeout)
+                if self.roles and self.roles[-1] == "runtime" and stdin.startswith("Use the reproduction-checklist"):
+                    return Completed(0, "", "", True)
+                return answer
+
+        vertical = load_cases(FORGE / "evals" / "smoke" / "vertical.yaml")
+        for name, runner, cases in (("explicit case timed out", ExplicitTimesOut(), vertical),
+                                    ("no cases", ScriptedRunner(), [])):
+            with self.subTest(name):
+                planned = [preflight("claude-code", role, runner=runner, environ=PARENT)["configuration"] for role in ROLES]
+                contract, confirmation = confirmed(record, REVISION, planned, "verify-1")
+                _, results = verify_live(record, files, symlinks, RULES, REVISION, "claude-code", contract=contract,
+                                         confirmation=confirmation, worker_evidence=planned, cases=cases,
+                                         runner=runner, environ=PARENT, kb_version="0.1.0")
+                part = {result.part_id: result for result in results}["A"]
+                self.assertEqual(part.harness_result, "not verified")
+                self.assertIn({"rule_id": "runtime.explicit-activation", "check": "script", "result": "fail",
+                               "reason": "the live build needs an observed explicit activation, and none passed"},
+                              part.rule_results)
+
     def test_a_file_changed_while_workers_ran_invalidates_the_part(self):
         record = skill_decision()
         files, symlinks = build_files(record)
