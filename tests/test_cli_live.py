@@ -230,6 +230,19 @@ class LiveCommandsTest(unittest.TestCase):
         self.assertEqual(code, 2)
         self.assertIn("accepted requirements", stderr)
 
+    def test_requirements_belong_to_the_part_they_are_accepted_for(self):
+        cli = Cli(FakeRunner(), self.root)
+        proposed = cli.write("proposed.json", {"requirements": [
+            {"id": "idea.repro.b.platform", "concept": "idea", "kind": "must", "severity": "error", "check": "judged",
+             "statement": "The checklist names the platform", "applies_to": {"harnesses": ["claude-code"]},
+             "evidence": "Vendor", "sources": ["https://docs.example-vendor.com/repro/platforms"], "contested": False}]})
+        choices = cli.write("choices.json", {"idea.repro.b.platform": "accept"})
+        code, _, stderr = cli("accept", "--decision", self.decision, "--part", "A", "--proposed", proposed,
+                              "--choices", choices, "--root", self.root, "--slug", "repro")
+        self.assertEqual(code, 2)
+        self.assertIn("idea.repro.b.platform belongs to part B, not A", stderr)
+        self.assertFalse((self.root / ".harness/research/repro.rules.yaml").exists())
+
     def test_case_ids_must_be_unique(self):
         import yaml
         cli, arguments = self.build_ready(ResearchRunner([finding()]))

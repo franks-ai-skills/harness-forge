@@ -216,10 +216,20 @@ def _require_unique(rule_ids: list[str], where: str) -> None:
         raise ValueError(f"{where} use an id more than once: {', '.join(duplicates)}")
 
 
-def accept_requirements(proposed: list[Rule], choices: dict, brief_digest: str) -> AcceptedRevision:
+def _check_entry(part_id: str, rule: Rule) -> None:
+    """An accepted requirement names its own part and uses only checkers idea rules may use."""
+    owner = _idea_part(rule)
+    if owner != part_id:
+        raise ValueError(f"{rule.id} belongs to part {owner}, not {part_id}")
+    _check_idea_rule(rule)
+
+
+def accept_requirements(proposed: list[Rule], choices: dict, brief_digest: str,
+                        part_id: str | None = None) -> AcceptedRevision:
     """Build the Idea KB revision from the user's accept, edit or reject choices.
 
     A proposed requirement without a choice stays pending and is excluded.
+    With ``part_id``, every accepted requirement must belong to that part.
     """
     _require_unique([rule.id for rule in proposed], "proposed requirements")
     by_id = {rule.id: rule for rule in proposed}
@@ -239,9 +249,9 @@ def accept_requirements(proposed: list[Rule], choices: dict, brief_digest: str) 
                 raise ValueError(f"an edit of {rule.id} must keep its id")
         else:
             raise ValueError(f"{rule.id}: choice must be accept, reject or an edit")
-        part_id = _idea_part(final)
-        _check_idea_rule(final)
-        accepted.append({"part_id": part_id, "rule": final.to_dict()})
+        owner = _idea_part(final)
+        _check_entry(part_id or owner, final)
+        accepted.append({"part_id": owner, "rule": final.to_dict()})
     digest = canonical_digest({"brief_digest": brief_digest, "rules": accepted})
     return AcceptedRevision(rule_ids=[entry["rule"]["id"] for entry in accepted], rules=accepted,
                             brief_digest=brief_digest, digest=digest)
@@ -304,5 +314,10 @@ def load_revision(path: Path, *, root: Path | None = None) -> AcceptedRevision:
     if digest != value["digest"]:
         raise ValueError(f"{path}: accepted requirements changed after acceptance")
     _require_unique([entry["rule"]["id"] for entry in value["rules"]], f"{path}: accepted requirements")
+    for entry in value["rules"]:
+        try:
+            _check_entry(entry["part_id"], Rule.from_dict(entry["rule"]))
+        except (ValueError, KeyError, TypeError) as error:
+            raise ValueError(f"{path}: {error}") from error
     return AcceptedRevision(rule_ids=[entry["rule"]["id"] for entry in value["rules"]], rules=value["rules"],
                             brief_digest=value["brief_digest"], digest=digest)

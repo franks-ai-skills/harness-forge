@@ -5,8 +5,8 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from harness_forge.documents import validate
-from harness_forge.models import Finding, Rule
+from harness_forge.documents import canonical_digest, validate
+from harness_forge.models import AcceptedRevision, Finding, Rule
 from harness_forge.research import (
     accept_requirements,
     blocked_parts,
@@ -212,6 +212,26 @@ class AcceptanceTest(unittest.TestCase):
             path.write_text(path.read_text(encoding="utf-8").replace("numbers each", "may number"), encoding="utf-8")
             with self.assertRaises(ValueError):
                 load_revision(path)
+
+    def test_requirements_belong_to_the_accepted_part(self):
+        other = idea_rule("idea.repro.b.steps", "Steps are numbered")
+        with self.assertRaisesRegex(ValueError, "idea.repro.b.steps belongs to part B, not A"):
+            accept_requirements([other], {"idea.repro.b.steps": "accept"}, BRIEF, part_id="A")
+
+    def test_a_loaded_revision_gets_the_acceptance_checks(self):
+        """A rehashed file cannot bring in a checker or a part that acceptance refuses."""
+        forbidden = idea_rule("idea.repro.a.always", "Always passes", check="script", checker="selection.match",
+                              params={})
+        misfiled = {"part_id": "A", "rule": idea_rule("idea.repro.b.steps", "Steps are numbered").to_dict()}
+        for entry, message in (({"part_id": "A", "rule": forbidden.to_dict()}, "not a catalog checker"),
+                               (misfiled, "belongs to part B, not A")):
+            with self.subTest(message=message), tempfile.TemporaryDirectory(prefix="forge-research-") as directory:
+                rules = [entry]
+                revision = AcceptedRevision(rule_ids=[entry["rule"]["id"]], rules=rules, brief_digest=BRIEF,
+                                            digest=canonical_digest({"brief_digest": BRIEF, "rules": rules}))
+                path = write_revision(Path(directory), "repro", revision)
+                with self.assertRaisesRegex(ValueError, message):
+                    load_revision(path)
 
     def test_research_check_cli_reports_kept_and_dropped(self):
         import contextlib

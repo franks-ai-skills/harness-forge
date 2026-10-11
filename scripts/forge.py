@@ -404,7 +404,8 @@ def _accept(arguments: argparse.Namespace) -> int:
     choices = _read_json(arguments.choices)
     try:
         rules = [Rule.from_dict(rule) for rule in proposed]
-        revision = accept_requirements(rules, choices, make_brief(decision, "deep", arguments.part).digest)
+        revision = accept_requirements(rules, choices, make_brief(decision, "deep", arguments.part).digest,
+                                       part_id=arguments.part)
         path = write_revision(root, arguments.slug, revision)
     except (ValueError, KeyError, TypeError) as error:
         raise _InvalidInput(str(error)) from error
