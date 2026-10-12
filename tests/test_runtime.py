@@ -340,6 +340,12 @@ class RuntimeTest(unittest.TestCase):
             {"type": "user", "message": {"content": quoted}}] + events[1:]) + "\n"
         result = self.run_cases("claude-code", stream)[0][0]
         self.assertEqual(result.result, "fail", result.reason)
+        for blocks in (["<command-name>/debug</command-name><command-args>Explain:", f"{marker}</command-args>"],
+                       ["<command-name>/debug</command-name>", marker]):
+            with self.subTest(blocks=blocks):
+                split = {"type": "user", "message": {"content": [{"type": "text", "text": text} for text in blocks]}}
+                stream = "\n".join(json.dumps(event) for event in events[:1] + [split] + events[1:]) + "\n"
+                self.assertEqual(self.run_cases("claude-code", stream)[0][0].result, "fail")
 
     def test_a_call_outside_the_list_fails_also_when_the_case_timed_out(self):
         result = self.run_cases("claude-code", claude_run(calls=("Bash",)),

@@ -225,7 +225,8 @@ def _observe_claude(stdout: str, name: str, baseline: set[str], workspace: Path 
             content = message.get("content") if isinstance(message, dict) else None
             prompt = [content] if isinstance(content, str) else [
                 block.get("text") for block in blocks if isinstance(block, dict) and block.get("type") == "text"]
-            if any(isinstance(text, str) and _invoked(text) == name for text in prompt):
+            # The whole prompt at once: an argument span may cross text blocks.
+            if _invoked("".join(text for text in prompt if isinstance(text, str))) == name:
                 observed["activation"] = observed["activation"] or f"/{name} was invoked"
         if event.get("type") == "result":
             observed["completed"] = event.get("is_error") is False and event.get("subtype") == "success"
