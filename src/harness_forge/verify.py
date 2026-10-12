@@ -308,6 +308,8 @@ def prepare_run(
             run.static_results.append(link)
         facts = {
             **record["facts"], **part["answers"], "targets": record["targets"], "outcome": part["outcome"],
+            # The harness versions the approved workers ran; a version range for another harness stays unresolved.
+            "harness_versions": {evidence["harness"]: evidence["harness_version"] for evidence in worker_evidence},
             "part_id": part_id, "symlinks": {k: v for k, v in symlinks.items() if k in run.part_links.get(part_id, [])},
             "outside_controls": [{"part_id": part_id, "control": c["control"]} for c in part["outside_controls"]],
             "readme_path": README,

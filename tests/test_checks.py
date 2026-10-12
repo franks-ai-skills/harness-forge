@@ -180,5 +180,28 @@ class RunnerLimitsTest(unittest.TestCase):
             self.assertFalse(marker.exists())
 
 
+
+
+class VersionApplicabilityTest(unittest.TestCase):
+    """A version range applies only to a harness version Forge knows."""
+
+    def rule(self):
+        from harness_forge.checks.runner import evaluate_applicability  # noqa: F401
+        pinned = next(rule for rule in load_document(Path(__file__).resolve().parents[1] / "snapshot/rules/skills.yaml",
+                                                     "rules") if rule["id"] == "skills.description.length")
+        return Rule.from_dict({**pinned, "applies_to": {"harnesses": ["claude-code"],
+                                                        "versions": {"claude-code": ">=999.0.0"}}})
+
+    def test_an_unknown_version_is_unresolved_and_a_known_one_decides(self):
+        from harness_forge.checks.runner import evaluate_applicability
+        from harness_forge.predicates import UnknownFact
+        facts = {"targets": ["claude-code"], "part_id": "A"}
+        with self.assertRaisesRegex(UnknownFact, "harness_versions.claude-code"):
+            evaluate_applicability(self.rule(), facts)
+        applies, reason = evaluate_applicability(self.rule(), {**facts, "harness_versions": {"claude-code": "2.1.296"}})
+        self.assertEqual((applies, reason), (False, "no target harness version is in the rule's range"))
+        self.assertTrue(evaluate_applicability(self.rule(), {**facts, "harness_versions": {"claude-code": "999.1"}})[0])
+
+
 if __name__ == "__main__":
     unittest.main()

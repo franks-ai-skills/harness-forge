@@ -69,7 +69,12 @@ def evaluate_applicability(rule: Rule, facts: dict) -> tuple[bool, str]:
         return False, f"applies to {', '.join(rule.applies_to['harnesses'])}, not the targets"
     versions = facts.get("harness_versions", {})
     for harness, ranges in rule.applies_to.get("versions", {}).items():
-        if harness in harnesses and harness in versions and not _version_matches(versions[harness], ranges):
+        if harness not in harnesses:
+            continue
+        if harness not in versions:
+            # A range decides nothing without the version: unresolved, never silently applicable.
+            raise UnknownFact(f"harness_versions.{harness}")
+        if not _version_matches(versions[harness], ranges):
             harnesses.discard(harness)
     if not harnesses:
         return False, "no target harness version is in the rule's range"
