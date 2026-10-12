@@ -94,15 +94,16 @@ def research_pass(
                     else None
             except ValueError:
                 verdict = None
-        result["support"].append({"finding_id": new_id, "quote_check": "pass" if quoted else "fail",
-                                  "verdict": verdict["verdict"] if verdict else "missing",
-                                  "worker_ref": f"support-{new_id.lower()}",
-                                  "finding_digest": canonical_digest(finding.to_dict())})
+        support = {"finding_id": new_id, "quote_check": "pass" if quoted else "fail",
+                   "verdict": verdict["verdict"] if verdict else "missing", "worker_ref": f"support-{new_id.lower()}"}
         problem = finding_problem(finding, page, verdict)
         if problem:
             result["dropped"].append({"id": new_id, "reason": problem})
         else:
+            # Only a finding that passed every check binds its entry; a dropped one's entry supports nothing.
+            support["finding_digest"] = canonical_digest(finding.to_dict())
             result["kept"].append(finding.to_dict())
+        result["support"].append(support)
     return result
 
 

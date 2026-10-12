@@ -144,6 +144,19 @@ class ResearchPassTest(unittest.TestCase):
                          {"F3": "pass", "F4": "fail"})
         self.assertEqual(len(result["worker_evidence"]), 2)
 
+    def test_a_dropped_finding_never_counts_as_supported(self):
+        """Its quote and verdict may pass while its context fails: the entry then binds no finding."""
+        from harness_forge.research import supported_findings
+        fabricated = finding(context=f"Invented surroundings. {QUOTE} More invention.")
+        result, _ = self.run_pass([fabricated])
+        self.assertEqual(result["kept"], [])
+        [entry] = result["support"]
+        self.assertEqual((entry["quote_check"], entry["verdict"]), ("pass", "supported"))
+        self.assertNotIn("finding_digest", entry)
+        from harness_forge.research import worker_finding, make_brief
+        restored = worker_finding(fabricated, make_brief(self.record, "deep", "A"), "F1").to_dict()
+        self.assertEqual(supported_findings({"findings": [restored], "support": result["support"]}), {})
+
     def test_unsupported_findings_are_dropped(self):
         result, _ = self.run_pass([finding()], support="unsupported")
         self.assertEqual(result["kept"], [])
