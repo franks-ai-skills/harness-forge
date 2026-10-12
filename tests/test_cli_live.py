@@ -1052,6 +1052,28 @@ class LiveCommandsTest(unittest.TestCase):
         code, _, stderr = cli(*research, "--pass", "deep", "--part", "A")
         self.assertEqual(code, 0, stderr)
 
+    def test_recorded_answers_must_be_declared_facts_of_their_scope(self):
+        cli, arguments = self.build_ready(ResearchRunner([finding()]))
+        for change, message in (
+            (lambda record: record.part("A")["answers"].update(target_set="codex"),
+             "part A answers target_set, which is not a part question"),
+            (lambda record: record.part("A")["answers"].update(every_time="sometimes"),
+             "part A answers every_time with 'sometimes'"),
+            (lambda record: record.record["facts"].update(job="procedure"),
+             "the idea answers job, which is not a whole-idea question"),
+        ):
+            with self.subTest(message=message):
+                record = load_decision(self.decision)
+                original = load_decision(self.decision)
+                change(record)
+                write_decision(self.root, record, slug="repro", date="2026-10-10")
+                for command in (["verify", *arguments], ["prepare-contract", "--decision", self.decision, "--revision",
+                                                         self.root / ".harness/research/repro.rules.yaml"]):
+                    code, _, stderr = cli(*command)
+                    self.assertEqual(code, 2, command[0])
+                    self.assertIn(message, stderr)
+                write_decision(self.root, original, slug="repro", date="2026-10-10")
+
     def test_case_ids_must_be_unique(self):
         import yaml
         cli, arguments = self.build_ready(ResearchRunner([finding()]))

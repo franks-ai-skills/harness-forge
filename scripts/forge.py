@@ -52,7 +52,7 @@ from harness_forge.verify import (  # noqa: E402
 )
 from harness_forge.models import ReviewResponse  # noqa: E402
 from harness_forge.selection import (  # noqa: E402
-    CONFLICT_CHOICES, conflict_kept, goal_conflict, next_question, recommend, selection_state,
+    CONFLICT_CHOICES, answers_problem, conflict_kept, goal_conflict, next_question, recommend, selection_state,
 )
 
 MAX_OUTPUT_BYTES = 64 * 1024
@@ -347,6 +347,9 @@ def _prepare_contract(arguments: argparse.Namespace) -> int:
         revision = load_revision(Path(arguments.revision)) if arguments.revision else None
     except ValueError as error:
         raise _InvalidInput(str(error)) from error
+    problem = answers_problem(decision.record, _selection_document())
+    if problem:
+        raise _InvalidInput(problem)
     overrides, described = _checked_overrides(Path(arguments.decision).resolve().parents[2])
     evidence = []
     if arguments.evidence:
@@ -648,7 +651,8 @@ def _decision_and_revision(arguments: argparse.Namespace, root: Path | None = No
         revision = load_revision(Path(arguments.revision), root=root) if getattr(arguments, "revision", None) else None
     except ValueError as error:
         raise _InvalidInput(str(error)) from error
-    problem = _revision_problem(decision, revision) if matching else None
+    problem = answers_problem(decision.record, _selection_document())
+    problem = problem or (_revision_problem(decision, revision) if matching else None)
     if problem:
         raise _InvalidInput(problem)
     return decision, revision

@@ -582,3 +582,27 @@ def conflict_kept(part: dict, conflict: dict) -> bool:
     recorded = part.get("goal_conflict") or {}
     return (recorded.get("choice") == "keep" and recorded.get("chosen") == conflict["chosen"]
             and sorted(recorded.get("rule_ids", [])) == sorted(item["rule_id"] for item in conflict["failing"]))
+
+
+def answers_problem(record: dict, selection: dict) -> str | None:
+    """Why a decision's recorded answers are not answers to the declared questions, or None.
+
+    Part answers must be part questions and whole-idea facts whole-idea
+    ones, each with one of its declared values: a part answer named like a
+    whole-idea fact would otherwise shadow it when facts are merged.
+    """
+    asked = {question["id"] for question in selection["questions"]}
+    declared = {fact["id"]: fact for fact in selection["facts"] if fact["id"] in asked}
+
+    def wrong(values: dict, scope: str, owner: str) -> str | None:
+        for fact, value in values.items():
+            if fact not in declared or declared[fact]["scope"] != scope:
+                return f"{owner} answers {fact}, which is not a {'part' if scope == 'part' else 'whole-idea'} question"
+            if not any(value == allowed and type(value) is type(allowed) for allowed in declared[fact]["values"]):
+                return f"{owner} answers {fact} with {value!r}, not one of {declared[fact]['values']}"
+        return None
+
+    problem = wrong(record["facts"], "idea", "the idea")
+    for part in record["parts"]:
+        problem = problem or wrong(part["answers"], "part", f"part {part['id']}")
+    return problem
