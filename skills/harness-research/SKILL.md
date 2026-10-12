@@ -60,7 +60,10 @@ this skill's folder; run it with the Forge environment's Python.
    accepts none; it replaces that part's requirements in
    `.harness/research/<slug>.rules.yaml`, bound to the part's brief,
    keeps the other parts' and records the revision in the decision. The
-   changed contract needs a new confirmation.
+   changed contract needs a new confirmation. Its output lists
+   `dropped_parts`: requirements of parts the decision no longer has,
+   or, when an older revision named no single part, every other part it
+   held. Tell the user, and accept each remaining dropped part again.
 6. **Incompatible goal.** If the deep pass shows the chosen mechanism
    cannot meet the part's goal, stop and return to harness-intake with a
    concrete alternative instead of building.
