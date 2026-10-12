@@ -701,6 +701,13 @@ def _research(arguments: argparse.Namespace) -> int:
         except ValueError as error:
             raise _InvalidInput(str(error)) from error
     part_id = arguments.part if arguments.pass_name == "deep" else None
+    confirmed = set(approval["confirmation"].part_ids)
+    if part_id is not None and part_id not in confirmed:
+        raise _InvalidInput(f"part {part_id} is not confirmed in this session; confirm it before researching it")
+    unconfirmed = sorted({part["id"] for part in decision.record["parts"]} - confirmed)
+    if part_id is None and unconfirmed:
+        raise _InvalidInput(f"the survey brief holds part {', '.join(unconfirmed)}, which is not confirmed in this "
+                            "session; confirm every part before the survey")
     try:
         result = research_pass(decision, arguments.pass_name, part_id, arguments.harness, **approval,
                                run_id=approval["confirmation"].run_id, runner=RUNNER, environ=_environ(), fetch=FETCH,

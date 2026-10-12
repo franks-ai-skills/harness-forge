@@ -1030,6 +1030,28 @@ class LiveCommandsTest(unittest.TestCase):
         self.assertEqual(code, 0, stderr)
         return output
 
+    def test_research_covers_only_confirmed_parts(self):
+        record = load_decision(self.decision)
+        record.record["parts"].append(part("B", "Never merge without review", outcome="outside-instead",
+                                           recommended=None, chosen=None))
+        write_decision(self.root, record, slug="repro", date="2026-10-10")
+        runner = ResearchRunner([finding()])
+        cli = Cli(runner, self.root)
+        _, workers, _ = cli("workers", "--harness", "claude-code")
+        evidence = cli.write("workers.json", workers)
+        relay = cli.confirm(self.decision, "intake-1")  # names part A only
+        research = ["research", "--decision", self.decision, "--harness", "claude-code", "--evidence", evidence,
+                    "--relay", relay, "--root", self.root, "--slug", "repro"]
+        for extra, message in ((["--pass", "deep", "--part", "B"], "part B is not confirmed"),
+                               (["--pass", "survey"], "the survey brief holds part B, which is not confirmed")):
+            with self.subTest(extra=extra):
+                code, _, stderr = cli(*research, *extra)
+                self.assertEqual(code, 2)
+                self.assertIn(message, stderr)
+        self.assertEqual(runner.worker_calls, [], "no worker starts")
+        code, _, stderr = cli(*research, "--pass", "deep", "--part", "A")
+        self.assertEqual(code, 0, stderr)
+
     def test_case_ids_must_be_unique(self):
         import yaml
         cli, arguments = self.build_ready(ResearchRunner([finding()]))
