@@ -367,6 +367,13 @@ def review_request(run: VerificationRun, request_id: str) -> dict:
         "goals": [{"part_id": r["part_id"], "goal": r["goal"], "requirement_ids": r["requirement_ids"]}
                   for r in run.judged_requests if r["kind"] == "goal"],
         "decision_digest": run.decision_digest,
+        # The confirmed facts a rule's judgment can depend on, such as the targets a flag is needed for.
+        "context": {"targets": list(run.whole_idea["targets"]), "reach": run.whole_idea["reach"],
+                    "facts": dict(run.whole_idea["facts"]),
+                    "parts": [{"part_id": part["id"], "goal": part["goal"], "answers": dict(part["answers"]),
+                               "outcome": part["outcome"], "mechanism": part["chosen"],
+                               "reuse": dict(part["reuse"]) if part.get("reuse") else None}
+                              for part in run.parts if part["id"] in requested]},
     }
     request = {"role": "review", "run_id": run.run_id, "request_id": request_id,
                "input_digest": canonical_digest(inputs), "inputs": inputs}

@@ -265,6 +265,17 @@ class VerdictTest(unittest.TestCase):
         self.assertNotEqual(exclusion_token(scenario.run, "A", rule), exclusion_token(rerun, "A", rule),
                             "the token binds the whole rule, its sources included")
 
+    def test_the_reviewer_gets_the_confirmed_decision_context(self):
+        from harness_forge.verify import review_request
+        scenario = Scenario(skill_decision())
+        context = review_request(scenario.run, "review-1")["inputs"]["context"]
+        self.assertEqual((context["targets"], context["reach"]), (["claude-code", "codex"], "repository"))
+        self.assertEqual(context["facts"]["target_set"], "both")
+        [part_a] = context["parts"]
+        self.assertEqual((part_a["part_id"], part_a["mechanism"], part_a["outcome"]), ("A", "skills", "harness-only"))
+        self.assertEqual(part_a["answers"]["every_time"], "usually")
+        self.assertIsNone(part_a["reuse"])
+
     def test_not_applicable_only_for_judged_applicability(self):
         review = copy.deepcopy(self.review)
         for verdict in review["verdicts"]:

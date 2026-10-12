@@ -244,6 +244,95 @@
               "decision_digest": {
                 "type": "string",
                 "pattern": "^[0-9a-f]{64}$"
+              },
+              "context": {
+                "type": "object",
+                "properties": {
+                  "targets": {
+                    "type": "array",
+                    "items": {
+                      "enum": [
+                        "claude-code",
+                        "codex"
+                      ]
+                    }
+                  },
+                  "reach": {
+                    "enum": [
+                      "repository",
+                      "user",
+                      "public"
+                    ]
+                  },
+                  "facts": {
+                    "type": "object",
+                    "additionalProperties": {
+                      "type": [
+                        "string",
+                        "boolean",
+                        "integer"
+                      ]
+                    }
+                  },
+                  "parts": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "part_id": {
+                          "type": "string",
+                          "pattern": "^[A-Z][0-9]*$"
+                        },
+                        "goal": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 20000
+                        },
+                        "answers": {
+                          "type": "object",
+                          "additionalProperties": {
+                            "type": [
+                              "string",
+                              "boolean",
+                              "integer"
+                            ]
+                          }
+                        },
+                        "outcome": {
+                          "type": "string"
+                        },
+                        "mechanism": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        },
+                        "reuse": {
+                          "type": [
+                            "object",
+                            "null"
+                          ]
+                        }
+                      },
+                      "additionalProperties": false,
+                      "required": [
+                        "part_id",
+                        "goal",
+                        "answers",
+                        "outcome",
+                        "mechanism",
+                        "reuse"
+                      ]
+                    }
+                  }
+                },
+                "additionalProperties": false,
+                "required": [
+                  "targets",
+                  "reach",
+                  "facts",
+                  "parts"
+                ]
               }
             },
             "additionalProperties": false,
@@ -251,7 +340,8 @@
               "files",
               "rules",
               "goals",
-              "decision_digest"
+              "decision_digest",
+              "context"
             ]
           }
         }
