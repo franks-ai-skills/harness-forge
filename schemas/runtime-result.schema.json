@@ -72,6 +72,12 @@
       "type": "string",
       "minLength": 1,
       "maxLength": 20000
+    },
+    "inventory": {
+      "enum": [
+        "observed",
+        "not observable"
+      ]
     }
   },
   "additionalProperties": false,

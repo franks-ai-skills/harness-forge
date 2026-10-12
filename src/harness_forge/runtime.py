@@ -88,7 +88,8 @@ def _claude_command(tools: list[str]) -> list[str]:
         "claude", "--print", "--output-format", "stream-json", "--verbose", "--no-session-persistence",
         "--setting-sources", "project", "--strict-mcp-config", "--mcp-config", '{"mcpServers":{}}',
         "--permission-mode", "dontAsk", "--permission-prompts", "none",
-        "--settings", '{"disableAllHooks":true,"autoMemoryEnabled":false}',
+        # disableSkillShellExecution: a candidate's !`cmd` lines would otherwise run before the model reads it.
+        "--settings", '{"disableAllHooks":true,"autoMemoryEnabled":false,"disableSkillShellExecution":true}',
         "--tools", listed, "--allowedTools", listed,
     ]
 
@@ -124,7 +125,7 @@ def _events(stdout: str) -> list[dict]:
     return events
 
 
-def _observe_claude(stdout: str, name: str, baseline: set[str]) -> dict:
+def _observe_claude(stdout: str, name: str, baseline: set[str], workspace: Path | None = None) -> dict:
     """Activation, tool calls and what else stayed loaded, from the init, assistant and tool-result events.
 
     A Skill or Read call activates only once its tool result arrives without
@@ -132,12 +133,15 @@ def _observe_claude(stdout: str, name: str, baseline: set[str]) -> dict:
     shows the skill was chosen (``attempted``).
     """
     observed = {"activation": None, "attempted": None, "calls": [], "unavailable": [], "competing": [],
-                "loaded": None, "completed": False, "errored": False}
+                "loaded": None, "completed": False, "errored": False, "inventory": "not observable"}
     other_skill = False
     pending: dict[str, str] = {}
+    # Only the candidate in the throwaway workspace counts; a same-named skill elsewhere is not it.
+    roots = ({str(workspace), str(Path(workspace).resolve())} if workspace is not None else {""})
     for event in _events(stdout):
         if event.get("type") == "system" and event.get("subtype") == "init":
             skills = [str(skill) for skill in event.get("skills", [])]
+            observed["inventory"] = "observed"
             observed["loaded"] = name in skills
             observed["competing"] = sorted(set(skills) - {name} - baseline)
             plugins = [p for p in event.get("plugins", []) if not (isinstance(p, dict) and p.get("path") == "builtin")]
@@ -163,9 +167,10 @@ def _observe_claude(stdout: str, name: str, baseline: set[str]) -> dict:
                     # the skill's own files shows its content was loaded. After
                     # another skill ran, such a read follows that skill's pointer.
                     path = str(arguments.get("file_path", ""))
-                    for root in (f"/.claude/skills/{name}/", f"/.agents/skills/{name}/"):
-                        if root in path:
-                            signal = f"read {path.split(root, 1)[1]} from the {name} skill"
+                    for base in roots:
+                        for root in (f"{base}/.claude/skills/{name}/", f"{base}/.agents/skills/{name}/"):
+                            if path.startswith(root):
+                                signal = f"read {path[len(root):]} from the {name} skill"
                 if signal:
                     observed["attempted"] = observed["attempted"] or signal
                     pending[str(block.get("id"))] = signal
@@ -195,11 +200,16 @@ def _skills_read(item: dict) -> list[str]:
             if re.search(rf"^name:\s*['\"]?{re.escape(name)}['\"]?\s*$", output, re.M)]
 
 
-def _observe_codex(stdout: str, directory: str) -> dict:
+def _observe_codex(stdout: str, directory: str, description_line: str | None = None) -> dict:
     """Activation is a read of the candidate's SKILL.md, unless another skill's SKILL.md was read first:
-    a later read of the candidate then follows that skill's pointer."""
+    a later read of the candidate then follows that skill's pointer.
+
+    The read must print the candidate's own description line, which a
+    command that only names the file or prints its name line does not.
+    Codex reports no inventory of what it loaded.
+    """
     observed = {"activation": None, "attempted": None, "calls": [], "unavailable": [], "competing": [],
-                "loaded": None, "completed": False, "errored": False}
+                "loaded": None, "completed": False, "errored": False, "inventory": "not observable"}
     name = directory.rsplit("/", 1)[-1]
     first_skill = None
     for event in _events(stdout):
@@ -210,7 +220,8 @@ def _observe_codex(stdout: str, directory: str) -> dict:
             if item.get("type") == "command_execution":
                 read = _skills_read(item)
                 first_skill = first_skill or (read[0] if read else None)
-                if name in read and first_skill == name:
+                printed = description_line is None or description_line in str(item.get("aggregated_output", ""))
+                if name in read and first_skill == name and printed:
                     observed["activation"] = f"read {directory}/SKILL.md"
         observed["completed"] = observed["completed"] or event.get("type") == "turn.completed"
         observed["errored"] = observed["errored"] or event.get("type") in ("turn.failed", "error")
@@ -244,24 +255,37 @@ def _decide(harness: str, test_case: dict, observed: dict, permitted: list[str])
     return "pass", "no Skill tool call for the candidate"
 
 
+def _description_line(files: Mapping[str, bytes], target: str) -> str | None:
+    """The candidate SKILL.md's description line, which a real read of it prints."""
+    text = files.get(f"{target}/SKILL.md", b"").decode("utf-8", "replace")
+    return next((line for line in text.splitlines() if line.startswith("description:")), None)
+
+
 def activation_case(
     harness: str, files: Mapping[str, bytes], skill_dirs: list[str], target: str, prompt: str, expected: str,
     permitted: list[str], fixtures: Mapping[str, str], *, runner: Runner, environ: Mapping[str, str],
     baseline: set[str], timeout: int = RUNTIME_TIMEOUT, workspace_root: str | None = None, slash: bool = False,
-) -> tuple[str, str, str | None]:
+    links: Mapping[str, str] | None = None,
+) -> tuple[str, str, str | None, str]:
     """Run one prompt in a throwaway workspace holding ``files``; judge whether ``target`` activated.
 
+    Returns (outcome, reason, observed activation, inventory), the inventory
+    ``observed`` only when the harness reported what it loaded.
+
     Skills in ``skill_dirs`` other than the target are installed on purpose
-    and never count as competing; Claude finds each through its
-    .claude/skills link. A slash or $ invocation (``slash``) may load the
-    skill without a tool call; with no observed signal it is not-run.
+    and never count as competing. ``links`` are the repository's own
+    symbolic links, recreated as they are, so a missing .claude/skills link
+    stays missing; without them, each skill directory gets its link (the
+    routing smoke installs Forge's own skills that way). A slash or $
+    invocation (``slash``) may load the skill without a tool call; with no
+    observed signal it is not-run.
     """
     name = target.rsplit("/", 1)[-1]
     companions = {directory.rsplit("/", 1)[-1] for directory in skill_dirs} - {name}
     for path in fixtures:
         problem = fixture_problem(path, files)
         if problem:
-            return "error", problem, None
+            return "error", problem, None, "not observable"
     with tempfile.TemporaryDirectory(prefix="forge-runtime-", dir=workspace_root) as temporary:
         workspace = Path(temporary)
         for path, data in files.items():
@@ -273,10 +297,12 @@ def activation_case(
             destination.parent.mkdir(parents=True, exist_ok=True)
             destination.write_text(text, encoding="utf-8")
         if harness == "claude-code":
-            for directory in skill_dirs:
-                link = workspace / ".claude" / "skills" / directory.rsplit("/", 1)[-1]
+            wanted = links if links is not None else {f".claude/skills/{d.rsplit('/', 1)[-1]}": f"../../{d}"
+                                                      for d in skill_dirs}
+            for path, link_target in wanted.items():
+                link = safe_path(workspace, path)
                 link.parent.mkdir(parents=True, exist_ok=True)
-                link.symlink_to(f"../../{directory}")
+                link.symlink_to(link_target)
             command = _claude_command(permitted)
         else:
             command = codex.command("review", str(workspace), structured=False)
@@ -284,17 +310,21 @@ def activation_case(
             completed = runner(command, cwd=str(workspace), env=worker_environment(environ, harness), stdin=prompt,
                                timeout=timeout)
         except OSError as error:
-            return "not-run", f"unavailable: the harness could not start: {error}", None
+            return "not-run", f"unavailable: the harness could not start: {error}", None, "not observable"
+    # What the harness did before it stopped counts, also when it timed out or failed.
+    observed = (_observe_claude(completed.stdout, name, baseline | companions, workspace) if harness == "claude-code"
+                else _observe_codex(completed.stdout, target, _description_line(files, target)))
+    outside = sorted(set(observed["calls"]) - set(permitted))
+    if outside:
+        return "fail", f"tool outside the declared list: {', '.join(outside)}", None, observed["inventory"]
     if completed.timed_out:
-        return "not-run", f"timed out after {timeout} s", None
+        return "not-run", f"timed out after {timeout} s", None, observed["inventory"]
     if completed.returncode:
-        return "error", f"the harness exited with {completed.returncode}", None
-    observed = (_observe_claude(completed.stdout, name, baseline | companions) if harness == "claude-code"
-                else _observe_codex(completed.stdout, target))
+        return "error", f"the harness exited with {completed.returncode}", None, observed["inventory"]
     outcome, reason = _decide(harness, {"expected": expected}, observed, permitted)
     if slash and outcome == "fail" and observed["activation"] is None and expected == "activates":
-        return "not-run", "the explicit invocation left no observable activation signal", None
-    return outcome, reason, observed["activation"]
+        return "not-run", "the explicit invocation left no observable activation signal", None, observed["inventory"]
+    return outcome, reason, observed["activation"], observed["inventory"]
 
 
 def run_skill_runtime(
@@ -342,11 +372,13 @@ def run_skill_runtime(
             *[f"{path} sha256 {hashlib.sha256(text.encode()).hexdigest()}" for path, text in sorted(fixtures.items())],
         ])
 
-        def result(outcome: str, reason: str, activation: str | None = None) -> RuntimeResult:
+        def result(outcome: str, reason: str, activation: str | None = None,
+                   inventory: str = "not observable") -> RuntimeResult:
             return RuntimeResult(run_id=run.run_id, part_id=test_case["part_id"], case_id=test_case["id"],
                                  prompt=test_case["prompt"], expected=test_case["expected"],
                                  observed_activation=activation, result=outcome, reason=reason, file_hashes=hashes,
-                                 harness=harness, harness_version=checked["version"], environment=environment)
+                                 harness=harness, harness_version=checked["version"], environment=environment,
+                                 inventory=inventory)
 
         if not checked["available"]:
             results.append(result("not-run", f"unavailable: {checked['reason']}"))
@@ -358,9 +390,12 @@ def run_skill_runtime(
                                              f"{', '.join(CLAUDE_CONTAINED)}"))
             continue
         staged = {path: data for path, data in files.items() if path.startswith(directory + "/")}
-        outcome, reason, activation = activation_case(
+        # The repository's own links for the part, as they are: a missing one stays missing.
+        links = {link: run.frozen_inputs["symlinks"][link] for link in run.part_links.get(test_case["part_id"], [])
+                 if link in run.frozen_inputs["symlinks"]}
+        outcome, reason, activation, inventory = activation_case(
             harness, staged, [directory], directory, test_case["prompt"], test_case["expected"], permitted, fixtures,
             runner=runner, environ=environ, baseline=set(baseline_skills), timeout=timeout,
-            workspace_root=workspace_root)
-        results.append(result(outcome, reason, activation))
+            workspace_root=workspace_root, links=links)
+        results.append(result(outcome, reason, activation, inventory))
     return results

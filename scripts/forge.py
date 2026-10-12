@@ -1083,7 +1083,8 @@ def _verify(arguments: argparse.Namespace) -> int:
         raise _InvalidInput(f"the report could not be written: {error}") from error
     parts = [{"part_id": r.part_id, "status": r.status, "harness_result": r.harness_result, "goal_result": r.goal_result}
              for r in results]
-    runtime = [{"case_id": r.case_id, "result": r.result, "reason": r.reason} for r in run.runtime_results]
+    runtime = [{"case_id": r.case_id, "result": r.result, "reason": r.reason, "inventory": r.inventory}
+               for r in run.runtime_results]
     unresolved = [{"part_id": r.part_id, "rule_id": rule["rule_id"], "reason": rule["reason"].removesuffix(NEEDS_CONFIRMATION),
                    "confirmation": f"{r.part_id}:{rule['rule_id']}:{exclusion_token(run, r.part_id, rule['rule_id'])}"}
                   for r in results for rule in r.rule_results if rule["result"] == "unresolved"]

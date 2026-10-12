@@ -22,9 +22,11 @@ never touches a real KB issue.
 Every worker and runtime launch's raw stream is kept under `streams/`
 next to the summary, in the git-ignored private results directory.
 
-A run is clean only when no user-level skill, plugin or MCP server stayed
-loaded in a runtime or routing case; otherwise it reports `clean: false`
-for the user to decide, never a clean result.
+A run is clean only when every runtime or routing case observed the
+harness's inventory and no user-level skill, plugin or MCP server stayed
+loaded. Something loaded reports `clean: false`; an inventory the harness
+does not report, as Codex does not, reports `clean: null`. Either is for
+the user to decide, never a clean result.
 """
 
 from __future__ import annotations
@@ -119,8 +121,13 @@ def _reviewed_parts(streams: Path, start: int) -> set[str]:
     return parts
 
 
-def _clean(reasons: list[str]) -> bool:
-    return not any(marker in reason for reason in reasons for marker in UNCLEAN)
+def _clean(results: list[dict]) -> bool | None:
+    """Clean only from observed inventories: False when anything stayed loaded, None when not observable."""
+    if any(marker in result["reason"] for result in results for marker in UNCLEAN):
+        return False
+    if not results or any(result.get("inventory") != "observed" for result in results):
+        return None
+    return True
 
 
 class _Session:
@@ -263,7 +270,7 @@ def vertical(harness: str, out: Path, *, forge: Forge | None = None,
         return session.finish("stopped: verification did not run")
     session.summary["parts"] = verified["parts"]
     session.summary["runtime"] = verified.get("runtime", [])
-    session.summary["clean"] = _clean([case["reason"] for case in session.summary["runtime"]])
+    session.summary["clean"] = _clean(session.summary["runtime"])
     # The vertical proves the workflow only when verification succeeded: verify exits 1 otherwise.
     return session.finish("completed" if session.verified(code, verified) else "not verified")
 
@@ -412,7 +419,7 @@ def flows(harness: str, out: Path, *, forge: Forge | None = None,
     runtime = [case for result in (verified, reviewed, extensive) if result for case in result.get("runtime", [])]
     session.summary["parts"] = (extensive or {}).get("parts")
     session.summary["runtime"] = runtime
-    session.summary["clean"] = _clean([case["reason"] for case in runtime])
+    session.summary["clean"] = _clean(runtime)
     return session.finish("completed" if all(checks.values()) else "flows did not hold")
 
 
@@ -459,13 +466,13 @@ def routing_smoke(harness: str, out: Path, *, runner=run_command, environ=None) 
         for case in _routing_cases(skill):
             prompt = f"{marker}{skill} {case['prompt']}" if case["mode"] == "explicit" else case["prompt"]
             expected = "activates" if case["expect"] == "trigger" else "does-not-activate"
-            outcome, reason, activation = activation_case(
+            outcome, reason, activation, inventory = activation_case(
                 harness, files, directories, f".agents/skills/{skill}", prompt, expected, permitted, {},
                 runner=runner, environ=environ, baseline=baseline, slash=case["mode"] == "explicit")
             summary["results"].append({"skill": skill, "case_id": case["id"], "mode": case["mode"], "prompt": prompt,
                                        "expected": expected, "result": outcome, "reason": reason,
-                                       "observed_activation": activation})
-    summary["clean"] = _clean([result["reason"] for result in summary["results"]])
+                                       "observed_activation": activation, "inventory": inventory})
+    summary["clean"] = _clean(summary["results"])
     failed = any(result["result"] in ("fail", "error") for result in summary["results"])
     summary["status"] = "completed with failures" if failed else "completed"
     _write_json(out / "summary.json", summary)

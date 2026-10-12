@@ -246,6 +246,7 @@ class RuntimeResult:
     harness: str
     harness_version: str
     environment: str
+    inventory: str = "not observable"  # "observed" when the harness reported the skills, plugins and servers it loaded
 
 
 @dataclass(frozen=True)

@@ -10,12 +10,14 @@ from harness_forge.adapters.base import Completed
 from harness_forge.runtime import BASELINE_PROMPT, load_cases, run_skill_runtime
 from harness_forge.verify import finish_run, validate_review
 from tests.test_adapters import CLAUDE_API_KEY, CLAUDE_LOGGED_OUT, PARENT, FakeRunner
-from tests.test_build_skill import NAME
+from tests.test_build_skill import DESCRIPTION, NAME
 from tests.test_verify import Scenario, passing_review, skill_decision
 
 FORGE = Path(__file__).resolve().parents[1]
 SKILL_DIR = f".agents/skills/{NAME}"
 BUILTIN_PLUGINS = [{"name": "cc-plugin-telemetry", "path": "builtin", "source": "cc-plugin-telemetry@builtin"}]
+# The built SKILL.md's description line, which a real read of the candidate prints.
+DESCRIPTION_LINE = yaml.dump({"description": DESCRIPTION.strip()}, width=10_000).strip()
 
 
 def case(mode="explicit", expected="activates", **extra):
@@ -50,7 +52,7 @@ def codex_run(read_skill=True, items=()):
         events.append({"type": "item.completed", "item": {"id": "r", "type": "command_execution",
                                                           "command": f"cat {SKILL_DIR}/SKILL.md", "exit_code": 0,
                                                           "status": "completed",
-                                                          "aggregated_output": f"---\nname: {NAME}\ndescription: x\n"}})
+                                                          "aggregated_output": f"---\nname: {NAME}\n{DESCRIPTION_LINE}\n"}})
     events += [{"type": "item.completed", "item": {"id": f"i{n}", "type": kind}} for n, kind in enumerate(items)]
     events += [{"type": "item.completed", "item": {"id": "m", "type": "agent_message", "text": "Checklist written."}},
                {"type": "turn.completed"}]
@@ -168,14 +170,17 @@ class RuntimeTest(unittest.TestCase):
                 tool_result("r", failed)]
             return "\n".join(json.dumps(event) for event in events) + "\n"
 
-        inside = read(f"/tmp/forge-runtime-x/.claude/skills/{NAME}/references/requirements.md")
+        inside = read(f"@@WORKSPACE@@/.claude/skills/{NAME}/references/requirements.md")
         result = self.run_cases("claude-code", inside)[0][0]
         self.assertEqual(result.result, "pass", result.reason)
         self.assertEqual(result.observed_activation, f"read references/requirements.md from the {NAME} skill")
-        missing = read(f"/tmp/forge-runtime-x/.claude/skills/{NAME}/references/absent.md", failed=True)
+        missing = read(f"@@WORKSPACE@@/.claude/skills/{NAME}/references/absent.md", failed=True)
         self.assertEqual(self.run_cases("claude-code", missing)[0][0].result, "fail", "a failed read loads nothing")
-        outside = read("/tmp/forge-runtime-x/bug-report.md")
+        outside = read("@@WORKSPACE@@/bug-report.md")
         self.assertEqual(self.run_cases("claude-code", outside)[0][0].result, "fail")
+        elsewhere = read(f"/home/u/.claude/skills/{NAME}/SKILL.md")
+        self.assertEqual(self.run_cases("claude-code", elsewhere)[0][0].result, "fail",
+                         "a same-named skill outside the throwaway workspace is not the candidate")
         near_miss = self.run_cases("claude-code", inside, cases=[case("implicit", "does-not-activate")])[0][0]
         self.assertEqual(near_miss.result, "fail")
 
@@ -209,11 +214,41 @@ class RuntimeTest(unittest.TestCase):
                                                                  "aggregated_output": output}})
 
         for name, line in (("echo", command(f"echo {SKILL_DIR}/SKILL.md", 0, f"{SKILL_DIR}/SKILL.md\n")),
+                           ("printed name", command(f"printf 'name: {NAME}\\n' # {SKILL_DIR}/SKILL.md", 0,
+                                                    f"name: {NAME}\n")),
                            ("failed cat", command(f"cat {SKILL_DIR}/SKILL.md", 1, "cat: No such file or directory\n"))):
             with self.subTest(name):
                 result = self.run_cases("codex", line + "\n" + codex_run(read_skill=False))[0][0]
                 self.assertEqual(result.result, "not-run", result.reason)
                 self.assertIsNone(result.observed_activation)
+
+    def test_a_call_outside_the_list_fails_also_when_the_case_timed_out(self):
+        result = self.run_cases("claude-code", claude_run(calls=("Bash",)),
+                                runner_options={"timed_out": True})[0][0]
+        self.assertEqual(result.result, "fail")
+        self.assertIn("tool outside the declared list: Bash", result.reason)
+
+    def test_skill_shell_commands_never_run_in_a_claude_case(self):
+        _, runner = self.run_cases("claude-code", claude_run())
+        command = runner.worker_calls[0]["command"]
+        settings = json.loads(command[command.index("--settings") + 1])
+        self.assertIs(settings["disableSkillShellExecution"], True)
+
+    def test_the_workspace_has_the_links_the_repository_has(self):
+        _, runner = self.run_cases("claude-code", claude_run())
+        self.assertEqual(runner.worker_calls[0]["links"], [f".claude/skills/{NAME}"])
+        run = self.scenario.run
+        run.part_links["A"] = []
+        run.frozen_inputs["symlinks"] = {}
+        results, runner = self.run_cases("claude-code", claude_run(skills=()))
+        self.assertEqual(runner.worker_calls[0]["links"], [], "a missing link stays missing")
+        self.assertEqual(results[0].result, "error")
+
+    def test_each_result_says_whether_the_inventory_was_observed(self):
+        self.assertEqual(self.run_cases("claude-code", claude_run())[0][0].inventory, "observed")
+        without_init = "\n".join(line for line in claude_run().splitlines() if '"init"' not in line) + "\n"
+        self.assertEqual(self.run_cases("claude-code", without_init)[0][0].inventory, "not observable")
+        self.assertEqual(self.run_cases("codex", codex_run())[0][0].inventory, "not observable")
 
     def test_a_fixture_cannot_replace_the_candidate_or_steer_the_harness(self):
         for path in (f"{SKILL_DIR}/SKILL.md", ".agents/skills/other/SKILL.md", ".claude/skills/x/SKILL.md",
