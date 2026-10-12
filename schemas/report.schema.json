@@ -280,6 +280,13 @@
         "worker": {
           "type": "string",
           "pattern": "^[0-9a-f]{64}$"
+        },
+        "cases": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$"
+          }
         }
       },
       "additionalProperties": false,

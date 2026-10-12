@@ -123,7 +123,7 @@ class FullPipelineTest(unittest.TestCase):
         self.run_ok(*build, "--replace", f".agents/skills/{NAME}/SKILL.md")
         options = self.run_ok("scope", "--decision", decision_path, "--root", root, "--revision", revision,
                               "--evidence", workers, "--relay", verify[verify.index("--relay") + 1], "--slug", "repro",
-                              "--fixed", "A1")["options"]
+                              "--fixed", "A1", "--cases", cases_path)["options"]
         self.assertEqual(options[0]["parts"], ["A1", "A2"], "A2 links to the fixed A1")
         chosen = cli.write("scope.json", {"choice": "review", "displayed_digest": options[0]["digest"],
                                           "run_id": "verify-1"})

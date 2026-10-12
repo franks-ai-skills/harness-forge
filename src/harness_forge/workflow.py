@@ -114,7 +114,7 @@ def verify_live(
     environ = os.environ if environ is None else environ
     run = prepare_run(decision, files, rules, confirmation, symlinks=symlinks, revision=revision,
                       overrides=overrides, kb_version=kb_version, worker_evidence=worker_evidence, scope=scope,
-                      scope_label=scope_label, recorded_drift=recorded_drift)
+                      scope_label=scope_label, recorded_drift=recorded_drift, cases=cases)
     review = ReviewResponse(run_id=run.run_id, verdicts=[], goal_verdicts=[])
     observations = []
     if any(request["kind"] == "rule" or request["kind"] == "goal" for request in run.judged_requests):
@@ -145,7 +145,7 @@ def verify_live(
             collect() if collect else (files, symlinks, decision, revision))
         current = bound_inputs(current_decision, current_files, rules, symlinks=current_links,
                                revision=current_revision, overrides=overrides, kb_version=kb_version,
-                               worker_evidence=worker_evidence)
+                               worker_evidence=worker_evidence, cases=cases)
     except (OSError, ValueError):
         current = {**run.frozen_inputs, "idea": "unreadable"}
     for evidence in observations:

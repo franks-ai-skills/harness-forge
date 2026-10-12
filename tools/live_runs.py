@@ -393,7 +393,7 @@ def flows(harness: str, out: Path, *, forge: Forge | None = None,
         """The scope question asked again before each attempt, answered by the runner (see TEST_RELAY)."""
         _, scope = session.run("scope", "scope", "--decision", session.decision, "--root", repo, "--revision",
                                session.revision, "--evidence", session.evidence, "--relay", relay, "--slug",
-                               inputs["slug"], "--fixed", "A")
+                               inputs["slug"], "--fixed", "A", "--cases", session.cases_path)
         review = next((option for option in (scope or {}).get("options", [])
                        if option["label"].startswith("Review")), {})
         chosen = _write_json(scratch / "scope-relay.json", {"choice": "review", "displayed_digest": review.get("digest"),

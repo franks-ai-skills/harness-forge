@@ -549,9 +549,16 @@ def _review_plan(earlier, decision: Decision, current: dict, fixed: set[str], co
             "digest": digest}
 
 
-def _current(decision: Decision, files, symlinks, rules, revision, overrides, evidence) -> dict:
+def _current(decision: Decision, files, symlinks, rules, revision, overrides, evidence, cases) -> dict:
     return bound_inputs(decision, files, rules, symlinks=symlinks, revision=revision, overrides=overrides,
-                        kb_version=_kb_version(), worker_evidence=evidence)
+                        kb_version=_kb_version(), worker_evidence=evidence, cases=cases)
+
+
+def _cases(arguments: argparse.Namespace) -> list[dict]:
+    try:
+        return load_cases(Path(arguments.cases)) if arguments.cases else []
+    except (OSError, ValueError) as error:
+        raise _InvalidInput(str(error)) from error
 
 
 def _scope(arguments: argparse.Namespace) -> int:
@@ -577,8 +584,8 @@ def _scope(arguments: argparse.Namespace) -> int:
     options = []
     if earlier is not None:
         plan = _review_plan(earlier, decision, _current(decision, files, symlinks, rules, revision, overrides,
-                                                        evidence), fixed, confirmation.contract_digest,
-                            confirmation.part_ids, run)
+                                                        evidence, _cases(arguments)), fixed,
+                            confirmation.contract_digest, confirmation.part_ids, run)
         options.append({"label": "Review (recommended)", "parts": plan["judged"],
                         "judged_rules": sum(counts.get(p, 0) for p in plan["judged"]), "link_checks": True,
                         "kept": [{"part_id": part_id, "run_id": plan["earlier_run"], "status": result["status"],
@@ -1046,7 +1053,7 @@ def _verify(arguments: argparse.Namespace) -> int:
         except ValueError as error:
             raise _InvalidInput(str(error)) from error
         plan = _review_plan(earlier, decision, _current(decision, files, symlinks, rules, revision, overrides,
-                                                        approval["worker_evidence"]),
+                                                        approval["worker_evidence"], cases),
                             fixed, confirmation.contract_digest, confirmation.part_ids, owners)
         relay = _read_json(arguments.scope_relay)
         if (set(relay) != {"choice", "displayed_digest", "run_id"} or relay["choice"] != "review"
@@ -1244,6 +1251,7 @@ def build_parser() -> argparse.ArgumentParser:
     scope.add_argument("--relay", required=True, help="JSON relay of the user's confirmation of the current contract")
     scope.add_argument("--slug", required=True, help="the report to compare with, .harness/reports/<slug>.md")
     scope.add_argument("--fixed", help="comma-separated ids of the parts the builder fixed")
+    scope.add_argument("--cases", help="the runtime cases verify will run; changed cases change their part")
     scope.set_defaults(handler=_scope)
     return parser
 

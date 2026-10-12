@@ -743,7 +743,8 @@ class LiveCommandsTest(unittest.TestCase):
         def scope(fixed="A"):
             relay = arguments[arguments.index("--relay") + 1]
             code, output, stderr = cli("scope", "--decision", self.decision, "--root", self.root, *revision,
-                                       "--evidence", workers, "--relay", relay, "--slug", "repro", "--fixed", fixed)
+                                       "--evidence", workers, "--relay", relay, "--slug", "repro", "--fixed", fixed,
+                                       "--cases", FORGE / "evals/smoke/vertical.yaml")
             self.assertEqual(code, 0, stderr)
             return output
 
@@ -857,7 +858,8 @@ class LiveCommandsTest(unittest.TestCase):
         code, output, stderr = cli("scope", "--decision", self.decision, "--root", self.root, "--revision",
                                    self.root / ".harness/research/repro.rules.yaml", "--slug", "repro", "--fixed", fixed,
                                    "--evidence", self.root / ".scratch/workers.json",
-                                   "--relay", arguments[arguments.index("--relay") + 1])
+                                   "--relay", arguments[arguments.index("--relay") + 1],
+                                   "--cases", FORGE / "evals/smoke/vertical.yaml")
         self.assertEqual(code, 0, stderr)
         return output["options"][0]["parts"]
 
@@ -882,6 +884,21 @@ class LiveCommandsTest(unittest.TestCase):
         code, output, _ = cli("verify", *arguments)
         self.assertEqual((code, output["parts"][0]["harness_result"]), (1, "not verified"))
         self.assertEqual(self.scope_parts(cli, arguments), ["A"], "an unresolved earlier result is not kept")
+
+    def test_changed_runtime_cases_put_their_part_back_in_scope(self):
+        cli, arguments = self.build_ready(ResearchRunner([finding()]))
+        self.assertEqual(cli("verify", *arguments)[0], 0)
+        cases = yaml.safe_load((FORGE / "evals/smoke/vertical.yaml").read_text(encoding="utf-8"))
+        for item in cases["cases"]:
+            if item["mode"] == "negative":
+                item["prompt"] = "Summarize this changelog for me."
+        changed = cli.write("changed-cases.yaml", yaml.safe_dump(cases))
+        code, output, stderr = cli("scope", "--decision", self.decision, "--root", self.root, "--revision",
+                                   self.root / ".harness/research/repro.rules.yaml", "--slug", "repro", "--fixed", "",
+                                   "--evidence", self.root / ".scratch/workers.json",
+                                   "--relay", arguments[arguments.index("--relay") + 1], "--cases", changed)
+        self.assertEqual(code, 0, stderr)
+        self.assertEqual(output["options"][0]["parts"], ["A"], "a changed case is a changed input of its part")
 
     def test_a_report_from_before_re_verification_only_rules_out_a_review(self):
         cli, arguments = self.build_ready(ResearchRunner([finding()]))

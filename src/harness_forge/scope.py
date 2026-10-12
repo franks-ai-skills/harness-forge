@@ -63,6 +63,9 @@ def affected_parts(run: VerificationRun, current: dict, owners: VerificationRun 
     if any(frozen[key] != current[key] for key in _GLOBAL_INPUTS):
         return parts
     affected = {part_id for part_id in parts if frozen["parts"].get(part_id) != current["parts"].get(part_id)}
+    # A part's runtime cases and fixtures; history without them counts as changed.
+    affected |= {part_id for part_id in parts
+                 if (frozen.get("cases") or {}).get(part_id) != (current.get("cases") or {}).get(part_id)}
     maps = [run] + ([owners] if owners is not None else [])
     if frozen["revision"] != current["revision"]:
         affected |= {part_id for owner in maps for part_id in owner.requirement_parts}

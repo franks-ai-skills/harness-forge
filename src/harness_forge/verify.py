@@ -225,9 +225,9 @@ def affecting_rules(run: VerificationRun, cited: dict[str, list[str]]) -> dict[s
 def bound_inputs(
     decision: Decision, files: dict[str, bytes], rules: list[Rule], *, symlinks: dict[str, str] | None = None,
     revision: AcceptedRevision | None = None, overrides: list[dict] | tuple = (), kb_version: str = "",
-    worker_evidence: list[dict] | tuple = (),
+    worker_evidence: list[dict] | tuple = (), cases: list[dict] | tuple = (),
 ) -> dict:
-    """Digests of every input a result is bound to."""
+    """Digests of every input a result is bound to; a part's runtime cases and fixtures are among them."""
     return {
         "files": {path: hashlib.sha256(data).hexdigest() for path, data in sorted(files.items())},
         "symlinks": dict(sorted((symlinks or {}).items())),
@@ -240,6 +240,9 @@ def bound_inputs(
         "parts": {part["id"]: canonical_digest(part) for part in decision.record["parts"]},
         "checkers": canonical_digest({checker_id: version for checker_id, (version, _) in sorted(REGISTRY.items())}),
         "worker": canonical_digest(worker_configurations(worker_evidence)),
+        "cases": {part["id"]: canonical_digest(sorted((case for case in cases if case["part_id"] == part["id"]),
+                                                      key=lambda case: case["id"]))
+                  for part in decision.record["parts"]},
     }
 
 
@@ -248,7 +251,7 @@ def prepare_run(
     symlinks: dict[str, str] | None = None, revision: AcceptedRevision | None = None,
     overrides: list[dict] | tuple = (), kb_version: str = "", worker_evidence: list[dict] | tuple = (),
     scope: set[str] | None = None, scope_label: str = "Extensive review (rarely needed)",
-    recorded_drift: list[dict] | tuple = (),
+    recorded_drift: list[dict] | tuple = (), cases: list[dict] | tuple = (),
 ) -> VerificationRun:
     """Decide applicability, run script rules and freeze the bound inputs."""
     duplicate = part_ids_problem(decision.record)
@@ -260,7 +263,7 @@ def prepare_run(
     worker_evidence = copy.deepcopy(list(worker_evidence))  # later changes by the caller must not reach the run
     record = copy.deepcopy(decision.record)
     inputs = bound_inputs(decision, files, rules, symlinks=symlinks, revision=revision, overrides=overrides,
-                          kb_version=kb_version, worker_evidence=worker_evidence)
+                          kb_version=kb_version, worker_evidence=worker_evidence, cases=cases)
     unconfirmed_reason = confirmation_problem(confirmation, decision, revision, overrides, worker_evidence,
                                               recorded_drift) or ""
     confirmed = [] if unconfirmed_reason else sorted(confirmation.part_ids)
