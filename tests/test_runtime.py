@@ -188,6 +188,35 @@ class RuntimeTest(unittest.TestCase):
         self.assertIn(f"a user-level skill named {NAME} takes precedence over the candidate", shadowed.reason)
         self.assertEqual(len(runner.worker_calls), 2, "no case launches under a shadowing skill")
 
+    def test_an_unobserved_bundled_off_probe_exempts_nothing(self):
+        def stream_without(key):
+            events = [json.loads(line) for line in claude_run(skills=(), skill_call=None).splitlines()]
+            if key == "init":
+                events = events[1:]
+            else:
+                events[0].pop(key)
+            return "\n".join(json.dumps(event) for event in events) + "\n"
+
+        for name, answer in (("failed", Completed(1, "", "error", False)),
+                             ("timed out", Completed(None, "", "", True)),
+                             ("no init event", Completed(0, stream_without("init"), "", False)),
+                             ("no skills listed", Completed(0, stream_without("skills"), "", False))):
+            class Probe(FakeRunner):
+                def __call__(self, command, *, cwd, env, stdin, timeout):
+                    result = super().__call__(command, cwd=cwd, env=env, stdin=stdin, timeout=timeout)
+                    if stdin != BASELINE_PROMPT:
+                        return result
+                    if "disableBundledSkills" in command[command.index("--settings") + 1]:
+                        return answer
+                    return Completed(0, claude_run(skills=(NAME, "my-personal"), skill_call=None), "", False)
+
+            with self.subTest(name):
+                runner = Probe(worker=claude_run(skills=(NAME, "my-personal")))
+                result = self.run_cases("claude-code", None, runner=runner, baseline_skills=None)[0][0]
+                self.assertEqual(result.result, "not-run", result.reason)
+                self.assertIn("could not tell bundled skills from the user's", result.reason)
+                self.assertEqual(len(runner.worker_calls), 2, "no case launches")
+
     def test_a_claude_read_of_the_candidates_skill_md_counts_as_activation(self):
         """Its instructions reached the model; a read of a reference alone shows file access, not activation."""
         def read(path, failed=False):

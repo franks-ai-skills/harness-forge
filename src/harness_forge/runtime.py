@@ -105,30 +105,45 @@ BASELINE_PROMPT = "Reply with OK."
 
 
 def _listed_skills(runner: Runner, environ: Mapping[str, str], *, bundled: bool, timeout: int,
-                   workspace_root: str | None) -> set[str]:
-    """The skills one tool-less launch with the runtime cases' settings lists in an empty workspace."""
+                   workspace_root: str | None) -> set[str] | None:
+    """The skills one tool-less launch with the runtime cases' settings lists in an empty workspace;
+    None when the launch failed or listed no skills field, which is no evidence of an empty listing."""
     with tempfile.TemporaryDirectory(prefix="forge-baseline-", dir=workspace_root) as temporary:
         completed = runner(_claude_command([], bundled=bundled), cwd=temporary,
                            env=worker_environment(environ, "claude-code"), stdin=BASELINE_PROMPT, timeout=timeout)
+    if completed.returncode != 0 or completed.timed_out:
+        return None
     for event in _events(completed.stdout):
         if event.get("type") == "system" and event.get("subtype") == "init":
-            return {str(skill) for skill in event.get("skills", [])}
-    return set()
+            skills = event.get("skills")
+            return {str(skill) for skill in skills} if isinstance(skills, list) else None
+    return None
 
 
 def claude_skill_origins(runner: Runner, environ: Mapping[str, str], *, timeout: int = RUNTIME_TIMEOUT,
-                         workspace_root: str | None = None) -> tuple[set[str], set[str]]:
+                         workspace_root: str | None = None) -> tuple[set[str], set[str] | None]:
     """(bundled, user-level) skills: an empty workspace lists both; with bundled skills off, only the
-    personal and managed ones remain. Only bundled skills are part of every user's environment."""
+    personal and managed ones remain. Only bundled skills are part of every user's environment.
+
+    When either launch shows no listing, the origins are unknown: (set(), None), and nothing is exempt.
+    """
     listed = _listed_skills(runner, environ, bundled=True, timeout=timeout, workspace_root=workspace_root)
     user = _listed_skills(runner, environ, bundled=False, timeout=timeout, workspace_root=workspace_root)
+    if listed is None or user is None:
+        return set(), None
     return listed - user, user
 
 
-def claude_baseline(runner: Runner, environ: Mapping[str, str], *, timeout: int = RUNTIME_TIMEOUT,
-                    workspace_root: str | None = None) -> set[str]:
-    """Claude's bundled skills, which never compete with a candidate (claude_skill_origins)."""
-    return claude_skill_origins(runner, environ, timeout=timeout, workspace_root=workspace_root)[0]
+UNKNOWN_ORIGINS = "unavailable: Forge could not tell bundled skills from the user's, so nothing is exempt"
+
+
+def shadowing(name: str, user_skills: set[str] | None) -> str | None:
+    """Why a case of the skill ``name`` cannot run: unknown skill origins, or a user-level skill of its name."""
+    if user_skills is None:
+        return UNKNOWN_ORIGINS
+    if name in user_skills:
+        return f"unavailable: a user-level skill named {name} takes precedence over the candidate"
+    return None
 
 
 def _events(stdout: str) -> list[dict]:
@@ -141,6 +156,13 @@ def _events(stdout: str) -> list[dict]:
         if isinstance(event, dict):
             events.append(event)
     return events
+
+
+def _invoked(text: str) -> str | None:
+    """The command a prompt invoked: its one command name outside the arguments, which may quote anything."""
+    names = re.findall(r"<command-name>/([^<]*)</command-name>", re.sub(r"<command-args>.*?</command-args>", "",
+                                                                         text, flags=re.S))
+    return names[0] if len(names) == 1 else None
 
 
 def _observe_claude(stdout: str, name: str, baseline: set[str], workspace: Path | None = None) -> dict:
@@ -450,7 +472,7 @@ def run_skill_runtime(
             raise ValueError(f"case {test_case['id']}: the files are not exactly the part's frozen files")
     environ = os.environ if environ is None else environ
     checked = preflight(harness, "review", runner=runner, environ=environ, login_answer=login_answer)
-    user_skills: set[str] = set()
+    user_skills: set[str] | None = set()
     if baseline_skills is None:
         baseline_skills, user_skills = (
             claude_skill_origins(runner, environ, timeout=timeout, workspace_root=workspace_root)
@@ -485,10 +507,9 @@ def run_skill_runtime(
                                              f"{', '.join(uncontained)} cannot be permitted, only "
                                              f"{', '.join(CLAUDE_CONTAINED)}"))
             continue
-        name = directory.rsplit("/", 1)[-1]
-        if name in user_skills:
-            results.append(result("not-run", f"unavailable: a user-level skill named {name} takes precedence over "
-                                             "the candidate"))
+        blocked = shadowing(directory.rsplit("/", 1)[-1], user_skills)
+        if blocked:
+            results.append(result("not-run", blocked))
             continue
         staged = {path: data for path, data in files.items() if path.startswith(directory + "/")}
         # The repository's own links for the part, as they are: a missing one stays missing.

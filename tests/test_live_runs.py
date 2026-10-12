@@ -169,9 +169,10 @@ class FlowsRunTest(unittest.TestCase):
 class RoutingRunner(FakeRunner):
     """Baseline lists two built-ins; a slash prompt shows its command marker; nothing else activates."""
 
-    def __init__(self, extra_skills=()):
+    def __init__(self, extra_skills=(), user_skills=()):
         super().__init__()
         self.extra = list(extra_skills)
+        self.user = list(user_skills)  # personal skills, listed by both baseline launches
 
     def __call__(self, command, *, cwd, env, stdin, timeout):
         launched = len(self.worker_calls)
@@ -180,7 +181,7 @@ class RoutingRunner(FakeRunner):
             return answer
         if stdin == BASELINE_PROMPT:
             # Bundled skills, which the second baseline launch turns off.
-            events = [init([] if "disableBundledSkills" in " ".join(command) else ["debug", "verify"])]
+            events = [init(self.user + ([] if "disableBundledSkills" in " ".join(command) else ["debug", "verify"]))]
         else:
             events = [init(FORGE_SKILLS + ["debug", "verify"] + self.extra)]
             if stdin.startswith("/"):
@@ -216,6 +217,16 @@ class RoutingSmokeTest(unittest.TestCase):
         summary = self.run_smoke(RoutingRunner(extra_skills=["my-own-skill"]))
         self.assertFalse(summary["clean"])
         self.assertTrue(all(result["result"] == "not-run" for result in summary["results"]))
+
+    def test_a_personal_skill_named_like_a_forge_skill_shadows_its_cases(self):
+        runner = RoutingRunner(user_skills=["harness-intake"])
+        summary = self.run_smoke(runner)
+        self.assertEqual(summary["baseline"]["user_skills"], ["harness-intake"])
+        shadowed = [result for result in summary["results"] if result["skill"] == "harness-intake"]
+        self.assertTrue(shadowed and all(result["result"] == "not-run" and "takes precedence" in result["reason"]
+                                         for result in shadowed))
+        self.assertFalse(summary["clean"])
+        self.assertEqual(LIVE.exit_code(summary), 1)
 
 
 

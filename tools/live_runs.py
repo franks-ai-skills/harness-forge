@@ -52,10 +52,10 @@ from harness_forge.adapters.base import preflight, run_command  # noqa: E402
 from harness_forge.contracts import write_decision  # noqa: E402
 from harness_forge.documents import load_document  # noqa: E402
 from harness_forge.models import Decision  # noqa: E402
-from harness_forge.runtime import activation_case, claude_baseline  # noqa: E402
+from harness_forge.runtime import activation_case, claude_skill_origins, shadowing  # noqa: E402
 
 TEST_RELAY = "confirmed by the test runner it was started with, not by a user in a session"
-UNCLEAN = ("competing skill", "executable components")
+UNCLEAN = ("competing skill", "executable components", "user-level skill named")
 SKILLS = ("harness-intake", "harness-research", "build-skill", "harness-verify")
 
 
@@ -451,12 +451,15 @@ def _routing_cases(skill: str) -> list[dict]:
     return [explicit, implicit, near]
 
 
-def _baseline(harness: str, runner, environ) -> tuple[set[str], list[str]]:
-    """Claude's built-in skills, from one empty launch with the cases' settings; Codex lists none."""
+def _baseline(harness: str, runner, environ) -> tuple[set[str], set[str] | None, list[str]]:
+    """Claude's bundled and user-level skills, from two empty launches with the cases' settings (the second
+    with bundled skills off); None for unknown origins. Codex lists none."""
     if harness != "claude-code":
-        return set(), []
-    skills = claude_baseline(runner, environ)
-    return skills, [f"skills listed: {', '.join(sorted(skills))}"]
+        return set(), set(), []
+    bundled, user = claude_skill_origins(runner, environ)
+    return bundled, user, [f"bundled skills: {', '.join(sorted(bundled)) or 'none'}",
+                           "user-level skills: " + (", ".join(sorted(user)) or "none" if user is not None
+                                                    else "unknown")]
 
 
 def routing_smoke(harness: str, out: Path, *, runner=run_command, environ=None) -> dict:
@@ -470,8 +473,9 @@ def routing_smoke(harness: str, out: Path, *, runner=run_command, environ=None) 
     if not checked["available"]:
         _write_json(out / "summary.json", summary)
         return summary
-    baseline, behavior = _baseline(harness, runner, environ)
-    summary["baseline"] = {"skills": sorted(baseline), "observed": behavior}
+    baseline, user, behavior = _baseline(harness, runner, environ)
+    summary["baseline"] = {"skills": sorted(baseline), "user_skills": sorted(user) if user is not None else None,
+                           "observed": behavior}
     files, directories = {}, []
     for skill in SKILLS:
         source = ROOT / "skills" / skill
@@ -485,9 +489,14 @@ def routing_smoke(harness: str, out: Path, *, runner=run_command, environ=None) 
         for case in _routing_cases(skill):
             prompt = f"{marker}{skill} {case['prompt']}" if case["mode"] == "explicit" else case["prompt"]
             expected = "activates" if case["expect"] == "trigger" else "does-not-activate"
-            outcome, reason, activation, inventory = activation_case(
-                harness, files, directories, f".agents/skills/{skill}", prompt, expected, permitted, {},
-                runner=runner, environ=environ, baseline=baseline, slash=case["mode"] == "explicit")
+            # A user-level skill of the same name would answer instead, as run_skill_runtime also refuses.
+            blocked = shadowing(skill, user)
+            if blocked:
+                outcome, reason, activation, inventory = "not-run", blocked, None, "not observable"
+            else:
+                outcome, reason, activation, inventory = activation_case(
+                    harness, files, directories, f".agents/skills/{skill}", prompt, expected, permitted, {},
+                    runner=runner, environ=environ, baseline=baseline, slash=case["mode"] == "explicit")
             summary["results"].append({"skill": skill, "case_id": case["id"], "mode": case["mode"], "prompt": prompt,
                                        "expected": expected, "result": outcome, "reason": reason,
                                        "observed_activation": activation, "inventory": inventory})
