@@ -187,7 +187,7 @@ class VerifyLiveTest(unittest.TestCase):
         part = {result.part_id: result for result in results}["A"]
         self.assertEqual((part.harness_result, part.goal_result), ("verified", "met by the verified build"),
                          part.rule_results)
-        self.assertEqual(runner.roles, ["review", "baseline", "runtime", "runtime", "runtime"])
+        self.assertEqual(runner.roles, ["review", "baseline", "baseline", "runtime", "runtime", "runtime"])
         self.assertEqual(len(run.runtime_results), 3)
         self.assertTrue(any(e["role"] == "review" and e["observed_tools"]["status"] == "observed"
                             for e in run.worker_evidence))

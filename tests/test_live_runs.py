@@ -47,7 +47,7 @@ class VerticalRunTest(unittest.TestCase):
         self.assertIn("not by a user", summary["confirmation"])
         self.assertEqual(on_disk["status"], "completed")
         self.assertEqual(runner.roles, ["research", "source-support", "research", "source-support", "review",
-                                        "baseline", "runtime", "runtime", "runtime"])
+                                        "baseline", "baseline", "runtime", "runtime", "runtime"])
 
     def test_every_worker_stream_is_kept_for_diagnosis(self):
         runner = ResearchRunner([finding()])
@@ -179,7 +179,8 @@ class RoutingRunner(FakeRunner):
         if len(self.worker_calls) == launched:
             return answer
         if stdin == BASELINE_PROMPT:
-            events = [init(["debug", "verify"])]
+            # Bundled skills, which the second baseline launch turns off.
+            events = [init([] if "disableBundledSkills" in " ".join(command) else ["debug", "verify"])]
         else:
             events = [init(FORGE_SKILLS + ["debug", "verify"] + self.extra)]
             if stdin.startswith("/"):
@@ -208,7 +209,7 @@ class RoutingSmokeTest(unittest.TestCase):
         self.assertEqual(by_mode, {"explicit": ["pass"] * 4, "implicit": ["fail"] * 4, "near-miss": ["pass"] * 4})
         self.assertTrue(summary["clean"])
         self.assertEqual(summary["status"], "completed with failures", "live_checks exits 1 on a failed case")
-        self.assertEqual(len(runner.worker_calls[1]["files"]),
+        self.assertEqual(len(runner.worker_calls[2]["files"]),  # after both baseline launches
                          sum(1 for skill in FORGE_SKILLS for p in (FORGE / "skills" / skill).rglob("*") if p.is_file()))
 
     def test_a_user_skill_makes_the_run_unclean(self):

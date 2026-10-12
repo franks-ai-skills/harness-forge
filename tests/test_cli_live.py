@@ -168,7 +168,7 @@ class LiveCommandsTest(unittest.TestCase):
         self.assertEqual(output["parts"], [{"part_id": "A", "status": "verified", "harness_result": "verified",
                                             "goal_result": "met by the verified build"}])
         self.assertTrue((self.root / ".harness/reports/repro.md").exists())
-        self.assertEqual(runner.roles, ["research", "source-support", "review", "baseline", "runtime", "runtime", "runtime"])
+        self.assertEqual(runner.roles, ["research", "source-support", "review", "baseline", "baseline", "runtime", "runtime", "runtime"])
 
     def test_a_decision_edited_during_review_is_not_verified(self):
         decision = self.decision
@@ -805,7 +805,7 @@ class LiveCommandsTest(unittest.TestCase):
         self.assertEqual(code, 0, stderr)
         self.assertEqual((output["judged_parts"], output["kept_parts"]), (["A"], ["B"]))
         self.assertEqual([p["harness_result"] for p in output["parts"]], ["verified", "not applicable"])
-        self.assertEqual(runner.roles[roles:], ["review", "baseline", "runtime", "runtime", "runtime"])
+        self.assertEqual(runner.roles[roles:], ["review", "baseline", "baseline", "runtime", "runtime", "runtime"])
         report = (self.root / ".harness/reports/repro.md").read_text(encoding="utf-8")
         self.assertIn("- Review scope: Review (recommended): judged A; kept from run verify-1: B", report)
         self.assertIn("(kept from run verify-1)", report)

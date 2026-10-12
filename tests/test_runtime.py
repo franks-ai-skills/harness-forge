@@ -151,17 +151,42 @@ class RuntimeTest(unittest.TestCase):
             def __call__(self, command, *, cwd, env, stdin, timeout):
                 answer = super().__call__(command, cwd=cwd, env=env, stdin=stdin, timeout=timeout)
                 if stdin == BASELINE_PROMPT:
-                    return Completed(0, claude_run(skills=("debug", "verify"), skill_call=None), "", False)
+                    bundled = () if "disableBundledSkills" in " ".join(command) else ("debug", "verify")
+                    return Completed(0, claude_run(skills=bundled, skill_call=None), "", False)
                 return answer
 
         runner = Baseline(worker=claude_run(skills=(NAME, "debug", "verify")))
         results, _ = self.run_cases("claude-code", None, runner=runner, baseline_skills=None)
         self.assertEqual(results[0].result, "pass", results[0].reason)
-        baseline, case_call = runner.worker_calls
+        baseline, without_bundled, case_call = runner.worker_calls
         self.assertEqual(baseline["files"], [], "the baseline workspace holds no candidate")
         self.assertEqual(baseline["command"][:baseline["command"].index("--tools")],
                          case_call["command"][:case_call["command"].index("--tools")])
         self.assertEqual(baseline["command"][baseline["command"].index("--tools") + 1], "")
+        settings = json.loads(without_bundled["command"][without_bundled["command"].index("--settings") + 1])
+        self.assertIs(settings["disableBundledSkills"], True)
+
+    def test_only_bundled_skills_are_exempt_from_competing(self):
+        """A skill still listed with bundled skills turned off is the user's or the organization's: it competes."""
+        def runner_for(user_skills):
+            class Origins(FakeRunner):
+                def __call__(self, command, *, cwd, env, stdin, timeout):
+                    answer = super().__call__(command, cwd=cwd, env=env, stdin=stdin, timeout=timeout)
+                    if stdin != BASELINE_PROMPT:
+                        return answer
+                    bundled_off = "disableBundledSkills" in command[command.index("--settings") + 1]
+                    skills = tuple(user_skills) + (() if bundled_off else ("debug", "verify"))
+                    return Completed(0, claude_run(skills=skills, skill_call=None), "", False)
+            return Origins(worker=claude_run(skills=(NAME, "debug", "verify", *user_skills)))
+
+        personal = self.run_cases("claude-code", None, runner=runner_for(["my-personal"]), baseline_skills=None)[0][0]
+        self.assertEqual(personal.result, "not-run")
+        self.assertIn("a competing skill was loaded: my-personal", personal.reason)
+        runner = runner_for([NAME])
+        shadowed = self.run_cases("claude-code", None, runner=runner, baseline_skills=None)[0][0]
+        self.assertEqual(shadowed.result, "not-run")
+        self.assertIn(f"a user-level skill named {NAME} takes precedence over the candidate", shadowed.reason)
+        self.assertEqual(len(runner.worker_calls), 2, "no case launches under a shadowing skill")
 
     def test_a_claude_read_of_the_candidates_skill_md_counts_as_activation(self):
         """Its instructions reached the model; a read of a reference alone shows file access, not activation."""

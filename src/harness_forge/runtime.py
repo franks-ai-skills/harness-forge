@@ -80,18 +80,23 @@ def load_cases(path: Path) -> list[dict]:
     return cases
 
 
-def _claude_command(tools: list[str]) -> list[str]:
-    """Project settings only: the candidate's skills load, the user's plugins, skills and hooks do not.
+def _claude_command(tools: list[str], *, bundled: bool = True) -> list[str]:
+    """Project settings only: the candidate's skills load, the user's plugins and hooks do not.
 
     `--restricted` cannot be used here: it also drops the project's skills.
+    Personal and managed skills still load; claude_skill_origins tells them
+    from the bundled ones. ``bundled=False`` turns the bundled skills off.
     """
     listed = ",".join(tools)
+    settings = {"disableAllHooks": True, "autoMemoryEnabled": False, "disableSkillShellExecution": True}
+    if not bundled:
+        settings["disableBundledSkills"] = True
     return [
         "claude", "--print", "--output-format", "stream-json", "--verbose", "--no-session-persistence",
         "--setting-sources", "project", "--strict-mcp-config", "--mcp-config", '{"mcpServers":{}}',
         "--permission-mode", "dontAsk", "--permission-prompts", "none",
         # disableSkillShellExecution: a candidate's !`cmd` lines would otherwise run before the model reads it.
-        "--settings", '{"disableAllHooks":true,"autoMemoryEnabled":false,"disableSkillShellExecution":true}',
+        "--settings", json.dumps(settings, separators=(",", ":")),
         "--tools", listed, "--allowedTools", listed,
     ]
 
@@ -99,20 +104,31 @@ def _claude_command(tools: list[str]) -> list[str]:
 BASELINE_PROMPT = "Reply with OK."
 
 
-def claude_baseline(runner: Runner, environ: Mapping[str, str], *, timeout: int = RUNTIME_TIMEOUT,
-                    workspace_root: str | None = None) -> set[str]:
-    """The skills Claude lists with the runtime cases' settings in an empty workspace: its built-ins.
-
-    One tool-less launch; a skill it lists is part of every user's environment
-    and never competes with a candidate.
-    """
+def _listed_skills(runner: Runner, environ: Mapping[str, str], *, bundled: bool, timeout: int,
+                   workspace_root: str | None) -> set[str]:
+    """The skills one tool-less launch with the runtime cases' settings lists in an empty workspace."""
     with tempfile.TemporaryDirectory(prefix="forge-baseline-", dir=workspace_root) as temporary:
-        completed = runner(_claude_command([]), cwd=temporary, env=worker_environment(environ, "claude-code"),
-                           stdin=BASELINE_PROMPT, timeout=timeout)
+        completed = runner(_claude_command([], bundled=bundled), cwd=temporary,
+                           env=worker_environment(environ, "claude-code"), stdin=BASELINE_PROMPT, timeout=timeout)
     for event in _events(completed.stdout):
         if event.get("type") == "system" and event.get("subtype") == "init":
             return {str(skill) for skill in event.get("skills", [])}
     return set()
+
+
+def claude_skill_origins(runner: Runner, environ: Mapping[str, str], *, timeout: int = RUNTIME_TIMEOUT,
+                         workspace_root: str | None = None) -> tuple[set[str], set[str]]:
+    """(bundled, user-level) skills: an empty workspace lists both; with bundled skills off, only the
+    personal and managed ones remain. Only bundled skills are part of every user's environment."""
+    listed = _listed_skills(runner, environ, bundled=True, timeout=timeout, workspace_root=workspace_root)
+    user = _listed_skills(runner, environ, bundled=False, timeout=timeout, workspace_root=workspace_root)
+    return listed - user, user
+
+
+def claude_baseline(runner: Runner, environ: Mapping[str, str], *, timeout: int = RUNTIME_TIMEOUT,
+                    workspace_root: str | None = None) -> set[str]:
+    """Claude's bundled skills, which never compete with a candidate (claude_skill_origins)."""
+    return claude_skill_origins(runner, environ, timeout=timeout, workspace_root=workspace_root)[0]
 
 
 def _events(stdout: str) -> list[dict]:
@@ -411,9 +427,10 @@ def run_skill_runtime(
 ) -> list[RuntimeResult]:
     """One RuntimeResult per case, bound to the run and the part's frozen files.
 
-    baseline_skills are the harness's built-in skills; they never count as
-    competing. Left out, Claude's are taken from one empty launch with the
-    cases' own settings (claude_baseline).
+    baseline_skills are the harness's bundled skills; they never count as
+    competing. Left out, Claude's come from empty launches with the cases'
+    own settings (claude_skill_origins), and a personal or managed skill
+    with the candidate's name, which takes precedence, stops its cases.
     """
     if harness not in run.targets:
         raise ValueError(f"{harness} is not a target of this run")
@@ -432,9 +449,11 @@ def run_skill_runtime(
             raise ValueError(f"case {test_case['id']}: the files are not exactly the part's frozen files")
     environ = os.environ if environ is None else environ
     checked = preflight(harness, "review", runner=runner, environ=environ, login_answer=login_answer)
+    user_skills: set[str] = set()
     if baseline_skills is None:
-        baseline_skills = (claude_baseline(runner, environ, timeout=timeout, workspace_root=workspace_root)
-                           if harness == "claude-code" and checked["available"] else set())
+        baseline_skills, user_skills = (
+            claude_skill_origins(runner, environ, timeout=timeout, workspace_root=workspace_root)
+            if harness == "claude-code" and checked["available"] else (set(), set()))
     results = []
     for test_case in cases:
         directory = run.part_dirs[test_case["part_id"]]
@@ -464,6 +483,11 @@ def run_skill_runtime(
             results.append(result("not-run", f"unavailable: Claude runs the case without a sandbox; "
                                              f"{', '.join(uncontained)} cannot be permitted, only "
                                              f"{', '.join(CLAUDE_CONTAINED)}"))
+            continue
+        name = directory.rsplit("/", 1)[-1]
+        if name in user_skills:
+            results.append(result("not-run", f"unavailable: a user-level skill named {name} takes precedence over "
+                                             "the candidate"))
             continue
         staged = {path: data for path, data in files.items() if path.startswith(directory + "/")}
         # The repository's own links for the part, as they are: a missing one stays missing.

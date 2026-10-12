@@ -184,7 +184,7 @@ class VerticalWorkflowTest(unittest.TestCase):
 
         self.assertEqual(self.runner.roles,
                          ["research", "research", "source-support", "source-support", "review",
-                          "baseline", "runtime", "runtime", "runtime"])
+                          "baseline", "baseline", "runtime", "runtime", "runtime"])
         workspaces = [call["cwd"] for call in self.runner.worker_calls]
         self.assertEqual(len(workspaces), len(set(workspaces)), "each worker is a separate process and workspace")
         support_prompts = [call["stdin"] for call, role in zip(self.runner.worker_calls, self.runner.roles)
