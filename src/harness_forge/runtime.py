@@ -197,7 +197,11 @@ _SHELLS = {"sh", "bash", "zsh", "dash"}
 
 
 def _segments(command: str) -> list[list[str]]:
-    """The simple commands a shell command line runs, comments dropped, a `zsh -lc '...'` wrapper unwrapped."""
+    """The simple commands a shell command line runs, comments dropped, a `zsh -lc '...'` wrapper unwrapped.
+
+    A line with a conditional or background operator (``&&``, ``||``,
+    ``&``) gives none: which of its commands ran cannot be told.
+    """
     try:
         words = shlex.split(command, comments=True)
     except ValueError:
@@ -210,7 +214,9 @@ def _segments(command: str) -> list[list[str]]:
     segments, current = [], []
     try:
         for token in lexer:
-            if token in (";", "&&", "||", "|", "&", "\n"):
+            if token in ("&&", "||", "&"):
+                return []
+            if token in (";", "|", "\n"):
                 segments.append(current)
                 current = []
             else:
@@ -225,21 +231,26 @@ def _lines(output: str) -> list[str]:
     return [re.sub(r"^\s*\d+\t", "", line) for line in output.splitlines()]
 
 
-def _skills_read(item: dict) -> list[str]:
-    """Skills whose SKILL.md a reading command printed: a mention, a comment or a failed read is no read."""
+def _skills_read(item: dict) -> list[tuple[str, str]]:
+    """Skills whose SKILL.md a reading command printed, with the normalized path read.
+
+    A mention, a comment or a failed read is no read; nor is a line that
+    also runs a command other than a reader, which could print the lines.
+    """
     if item.get("status") != "completed" or str(item.get("exit_code")) != "0":
         return []
     lines = _lines(str(item.get("aggregated_output", "")))
-    names = []
-    for segment in _segments(str(item.get("command", ""))):
-        if posixpath.basename(segment[0]) not in _READERS:
-            continue
+    segments = _segments(str(item.get("command", "")))
+    if any(posixpath.basename(segment[0]) not in _READERS for segment in segments):
+        return []
+    read = []
+    for segment in segments:
         for word in segment[1:]:
             match = _SKILL_PATH.match(word)
             if match and any(re.fullmatch(rf"name:\s*['\"]?{re.escape(match.group(1))}['\"]?\s*", line)
                              for line in lines):
-                names.append(match.group(1))
-    return names
+                read.append((match.group(1), posixpath.normpath(word)))
+    return read
 
 
 def _printed(item: dict, markers: list[str]) -> bool:
@@ -248,11 +259,14 @@ def _printed(item: dict, markers: list[str]) -> bool:
     return all(marker in lines for marker in markers)
 
 
-def _observe_codex(stdout: str, directory: str, markers: list[str] | None = None) -> dict:
+def _observe_codex(stdout: str, directory: str, markers: list[str] | None = None, *workspaces: Path) -> dict:
     """Activation is a read of the candidate's SKILL.md, unless another skill's SKILL.md was read first:
     a later read of the candidate then follows that skill's pointer.
 
-    The read must be a reading command on the candidate's SKILL.md and
+    The read must be a reading command on the staged candidate's own
+    SKILL.md, relative to the workspace or under one of its
+    ``workspaces`` paths (a fixture copy or another same-named skill is
+    not the candidate), and
     print its own description line and first heading (``markers``), which
     a command that only names the file or prints a few lines does not.
     Codex reports no inventory of what it loaded.
@@ -260,6 +274,7 @@ def _observe_codex(stdout: str, directory: str, markers: list[str] | None = None
     observed = {"activation": None, "attempted": None, "calls": [], "unavailable": [], "competing": [],
                 "loaded": None, "completed": False, "errored": False, "inventory": "not observable"}
     name = directory.rsplit("/", 1)[-1]
+    candidate = {f"{directory}/SKILL.md"} | {f"{root}/{directory}/SKILL.md" for root in workspaces}
     first_skill = None
     for event in _events(stdout):
         item = event.get("item") if isinstance(event.get("item"), dict) else {}
@@ -268,8 +283,9 @@ def _observe_codex(stdout: str, directory: str, markers: list[str] | None = None
             observed["calls"].append(str(item.get("type")))
             if item.get("type") == "command_execution":
                 read = _skills_read(item)
-                first_skill = first_skill or (read[0] if read else None)
-                if name in read and first_skill == name and _printed(item, markers or []):
+                first_skill = first_skill or (read[0][0] if read else None)
+                if (first_skill == name and any(path in candidate for _, path in read)
+                        and _printed(item, markers or [])):
                     observed["activation"] = f"read {directory}/SKILL.md"
         observed["completed"] = observed["completed"] or event.get("type") == "turn.completed"
         observed["errored"] = observed["errored"] or event.get("type") in ("turn.failed", "error")
@@ -367,7 +383,8 @@ def activation_case(
             return "not-run", f"unavailable: the harness could not start: {error}", None, "not observable"
     # What the harness did before it stopped counts, also when it timed out or failed.
     observed = (_observe_claude(completed.stdout, name, baseline | companions, workspace) if harness == "claude-code"
-                else _observe_codex(completed.stdout, target, _markers(files, target)))
+                else _observe_codex(completed.stdout, target, _markers(files, target), workspace,
+                                    workspace.resolve()))
     outside = sorted(set(observed["calls"]) - set(permitted))
     if outside:
         return "fail", f"tool outside the declared list: {', '.join(outside)}", None, observed["inventory"]

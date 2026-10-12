@@ -218,13 +218,21 @@ class RuntimeTest(unittest.TestCase):
                                                                  "exit_code": exit_code, "status": "completed",
                                                                  "aggregated_output": output}})
 
+        copy = f"---\nname: {NAME}\n{DESCRIPTION_LINE}\n---\n\n# Reproduction checklist\n"
         for name, line in (("echo", command(f"echo {SKILL_DIR}/SKILL.md", 0, f"{SKILL_DIR}/SKILL.md\n")),
                            ("printed name", command(f"printf 'name: {NAME}\\n' # {SKILL_DIR}/SKILL.md", 0,
                                                     f"name: {NAME}\n")),
                            ("printed copy", command(f"printf '---\\nname: {NAME}\\n' # {SKILL_DIR}/SKILL.md", 0,
                                                     f"---\nname: {NAME}\n{DESCRIPTION_LINE}\n# Reproduction "
                                                     "checklist\n")),
-                           ("failed cat", command(f"cat {SKILL_DIR}/SKILL.md", 1, "cat: No such file or directory\n"))):
+                           ("failed cat", command(f"cat {SKILL_DIR}/SKILL.md", 1, "cat: No such file or directory\n")),
+                           *((label, command(text, 0, copy)) for label, text in (
+                               ("skipped read", f"false && cat {SKILL_DIR}/SKILL.md; printf '{NAME}'"),
+                               ("or branch", f"true || nl -ba {SKILL_DIR}/SKILL.md"),
+                               ("printed after a read", f"cat {SKILL_DIR}/SKILL.md; printf 'x'"),
+                               ("fixture copy", f"cat fixtures/{SKILL_DIR}/SKILL.md"),
+                               ("outside the workspace", f"cat ../elsewhere/{SKILL_DIR}/SKILL.md"),
+                               ("foreign absolute path", f"cat /tmp/elsewhere/{SKILL_DIR}/SKILL.md")))):
             with self.subTest(name):
                 result = self.run_cases("codex", line + "\n" + codex_run(read_skill=False))[0][0]
                 self.assertEqual(result.result, "not-run", result.reason)
@@ -260,6 +268,20 @@ class RuntimeTest(unittest.TestCase):
             "command": f"/bin/zsh -lc 'cat request.json; nl -ba {SKILL_DIR}/SKILL.md'", "aggregated_output": numbered}})
         result = self.run_cases("codex", line + "\n" + codex_run(read_skill=False))[0][0]
         self.assertEqual(result.result, "pass", result.reason)
+
+    def test_a_codex_read_by_the_workspaces_absolute_path_counts(self):
+        from harness_forge.runtime import _observe_codex
+
+        copy = f"---\nname: {NAME}\n{DESCRIPTION_LINE}\n---\n\n# Reproduction checklist\n"
+        markers = [DESCRIPTION_LINE, "# Reproduction checklist"]
+        for path, activated in (("/private/var/ws/" + SKILL_DIR, True), ("/var/ws/" + SKILL_DIR, True),
+                                ("/var/other/" + SKILL_DIR, False)):
+            with self.subTest(path):
+                line = json.dumps({"type": "item.completed", "item": {
+                    "id": "r", "type": "command_execution", "exit_code": 0, "status": "completed",
+                    "command": f"/bin/zsh -lc 'sed -n 1,200p {path}/SKILL.md'", "aggregated_output": copy}})
+                observed = _observe_codex(line + "\n", SKILL_DIR, markers, Path("/var/ws"), Path("/private/var/ws"))
+                self.assertEqual(observed["activation"] is not None, activated)
 
     def test_a_repository_link_that_leaves_the_candidate_is_refused(self):
         run = self.scenario.run
