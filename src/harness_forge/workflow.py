@@ -16,7 +16,8 @@ from harness_forge.documents import validate
 from harness_forge.fetch import FetchError, fetch_text
 from harness_forge.models import AcceptedRevision, Confirmation, Contract, Decision, ReviewResponse, Rule
 from harness_forge.research import (
-    _normalized, finding_problem, make_brief, research_request, source_rejection, support_request, worker_finding,
+    _normalized, finding_problem, make_brief, match_support, research_request, source_rejection, support_request,
+    worker_finding,
 )
 from harness_forge.runtime import run_skill_runtime
 from harness_forge.verify import bound_inputs, finish_run, part_kind, prepare_run, review_request, validate_review
@@ -67,9 +68,12 @@ def research_pass(
         if quoted:
             support = run_worker(support_request(finding, run_id, f"support-{new_id.lower()}"), harness, **approval)
             result["worker_evidence"].append(support["evidence"])
-            verdicts = support["output"]["verdicts"] if support["status"] == "completed" else []
-            matching = [v for v in verdicts if v["finding_id"] == new_id]
-            verdict = matching[0] if len(matching) == 1 else None
+            # Exactly the requested finding's verdict: an extra, missing or duplicate verdict voids the answer.
+            try:
+                verdict = match_support([finding], support["output"])[new_id] if support["status"] == "completed" \
+                    else None
+            except ValueError:
+                verdict = None
         result["support"].append({"finding_id": new_id, "quote_check": "pass" if quoted else "fail",
                                   "verdict": verdict["verdict"] if verdict else "missing",
                                   "worker_ref": f"support-{new_id.lower()}"})

@@ -57,10 +57,32 @@ def finding(**changes):
     return value
 
 
+class ExtraVerdictRunner(ResearchRunner):
+    """The support worker adds a verdict for a finding nobody asked about."""
+
+    def __call__(self, command, *, cwd, env, stdin, timeout):
+        answer = super().__call__(command, cwd=cwd, env=env, stdin=stdin, timeout=timeout)
+        if self.roles and self.roles[-1] == "source-support" and stdin and "```json" in stdin:
+            output = json.loads(json.loads(answer.stdout.splitlines()[-1])["result"])
+            output["verdicts"].append({"finding_id": "F999", "verdict": "supported", "reasoning": "Unasked."})
+            return Completed(0, claude_stream(output, tools=()), "", False)
+        return answer
+
+
 class ResearchPassTest(unittest.TestCase):
     def setUp(self):
         self.record = skill_decision(status="decided")
         self.record.record["accepted_revision"] = None
+
+    def test_a_support_answer_must_cover_exactly_the_requested_finding(self):
+        runner = ExtraVerdictRunner([finding()])
+        planned = [preflight("claude-code", role, runner=runner, environ=PARENT)["configuration"] for role in ROLES]
+        contract, confirmation = confirmed(self.record, None, planned, "intake-1")
+        result = research_pass(self.record, "deep", "A", "claude-code", contract=contract, confirmation=confirmation,
+                               worker_evidence=planned, run_id="intake-1", runner=runner, environ=PARENT,
+                               fetch=fetch_page)
+        self.assertEqual(result["kept"], [])
+        self.assertEqual(result["support"][0]["verdict"], "missing")
 
     def run_pass(self, findings, support="supported", existing=(), fetch=fetch_page):
         runner = ResearchRunner(findings, support)
