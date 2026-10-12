@@ -82,7 +82,7 @@ def parse_yaml(text: str) -> Any:
             elif isinstance(event, (yaml.MappingEndEvent, yaml.SequenceEndEvent)):
                 depth -= 1
         return yaml.load(text, Loader=_StrictLoader)
-    except yaml.YAMLError as error:
+    except (yaml.YAMLError, TypeError) as error:  # TypeError: an unhashable key, such as a sequence
         raise ValueError(f"invalid YAML: {error}") from error
 
 

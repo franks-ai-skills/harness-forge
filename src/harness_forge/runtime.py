@@ -20,11 +20,10 @@ import tempfile
 from pathlib import Path
 from typing import Mapping
 
-import yaml
 
 from harness_forge.adapters import codex
 from harness_forge.adapters.base import Runner, preflight, run_command, worker_environment
-from harness_forge.documents import safe_path
+from harness_forge.documents import load_document, safe_path
 from harness_forge.models import RuntimeResult, VerificationRun
 
 MODES = ("explicit", "implicit", "negative")
@@ -66,18 +65,12 @@ def _shared_id(cases: list[dict]) -> str | None:
 
 
 def load_cases(path: Path) -> list[dict]:
-    """Cases from an evals/smoke file, checked for the keys a run needs."""
-    value = yaml.safe_load(Path(path).read_text(encoding="utf-8"))
-    cases = value.get("cases") if isinstance(value, dict) else None
-    if not isinstance(cases, list) or not cases:
-        raise ValueError(f"{path}: expected a non-empty cases list")
+    """Cases from an evals/smoke file: bounded, strict YAML against the closed runtime-cases schema."""
+    cases = load_document(Path(path), "runtime-cases")["cases"]
     shared = _shared_id(cases)
     if shared:
         raise ValueError(f"{path}: {shared}")
     for item in cases:
-        missing = {"id", "part_id", "mode", "prompt", "expected", "permitted_tools"} - set(item)
-        if missing or item["mode"] not in MODES or item["expected"] not in EXPECTED:
-            raise ValueError(f"{path}: case {item.get('id')!r} is incomplete or has an unknown mode or expectation")
         for fixture in item.get("fixtures") or {}:
             problem = fixture_problem(fixture)
             if problem:

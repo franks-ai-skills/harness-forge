@@ -4,6 +4,8 @@ import json
 import unittest
 from pathlib import Path
 
+import yaml
+
 from harness_forge.adapters.base import Completed
 from harness_forge.runtime import BASELINE_PROMPT, load_cases, run_skill_runtime
 from harness_forge.verify import finish_run, validate_review
@@ -237,6 +239,22 @@ class RuntimeTest(unittest.TestCase):
                             encoding="utf-8")
             with self.assertRaisesRegex(ValueError, "AGENTS.md"):
                 load_cases(path)
+
+    def test_malformed_case_files_are_invalid_input(self):
+        import tempfile
+        good = case()
+        variants = {
+            "a string case": "cases: [oops]\n",
+            "no tools for a harness": yaml.safe_dump({"cases": [{**good, "permitted_tools": {}}]}),
+            "an unknown field": yaml.safe_dump({"cases": [{**good, "notes": "x"}]}),
+            "a sequence as a key": "cases:\n- ? [a, b]\n  : x\n",
+        }
+        for name, text in variants.items():
+            with self.subTest(name=name), tempfile.TemporaryDirectory() as directory:
+                path = Path(directory) / "cases.yaml"
+                path.write_text(text, encoding="utf-8")
+                with self.assertRaises(ValueError):
+                    load_cases(path)
 
     def test_a_codex_resource_listing_is_not_a_tool_outside_the_list(self):
         listing = json.dumps({"type": "item.completed", "item": {"id": "l", "type": "mcp_tool_call", "server": "codex",
