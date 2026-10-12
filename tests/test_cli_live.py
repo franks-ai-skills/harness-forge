@@ -370,6 +370,26 @@ class LiveCommandsTest(unittest.TestCase):
         self.assertIn("F9", stderr)
         self.assertFalse((self.root / ".harness/overrides").exists())
 
+    def test_an_override_whose_support_lapsed_says_how_to_refresh_it(self):
+        cli, arguments = self.build_ready(ResearchRunner([finding()]))
+        request = cli.write("override.json", {"rule_id": "skills.description.concise", "finding_id": "F1",
+                                              "reason": "Longer descriptions.", "retired": True})
+        self.assertEqual(cli("override", "--root", self.root, "--input", request, "--write")[0], 0)
+        # Research written before support entries named the finding they checked.
+        path = self.root / ".harness/research/repro.md"
+        record = load_document(path, "research")
+        for entry in record["support"]:
+            entry.pop("finding_digest", None)
+        write_research(self.root, record, "Older research.\n")
+        revision = ["--revision", self.root / ".harness/research/repro.rules.yaml"]
+        code, _, stderr = cli("prepare-contract", "--decision", self.decision, *revision)
+        self.assertEqual(code, 2)
+        self.assertIn("forge.py overrides --remove skills.description.concise", stderr)
+        code, output, stderr = cli("overrides", "--root", self.root, "--remove", "skills.description.concise")
+        self.assertEqual((code, output["overrides"]), (0, []), stderr)
+        code, _, stderr = cli("prepare-contract", "--decision", self.decision, *revision)
+        self.assertEqual(code, 0, "without the override the pinned rule applies, and research can run again")
+
     def test_select_applies_overrides_only_under_a_confirmation(self):
         cli, _ = self.build_ready(ResearchRunner([finding()]))
         request = cli.write("override.json", {"rule_id": "selection.eligibility.own-context-skills", "finding_id": "F1",

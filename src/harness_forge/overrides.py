@@ -127,8 +127,11 @@ def check_override(override: dict, pinned: list[Rule], *, kb_version: str, catal
     if old is None:
         problems.append(f"{override['rule_id']} is not a pinned Harness KB rule")
     if not _supported(override["drift"]["finding"], research):
+        # Its support may have lapsed, as for research recorded before verdicts named their finding: the pinned
+        # rule applies again once the override is removed, and the drift can be researched and adopted anew.
         problems.append(f"finding {override['drift']['finding']['id']} is not a finding this repository's research "
-                        "kept with a passed quote check and a supported verdict")
+                        "kept with a passed quote check and a supported verdict; to refresh it, run forge.py "
+                        f"overrides --remove {override['rule_id']}, research again and adopt the drift anew")
     if new is not None and old is not None:
         if new.id != old.id:
             problems.append(f"the new rule's id {new.id} is not {old.id}")
