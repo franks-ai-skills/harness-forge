@@ -1164,6 +1164,16 @@ class LiveCommandsTest(unittest.TestCase):
         code, _, stderr = cli(*accept, "--proposed", cli.write("proposed.json", {"requirements": [requirement]}))
         self.assertEqual(code, 0, stderr)
 
+        # A finding edited into the record, outside the brief and without support, is no provenance.
+        path = self.root / ".harness/research/repro.md"
+        record = load_document(path, "research")
+        record["findings"].append({**record["findings"][0], "id": "F9", "source": "https://x.com/someone/status/1",
+                                   "brief_digest": "0" * 64})
+        write_research(self.root, record, "Edited.\n")
+        code, _, stderr = cli(*accept, "--proposed", cli.write("proposed-x.json", {"requirements": [unsourced]}))
+        self.assertEqual(code, 2)
+        self.assertIn("which no kept finding of part A's deep research has", stderr)
+
     def test_a_built_part_needs_accepted_requirements(self):
         cli, arguments = self.build_ready(ResearchRunner([finding()]))
         record = load_decision(self.decision)

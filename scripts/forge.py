@@ -759,8 +759,12 @@ def _provenance_problem(root: Path, slug: str, part_id: str, brief: str, accepte
                                  for item in record["briefs"]):
         return (f"there is no deep research for part {part_id} under its current brief; run the deep pass before "
                 "accepting its requirements, even none")
+    supported = {entry["finding_id"] for entry in record["support"]
+                 if entry["quote_check"] == "pass" and entry["verdict"] == "supported"}
+    # Only findings of this brief that passed both checks, and that the source policy still allows.
     sources = {finding["source"] for finding in record["findings"]
-               if finding["pass"] == "deep" and finding["part_id"] == part_id}
+               if finding["pass"] == "deep" and finding["part_id"] == part_id and finding["brief_digest"] == brief
+               and finding["id"] in supported and source_rejection(finding["source"]) is None}
     for entry in accepted.rules:
         for source in entry["rule"]["sources"]:
             if source not in sources:
