@@ -1191,6 +1191,27 @@ class LiveCommandsTest(unittest.TestCase):
         self.assertEqual(code, 2)
         self.assertIn("which no kept finding of part A's deep research has", stderr)
 
+        # A finding edited in place keeps its id, but not the checks its earlier content passed.
+        replaced = {**requirement, "sources": ["https://docs.example-vendor.com/other"]}
+        record = load_document(path, "research")
+        record["findings"] = [{**record["findings"][0], "source": "https://docs.example-vendor.com/other",
+                               "claim": "Another claim.", "quote": "Another quote."}]
+        write_research(self.root, record, "Edited.\n")
+        code, _, stderr = cli(*accept, "--proposed", cli.write("proposed-r.json", {"requirements": [replaced]}))
+        self.assertEqual(code, 2)
+        self.assertIn("which no kept finding of part A's deep research has", stderr)
+
+        # Contradictory support entries for one finding make the record invalid, also when edited by hand.
+        import yaml
+        text = path.read_text(encoding="utf-8")
+        _, frontmatter, body = text.split("---\n", 2)
+        record = yaml.safe_load(frontmatter)
+        record["support"].append({**record["support"][0], "quote_check": "fail", "verdict": "unsupported"})
+        path.write_text(f"---\n{yaml.safe_dump(record, sort_keys=False)}---\n{body}", encoding="utf-8")
+        code, _, stderr = cli(*accept, "--proposed", cli.write("proposed.json", {"requirements": [requirement]}))
+        self.assertEqual(code, 2)
+        self.assertIn("research support entries use an id more than once: F1", stderr)
+
     def test_a_built_part_needs_accepted_requirements(self):
         cli, arguments = self.build_ready(ResearchRunner([finding()]))
         record = load_decision(self.decision)

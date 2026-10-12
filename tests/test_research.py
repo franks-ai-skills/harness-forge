@@ -343,7 +343,8 @@ class DriftRecordTest(unittest.TestCase):
         self.record = {"slug": "repro", "search_mode": "live",
                        "briefs": [{"pass": "deep", "part_id": "A", "digest": BRIEF}], "findings": [finding().to_dict()],
                        "support": [{"finding_id": "F1", "quote_check": "pass", "verdict": "supported",
-                                    "worker_ref": "support-f1"}], "drift": []}
+                                    "worker_ref": "support-f1", "finding_digest": canonical_digest(finding().to_dict())}],
+                       "drift": []}
         self.pinned = {"skills.description.length", "security.secrets.none-in-files"}
 
     def record_drift(self, record=None, **changes):

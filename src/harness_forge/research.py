@@ -317,8 +317,7 @@ def record_drift(record: dict, *, finding_id: str, rule_id: str, category: str, 
     finding = next((item for item in record["findings"] if item["id"] == finding_id), None)
     if finding is None:
         raise ValueError(f"finding {finding_id} is not a kept finding of research record {record['slug']}")
-    support = next((entry for entry in record["support"] if entry["finding_id"] == finding_id), None)
-    if not (support and support["quote_check"] == "pass" and support["verdict"] == "supported"):
+    if finding_id not in supported_findings(record):
         raise ValueError(f"finding {finding_id} did not pass both checks: its quote and a supported verdict")
     if rule_id not in pinned_ids:
         raise ValueError(f"{rule_id} is not a pinned Harness KB rule")
@@ -374,10 +373,30 @@ def can_adopt(drift: dict, support: dict | None) -> bool:
 # --- Records --------------------------------------------------------------------
 
 
+def supported_findings(record: dict) -> dict[str, dict]:
+    """The record's findings that passed both checks, by id: a passed quote check and a supported verdict,
+    given for exactly the finding's current content."""
+    findings = {finding["id"]: finding for finding in record["findings"]}
+    return {entry["finding_id"]: findings[entry["finding_id"]] for entry in record["support"]
+            if entry["quote_check"] == "pass" and entry["verdict"] == "supported" and entry["finding_id"] in findings
+            and entry.get("finding_digest") == canonical_digest(findings[entry["finding_id"]])}
+
+
+def _check_record(record: dict, where: str) -> None:
+    _require_unique([finding["id"] for finding in record["findings"]], f"{where}research findings")
+    _require_unique([entry["finding_id"] for entry in record["support"]], f"{where}research support entries")
+
+
+def load_research(path: Path, *, root: Path | None = None) -> dict:
+    """A research record, with one support entry per finding at most."""
+    record = load_document(path, "research", root=root)
+    _check_record(record, f"{path}: ")
+    return record
+
+
 def write_research(root: Path, record: dict, body: str) -> Path:
     validate(record, "research")
-    _require_unique([finding["id"] for finding in record["findings"]], "research findings")
-    _require_unique([entry["finding_id"] for entry in record["support"]], "research support entries")
+    _check_record(record, "")
     path = safe_path(root, f".harness/research/{record['slug']}.md")
     path.parent.mkdir(parents=True, exist_ok=True)
     frontmatter = yaml.dump(record, Dumper=_NoAliases, sort_keys=False, allow_unicode=True, width=100)

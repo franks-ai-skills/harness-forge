@@ -81,6 +81,11 @@
           "worker_ref": {
             "type": "string",
             "minLength": 1
+          },
+          "finding_digest": {
+            "description": "Digest of the finding exactly as checked; a support entry without it, or for other content, supports nothing.",
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$"
           }
         },
         "additionalProperties": false,

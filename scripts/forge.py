@@ -39,9 +39,9 @@ from harness_forge.overrides import (  # noqa: E402
 from harness_forge.report import render_report, write_report  # noqa: E402
 from harness_forge.research import (  # noqa: E402
     _BLOCKING_DRIFT, _catalog, accept_requirements, drift_category, drift_digest, drift_state, finding_problem,
-    load_revision, source_rejection,
+    load_research, load_revision, source_rejection,
     make_brief, merge_revision,
-    record_drift, write_research, write_revision,
+    record_drift, supported_findings, write_research, write_revision,
 )
 from harness_forge.runtime import load_cases  # noqa: E402
 from harness_forge.workflow import research_pass, verify_live  # noqa: E402
@@ -248,7 +248,7 @@ def _research_records(root: Path) -> list[dict]:
     records = []
     for path in sorted((root / ".harness" / "research").glob("*.md")):
         try:
-            records.append(load_document(path, "research", root=root))
+            records.append(load_research(path, root=root))
         except ValueError as error:
             raise _InvalidInput(str(error)) from error
     return records
@@ -712,7 +712,7 @@ def _research(arguments: argparse.Namespace) -> int:
     existing = {"slug": arguments.slug, "search_mode": "live", "briefs": [], "findings": [], "support": [], "drift": []}
     if record_path.exists():
         try:
-            existing = load_document(record_path, "research", root=root)
+            existing = load_research(record_path, root=root)
         except ValueError as error:
             raise _InvalidInput(str(error)) from error
     part_id = arguments.part if arguments.pass_name == "deep" else None
@@ -753,15 +753,14 @@ def _provenance_problem(root: Path, slug: str, part_id: str, brief: str, accepte
     """Accepted requirements rest on the part's current deep research: its brief, and its kept findings' sources."""
     path = root / ".harness" / "research" / f"{slug}.md"
     try:
-        record = load_document(path, "research", root=root) if path.is_file() else None
+        record = load_research(path, root=root) if path.is_file() else None
     except ValueError as error:
         return str(error)
     if record is None or not any(item["pass"] == "deep" and item["part_id"] == part_id and item["digest"] == brief
                                  for item in record["briefs"]):
         return (f"there is no deep research for part {part_id} under its current brief; run the deep pass before "
                 "accepting its requirements, even none")
-    supported = {entry["finding_id"] for entry in record["support"]
-                 if entry["quote_check"] == "pass" and entry["verdict"] == "supported"}
+    supported = supported_findings(record)
     # Only findings of this brief that passed both checks, and that the source policy still allows.
     sources = {finding["source"] for finding in record["findings"]
                if finding["pass"] == "deep" and finding["part_id"] == part_id and finding["brief_digest"] == brief
@@ -920,7 +919,7 @@ def _record_drift(arguments: argparse.Namespace) -> int:
     root = Path(arguments.root).resolve()
     path = root / ".harness" / "research" / f"{arguments.slug}.md"
     try:
-        record = load_document(path, "research", root=root)
+        record = load_research(path, root=root)
         updated = record_drift(record, finding_id=arguments.finding, rule_id=arguments.rule,
                                category=arguments.category, summary=arguments.summary,
                                pinned_ids={rule.id for rule in _pinned_rules() + _selection_rules()})
@@ -1005,7 +1004,7 @@ def _publish_issue(arguments: argparse.Namespace) -> int:
         raise _InvalidInput(f"filing the KB issue failed: {error}") from error
     try:
         path = root / ".harness" / "research" / f"{entry['slug']}.md"
-        record = load_document(path, "research", root=root)
+        record = load_research(path, root=root)
         for item in record["drift"]:
             if (item["rule_id"], item["finding_id"]) == (entry["rule_id"], entry["finding_id"]):
                 item["issue"] = result

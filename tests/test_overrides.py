@@ -9,7 +9,7 @@ from pathlib import Path
 
 import yaml
 
-from harness_forge.documents import load_document
+from harness_forge.documents import canonical_digest, load_document
 from harness_forge.models import Confirmation, Rule
 from harness_forge.overrides import (
     OverridesPending, apply_overrides, check_override, describe, effective_rules, load_overrides, write_override,
@@ -25,7 +25,8 @@ KB_VERSION = json.loads((SNAPSHOT / "kb-manifest.json").read_text(encoding="utf-
 FINDING = finding(source="https://docs.example-vendor.com/skills/limits", quote="Descriptions may be 2048 characters.",
                   context="Limits. Descriptions may be 2048 characters. Names stay short.").to_dict()
 RESEARCH = [{"slug": "repro", "search_mode": "live", "briefs": [], "findings": [FINDING],
-             "support": [{"finding_id": "F1", "quote_check": "pass", "verdict": "supported", "worker_ref": "support-f1"}],
+             "support": [{"finding_id": "F1", "quote_check": "pass", "verdict": "supported", "worker_ref": "support-f1",
+                          "finding_digest": canonical_digest(FINDING)}],
              "drift": []}]
 LENGTH = next(rule for rule in PINNED if rule.id == "skills.description.length")
 RAISED = {**LENGTH.to_dict(), "params": {"max_chars": 2048},
@@ -85,6 +86,9 @@ class ValidationTest(unittest.TestCase):
             "failed quote check": (override(), failed_quote, "with a passed quote check"),
             "forged finding": (override(drift={"finding": forged, "support_verdict": "supported"}), RESEARCH,
                                "is not a finding this repository's research kept"),
+            "finding edited after its checks": (override(drift={"finding": forged, "support_verdict": "supported"}),
+                                                [{**RESEARCH[0], "findings": [forged]}],
+                                                "is not a finding this repository's research kept"),
             "unknown rule": (override(rule_id="skills.made-up"), RESEARCH, "is not a pinned Harness KB rule"),
             "checker": (override(rule={**LENGTH.to_dict(), "checker": "skills.name-format"}), RESEARCH,
                         "may not change checker"),

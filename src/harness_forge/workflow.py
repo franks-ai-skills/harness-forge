@@ -96,7 +96,8 @@ def research_pass(
                 verdict = None
         result["support"].append({"finding_id": new_id, "quote_check": "pass" if quoted else "fail",
                                   "verdict": verdict["verdict"] if verdict else "missing",
-                                  "worker_ref": f"support-{new_id.lower()}"})
+                                  "worker_ref": f"support-{new_id.lower()}",
+                                  "finding_digest": canonical_digest(finding.to_dict())})
         problem = finding_problem(finding, page, verdict)
         if problem:
             result["dropped"].append({"id": new_id, "reason": problem})

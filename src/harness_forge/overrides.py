@@ -23,6 +23,7 @@ import yaml
 from harness_forge.checks import REGISTRY
 from harness_forge.documents import load_document, safe_path, schema_errors, validate
 from harness_forge.models import Confirmation, Rule
+from harness_forge.research import supported_findings
 
 OVERRIDES_DIR = ".harness/overrides"
 # What an override may change; sources may only gain the drift finding's own source.
@@ -76,11 +77,7 @@ def _guarding(rule: Rule) -> str | None:
 
 def _supported(finding: dict, research: list[dict]) -> bool:
     """The finding is one this repository's research kept, with a passed quote check and a supported verdict."""
-    for record in research:
-        if finding in record["findings"]:
-            return any(entry["finding_id"] == finding["id"] and entry["quote_check"] == "pass"
-                       and entry["verdict"] == "supported" for entry in record["support"])
-    return False
+    return any(supported_findings(record).get(finding.get("id")) == finding for record in research)
 
 
 def _when_values(predicate: dict) -> list[tuple[str, list]]:
