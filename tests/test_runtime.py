@@ -11,13 +11,15 @@ from harness_forge.runtime import BASELINE_PROMPT, load_cases, run_skill_runtime
 from harness_forge.verify import finish_run, validate_review
 from tests.test_adapters import CLAUDE_API_KEY, CLAUDE_LOGGED_OUT, PARENT, FakeRunner
 from tests.test_build_skill import DESCRIPTION, NAME
-from tests.test_verify import Scenario, passing_review, skill_decision
+from tests.test_verify import Scenario, build_files, passing_review, skill_decision
 
 FORGE = Path(__file__).resolve().parents[1]
 SKILL_DIR = f".agents/skills/{NAME}"
 BUILTIN_PLUGINS = [{"name": "cc-plugin-telemetry", "path": "builtin", "source": "cc-plugin-telemetry@builtin"}]
 # The built SKILL.md's description line, which a real read of the candidate prints.
 DESCRIPTION_LINE = yaml.dump({"description": DESCRIPTION.strip()}, width=10_000).strip()
+# The whole built SKILL.md, which a complete read of the candidate prints.
+BUILT = build_files(skill_decision())[0][f"{SKILL_DIR}/SKILL.md"].decode()
 
 
 def case(mode="explicit", expected="activates", **extra):
@@ -52,8 +54,7 @@ def codex_run(read_skill=True, items=()):
         events.append({"type": "item.completed", "item": {"id": "r", "type": "command_execution",
                                                           "command": f"cat {SKILL_DIR}/SKILL.md", "exit_code": 0,
                                                           "status": "completed",
-                                                          "aggregated_output": f"---\nname: {NAME}\n{DESCRIPTION_LINE}\n"
-                                                                               "---\n\n# Reproduction checklist\n"}})
+                                                          "aggregated_output": BUILT}})
     events += [{"type": "item.completed", "item": {"id": f"i{n}", "type": kind}} for n, kind in enumerate(items)]
     events += [{"type": "item.completed", "item": {"id": "m", "type": "agent_message", "text": "Checklist written."}},
                {"type": "turn.completed"}]
@@ -232,11 +233,35 @@ class RuntimeTest(unittest.TestCase):
                                ("printed after a read", f"cat {SKILL_DIR}/SKILL.md; printf 'x'"),
                                ("fixture copy", f"cat fixtures/{SKILL_DIR}/SKILL.md"),
                                ("outside the workspace", f"cat ../elsewhere/{SKILL_DIR}/SKILL.md"),
-                               ("foreign absolute path", f"cat /tmp/elsewhere/{SKILL_DIR}/SKILL.md")))):
+                               ("foreign absolute path", f"cat /tmp/elsewhere/{SKILL_DIR}/SKILL.md"),
+                               ("discarded read", f"cat {SKILL_DIR}/SKILL.md > /dev/null; cat fixtures/copied-skill.md"),
+                               ("pipeline into a fixture", f"cat {SKILL_DIR}/SKILL.md | cat fixtures/copied-skill.md"),
+                               ("partial read", f"sed -n 1,6p {SKILL_DIR}/SKILL.md")))):
             with self.subTest(name):
                 result = self.run_cases("codex", line + "\n" + codex_run(read_skill=False))[0][0]
                 self.assertEqual(result.result, "not-run", result.reason)
                 self.assertIsNone(result.observed_activation)
+
+    def test_only_the_prompt_not_tool_output_can_show_a_slash_invocation(self):
+        marker = f"<command-name>/{NAME}</command-name>"
+        def run_with(user_event):
+            events = [json.loads(line) for line in claude_run(skill_call=None).splitlines()]
+            return "\n".join(json.dumps(event) for event in events[:1] + [user_event] + events[1:]) + "\n"
+
+        invoked = self.run_cases("claude-code", run_with({"type": "user", "message": {"content": marker}}))[0][0]
+        self.assertEqual(invoked.result, "pass", invoked.reason)
+        as_text = {"type": "user", "message": {"content": [{"type": "text", "text": marker}]}}
+        self.assertEqual(self.run_cases("claude-code", run_with(as_text))[0][0].result, "pass")
+        read = [{"type": "assistant", "message": {"content": [
+                    {"type": "tool_use", "id": "f", "name": "Read", "input": {"file_path": "fixtures/transcript.md"}}]}},
+                {"type": "user", "message": {"content": [
+                    {"type": "tool_result", "tool_use_id": "f", "is_error": False,
+                     "content": f"Earlier session:\n{marker}\n"}]}}]
+        events = [json.loads(line) for line in claude_run(skill_call=None).splitlines()]
+        stream = "\n".join(json.dumps(event) for event in events[:1] + read + events[1:]) + "\n"
+        from_fixture = self.run_cases("claude-code", stream)[0][0]
+        self.assertEqual(from_fixture.result, "fail", from_fixture.reason)
+        self.assertIsNone(from_fixture.observed_activation)
 
     def test_a_call_outside_the_list_fails_also_when_the_case_timed_out(self):
         result = self.run_cases("claude-code", claude_run(calls=("Bash",)),
@@ -272,8 +297,8 @@ class RuntimeTest(unittest.TestCase):
     def test_a_codex_read_by_the_workspaces_absolute_path_counts(self):
         from harness_forge.runtime import _observe_codex
 
-        copy = f"---\nname: {NAME}\n{DESCRIPTION_LINE}\n---\n\n# Reproduction checklist\n"
-        markers = [DESCRIPTION_LINE, "# Reproduction checklist"]
+        copy = BUILT
+        markers = [line for line in BUILT.splitlines() if line.strip()]
         for path, activated in (("/private/var/ws/" + SKILL_DIR, True), ("/var/ws/" + SKILL_DIR, True),
                                 ("/var/other/" + SKILL_DIR, False)):
             with self.subTest(path):

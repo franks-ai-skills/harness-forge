@@ -182,7 +182,12 @@ def _observe_claude(stdout: str, name: str, baseline: set[str], workspace: Path 
                 if (isinstance(block, dict) and block.get("type") == "tool_result" and block.get("is_error") is not True
                         and str(block.get("tool_use_id")) in pending):
                     observed["activation"] = observed["activation"] or pending[str(block["tool_use_id"])]
-            if f"<command-name>/{name}</command-name>" in json.dumps(event):
+            # The invocation marker counts only in the prompt's own text: a tool result is data, such as a
+            # fixture that quotes a transcript.
+            content = message.get("content") if isinstance(message, dict) else None
+            prompt = [content] if isinstance(content, str) else [
+                block.get("text") for block in blocks if isinstance(block, dict) and block.get("type") == "text"]
+            if any(isinstance(text, str) and f"<command-name>/{name}</command-name>" in text for text in prompt):
                 observed["activation"] = observed["activation"] or f"/{name} was invoked"
         if event.get("type") == "result":
             observed["completed"] = event.get("is_error") is False and event.get("subtype") == "success"
@@ -199,8 +204,9 @@ _SHELLS = {"sh", "bash", "zsh", "dash"}
 def _segments(command: str) -> list[list[str]]:
     """The simple commands a shell command line runs, comments dropped, a `zsh -lc '...'` wrapper unwrapped.
 
-    A line with a conditional or background operator (``&&``, ``||``,
-    ``&``) gives none: which of its commands ran cannot be told.
+    A line with a conditional, background or redirection operator (``&&``,
+    ``||``, ``&``, ``>``, ``<`` and the like) gives none: which of its
+    commands ran, or where a read's output went, cannot be told.
     """
     try:
         words = shlex.split(command, comments=True)
@@ -214,7 +220,8 @@ def _segments(command: str) -> list[list[str]]:
     segments, current = [], []
     try:
         for token in lexer:
-            if token in ("&&", "||", "&"):
+            # A conditional, a background job or a redirection hides which output a read produced.
+            if token in ("&&", "||", "&") or (token not in (";", "|", "\n") and set(token) <= set("<>&|;")):
                 return []
             if token in (";", "|", "\n"):
                 segments.append(current)
@@ -254,8 +261,8 @@ def _skills_read(item: dict) -> list[tuple[str, str]]:
 
 
 def _printed(item: dict, markers: list[str]) -> bool:
-    """Whether the command printed every marker line of the candidate's SKILL.md."""
-    lines = set(_lines(str(item.get("aggregated_output", ""))))
+    """Whether the command printed every line of the candidate's SKILL.md (_markers)."""
+    lines = {line.rstrip() for line in _lines(str(item.get("aggregated_output", "")))}
     return all(marker in lines for marker in markers)
 
 
@@ -266,9 +273,8 @@ def _observe_codex(stdout: str, directory: str, markers: list[str] | None = None
     The read must be a reading command on the staged candidate's own
     SKILL.md, relative to the workspace or under one of its
     ``workspaces`` paths (a fixture copy or another same-named skill is
-    not the candidate), and
-    print its own description line and first heading (``markers``), which
-    a command that only names the file or prints a few lines does not.
+    not the candidate), and print every line of it (``markers``), which a
+    command that only names the file or prints part of it does not.
     Codex reports no inventory of what it loaded.
     """
     observed = {"activation": None, "attempted": None, "calls": [], "unavailable": [], "competing": [],
@@ -320,11 +326,10 @@ def _decide(harness: str, test_case: dict, observed: dict, permitted: list[str])
 
 
 def _markers(files: Mapping[str, bytes], target: str) -> list[str]:
-    """The candidate SKILL.md's description line and first heading, which a real read of it prints."""
+    """Every non-empty line of the candidate's SKILL.md: a complete read prints them all, so its
+    instructions reached the model, whichever command's output the lines came from."""
     lines = files.get(f"{target}/SKILL.md", b"").decode("utf-8", "replace").splitlines()
-    markers = [next((line for line in lines if line.startswith("description:")), None),
-               next((line for line in lines if line.startswith("# ")), None)]
-    return [marker for marker in markers if marker is not None] or ["\0no marker"]
+    return [line.rstrip() for line in lines if line.strip()] or ["\0no marker"]
 
 
 def activation_case(
