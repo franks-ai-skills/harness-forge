@@ -85,6 +85,29 @@ class LiveCommandsTest(unittest.TestCase):
     def tearDown(self):
         self.directory.cleanup()
 
+    def test_verification_runs_only_in_a_target_harness(self):
+        """A harness the decision does not target would skip the runtime tests the build needs."""
+        record = load_decision(self.decision)
+        record.record.update(targets=["claude-code"])
+        record.record["facts"]["target_set"] = "claude-code"
+        write_decision(self.root, record, slug="repro", date="2026-10-10")
+        runner = ResearchRunner([finding()])
+        cli, arguments = self.build_ready(runner)
+        arguments[arguments.index("--harness") + 1] = "codex"
+        option = arguments.index("--cases")
+        workers = len(runner.worker_calls)
+        for extra in (arguments, arguments[:option] + arguments[option + 2:]):
+            code, _, stderr = cli("verify", *extra)
+            self.assertEqual(code, 2)
+            self.assertIn("codex is not one of the decision's target harnesses (claude-code)", stderr)
+        relay = arguments[arguments.index("--relay") + 1]
+        code, _, stderr = cli("scope", "--harness", "codex", "--decision", self.decision, "--root", self.root,
+                              "--revision", self.root / ".harness/research/repro.rules.yaml", "--slug", "repro",
+                              "--evidence", self.root / ".scratch/workers.json", "--relay", relay)
+        self.assertEqual(code, 2)
+        self.assertIn("not one of the decision's target harnesses", stderr)
+        self.assertEqual(len(runner.worker_calls), workers, "nothing launches")
+
     def test_workers_reports_the_planned_configurations(self):
         cli = Cli(FakeRunner(), self.root)
         code, output, _ = cli("workers", "--harness", "claude-code")

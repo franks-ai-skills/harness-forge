@@ -68,7 +68,9 @@ this skill's folder; run it with the Forge environment's Python.
    permits any other tool is unavailable. Run `scripts/forge.py verify --decision
    <record> --root <repository> --revision <rules file> --harness <this
    harness> --evidence <workers output> --relay <relay> --slug <slug>
-   --write --cases <file>`. It runs the static checks, a fresh
+   --write --cases <file>`. This harness must be one of the decision's
+   targets: if it is not, tell the user to verify from a target
+   harness, since the build's runtime tests would not run here. It runs the static checks, a fresh
    review worker on the frozen files and each runtime case in a throwaway
    workspace, then writes `.harness/reports/<slug>.md`. A worker
    configuration other than the confirmed one leaves every part not

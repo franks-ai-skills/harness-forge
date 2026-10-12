@@ -587,6 +587,7 @@ def _scope(arguments: argparse.Namespace) -> int:
     """The two re-verification choices, each with its exact parts, kept results and judged-rule count."""
     root = Path(arguments.root).resolve()
     decision, revision = _decision_and_revision(arguments, root)
+    _require_target(decision, arguments.harness)
     # The scope is computed for the contract confirmed in this run, as verify then computes it.
     approval, overrides = _approval(arguments, decision, revision)
     confirmation, evidence = approval["confirmation"], approval["worker_evidence"]
@@ -1084,10 +1085,19 @@ def _current_inputs(arguments: argparse.Namespace, root: Path, drift: list[dict]
         raise ValueError(str(error)) from error
 
 
+def _require_target(decision: Decision, harness: str) -> None:
+    """Verification runs in a harness the decision targets: in another, a build's runtime tests would not run."""
+    targets = decision.record["targets"]
+    if harness not in targets:
+        raise _InvalidInput(f"{harness} is not one of the decision's target harnesses ({', '.join(targets)}); run "
+                            "the verification from a target harness")
+
+
 def _verify(arguments: argparse.Namespace) -> int:
     """Live verification: static checks, a fresh review worker, runtime cases and the report."""
     root = Path(arguments.root).resolve()
     decision, revision = _decision_and_revision(arguments, root)
+    _require_target(decision, arguments.harness)
     approval, overrides = _approval(arguments, decision, revision)
     stale = _stale_requirements(decision, revision, [part["id"] for part in decision.record["parts"]
                                                      if part_kind(part) in ("build", "local-reuse")])
