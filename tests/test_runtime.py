@@ -52,7 +52,8 @@ def codex_run(read_skill=True, items=()):
         events.append({"type": "item.completed", "item": {"id": "r", "type": "command_execution",
                                                           "command": f"cat {SKILL_DIR}/SKILL.md", "exit_code": 0,
                                                           "status": "completed",
-                                                          "aggregated_output": f"---\nname: {NAME}\n{DESCRIPTION_LINE}\n"}})
+                                                          "aggregated_output": f"---\nname: {NAME}\n{DESCRIPTION_LINE}\n"
+                                                                               "---\n\n# Reproduction checklist\n"}})
     events += [{"type": "item.completed", "item": {"id": f"i{n}", "type": kind}} for n, kind in enumerate(items)]
     events += [{"type": "item.completed", "item": {"id": "m", "type": "agent_message", "text": "Checklist written."}},
                {"type": "turn.completed"}]
@@ -161,8 +162,8 @@ class RuntimeTest(unittest.TestCase):
                          case_call["command"][:case_call["command"].index("--tools")])
         self.assertEqual(baseline["command"][baseline["command"].index("--tools") + 1], "")
 
-    def test_a_claude_read_inside_the_skill_counts_as_activation(self):
-        """A slash invocation in print mode leaves no event; reading the skill's own files shows it loaded."""
+    def test_a_claude_read_of_the_candidates_skill_md_counts_as_activation(self):
+        """Its instructions reached the model; a read of a reference alone shows file access, not activation."""
         def read(path, failed=False):
             events = [json.loads(line) for line in claude_run(skill_call=None).splitlines()]
             events[1:1] = [{"type": "assistant", "message": {"content": [
@@ -170,10 +171,14 @@ class RuntimeTest(unittest.TestCase):
                 tool_result("r", failed)]
             return "\n".join(json.dumps(event) for event in events) + "\n"
 
-        inside = read(f"@@WORKSPACE@@/.claude/skills/{NAME}/references/requirements.md")
+        inside = read(f"@@WORKSPACE@@/.claude/skills/{NAME}/SKILL.md")
         result = self.run_cases("claude-code", inside)[0][0]
         self.assertEqual(result.result, "pass", result.reason)
-        self.assertEqual(result.observed_activation, f"read references/requirements.md from the {NAME} skill")
+        self.assertEqual(result.observed_activation, f"read SKILL.md from the {NAME} skill")
+        reference = read(f"@@WORKSPACE@@/.claude/skills/{NAME}/references/requirements.md")
+        self.assertEqual(self.run_cases("claude-code", reference)[0][0].result, "fail", "a reference is not the skill")
+        escaping = read(f"@@WORKSPACE@@/.claude/skills/{NAME}/../../../outside/SKILL.md")
+        self.assertEqual(self.run_cases("claude-code", escaping)[0][0].result, "fail", "the path leaves the skill")
         missing = read(f"@@WORKSPACE@@/.claude/skills/{NAME}/references/absent.md", failed=True)
         self.assertEqual(self.run_cases("claude-code", missing)[0][0].result, "fail", "a failed read loads nothing")
         outside = read("@@WORKSPACE@@/bug-report.md")
@@ -216,6 +221,9 @@ class RuntimeTest(unittest.TestCase):
         for name, line in (("echo", command(f"echo {SKILL_DIR}/SKILL.md", 0, f"{SKILL_DIR}/SKILL.md\n")),
                            ("printed name", command(f"printf 'name: {NAME}\\n' # {SKILL_DIR}/SKILL.md", 0,
                                                     f"name: {NAME}\n")),
+                           ("printed copy", command(f"printf '---\\nname: {NAME}\\n' # {SKILL_DIR}/SKILL.md", 0,
+                                                    f"---\nname: {NAME}\n{DESCRIPTION_LINE}\n# Reproduction "
+                                                    "checklist\n")),
                            ("failed cat", command(f"cat {SKILL_DIR}/SKILL.md", 1, "cat: No such file or directory\n"))):
             with self.subTest(name):
                 result = self.run_cases("codex", line + "\n" + codex_run(read_skill=False))[0][0]
@@ -243,6 +251,30 @@ class RuntimeTest(unittest.TestCase):
         results, runner = self.run_cases("claude-code", claude_run(skills=()))
         self.assertEqual(runner.worker_calls[0]["links"], [], "a missing link stays missing")
         self.assertEqual(results[0].result, "error")
+
+    def test_a_codex_read_through_its_shell_counts(self):
+        output = self.files[f"{SKILL_DIR}/SKILL.md"].decode()
+        numbered = "".join(f"{n:6}\t{line}\n" for n, line in enumerate(output.splitlines(), 1))
+        line = json.dumps({"type": "item.completed", "item": {
+            "id": "r", "type": "command_execution", "exit_code": 0, "status": "completed",
+            "command": f"/bin/zsh -lc 'cat request.json; nl -ba {SKILL_DIR}/SKILL.md'", "aggregated_output": numbered}})
+        result = self.run_cases("codex", line + "\n" + codex_run(read_skill=False))[0][0]
+        self.assertEqual(result.result, "pass", result.reason)
+
+    def test_a_repository_link_that_leaves_the_candidate_is_refused(self):
+        run = self.scenario.run
+        run.frozen_inputs["symlinks"] = {f".claude/skills/{NAME}": "../../../elsewhere/reproduction-checklist"}
+        results, runner = self.run_cases("claude-code", claude_run())
+        self.assertEqual(results[0].result, "error")
+        self.assertIn("does not point at the candidate", results[0].reason)
+        self.assertEqual(runner.worker_calls, [], "nothing launches")
+
+    def test_a_partial_startup_inventory_is_not_observed(self):
+        events = [json.loads(line) for line in claude_run().splitlines()]
+        for key in ("plugins", "mcp_servers"):
+            events[0].pop(key)
+        stream = "\n".join(json.dumps(event) for event in events) + "\n"
+        self.assertEqual(self.run_cases("claude-code", stream)[0][0].inventory, "not observable")
 
     def test_each_result_says_whether_the_inventory_was_observed(self):
         self.assertEqual(self.run_cases("claude-code", claude_run())[0][0].inventory, "observed")
