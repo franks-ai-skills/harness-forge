@@ -91,6 +91,7 @@ def verify_live(
     selection: dict[str, list[dict]] | None = None, overrides: list[dict] | tuple = (),
     scope: set[str] | None = None, scope_label: str = "Extensive review (rarely needed)",
     kept: dict[str, dict] | None = None, cited: dict[str, list[str]] | None = None,
+    recorded_drift: list[dict] | tuple = (),
 ):
     """Static checks, a fresh review worker, runtime cases, then results in the design's precedence.
 
@@ -109,7 +110,7 @@ def verify_live(
     environ = os.environ if environ is None else environ
     run = prepare_run(decision, files, rules, confirmation, symlinks=symlinks, revision=revision,
                       overrides=overrides, kb_version=kb_version, worker_evidence=worker_evidence, scope=scope,
-                      scope_label=scope_label)
+                      scope_label=scope_label, recorded_drift=recorded_drift)
     review = ReviewResponse(run_id=run.run_id, verdicts=[], goal_verdicts=[])
     observations = []
     if any(request["kind"] == "rule" or request["kind"] == "goal" for request in run.judged_requests):

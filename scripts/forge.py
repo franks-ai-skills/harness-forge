@@ -357,7 +357,8 @@ def _prepare_contract(arguments: argparse.Namespace) -> int:
         except ValueError as error:
             raise _InvalidInput(str(error)) from error
     try:
-        contract = render_contract(decision, revision, overrides, worker_evidence=evidence, described=described)
+        contract = render_contract(decision, revision, overrides, worker_evidence=evidence, described=described,
+                                   drift=_drift(Path(arguments.decision).resolve().parents[2]))
     except ValueError as error:
         raise _InvalidInput(str(error)) from error
     problem = _revision_problem(decision, revision)
@@ -663,7 +664,8 @@ def _approval(arguments: argparse.Namespace, decision: Decision, revision) -> tu
     try:
         for record in evidence:
             validate(record, "worker-evidence")
-        contract = render_contract(decision, revision, overrides, worker_evidence=evidence)
+        contract = render_contract(decision, revision, overrides, worker_evidence=evidence,
+                                   drift=_drift(Path(arguments.root).resolve()))
     except ValueError as error:
         raise _InvalidInput(str(error)) from error
     confirmation = confirm_contract(contract, relay, run_id=str(relay.get("run_id", "")))
@@ -806,7 +808,7 @@ def _build(arguments: argparse.Namespace) -> int:
         procedure = Path(arguments.procedure).read_text(encoding="utf-8")
         planned = plan_skill(decision, arguments.part, revision, pinned, confirmation=approval["confirmation"],
                              worker_evidence=approval["worker_evidence"], description=description, procedure=procedure,
-                             overrides=overrides)
+                             overrides=overrides, drift=_drift(root))
         written = write_skill(root, planned, replace=[item for item in (arguments.replace or "").split(",") if item])
     except BuilderUnavailable as error:
         emit({"command": "build", "built": False, "reason": str(error)})
@@ -1054,7 +1056,7 @@ def _verify(arguments: argparse.Namespace) -> int:
     try:
         run, results = verify_live(decision, files, symlinks, rules, revision,
                                    arguments.harness, **approval, overrides=overrides, scope=scope,
-                                   scope_label=label, kept=kept, cited=cited,
+                                   scope_label=label, kept=kept, cited=cited, recorded_drift=drift,
                                    cases=cases, runner=RUNNER, environ=_environ(), kb_version=manifest["kb_version"],
                                    login_answer=arguments.login_answer, collect=lambda: _current_inputs(arguments, root, drift, overrides),
                                    confirmed_exclusions=exclusions, drift=unresolved, selection=failures)

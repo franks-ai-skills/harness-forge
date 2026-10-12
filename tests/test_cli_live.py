@@ -440,6 +440,10 @@ class LiveCommandsTest(unittest.TestCase):
         record["drift"] = [{"rule_id": "skills.description.length", "finding_id": record["findings"][0]["id"],
                             "summary": "The vendor raised the description limit.", "category": "compatibility"}]
         write_research(self.root, record, "Drift recorded.\n")
+        code, _, stderr = cli("verify", *arguments)
+        self.assertEqual(code, 2, "recorded drift changes the contract")
+        self.assertIn("does not confirm", stderr)
+        self.reconfirm(cli, arguments)
         code, output, stderr = cli("verify", *arguments)
         self.assertEqual(code, 1, stderr)
         self.assertEqual(output["parts"][0]["status"], "blocked")
@@ -609,6 +613,12 @@ class LiveCommandsTest(unittest.TestCase):
         self.assertEqual(code, 2)
         self.assertIn("is not what its answers give now", stderr)
 
+    def reconfirm(self, cli, arguments, run_id="verify-drift"):
+        """A new confirmation after the contract changed, such as recorded drift; updates arguments in place."""
+        relay = cli.confirm(self.decision, run_id, "--revision", self.root / ".harness/research/repro.rules.yaml")
+        arguments[arguments.index("--relay") + 1] = relay
+        return relay
+
     def record_drift(self, cli, rule="skills.description.length", category="compatibility"):
         code, output, stderr = cli("drift", "--root", self.root, "--slug", "repro", "--finding", "F1", "--rule", rule,
                                    "--category", category, "--summary", "The vendor raised the limit.")
@@ -621,6 +631,7 @@ class LiveCommandsTest(unittest.TestCase):
         cli.module.ISSUES = (lambda rule_id: [], lambda proposal: filed.append(proposal) or "https://github.com/k/b/issues/3")
         output = self.record_drift(cli)
         self.assertEqual((output["entry"]["category"], output["blocking"]), ("compatibility", True))
+        self.reconfirm(cli, arguments)
         code, output, _ = cli("verify", *arguments)
         self.assertEqual((code, output["parts"][0]["status"]), (1, "blocked"))
         self.assertEqual(output["drift"], [{"rule_id": "skills.description.length", "finding_id": "F1",
@@ -664,6 +675,9 @@ class LiveCommandsTest(unittest.TestCase):
         research.write_text(research.read_text(encoding="utf-8").replace("The vendor raised the limit.",
                                                                          "The vendor removed the limit."),
                             encoding="utf-8")
+        code, _, stderr = cli("verify", *arguments[:option], relay, *arguments[option + 1:])
+        self.assertEqual(code, 2, "the edited drift changed the contract")
+        relay = cli.confirm(self.decision, "verify-3", "--revision", self.root / ".harness/research/repro.rules.yaml")
         code, output, _ = cli("verify", *arguments[:option], relay, *arguments[option + 1:])
         self.assertEqual((code, output["drift"][0]["state"]), (1, "open"), "the keep covered the earlier drift only")
         request = cli.write("override.json", {"rule_id": "skills.description.length", "finding_id": "F1",
@@ -918,6 +932,7 @@ class LiveCommandsTest(unittest.TestCase):
         _, selected, _ = cli("select", "--input", request)
         winner = next(row["rules"][0] for row in selected["assessment"] if row["state"] == "recommended")
         self.record_drift(cli, rule=winner)
+        self.reconfirm(cli, arguments)
         code, output, _ = cli("verify", *arguments)
         self.assertEqual((code, output["parts"][0]["status"]), (1, "blocked"))
         self.assertIn(f"unresolved compatibility drift on {winner}",
@@ -939,6 +954,7 @@ class LiveCommandsTest(unittest.TestCase):
                  "--procedure", cli.write("procedure.md", PROCEDURE)]
         # Drift on a rule that does not apply to A (it needs every_time: always) blocks neither step.
         self.record_drift(cli, rule="skills.goal.no-must-hold-rule-in-skill")
+        build[build.index("--relay") + 1] = self.reconfirm(cli, arguments)
         self.assertEqual(cli(*build)[0], 0, "build agrees with verify that the rule does not apply")
         code, output, stderr = cli("verify", *arguments)
         self.assertEqual(code, 0, stderr)
@@ -950,6 +966,7 @@ class LiveCommandsTest(unittest.TestCase):
         record["drift"] = [{"rule_id": "security.secrets.none-in-files", "finding_id": "F1", "summary": "Edited.",
                             "category": "ordinary"}]
         write_research(self.root, record, "Edited.\n")
+        build[build.index("--relay") + 1] = self.reconfirm(cli, arguments, run_id="verify-drift-2")
         code, _, stderr = cli(*build)
         self.assertEqual(code, 2)
         self.assertIn("open security drift on security.secrets.none-in-files", stderr)

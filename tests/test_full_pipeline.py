@@ -133,6 +133,9 @@ class FullPipelineTest(unittest.TestCase):
         # A stricter description limit, adopted from drift: building and checking both apply it.
         self.run_ok("drift", "--root", root, "--slug", "repro", "--finding", "F2", "--rule",
                     "skills.description.length", "--category", "compatibility", "--summary", "A lower limit.")
+        returned, _, _ = cli(*verify)
+        self.assertEqual(returned, 2, "recorded drift changes the contract")
+        verify[verify.index("--relay") + 1] = cli.confirm(decision_path, "verify-drift", "--revision", revision)
         output = self.run_ok(*verify, code=1)
         self.assertEqual(output["parts"][0]["status"], "blocked", "open compatibility drift blocks the skill")
         pinned = next(rule for rule in yaml.safe_load((FORGE / "snapshot/rules/skills.yaml").read_text())

@@ -13,10 +13,12 @@ accounts. Then run `scripts/forge.py prepare-contract --decision
 <record> --evidence <workers output>`, adding
 `--revision .harness/research/<slug>.rules.yaml` when it exists; it
 reads the repository's `.harness/overrides/` itself. Show its `text` in
-full, unchanged: the idea's reach, hosting and confirmed facts; every
+full, unchanged: the idea's goals, the user's picture, reach, hosting
+and confirmed facts; every
 part's name, goal, confirmed answers, outcome and mechanism, the reused
 artifact of a reuse part, outside controls, accepted requirements with the revision's
-sha256, every override with its content and sha256, the worker policy
+sha256, every override with its content and sha256, the drift recorded
+in the repository's research and the user's decisions on it, the worker policy
 (`best-effort-v1`, isolation not certified), each planned worker's
 configuration and the contract digest. A
 line marked as a hint from an untrusted record only points at

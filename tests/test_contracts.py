@@ -89,6 +89,23 @@ class RenderTest(unittest.TestCase):
         self.assertNotEqual(contract.digest, render_contract(unlinked, None, [], worker_evidence=EVIDENCE).digest,
                             "an edit to the links after confirmation would narrow the Review scope")
 
+    def test_goals_picture_and_drift_are_part_of_the_contract(self):
+        base = render_contract(decision(), None, [], worker_evidence=EVIDENCE)
+        self.assertIn("Goals: Reproduction checklists from approved bug reports", base.text)
+        self.assertIn("Picture: I ask for a checklist", base.text)
+        for change in ({"goals": ["Another goal"]}, {"picture": "Another picture."}):
+            with self.subTest(change=list(change)):
+                self.assertNotEqual(render_contract(decision(**change), None, [], worker_evidence=EVIDENCE).digest,
+                                    base.digest)
+        drift = [{"rule_id": "skills.description.length", "finding_id": "F1", "slug": "repro",
+                  "category": "compatibility", "summary": "The limit grew.",
+                  "finding": {"source": "https://docs.example.com/limits", "quote": "Up to 2048."}}]
+        with_drift = render_contract(decision(), None, [], worker_evidence=EVIDENCE, drift=drift)
+        self.assertIn("Recorded drift:\n  - skills.description.length (finding F1 of research repro, compatibility): "
+                      "The limit grew. Source: https://docs.example.com/limits", with_drift.text)
+        self.assertNotEqual(with_drift.digest, base.digest, "adding or deleting drift changes the contract")
+        self.assertIn("Recorded drift: none", base.text)
+
     def test_part_ids_must_be_unique(self):
         twice = decision(part("A", "Write a checklist"), part("A", "Write another checklist"))
         with self.assertRaisesRegex(ValueError, "part id 'A' is used twice"):

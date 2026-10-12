@@ -203,11 +203,15 @@ def render_contract(
     worker_evidence: list[dict] | tuple = (),
     previous: list[dict] | None = None,
     described: dict[str, list[str]] | None = None,
+    drift: list[dict] | tuple = (),
 ) -> Contract:
     """The whole current contract with readable text and a binding digest.
 
     ``described`` maps an override's rule id to its description (old and new
     rule, source quote, warnings); without one the record itself is shown.
+    ``drift`` is the repository's recorded drift, each entry with its
+    finding and research slug: adding, editing or deleting one changes the
+    contract, so a part a drift blocked cannot be unblocked by an edit.
     """
     validate(decision.record, "decision")
     duplicate = part_ids_problem(decision.record)
@@ -230,8 +234,12 @@ def render_contract(
         "evidence_digest": canonical_digest(list(worker_evidence)) if worker_evidence else None,
     }
     revision_digest = revision.digest if revision else None
+    shown_drift = [_drift_shown(entry) for entry in drift]
     content = {
         "idea": decision.record["idea"],
+        "goals": list(decision.record["goals"]),
+        "picture": decision.record["picture"],
+        "drift": shown_drift,
         "targets": decision.record["targets"],
         "reach": decision.record["reach"],
         "hosting": decision.record["hosting"],
@@ -246,7 +254,8 @@ def render_contract(
 
     record = decision.record
     hosting = record["hosting"]
-    lines = [f"Contract for: {record['idea']}", f"Targets: {', '.join(record['targets'])}",
+    lines = [f"Contract for: {record['idea']}", f"Goals: {'; '.join(record['goals'])}",
+             f"Picture: {record['picture']}", f"Targets: {', '.join(record['targets'])}",
              f"Reach: {record['reach']}; hosting: {hosting['platform']}, {hosting['plan']} plan, {hosting['visibility']}",
              f"Facts: {_pairs(record['facts'])}", ""]
     for part in parts:
@@ -260,6 +269,12 @@ def render_contract(
             lines.extend("      " + line for line in shown)
     else:
         lines.append("Rule overrides: none")
+    if shown_drift:
+        lines.append("Recorded drift:")
+        lines += [f"  - {entry['rule_id']} (finding {entry['finding_id']} of research {entry['slug']}, "
+                  f"{entry['category']}): {entry['summary']} Source: {entry['source']}" for entry in shown_drift]
+    else:
+        lines.append("Recorded drift: none")
     drift_decisions = decision.record.get("drift_decisions", [])
     if drift_decisions:
         lines.append("Drift decisions:")
@@ -281,9 +296,17 @@ def render_contract(
                     text="\n".join(lines) + "\n", digest=digest)
 
 
+def _drift_shown(entry: dict) -> dict:
+    """What the contract shows and binds of one recorded drift; its issue answer is not a decision."""
+    finding = entry.get("finding") or {}
+    return {"rule_id": entry["rule_id"], "finding_id": entry["finding_id"], "slug": entry.get("slug"),
+            "category": entry["category"], "summary": entry["summary"], "source": finding.get("source"),
+            "quote": finding.get("quote")}
+
+
 def confirmation_problem(
     confirmation: Confirmation | None, decision: Decision, revision: AcceptedRevision | None,
-    overrides: list[dict] | tuple, worker_evidence: list[dict] | tuple,
+    overrides: list[dict] | tuple, worker_evidence: list[dict] | tuple, drift: list[dict] | tuple = (),
 ) -> str | None:
     """Why a confirmation does not cover the complete current contract, or None.
 
@@ -293,7 +316,7 @@ def confirmation_problem(
     if confirmation is None:
         return "no live confirmation in this session"
     try:
-        current = render_contract(decision, revision, list(overrides), worker_evidence=worker_evidence)
+        current = render_contract(decision, revision, list(overrides), worker_evidence=worker_evidence, drift=drift)
     except ValueError as error:
         return str(error)
     if confirmation.contract_digest != current.digest:

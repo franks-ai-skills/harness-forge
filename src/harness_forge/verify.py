@@ -248,6 +248,7 @@ def prepare_run(
     symlinks: dict[str, str] | None = None, revision: AcceptedRevision | None = None,
     overrides: list[dict] | tuple = (), kb_version: str = "", worker_evidence: list[dict] | tuple = (),
     scope: set[str] | None = None, scope_label: str = "Extensive review (rarely needed)",
+    recorded_drift: list[dict] | tuple = (),
 ) -> VerificationRun:
     """Decide applicability, run script rules and freeze the bound inputs."""
     duplicate = part_ids_problem(decision.record)
@@ -260,7 +261,8 @@ def prepare_run(
     record = copy.deepcopy(decision.record)
     inputs = bound_inputs(decision, files, rules, symlinks=symlinks, revision=revision, overrides=overrides,
                           kb_version=kb_version, worker_evidence=worker_evidence)
-    unconfirmed_reason = confirmation_problem(confirmation, decision, revision, overrides, worker_evidence) or ""
+    unconfirmed_reason = confirmation_problem(confirmation, decision, revision, overrides, worker_evidence,
+                                              recorded_drift) or ""
     confirmed = [] if unconfirmed_reason else sorted(confirmation.part_ids)
     run_id = confirmation.run_id if confirmation else "unattended-" + canonical_digest(inputs)[:12]
     run = VerificationRun(
