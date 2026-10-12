@@ -56,9 +56,11 @@ this skill's folder; run it with the Forge environment's Python.
    passes it when that behavior is absent. Write the proposals as idea rules
    and the user's choices to JSON files and run `scripts/forge.py accept
    --decision <record> --root <repository> --part <id> --proposed <file>
-   --choices <file> --slug <slug>`; it writes
-   `.harness/research/<slug>.rules.yaml` and records the revision in the
-   decision. The changed contract needs a new confirmation.
+   --choices <file> --slug <slug>`, once per part, also when the user
+   accepts none; it replaces that part's requirements in
+   `.harness/research/<slug>.rules.yaml`, bound to the part's brief,
+   keeps the other parts' and records the revision in the decision. The
+   changed contract needs a new confirmation.
 6. **Incompatible goal.** If the deep pass shows the chosen mechanism
    cannot meet the part's goal, stop and return to harness-intake with a
    concrete alternative instead of building.

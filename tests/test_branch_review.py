@@ -15,7 +15,7 @@ from harness_forge.checks.runner import run_check
 from harness_forge.contracts import confirm_contract, confirmation_problem, render_contract, write_decision
 from harness_forge.documents import canonical_digest, validate
 from harness_forge.models import AcceptedRevision
-from harness_forge.research import accept_requirements, load_revision, write_revision
+from harness_forge.research import accept_requirements, load_revision, revision_digest, write_revision
 from harness_forge import verify
 from harness_forge.verify import bound_inputs, prepare_run
 from tests.builders import EVIDENCE, decision, part
@@ -53,8 +53,7 @@ class DuplicateRequirementTest(unittest.TestCase):
 
     def test_loading_rejects_a_revision_with_one_id_twice(self):
         rules = [{"part_id": "A", "rule": rule.to_dict()} for rule in self.twins()]
-        value = {"brief_digest": "b" * 64, "digest": canonical_digest({"brief_digest": "b" * 64, "rules": rules}),
-                 "rules": rules}
+        value = {"briefs": {"A": "b" * 64}, "digest": revision_digest({"A": "b" * 64}, rules), "rules": rules}
         with tempfile.TemporaryDirectory(prefix="forge-revision-") as directory:
             path = Path(directory) / "repro.rules.yaml"
             path.write_text(yaml.safe_dump(value, sort_keys=False), encoding="utf-8")
@@ -63,8 +62,8 @@ class DuplicateRequirementTest(unittest.TestCase):
 
     def test_verification_rejects_a_revision_with_one_id_twice(self):
         rules = [{"part_id": "A", "rule": rule.to_dict()} for rule in self.twins()]
-        twice = AcceptedRevision(rule_ids=[r["rule"]["id"] for r in rules], rules=rules, brief_digest="b" * 64,
-                                 digest=canonical_digest({"brief_digest": "b" * 64, "rules": rules}))
+        twice = AcceptedRevision(rule_ids=[r["rule"]["id"] for r in rules], rules=rules, brief_digests={"A": "b" * 64},
+                                 digest=revision_digest({"A": "b" * 64}, rules))
         with self.assertRaises(ValueError):
             prepare_run(skill_decision(), {}, RULES, None, revision=twice)
 

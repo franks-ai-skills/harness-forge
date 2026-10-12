@@ -1091,6 +1091,54 @@ class LiveCommandsTest(unittest.TestCase):
                     self.assertIn(message, stderr)
                 write_decision(self.root, original, slug="repro", date="2026-10-10")
 
+    def test_two_skill_parts_each_accept_their_own_requirements(self):
+        record = load_decision(self.decision)
+        record.record["parts"].append(part("B", "Summarize a reproduction checklist", slug="checklist-summary"))
+        write_decision(self.root, record, slug="repro", date="2026-10-10")
+        cli = Cli(ResearchRunner([finding()]), self.root)
+        cli.parts = ["A", "B"]
+        _, workers, _ = cli("workers", "--harness", "claude-code")
+        evidence = cli.write("workers.json", workers)
+        revision = self.root / ".harness/research/repro.rules.yaml"
+        for part_id in ("A", "B"):
+            recorded = ["--revision", revision] if revision.exists() else []
+            relay = cli.confirm(self.decision, f"intake-{part_id}", *recorded)
+            code, _, stderr = cli("research", "--decision", self.decision, "--pass", "deep", "--part", part_id,
+                                  "--harness", "claude-code", "--evidence", evidence, "--relay", relay,
+                                  "--root", self.root, "--slug", "repro", "--write", *recorded)
+            self.assertEqual(code, 0, stderr)
+            rule_id = f"idea.repro.{part_id.lower()}.platform"
+            proposed = cli.write(f"proposed-{part_id}.json", {"requirements": [
+                {"id": rule_id, "concept": "idea", "kind": "must", "severity": "error", "check": "judged",
+                 "statement": "The checklist names the platform", "applies_to": {"harnesses": ["claude-code"]},
+                 "evidence": "Vendor", "sources": ["https://docs.example-vendor.com/repro/platforms"],
+                 "contested": False}]})
+            code, output, stderr = cli("accept", "--decision", self.decision, "--part", part_id, "--proposed", proposed,
+                                       "--choices", cli.write(f"choices-{part_id}.json", {rule_id: "accept"}),
+                                       "--root", self.root, "--slug", "repro")
+            self.assertEqual(code, 0, stderr)
+        accepted = load_revision(revision)
+        self.assertEqual(accepted.rule_ids, ["idea.repro.a.platform", "idea.repro.b.platform"])
+        self.assertEqual(sorted(accepted.brief_digests), ["A", "B"])
+
+        def build(part_id, run_id):
+            relay = cli.confirm(self.decision, run_id, "--revision", revision)
+            return cli("build", "--decision", self.decision, "--part", part_id, "--revision", revision,
+                       "--evidence", evidence, "--relay", relay, "--root", self.root,
+                       "--description", cli.write("description.txt", DESCRIPTION),
+                       "--procedure", cli.write("procedure.md", PROCEDURE))
+
+        self.assertEqual(build("A", "build-a")[0], 0)
+        self.assertEqual(build("B", "build-b")[0], 0)
+        record = load_decision(self.decision)
+        record.part("B")["goal"] = "Summarize a security report"
+        write_decision(self.root, record, slug="repro", date="2026-10-10")
+        code, _, stderr = build("B", "build-b2")
+        self.assertEqual(code, 2)
+        self.assertIn("researched for another brief than part B's", stderr)
+        code, _, stderr = build("A", "build-a2")
+        self.assertEqual(code, 0, stderr)
+
     def test_case_ids_must_be_unique(self):
         import yaml
         cli, arguments = self.build_ready(ResearchRunner([finding()]))

@@ -154,9 +154,11 @@ class Finding:
 
 @dataclass(frozen=True)
 class AcceptedRevision:
+    """Accepted requirements per part, each part bound to the deep-research brief it was accepted for."""
+
     rule_ids: list[str]
     rules: list[dict]
-    brief_digest: str
+    brief_digests: dict[str, str]
     digest: str
 
 

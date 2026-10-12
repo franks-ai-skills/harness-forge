@@ -17,6 +17,7 @@ from harness_forge.research import (
     load_revision,
     match_support,
     record_drift,
+    revision_digest,
     rejected_domains,
     research_matches_brief,
     source_rejection,
@@ -180,7 +181,7 @@ class AcceptanceTest(unittest.TestCase):
         accepted_ids = ["idea.repro.a.numbered-steps"]
         self.assertEqual(revision.rule_ids, accepted_ids)
         self.assertEqual([entry["part_id"] for entry in revision.rules], ["A"])
-        self.assertEqual(revision.brief_digest, BRIEF)
+        self.assertEqual(revision.brief_digests, {"A": BRIEF})
 
     def test_edited_requirement_changes_the_revision_digest(self):
         accepted = accept_requirements(self.proposed, {"idea.repro.a.numbered-steps": "accept"}, BRIEF)
@@ -235,8 +236,8 @@ class AcceptanceTest(unittest.TestCase):
                                (misfiled, "belongs to part B, not A")):
             with self.subTest(message=message), tempfile.TemporaryDirectory(prefix="forge-research-") as directory:
                 rules = [entry]
-                revision = AcceptedRevision(rule_ids=[entry["rule"]["id"]], rules=rules, brief_digest=BRIEF,
-                                            digest=canonical_digest({"brief_digest": BRIEF, "rules": rules}))
+                revision = AcceptedRevision(rule_ids=[entry["rule"]["id"]], rules=rules, brief_digests={"A": BRIEF},
+                                            digest=revision_digest({"A": BRIEF}, rules))
                 path = write_revision(Path(directory), "repro", revision)
                 with self.assertRaisesRegex(ValueError, message):
                     load_revision(path)

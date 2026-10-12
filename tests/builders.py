@@ -57,4 +57,5 @@ def revision(*requirements: tuple[str, str, str]) -> AcceptedRevision:
     rules = [{"part_id": part_id, "rule": {"id": rule_id, "kind": "must", "statement": statement}}
              for part_id, rule_id, statement in requirements]
     digest = canonical_digest(rules)
-    return AcceptedRevision(rule_ids=[r["rule"]["id"] for r in rules], rules=rules, brief_digest="1" * 64, digest=digest)
+    briefs = {part_id: "1" * 64 for part_id, _, _ in requirements}
+    return AcceptedRevision(rule_ids=[r["rule"]["id"] for r in rules], rules=rules, brief_digests=briefs, digest=digest)

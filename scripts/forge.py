@@ -40,7 +40,7 @@ from harness_forge.report import render_report, write_report  # noqa: E402
 from harness_forge.research import (  # noqa: E402
     _BLOCKING_DRIFT, _catalog, accept_requirements, drift_category, drift_digest, drift_state, finding_problem,
     load_revision, source_rejection,
-    make_brief,
+    make_brief, merge_revision,
     record_drift, write_research, write_revision,
 )
 from harness_forge.runtime import load_cases  # noqa: E402
@@ -630,25 +630,26 @@ def _revision_problem(decision: Decision, revision) -> str | None:
 
 
 def _stale_requirements(decision: Decision, revision, covered: list[str]) -> str | None:
-    """Accepted requirements count only for the parts and the brief they were researched for.
+    """Accepted requirements count only for the parts and the briefs they were researched for.
 
     ``covered`` are the parts the requirements must hold for: the part being
-    built, or each part verification checks. A revision covers one part's
-    deep brief, empty or not, so each covered part's brief must be the
-    revision's; a second skill part is refused until several parts can hold
-    requirements.
+    built, or each part verification checks. Each has its own accepted
+    requirements, possibly none, bound to that part's current deep brief.
     """
     if revision is None:
         return None
-    for part_id in sorted({entry["part_id"] for entry in revision.rules} | set(covered)):
-        try:
-            brief = make_brief(decision, "deep", part_id)
-        except ValueError:
-            return f"the accepted requirements are for part {part_id}, which the decision does not have"
-        if brief.digest != revision.brief_digest:
+    parts = {part["id"] for part in decision.record["parts"]}
+    for part_id in sorted(set(revision.brief_digests) - parts):
+        return f"the accepted requirements are for part {part_id}, which the decision does not have"
+    for part_id in sorted(covered):
+        brief = make_brief(decision, "deep", part_id)
+        if part_id not in revision.brief_digests:
+            return (f"part {part_id} has no accepted requirements; research it and accept its requirements, "
+                    "even if none")
+        if brief.digest != revision.brief_digests[part_id]:
             return (f"the accepted requirements were researched for another brief than part {part_id}'s: the goals, "
-                    f"picture, targets, reach or the part's goal, answers or mechanism changed, or they belong to "
-                    f"another part; research part {part_id} again and accept its requirements")
+                    f"picture, targets, reach or the part's goal, answers or mechanism changed; research part "
+                    f"{part_id} again and accept its requirements")
     return None
 
 
@@ -750,17 +751,23 @@ def _accept(arguments: argparse.Namespace) -> int:
     """Write the accepted revision from the user's choices and record it in the decision."""
     root = Path(arguments.root).resolve()
     decision, _ = _decision_and_revision(arguments, root, matching=False)
-    previous = decision.record.get("accepted_revision") or {}
-    others = [rule_id for rule_id in previous.get("rule_ids", []) if rule_id.split(".")[2:3] != [arguments.part.lower()]]
-    if others:
-        raise _InvalidInput("accepting requirements for a second part is not supported yet; "
-                            f"the revision already holds {', '.join(others)}")
+    recorded = (decision.record.get("accepted_revision") or {}).get("digest")
+    previous = None
+    if recorded:
+        # Other parts' accepted requirements stay; this part's are replaced.
+        try:
+            previous = load_revision(safe_path(root, f".harness/research/{arguments.slug}.rules.yaml"), root=root)
+        except (OSError, ValueError) as error:
+            raise _InvalidInput(f"the recorded requirements cannot be read: {error}") from error
+        if previous.digest != recorded:
+            raise _InvalidInput("the requirements file is not the one the decision records; accept from that file")
     proposed = _read_json(arguments.proposed).get("requirements", [])
     choices = _read_json(arguments.choices)
     try:
         rules = [Rule.from_dict(rule) for rule in proposed]
-        revision = accept_requirements(rules, choices, make_brief(decision, "deep", arguments.part).digest,
+        accepted = accept_requirements(rules, choices, make_brief(decision, "deep", arguments.part).digest,
                                        part_id=arguments.part)
+        revision = merge_revision(previous, accepted)
         path = write_revision(root, arguments.slug, revision)
     except (ValueError, KeyError, TypeError) as error:
         raise _InvalidInput(str(error)) from error

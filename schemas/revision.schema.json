@@ -4,9 +4,16 @@
   "title": "Accepted Idea KB revision (.harness/research/<slug>.rules.yaml)",
   "type": "object",
   "properties": {
-    "brief_digest": {
-      "type": "string",
-      "pattern": "^[0-9a-f]{64}$"
+    "briefs": {
+      "type": "object",
+      "propertyNames": {
+        "pattern": "^[A-Z][0-9]*$"
+      },
+      "additionalProperties": {
+        "type": "string",
+        "pattern": "^[0-9a-f]{64}$"
+      },
+      "minProperties": 1
     },
     "digest": {
       "type": "string",
@@ -35,7 +42,7 @@
   },
   "additionalProperties": false,
   "required": [
-    "brief_digest",
+    "briefs",
     "digest",
     "rules"
   ]

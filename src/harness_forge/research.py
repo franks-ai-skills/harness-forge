@@ -227,12 +227,18 @@ def _check_entry(part_id: str, rule: Rule) -> None:
     _check_idea_rule(rule)
 
 
+def revision_digest(brief_digests: dict[str, str], rules: list[dict]) -> str:
+    return canonical_digest({"briefs": dict(sorted(brief_digests.items())), "rules": rules})
+
+
 def accept_requirements(proposed: list[Rule], choices: dict, brief_digest: str,
                         part_id: str | None = None) -> AcceptedRevision:
-    """Build the Idea KB revision from the user's accept, edit or reject choices.
+    """One part's accepted requirements from the user's accept, edit or reject choices.
 
     A proposed requirement without a choice stays pending and is excluded.
-    With ``part_id``, every accepted requirement must belong to that part.
+    With ``part_id``, every accepted requirement must belong to that part;
+    without it, they name one part. ``brief_digest`` is that part's deep
+    brief; merge_revision adds the part to the repository's revision.
     """
     _require_unique([rule.id for rule in proposed], "proposed requirements")
     by_id = {rule.id: rule for rule in proposed}
@@ -255,9 +261,26 @@ def accept_requirements(proposed: list[Rule], choices: dict, brief_digest: str,
         owner = _idea_part(final)
         _check_entry(part_id or owner, final)
         accepted.append({"part_id": owner, "rule": final.to_dict()})
-    digest = canonical_digest({"brief_digest": brief_digest, "rules": accepted})
+    if part_id is None:
+        owners = {entry["part_id"] for entry in accepted}
+        if len(owners) != 1:
+            raise ValueError("name the part whose requirements these are")
+        part_id = owners.pop()
+    briefs = {part_id: brief_digest}
     return AcceptedRevision(rule_ids=[entry["rule"]["id"] for entry in accepted], rules=accepted,
-                            brief_digest=brief_digest, digest=digest)
+                            brief_digests=briefs, digest=revision_digest(briefs, accepted))
+
+
+def merge_revision(previous: AcceptedRevision | None, accepted: AcceptedRevision) -> AcceptedRevision:
+    """The repository's revision with one part's accepted requirements replaced by ``accepted``'s."""
+    if previous is None:
+        return accepted
+    (part_id,) = accepted.brief_digests
+    rules = [entry for entry in previous.rules if entry["part_id"] != part_id] + list(accepted.rules)
+    briefs = {**{key: value for key, value in previous.brief_digests.items() if key != part_id},
+              part_id: accepted.brief_digests[part_id]}
+    return AcceptedRevision(rule_ids=[entry["rule"]["id"] for entry in rules], rules=rules, brief_digests=briefs,
+                            digest=revision_digest(briefs, rules))
 
 
 # --- Drift ----------------------------------------------------------------------
@@ -358,7 +381,7 @@ def write_research(root: Path, record: dict, body: str) -> Path:
 def write_revision(root: Path, slug: str, revision: AcceptedRevision) -> Path:
     if not re.fullmatch(r"[a-z0-9][a-z0-9-]*", slug):
         raise ValueError(f"invalid slug {slug!r}")
-    value = {"brief_digest": revision.brief_digest, "digest": revision.digest, "rules": revision.rules}
+    value = {"briefs": dict(sorted(revision.brief_digests.items())), "digest": revision.digest, "rules": revision.rules}
     validate(value, "revision")
     path = safe_path(root, f".harness/research/{slug}.rules.yaml")
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -369,9 +392,12 @@ def write_revision(root: Path, slug: str, revision: AcceptedRevision) -> Path:
 def load_revision(path: Path, *, root: Path | None = None) -> AcceptedRevision:
     """Load a revision and recompute its digest; a mismatch is an edit."""
     value = load_document(path, "revision", root=root)
-    digest = canonical_digest({"brief_digest": value["brief_digest"], "rules": value["rules"]})
+    digest = revision_digest(value["briefs"], value["rules"])
     if digest != value["digest"]:
         raise ValueError(f"{path}: accepted requirements changed after acceptance")
+    unbriefed = sorted({entry["part_id"] for entry in value["rules"]} - set(value["briefs"]))
+    if unbriefed:
+        raise ValueError(f"{path}: requirements of part {', '.join(unbriefed)} without the brief they were accepted for")
     _require_unique([entry["rule"]["id"] for entry in value["rules"]], f"{path}: accepted requirements")
     for entry in value["rules"]:
         try:
@@ -379,4 +405,4 @@ def load_revision(path: Path, *, root: Path | None = None) -> AcceptedRevision:
         except (ValueError, KeyError, TypeError) as error:
             raise ValueError(f"{path}: {error}") from error
     return AcceptedRevision(rule_ids=[entry["rule"]["id"] for entry in value["rules"]], rules=value["rules"],
-                            brief_digest=value["brief_digest"], digest=digest)
+                            brief_digests=dict(value["briefs"]), digest=digest)
