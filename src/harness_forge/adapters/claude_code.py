@@ -80,7 +80,7 @@ def allowed_calls(role: str) -> set[str]:
 
 def observe(stdout: str) -> dict:
     """Tool inventory, tool calls and the final text from the stream-json events."""
-    tools, calls, behavior, text = None, [], [], None
+    tools, calls, behavior, text, error = None, [], [], None, None
     completed = errored = False
     parse_errors = 0
     for line in stdout.splitlines():
@@ -118,7 +118,9 @@ def observe(stdout: str) -> dict:
                 text = json.dumps(structured) if isinstance(structured, dict) else event.get("result")
             else:
                 errored = True
+                # Claude reports a failed turn, such as a reached usage limit, in the result and not on stderr.
+                error = error or (str(event["result"]) if event.get("result") else None)
     if parse_errors:
         behavior.append(f"{parse_errors} unparseable event line(s)")
     return {"tools": tools, "calls": calls, "text": text, "completed": completed, "errored": errored,
-            "behavior": behavior}
+            "behavior": behavior, "error": error}

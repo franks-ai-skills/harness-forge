@@ -82,8 +82,11 @@ class FakeRunner:
         schema = workspace / "output-schema.json"
         self.worker_calls.append({"command": list(command), "env": dict(env), "cwd": str(workspace), "stdin": stdin,
                                   "files": sorted(p.relative_to(workspace).as_posix() for p in workspace.rglob("*") if p.is_file()),
+                                  "links": sorted(p.relative_to(workspace).as_posix() for p in workspace.rglob("*")
+                                                  if p.is_symlink()),
                                   "output_schema": json.loads(schema.read_text()) if schema.exists() else None})
-        return Completed(self.returncode, self.worker, self.stderr, self.timed_out)
+        # @@WORKSPACE@@ in a scripted stream stands for the throwaway workspace the worker runs in.
+        return Completed(self.returncode, self.worker.replace("@@WORKSPACE@@", str(workspace)), self.stderr, self.timed_out)
 
 
 def review_case():
@@ -334,6 +337,18 @@ class LaunchTest(unittest.TestCase):
         response = run_worker(request, "codex", **approval("codex", "review"), runner=runner, environ=PARENT, files=files)
         self.assertEqual(response["status"], "failed")
         self.assertEqual(response["reason"], f"the worker did not complete (exit 1); {message}")
+
+    def test_a_claude_worker_that_failed_its_turn_says_why(self):
+        request, files, _ = review_case()
+        stream = "\n".join(json.dumps(event) for event in (
+            {"type": "system", "subtype": "init", "tools": ["Read", "Grep", "Glob"]},
+            {"type": "result", "subtype": "success", "is_error": True, "api_error_status": 429,
+             "result": "You've hit your session limit · resets 2:30am"})) + "\n"
+        runner = FakeRunner(worker=stream, returncode=1)
+        response = run_worker(request, "claude-code", **approval("claude-code", "review"), runner=runner,
+                              environ=PARENT, files=files)
+        self.assertEqual(response["reason"], "the worker did not complete (exit 1); You've hit your session limit · "
+                                             "resets 2:30am")
 
     def test_out_of_scope_behavior_discards_the_output(self):
         request, files, verdicts = review_case()
