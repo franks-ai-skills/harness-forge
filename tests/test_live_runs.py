@@ -217,5 +217,28 @@ class RoutingSmokeTest(unittest.TestCase):
         self.assertTrue(all(result["result"] == "not-run" for result in summary["results"]))
 
 
+
+class InventoryGapTest(unittest.TestCase):
+    """Codex reports no inventory: its runs are best-effort, and the summary says what stays unknown."""
+
+    def test_an_unobservable_inventory_is_a_stated_gap_not_a_failure(self):
+        observed = {"reason": "Skill tool called", "inventory": "observed"}
+        hidden = {"reason": "read SKILL.md", "inventory": "not observable"}
+        for results, clean, gap in (([observed], True, False), ([observed, hidden], None, True)):
+            with self.subTest(clean=clean):
+                summary = {"status": "completed"}
+                LIVE.set_clean(summary, results)
+                self.assertEqual(summary["clean"], clean)
+                self.assertEqual("inventory_gap" in summary, gap)
+                self.assertEqual(LIVE.exit_code(summary), 0)
+        summary = {"status": "completed"}
+        LIVE.set_clean(summary, [hidden])
+        self.assertIn("cannot rule out", summary["inventory_gap"])
+        unclean = {"status": "completed"}
+        LIVE.set_clean(unclean, [{"reason": "unavailable: executable components stayed loaded: plugin x",
+                                  "inventory": "observed"}])
+        self.assertEqual((unclean["clean"], LIVE.exit_code(unclean)), (False, 1))
+        self.assertEqual(LIVE.exit_code({"status": "flows did not hold", "clean": True}), 1)
+
 if __name__ == "__main__":
     unittest.main()

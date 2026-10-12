@@ -106,6 +106,9 @@ def render_report(run: VerificationRun, results: list[PartResult]) -> str:
         for item in run.runtime_results:
             lines.append(f"| {item.part_id} | {item.case_id} | {item.harness} {item.harness_version} | {item.result} | "
                          f"{item.observed_activation or '-'} | {item.reason} |")
+        for harness in sorted({item.harness for item in run.runtime_results if item.inventory != "observed"}):
+            lines += ["", f"Inventory gap: {harness} does not report the skills, plugins and MCP servers it loaded, "
+                          "so a user-level one that stayed loaded cannot be ruled out; its results are best-effort."]
     else:
         lines.append("none run")
     lines += ["", "## Checked files", "", "```"]

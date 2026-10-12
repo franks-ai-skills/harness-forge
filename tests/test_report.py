@@ -42,6 +42,15 @@ class RenderTest(unittest.TestCase):
         self.assertIn("No observable activation signal.", rendered)
         self.assertNotIn("none run", rendered)
 
+    def test_an_unobservable_inventory_is_stated_under_the_runtime_tests(self):
+        helper = RuntimeAndInputsTest()
+        helper.scenario = self.scenario
+        self.scenario.run.runtime_results.append(helper.runtime(inventory="observed"))
+        self.assertNotIn("does not report", render_report(self.scenario.run, self.results))
+        self.scenario.run.runtime_results.append(helper.runtime(harness="codex", inventory="not observable"))
+        rendered = render_report(self.scenario.run, self.results)
+        self.assertIn("Inventory gap: codex does not report the skills, plugins and MCP servers it loaded", rendered)
+
 
 class WriteTest(unittest.TestCase):
     def test_exact_path_and_escapes(self):

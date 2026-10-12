@@ -367,9 +367,9 @@ def run_live_case(harness, case):
     out = ROOT / "evals/canaries/results/private" / f"{case}-{harness}-{stamp}"
     run = {"vertical": live_runs.vertical, "flows": live_runs.flows, "routing-smoke": live_runs.routing_smoke}[case]
     summary = run(harness, out)
-    print(json.dumps({key: summary.get(key) for key in ("case", "harness", "status", "clean", "parts")}
+    print(json.dumps({key: summary.get(key) for key in ("case", "harness", "status", "clean", "inventory_gap", "parts")}
                      | {"summary": str(out / "summary.json")}), flush=True)
-    return 0 if summary["status"] == "completed" and summary["clean"] else 1
+    return live_runs.exit_code(summary)
 
 
 def main():

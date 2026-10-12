@@ -30,7 +30,9 @@ this skill's folder; run it with the Forge environment's Python.
   isolation; the report always says `not-certified`.
 - **Runtime tests are reported separately.** Without them the report
   says `none run`; an unavailable test is listed with its reason and
-  never counts as a pass.
+  never counts as a pass. Codex reports no inventory of the skills,
+  plugins and MCP servers it loaded, so its runtime results are
+  best-effort: say so whenever the report states an inventory gap.
 
 ## Procedure
 

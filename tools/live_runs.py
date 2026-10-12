@@ -24,9 +24,10 @@ next to the summary, in the git-ignored private results directory.
 
 A run is clean only when every runtime or routing case observed the
 harness's inventory and no user-level skill, plugin or MCP server stayed
-loaded. Something loaded reports `clean: false`; an inventory the harness
-does not report, as Codex does not, reports `clean: null`. Either is for
-the user to decide, never a clean result.
+loaded. Something loaded reports `clean: false` and fails the run. An
+inventory the harness does not report, as Codex does not, reports
+`clean: null` with an `inventory_gap` saying what stays unknown: such a
+run is best-effort and passes, never a clean result.
 """
 
 from __future__ import annotations
@@ -128,6 +129,24 @@ def _clean(results: list[dict]) -> bool | None:
     if not results or any(result.get("inventory") != "observed" for result in results):
         return None
     return True
+
+
+INVENTORY_GAP = ("the harness does not report the skills, plugins and MCP servers it loaded, so this run cannot rule "
+                 "out a user-level one that stayed loaded; its results are best-effort")
+
+
+def set_clean(summary: dict, results: list[dict]) -> None:
+    """Record whether the run was clean, and the gap when the harness reported no inventory."""
+    summary["clean"] = _clean(results)
+    if summary["clean"] is None:
+        summary["inventory_gap"] = INVENTORY_GAP
+    else:
+        summary.pop("inventory_gap", None)
+
+
+def exit_code(summary: dict) -> int:
+    """0 for a completed run unless something stayed loaded; an unobservable inventory is a stated gap."""
+    return 0 if summary["status"] == "completed" and summary.get("clean") is not False else 1
 
 
 class _Session:
@@ -270,7 +289,7 @@ def vertical(harness: str, out: Path, *, forge: Forge | None = None,
         return session.finish("stopped: verification did not run")
     session.summary["parts"] = verified["parts"]
     session.summary["runtime"] = verified.get("runtime", [])
-    session.summary["clean"] = _clean(session.summary["runtime"])
+    set_clean(session.summary, session.summary["runtime"])
     # The vertical proves the workflow only when verification succeeded: verify exits 1 otherwise.
     return session.finish("completed" if session.verified(code, verified) else "not verified")
 
@@ -419,7 +438,7 @@ def flows(harness: str, out: Path, *, forge: Forge | None = None,
     runtime = [case for result in (verified, reviewed, extensive) if result for case in result.get("runtime", [])]
     session.summary["parts"] = (extensive or {}).get("parts")
     session.summary["runtime"] = runtime
-    session.summary["clean"] = _clean(runtime)
+    set_clean(session.summary, runtime)
     return session.finish("completed" if all(checks.values()) else "flows did not hold")
 
 
@@ -472,7 +491,7 @@ def routing_smoke(harness: str, out: Path, *, runner=run_command, environ=None) 
             summary["results"].append({"skill": skill, "case_id": case["id"], "mode": case["mode"], "prompt": prompt,
                                        "expected": expected, "result": outcome, "reason": reason,
                                        "observed_activation": activation, "inventory": inventory})
-    summary["clean"] = _clean(summary["results"])
+    set_clean(summary, summary["results"])
     failed = any(result["result"] in ("fail", "error") for result in summary["results"])
     summary["status"] = "completed with failures" if failed else "completed"
     _write_json(out / "summary.json", summary)
