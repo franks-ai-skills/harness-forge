@@ -288,6 +288,30 @@ class RuntimeTest(unittest.TestCase):
         self.assertEqual(from_fixture.result, "fail", from_fixture.reason)
         self.assertIsNone(from_fixture.observed_activation)
 
+    def test_a_complete_read_keeps_the_files_order_and_repeated_lines(self):
+        from harness_forge.runtime import _printed
+
+        markers = ["# Steps", "Pause for confirmation.", "## After", "Pause for confirmation."]
+        def printed(output):
+            return _printed({"aggregated_output": output}, markers)
+
+        self.assertTrue(printed("---\n# Steps\nPause for confirmation.\n\n## After\nPause for confirmation.\n"))
+        self.assertTrue(printed("     1\t# Steps\n     2\tPause for confirmation.\n     3\t## After\n"
+                                "     4\tPause for confirmation.\n"))
+        self.assertFalse(printed("# Steps\nPause for confirmation.\n## After\n"), "the last line was cut off")
+        self.assertFalse(printed("Pause for confirmation.\n## After\nPause for confirmation.\n# Steps\n"),
+                         "reordered")
+
+    def test_a_marker_quoted_in_another_commands_arguments_is_no_invocation(self):
+        marker = f"<command-name>/{NAME}</command-name>"
+        quoted = (f"<command-message>debug</command-message>\n<command-name>/debug</command-name>\n"
+                  f"<command-args>Why did this transcript say {marker}?</command-args>")
+        events = [json.loads(line) for line in claude_run(skill_call=None).splitlines()]
+        stream = "\n".join(json.dumps(event) for event in events[:1] + [
+            {"type": "user", "message": {"content": quoted}}] + events[1:]) + "\n"
+        result = self.run_cases("claude-code", stream)[0][0]
+        self.assertEqual(result.result, "fail", result.reason)
+
     def test_a_call_outside_the_list_fails_also_when_the_case_timed_out(self):
         result = self.run_cases("claude-code", claude_run(calls=("Bash",)),
                                 runner_options={"timed_out": True})[0][0]

@@ -203,7 +203,7 @@ def _observe_claude(stdout: str, name: str, baseline: set[str], workspace: Path 
             content = message.get("content") if isinstance(message, dict) else None
             prompt = [content] if isinstance(content, str) else [
                 block.get("text") for block in blocks if isinstance(block, dict) and block.get("type") == "text"]
-            if any(isinstance(text, str) and f"<command-name>/{name}</command-name>" in text for text in prompt):
+            if any(isinstance(text, str) and _invoked(text) == name for text in prompt):
                 observed["activation"] = observed["activation"] or f"/{name} was invoked"
         if event.get("type") == "result":
             observed["completed"] = event.get("is_error") is False and event.get("subtype") == "success"
@@ -277,9 +277,10 @@ def _skills_read(item: dict) -> list[tuple[str, str]]:
 
 
 def _printed(item: dict, markers: list[str]) -> bool:
-    """Whether the command printed every line of the candidate's SKILL.md (_markers)."""
-    lines = {line.rstrip() for line in _lines(str(item.get("aggregated_output", "")))}
-    return all(marker in lines for marker in markers)
+    """Whether the command printed the candidate's SKILL.md (_markers) whole: its non-empty lines in order,
+    repeated lines included, as one run of the output's non-empty lines."""
+    lines = [line.rstrip() for line in _lines(str(item.get("aggregated_output", ""))) if line.strip()]
+    return any(lines[start:start + len(markers)] == markers for start in range(len(lines) - len(markers) + 1))
 
 
 def _observe_codex(stdout: str, directory: str, markers: list[str] | None = None, *workspaces: Path) -> dict:
