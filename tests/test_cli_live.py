@@ -506,27 +506,24 @@ class LiveCommandsTest(unittest.TestCase):
         self.assertEqual(code, 2)
         self.assertIn("researched for another brief", stderr)
 
-    def test_another_parts_empty_revision_does_not_cover_a_built_part(self):
+    def test_another_parts_requirements_do_not_cover_a_built_part(self):
+        from harness_forge.models import AcceptedRevision
+        from harness_forge.research import make_brief, revision_digest, write_revision
         cli, arguments = self.build_ready(ResearchRunner([finding()]))
         record = load_decision(self.decision)
         record.record["parts"].append(part("B", "Never merge without review", outcome="outside-instead",
                                            recommended=None, chosen=None))
+        # A requirements file that holds only B's (empty) acceptance, as an edit could leave it.
+        briefs = {"B": make_brief(record, "deep", "B").digest}
+        only_b = AcceptedRevision(rule_ids=[], rules=[], brief_digests=briefs, digest=revision_digest(briefs, []))
+        revision = write_revision(self.root, "repro", only_b)
+        record.record["accepted_revision"] = {"digest": only_b.digest, "rule_ids": []}
         write_decision(self.root, record, slug="repro", date="2026-10-10")
-        proposed = cli.write("proposed-empty.json", {"requirements": []})
-        choices = cli.write("choices-empty.json", {})
-        for part_id in ("A", "B"):
-            code, _, stderr = cli("accept", "--decision", self.decision, "--part", part_id, "--proposed", proposed,
-                                  "--choices", choices, "--root", self.root, "--slug", "repro")
-            self.assertEqual(code, 0, stderr)
-        text = Path(self.decision).read_text(encoding="utf-8")
-        Path(self.decision).write_text(text.replace("goal: Write a reproduction checklist when asked",
-                                                    "goal: Write a security vulnerability report"), encoding="utf-8")
-        relay = cli.confirm(self.decision, "verify-1", "--revision", self.root / ".harness/research/repro.rules.yaml")
+        relay = cli.confirm(self.decision, "verify-1", "--revision", revision)
         option = arguments.index("--relay") + 1
         code, _, stderr = cli("verify", *arguments[:option], relay, *arguments[option + 1:])
         self.assertEqual(code, 2)
-        self.assertIn("part A", stderr)
-        self.assertIn("researched for another brief", stderr)
+        self.assertIn("part A has no accepted requirements", stderr)
 
     def conflict(self):
         """Part A chose a skill although its own-context answer rules skills out (the Claude Code trial's case)."""
@@ -1138,6 +1135,47 @@ class LiveCommandsTest(unittest.TestCase):
         self.assertIn("researched for another brief than part B's", stderr)
         code, _, stderr = build("A", "build-a2")
         self.assertEqual(code, 0, stderr)
+
+    def test_acceptance_needs_the_parts_deep_research_and_its_sources(self):
+        runner = ResearchRunner([finding()])
+        cli = Cli(runner, self.root)
+        requirement = {"id": "idea.repro.a.platform", "concept": "idea", "kind": "must", "severity": "error",
+                       "check": "judged", "statement": "The checklist names the platform",
+                       "applies_to": {"harnesses": ["claude-code"]}, "evidence": "Vendor",
+                       "sources": ["https://docs.example-vendor.com/repro/platforms"], "contested": False}
+        accept = ["accept", "--decision", self.decision, "--part", "A", "--root", self.root, "--slug", "repro",
+                  "--choices", cli.write("choices.json", {"idea.repro.a.platform": "accept"})]
+        code, _, stderr = cli(*accept, "--proposed", cli.write("proposed.json", {"requirements": [requirement]}))
+        self.assertEqual(code, 2)
+        self.assertIn("no deep research for part A", stderr)
+
+        _, workers, _ = cli("workers", "--harness", "claude-code")
+        evidence = cli.write("workers.json", workers)
+        relay = cli.confirm(self.decision, "intake-1")
+        code, _, stderr = cli("research", "--decision", self.decision, "--pass", "deep", "--part", "A", "--harness",
+                              "claude-code", "--evidence", evidence, "--relay", relay, "--root", self.root,
+                              "--slug", "repro", "--write")
+        self.assertEqual(code, 0, stderr)
+        unsourced = {**requirement, "sources": ["https://x.com/someone/status/1"]}
+        code, _, stderr = cli(*accept, "--proposed", cli.write("proposed-x.json", {"requirements": [unsourced]}))
+        self.assertEqual(code, 2)
+        self.assertIn("cites https://x.com/someone/status/1, which no kept finding of part A's deep research has",
+                      stderr)
+        code, _, stderr = cli(*accept, "--proposed", cli.write("proposed.json", {"requirements": [requirement]}))
+        self.assertEqual(code, 0, stderr)
+
+    def test_a_built_part_needs_accepted_requirements(self):
+        cli, arguments = self.build_ready(ResearchRunner([finding()]))
+        record = load_decision(self.decision)
+        record.record["accepted_revision"] = None
+        write_decision(self.root, record, slug="repro", date="2026-10-10")
+        relay = cli.confirm(self.decision, "verify-2")
+        option = arguments.index("--revision")
+        without = arguments[:option] + arguments[option + 2:]
+        without[without.index("--relay") + 1] = relay
+        code, _, stderr = cli("verify", *without)
+        self.assertEqual(code, 2)
+        self.assertIn("part A has no accepted requirements", stderr)
 
     def test_case_ids_must_be_unique(self):
         import yaml

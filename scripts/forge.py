@@ -637,7 +637,8 @@ def _stale_requirements(decision: Decision, revision, covered: list[str]) -> str
     requirements, possibly none, bound to that part's current deep brief.
     """
     if revision is None:
-        return None
+        return (f"part {covered[0]} has no accepted requirements; research it and accept its requirements, even none"
+                if covered else None)
     parts = {part["id"] for part in decision.record["parts"]}
     for part_id in sorted(set(revision.brief_digests) - parts):
         return f"the accepted requirements are for part {part_id}, which the decision does not have"
@@ -747,6 +748,27 @@ def _research(arguments: argparse.Namespace) -> int:
     return 0 if result["status"] == "completed" else 1
 
 
+def _provenance_problem(root: Path, slug: str, part_id: str, brief: str, accepted) -> str | None:
+    """Accepted requirements rest on the part's current deep research: its brief, and its kept findings' sources."""
+    path = root / ".harness" / "research" / f"{slug}.md"
+    try:
+        record = load_document(path, "research", root=root) if path.is_file() else None
+    except ValueError as error:
+        return str(error)
+    if record is None or not any(item["pass"] == "deep" and item["part_id"] == part_id and item["digest"] == brief
+                                 for item in record["briefs"]):
+        return (f"there is no deep research for part {part_id} under its current brief; run the deep pass before "
+                "accepting its requirements, even none")
+    sources = {finding["source"] for finding in record["findings"]
+               if finding["pass"] == "deep" and finding["part_id"] == part_id}
+    for entry in accepted.rules:
+        for source in entry["rule"]["sources"]:
+            if source not in sources:
+                return (f"{entry['rule']['id']} cites {source}, which no kept finding of part {part_id}'s deep "
+                        "research has")
+    return None
+
+
 def _accept(arguments: argparse.Namespace) -> int:
     """Write the accepted revision from the user's choices and record it in the decision."""
     root = Path(arguments.root).resolve()
@@ -765,8 +787,11 @@ def _accept(arguments: argparse.Namespace) -> int:
     choices = _read_json(arguments.choices)
     try:
         rules = [Rule.from_dict(rule) for rule in proposed]
-        accepted = accept_requirements(rules, choices, make_brief(decision, "deep", arguments.part).digest,
-                                       part_id=arguments.part)
+        brief = make_brief(decision, "deep", arguments.part).digest
+        accepted = accept_requirements(rules, choices, brief, part_id=arguments.part)
+        problem = _provenance_problem(root, arguments.slug, arguments.part, brief, accepted)
+        if problem:
+            raise _InvalidInput(problem)
         revision = merge_revision(previous, accepted)
         path = write_revision(root, arguments.slug, revision)
     except (ValueError, KeyError, TypeError) as error:
