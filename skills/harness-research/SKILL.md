@@ -106,7 +106,9 @@ as one from research recorded before support verdicts named their
 finding, stops every command until it is refreshed: with the user's
 agreement, run `scripts/forge.py overrides --root <repository> --remove
 <rule id>` (the pinned rule applies again), research again, and adopt
-the drift anew from the new finding.
+the drift anew from the new finding. Research lists in `dangling_drift`
+the drift whose finding it replaced; recording that rule's drift from
+the new finding supersedes the old entry.
 
 Record the answer with `scripts/forge.py drift-decision --decision
 <record> --root <repository> --rule <rule id> --finding <id> --choice

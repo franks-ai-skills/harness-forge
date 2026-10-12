@@ -41,7 +41,7 @@ from harness_forge.research import (  # noqa: E402
     _BLOCKING_DRIFT, _catalog, accept_requirements, drift_category, drift_digest, drift_state, finding_problem,
     load_research, load_revision, source_rejection,
     make_brief, merge_revision,
-    UnassignedRevision, record_drift, supported_findings, write_research, write_revision,
+    UnassignedRevision, dangling_drift, record_drift, supported_findings, write_research, write_revision,
 )
 from harness_forge.runtime import load_cases  # noqa: E402
 from harness_forge.workflow import research_pass, verify_live  # noqa: E402
@@ -759,7 +759,10 @@ def _research(arguments: argparse.Namespace) -> int:
                   "support": [s for s in existing["support"] if s["finding_id"] not in replaced] + result["support"]}
         body = "Findings grouped by pass and part are in the frontmatter; dropped findings are not kept.\n"
         written = str(write_research(root, record, body))
+    dangling = dangling_drift(record) if written else []
     emit({"command": "research", "status": result["status"], "reason": result["reason"],
+          # Drift whose finding this pass replaced: record it again from a current finding, which supersedes it.
+          "dangling_drift": dangling,
           "brief_digest": result["brief"]["digest"],
           "kept": [{key: f[key] for key in ("id", "claim", "source", "quote")} for f in result["kept"]],
           "dropped": result["dropped"], "worker_evidence": result["worker_evidence"], "written": written})
@@ -921,6 +924,10 @@ def _drift_entry(root: Path, rule_id: str, finding_id: str) -> dict:
     matching = [entry for entry in _drift(root) if (entry["rule_id"], entry["finding_id"]) == (rule_id, finding_id)]
     if len(matching) != 1:
         raise _InvalidInput(f"no single recorded drift of {rule_id} from finding {finding_id}; record it with drift")
+    if matching[0]["finding"] is None:
+        raise _InvalidInput(f"finding {finding_id} is no longer in research {matching[0]['slug']}, which replaced it; "
+                            f"record the drift of {rule_id} again from a current finding with forge.py drift, which "
+                            "supersedes this entry")
     return matching[0]
 
 
@@ -950,7 +957,10 @@ def _record_drift(arguments: argparse.Namespace) -> int:
         raise _InvalidInput(str(error)) from error
     entry = next(item for item in updated["drift"] if (item["rule_id"], item["finding_id"]) == (arguments.rule,
                                                                                                 arguments.finding))
-    emit({"command": "drift", "entry": entry, "blocking": entry["category"] in _BLOCKING_DRIFT})
+    superseded = [item["finding_id"] for item in record["drift"] if item not in updated["drift"]
+                  and item["finding_id"] != arguments.finding]
+    emit({"command": "drift", "entry": entry, "blocking": entry["category"] in _BLOCKING_DRIFT,
+          "superseded": superseded})
     return 0
 
 

@@ -312,7 +312,8 @@ def record_drift(record: dict, *, finding_id: str, rule_id: str, category: str, 
     """The research record with one more drift entry: a kept, supported finding that contradicts a pinned rule.
 
     A security rule's drift is always security drift. Recording the same
-    rule and finding again replaces the entry.
+    rule and finding again replaces the entry, as it does an entry of the
+    rule whose finding research has since replaced (dangling_drift).
     """
     finding = next((item for item in record["findings"] if item["id"] == finding_id), None)
     if finding is None:
@@ -326,9 +327,19 @@ def record_drift(record: dict, *, finding_id: str, rule_id: str, category: str, 
     entry = {"rule_id": rule_id, "finding_id": finding_id, "summary": summary,
              "category": drift_category({"rule_id": rule_id, "category": category})}
     updated = copy.deepcopy(record)
+    # Drift of the same rule whose finding research has since replaced is superseded by this entry.
+    present = {item["id"] for item in record["findings"]}
     updated["drift"] = [item for item in updated["drift"]
-                        if (item["rule_id"], item["finding_id"]) != (rule_id, finding_id)] + [entry]
+                        if (item["rule_id"], item["finding_id"]) != (rule_id, finding_id)
+                        and not (item["rule_id"] == rule_id and item["finding_id"] not in present)] + [entry]
     return updated
+
+
+def dangling_drift(record: dict) -> list[dict]:
+    """Drift entries whose finding is no longer in the record, as after research replaced it."""
+    present = {item["id"] for item in record["findings"]}
+    return [{"rule_id": item["rule_id"], "finding_id": item["finding_id"]} for item in record["drift"]
+            if item["finding_id"] not in present]
 
 
 def drift_digest(drift: dict) -> str:

@@ -1113,6 +1113,28 @@ class LiveCommandsTest(unittest.TestCase):
         self.assertEqual([f["id"] for f in record["findings"]], ["F2"], "the dropped survey finding was F1")
         self.assertEqual(self.record_drift_for("F2")["entry"]["finding_id"], "F2")
 
+    def test_drift_whose_finding_research_replaced_is_superseded_explicitly(self):
+        runner = ResearchRunner([finding()])
+        cli = Cli(runner, self.root)
+        _, workers, _ = cli("workers", "--harness", "claude-code")
+        evidence = cli.write("workers.json", workers)
+        research = ["research", "--decision", self.decision, "--harness", "claude-code", "--evidence", evidence,
+                    "--root", self.root, "--slug", "repro", "--write", "--pass", "deep", "--part", "A"]
+        self.assertEqual(cli(*research, "--relay", cli.confirm(self.decision, "intake-1"))[0], 0)
+        self.record_drift_for("F1")
+        # Research again: F1 is replaced by F2, and the F1 drift is left without its finding.
+        code, output, stderr = cli(*research, "--relay", cli.confirm(self.decision, "intake-2"))
+        self.assertEqual(code, 0, stderr)
+        self.assertEqual(output["dangling_drift"], [{"rule_id": "skills.description.length", "finding_id": "F1"}])
+        code, _, stderr = cli("drift-decision", "--decision", self.decision, "--root", self.root, "--rule",
+                              "skills.description.length", "--finding", "F1", "--choice", "keep", "--reason", "x")
+        self.assertEqual(code, 2)
+        self.assertIn("finding F1 is no longer in research repro", stderr)
+        output = self.record_drift_for("F2")
+        self.assertEqual(output["superseded"], ["F1"])
+        record = load_document(self.root / ".harness/research/repro.md", "research")
+        self.assertEqual([entry["finding_id"] for entry in record["drift"]], ["F2"])
+
     def record_drift_for(self, finding_id):
         cli = Cli(FakeRunner(), self.root)
         code, output, stderr = cli("drift", "--root", self.root, "--slug", "repro", "--finding", finding_id, "--rule",
