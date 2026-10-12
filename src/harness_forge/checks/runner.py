@@ -71,8 +71,8 @@ def evaluate_applicability(rule: Rule, facts: dict) -> tuple[bool, str]:
     for harness, ranges in rule.applies_to.get("versions", {}).items():
         if harness not in harnesses:
             continue
-        if harness not in versions:
-            # A range decides nothing without the version: unresolved, never silently applicable.
+        if harness not in versions or not re.search(r"\d", str(versions[harness])):
+            # A range decides nothing without a version, "unknown" included: unresolved, never silently applicable.
             raise UnknownFact(f"harness_versions.{harness}")
         if not _version_matches(versions[harness], ranges):
             harnesses.discard(harness)

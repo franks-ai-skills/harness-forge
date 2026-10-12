@@ -201,6 +201,8 @@ class VersionApplicabilityTest(unittest.TestCase):
         applies, reason = evaluate_applicability(self.rule(), {**facts, "harness_versions": {"claude-code": "2.1.296"}})
         self.assertEqual((applies, reason), (False, "no target harness version is in the rule's range"))
         self.assertTrue(evaluate_applicability(self.rule(), {**facts, "harness_versions": {"claude-code": "999.1"}})[0])
+        with self.assertRaisesRegex(UnknownFact, "harness_versions.claude-code"):
+            evaluate_applicability(self.rule(), {**facts, "harness_versions": {"claude-code": "unknown"}})
 
 
 if __name__ == "__main__":
