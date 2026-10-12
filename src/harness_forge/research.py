@@ -126,7 +126,8 @@ def source_rejection(url: str) -> str | None:
         return "the X platform and its mirrors are not sources"
     if any(matches(domain) for domain in policy["hosts"]):
         return f"{host} is a rejected domain"
-    if matches("github.com"):
+    # Every GitHub host that serves a repository's content names it by its first two path segments.
+    if matches("github.com") or host in ("raw.githubusercontent.com", "codeload.github.com"):
         repository = "/".join(parts.path.strip("/").split("/")[:2]).lower()
         if repository in policy["github"]:
             return f"GitHub {repository} is a rejected source"

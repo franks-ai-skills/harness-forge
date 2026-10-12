@@ -68,6 +68,14 @@ class FetchTest(unittest.TestCase):
             self.fetch("https://docs.example.com/a", web)
         self.assertEqual(len(web.requests), 1)
 
+    def test_a_redirect_to_a_rejected_source_is_refused(self):
+        web = FakeWeb({"docs.example.com": ["93.184.215.14"]},
+                      {("docs.example.com", "/a"): page(status=302, location="https://x.com/someone/status/1")})
+        with self.assertRaisesRegex(FetchError, "the X platform"):
+            fetch_text("https://docs.example.com/a", resolve=web.resolve, get=web.get,
+                       reject=lambda url: "the X platform and its mirrors are not sources" if "x.com" in url else None)
+        self.assertEqual(len(web.requests), 1)
+
     def test_redirects_are_followed_a_few_times_only(self):
         pages = {("docs.example.com", f"/{n}"): page(status=301, location=f"/{n + 1}") for n in range(10)}
         web = FakeWeb({"docs.example.com": ["93.184.215.14"]}, pages)

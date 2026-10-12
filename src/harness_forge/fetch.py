@@ -114,9 +114,17 @@ def page_text(html: str) -> str:
 
 
 def fetch_text(url: str, *, resolve: Callable[[str], list[str]] = resolve, get: Callable[..., Response] = get,
-               timeout: int = TIMEOUT, limit: int = MAX_BYTES) -> str:
-    """The text of a public HTTPS page, or FetchError."""
+               timeout: int = TIMEOUT, limit: int = MAX_BYTES,
+               reject: Callable[[str], str | None] | None = None) -> str:
+    """The text of a public HTTPS page, or FetchError.
+
+    ``reject`` gives the source policy's reason to refuse a URL; it is asked
+    for every hop, so a redirect cannot reach a rejected source.
+    """
     for _ in range(MAX_REDIRECTS + 1):
+        refused = reject(url) if reject else None
+        if refused:
+            raise FetchError(f"{url}: {refused}")
         parts = urlsplit(url)
         if parts.scheme != "https" or not parts.hostname or parts.username or parts.password:
             raise FetchError(f"only public https URLs without credentials are fetched: {url}")

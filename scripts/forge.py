@@ -17,6 +17,7 @@ if _SOURCE not in sys.path:
 from dataclasses import asdict  # noqa: E402
 
 import datetime  # noqa: E402
+import functools  # noqa: E402
 import os  # noqa: E402
 import re  # noqa: E402
 
@@ -38,7 +39,7 @@ from harness_forge.overrides import (  # noqa: E402
 from harness_forge.report import render_report, write_report  # noqa: E402
 from harness_forge.research import (  # noqa: E402
     _BLOCKING_DRIFT, _catalog, accept_requirements, drift_category, drift_digest, drift_state, finding_problem,
-    load_revision,
+    load_revision, source_rejection,
     make_brief,
     record_drift, write_research, write_revision,
 )
@@ -62,7 +63,7 @@ HARNESSES = ("claude-code", "codex")
 ROLES = ("research", "source-support", "review")
 # Replaced by tests; the live commands launch real workers and fetch real pages.
 RUNNER = run_command
-FETCH = fetch_text
+FETCH = functools.partial(fetch_text, reject=source_rejection)  # every redirect hop meets the source policy
 ENVIRON = None
 # (search, publisher) for KB issues; None uses the GitHub CLI with the user's existing login.
 ISSUES = None

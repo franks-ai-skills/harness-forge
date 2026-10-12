@@ -79,6 +79,11 @@ class SourceFilterTest(unittest.TestCase):
                 self.assertIsNotNone(source_rejection(url))
                 self.assertIsNone(validate_finding(finding(source=url), PAGE, verdict()))
         self.assertIsNone(source_rejection("https://github.com/openai/codex/blob/main/README.md"))
+        for url in ("https://raw.githubusercontent.com/deusyu/harness-engineering/main/README.md",
+                    "https://codeload.github.com/deusyu/harness-engineering/zip/refs/heads/main"):
+            with self.subTest(url=url):
+                self.assertIn("deusyu/harness-engineering", source_rejection(url) or "")
+        self.assertIsNone(source_rejection("https://raw.githubusercontent.com/openai/codex/main/README.md"))
 
     def test_rejected_domains_come_from_the_pinned_source_policy(self):
         domains = rejected_domains()
