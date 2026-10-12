@@ -477,6 +477,11 @@ def routing_smoke(harness: str, out: Path, *, runner=run_command, environ=None) 
     baseline, user, behavior = _baseline(harness, runner, environ)
     summary["baseline"] = {"skills": sorted(baseline), "user_skills": sorted(user) if user is not None else None,
                            "observed": behavior}
+    if user is None:
+        # Not Codex's accepted inventory gap: without the origins no Claude case can run, so the smoke stops.
+        summary["status"] = "stopped: Forge could not tell bundled skills from the user's"
+        _write_json(out / "summary.json", summary)
+        return summary
     files, directories = {}, []
     for skill in SKILLS:
         source = ROOT / "skills" / skill

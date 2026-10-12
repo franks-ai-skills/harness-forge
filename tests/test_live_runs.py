@@ -218,6 +218,21 @@ class RoutingSmokeTest(unittest.TestCase):
         self.assertFalse(summary["clean"])
         self.assertTrue(all(result["result"] == "not-run" for result in summary["results"]))
 
+    def test_unknown_skill_origins_stop_the_smoke_run(self):
+        class FailedProbe(RoutingRunner):
+            def __call__(self, command, *, cwd, env, stdin, timeout):
+                answer = super().__call__(command, cwd=cwd, env=env, stdin=stdin, timeout=timeout)
+                if stdin == BASELINE_PROMPT and "disableBundledSkills" in " ".join(command):
+                    return Completed(1, "", "error", False)
+                return answer
+
+        runner = FailedProbe()
+        summary = self.run_smoke(runner)
+        self.assertEqual(summary["status"], "stopped: Forge could not tell bundled skills from the user's")
+        self.assertEqual((summary["results"], LIVE.exit_code(summary)), ([], 1))
+        self.assertNotIn("inventory_gap", summary)
+        self.assertEqual(len(runner.worker_calls), 2, "only the two baseline launches")
+
     def test_a_personal_skill_named_like_a_forge_skill_shadows_its_cases(self):
         runner = RoutingRunner(user_skills=["harness-intake"])
         summary = self.run_smoke(runner)
