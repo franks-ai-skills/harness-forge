@@ -871,6 +871,31 @@ class LiveCommandsTest(unittest.TestCase):
         self.assertEqual(code, 0, stderr)
         self.assertEqual((output["changed"], output["options"][0]["parts"]), (["A"], ["A"]))
 
+    def test_a_review_carries_a_kept_parts_runtime_results(self):
+        """Kept results keep their runtime evidence, inventory included, in the choice and the report."""
+        cli, arguments = self.build_ready(ResearchRunner([finding()]))
+        code, first, stderr = cli("verify", *arguments)
+        self.assertEqual(code, 0, stderr)
+        relay = arguments[arguments.index("--relay") + 1]
+        code, output, stderr = cli("scope", "--decision", self.decision, "--root", self.root, "--revision",
+                                   self.root / ".harness/research/repro.rules.yaml", "--slug", "repro", "--fixed", "",
+                                   "--evidence", self.root / ".scratch/workers.json", "--relay", relay,
+                                   "--cases", arguments[arguments.index("--cases") + 1])
+        self.assertEqual(code, 0, stderr)
+        review = output["options"][0]
+        self.assertEqual(review["parts"], [])
+        [kept] = review["kept"]
+        self.assertEqual([(item["case_id"], item["result"], item["inventory"]) for item in kept["runtime"]],
+                         [(item["case_id"], item["result"], item["inventory"]) for item in first["runtime"]])
+        choice = cli.write("scope-keep.json", {"choice": "review", "displayed_digest": review["digest"],
+                                               "run_id": "verify-1"})
+        code, output, stderr = cli("verify", *arguments, "--scope", "review", "--fixed", "", "--scope-relay", choice)
+        self.assertEqual(code, 0, stderr)
+        self.assertEqual([item["case_id"] for item in output["runtime"]], [item["case_id"] for item in first["runtime"]])
+        report = (self.root / ".harness/reports/repro.md").read_text(encoding="utf-8")
+        runtime = report[report.index("## Runtime tests"):report.index("## Checked files")]
+        self.assertEqual(runtime.count("(kept from run verify-1) |"), len(first["runtime"]))
+
     def scope_parts(self, cli, arguments, fixed=""):
         code, output, stderr = cli("scope", "--decision", self.decision, "--root", self.root, "--revision",
                                    self.root / ".harness/research/repro.rules.yaml", "--slug", "repro", "--fixed", fixed,

@@ -50,7 +50,7 @@ from harness_forge.verify import (  # noqa: E402
     NEEDS_CONFIRMATION, affecting_rules, bound_inputs, exclusion_token, finish_run, open_blocking_drift, part_kind,
     prepare_run, selection_citations, selection_failures,
 )
-from harness_forge.models import ReviewResponse  # noqa: E402
+from harness_forge.models import ReviewResponse, RuntimeResult  # noqa: E402
 from harness_forge.selection import (  # noqa: E402
     CONFLICT_CHOICES, answers_problem, conflict_kept, goal_conflict, next_question, recommend, selection_state,
 )
@@ -539,14 +539,16 @@ def _review_plan(earlier, decision: Decision, current: dict, fixed: set[str], co
                  if settled(results[part_id])}
     judged = review_scope(decision, fixed, changed) | (every - preserved)
     kept = {part_id: results[part_id] for part_id in sorted(every - judged)}
-    # The user's choice binds the parts, the kept results, the earlier inputs they rest on and the inputs now:
-    # anything that changes after the choice makes it another plan.
+    kept_runtime = [asdict(result) for result in run.runtime_results if result.part_id in kept]
+    # The user's choice binds the parts, the kept results with their runtime evidence, the earlier inputs they
+    # rest on and the inputs now: anything that changes after the choice makes it another plan.
     digest = canonical_digest({"earlier_run": run.run_id, "judged": sorted(judged),
                                "kept": {part_id: canonical_digest(result) for part_id, result in kept.items()},
+                               "kept_runtime": kept_runtime,
                                "earlier_inputs": run.frozen_inputs, "current_inputs": current,
                                "contract": contract_digest, "confirmed": sorted(confirmed_parts)})
     return {"earlier_run": run.run_id, "changed": sorted(changed), "judged": sorted(judged), "kept": kept,
-            "digest": digest}
+            "kept_runtime": kept_runtime, "digest": digest}
 
 
 def _current(decision: Decision, files, symlinks, rules, revision, overrides, evidence, cases) -> dict:
@@ -594,7 +596,11 @@ def _scope(arguments: argparse.Namespace) -> int:
                                   # Every kept judgment, as the user must see what the choice keeps.
                                   "judgments": [{key: item.get(key) for key in ("rule_id", "result", "reason",
                                                                                  "citation")}
-                                                for item in result["rule_results"] if item["check"] == "judged"]}
+                                                for item in result["rule_results"] if item["check"] == "judged"],
+                                  # Its runtime evidence, which an inventory gap qualifies.
+                                  "runtime": [{key: item[key] for key in ("case_id", "harness", "result", "reason",
+                                                                          "inventory")}
+                                              for item in plan["kept_runtime"] if item["part_id"] == part_id]}
                                  for part_id, result in plan["kept"].items()],
                         "digest": plan["digest"]})
     options.append({"label": "Extensive review (rarely needed)", "parts": every,
@@ -1082,7 +1088,7 @@ def _verify(arguments: argparse.Namespace) -> int:
     every = {part["id"] for part in decision.record["parts"]}
     earlier = _earlier(root, arguments.slug, required=arguments.scope == "review")
     fixed = _fixed(arguments, decision)
-    scope, kept = None, {}
+    scope, kept, kept_runtime = None, {}, []
     if arguments.scope == "review":
         if earlier is None:
             raise _InvalidInput("a Review compares with an earlier run, and there is no earlier report "
@@ -1106,6 +1112,7 @@ def _verify(arguments: argparse.Namespace) -> int:
                                 "options shown; run scope again and ask")
         scope = set(plan["judged"])
         kept = {part_id: {"run_id": plan["earlier_run"], "result": result} for part_id, result in plan["kept"].items()}
+        kept_runtime = plan["kept_runtime"]
         label = f"Review (recommended): judged {', '.join(sorted(scope)) or 'no part'}"
         if kept:
             label += f"; kept from run {earlier[0].run_id}: {', '.join(sorted(kept))}"
@@ -1125,6 +1132,10 @@ def _verify(arguments: argparse.Namespace) -> int:
                                    confirmed_exclusions=exclusions, drift=unresolved, selection=failures)
     except ValueError as error:
         raise _InvalidInput(str(error)) from error
+    # A kept part's runtime results stand as its runtime evidence, attributed to the run that produced them.
+    run.runtime_results += [RuntimeResult(**{**item, "reason": item["reason"] if "(kept from run " in item["reason"]
+                                             else f"{item['reason']} (kept from run {item['run_id']})"})
+                            for item in kept_runtime]
     written = None
     try:
         rendered = render_report(run, results)
