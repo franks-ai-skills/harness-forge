@@ -84,6 +84,23 @@ class ResearchPassTest(unittest.TestCase):
         self.assertEqual(result["kept"], [])
         self.assertEqual(result["support"][0]["verdict"], "missing")
 
+    def test_research_launches_nothing_for_an_unconfirmed_part(self):
+        from harness_forge.contracts import confirm_contract, render_contract
+        from tests.builders import part
+        record = skill_decision(part("B", "Summarize the checklist", slug="checklist-summary"), status="decided")
+        record.record["accepted_revision"] = None
+        runner = ResearchRunner([finding()])
+        planned = [preflight("claude-code", role, runner=runner, environ=PARENT)["configuration"] for role in ROLES]
+        contract = render_contract(record, None, [], worker_evidence=planned)
+        relay = {"choice": "confirm", "displayed_digest": contract.digest, "part_ids": ["A"], "run_id": "intake-1"}
+        confirmation = confirm_contract(contract, relay, run_id="intake-1")
+        for pass_name, part_id in (("deep", "B"), ("survey", None)):
+            with self.subTest(pass_name=pass_name), self.assertRaisesRegex(ValueError, "not confirmed"):
+                research_pass(record, pass_name, part_id, "claude-code", contract=contract, confirmation=confirmation,
+                              worker_evidence=planned, run_id="intake-1", runner=runner, environ=PARENT,
+                              fetch=fetch_page)
+        self.assertEqual(runner.worker_calls, [])
+
     def run_pass(self, findings, support="supported", existing=(), fetch=fetch_page):
         runner = ResearchRunner(findings, support)
         planned = [preflight("claude-code", role, runner=runner, environ=PARENT)["configuration"] for role in ROLES]

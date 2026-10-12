@@ -43,6 +43,12 @@ def research_pass(
     """
     environ = os.environ if environ is None else environ
     brief = make_brief(decision, pass_name, part_id)
+    # The brief may hold only parts the user confirmed in this session; nothing launches otherwise.
+    covered = set(confirmation.part_ids) if confirmation is not None else set()
+    needed = {part_id} if part_id is not None else {part["id"] for part in decision.record["parts"]}
+    if needed - covered:
+        raise ValueError(f"part {', '.join(sorted(needed - covered))} is not confirmed in this session; "
+                         "confirm it before researching it")
     approval = {"contract": contract, "confirmation": confirmation, "worker_evidence": worker_evidence,
                 "runner": runner, "environ": environ, "login_answer": login_answer}
     request = research_request(brief, run_id, f"{pass_name}-{(part_id or 'idea').lower()}")
