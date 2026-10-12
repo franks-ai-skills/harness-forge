@@ -41,7 +41,7 @@ from harness_forge.research import (  # noqa: E402
     _BLOCKING_DRIFT, _catalog, accept_requirements, drift_category, drift_digest, drift_state, finding_problem,
     load_research, load_revision, source_rejection,
     make_brief, merge_revision,
-    record_drift, supported_findings, write_research, write_revision,
+    UnassignedRevision, record_drift, supported_findings, write_research, write_revision,
 )
 from harness_forge.runtime import load_cases  # noqa: E402
 from harness_forge.workflow import research_pass, verify_live  # noqa: E402
@@ -778,14 +778,18 @@ def _accept(arguments: argparse.Namespace) -> int:
     root = Path(arguments.root).resolve()
     decision, _ = _decision_and_revision(arguments, root, matching=False)
     recorded = (decision.record.get("accepted_revision") or {}).get("digest")
-    previous = None
+    previous, unassigned = None, []
     if recorded:
         # Other parts' accepted requirements stay; this part's are replaced.
         try:
             previous = load_revision(safe_path(root, f".harness/research/{arguments.slug}.rules.yaml"), root=root)
+            digest = previous.digest
+        except UnassignedRevision as error:
+            # An older revision without a single part: this acceptance replaces it, dropping what it held.
+            digest, unassigned = error.digest, error.parts
         except (OSError, ValueError) as error:
             raise _InvalidInput(f"the recorded requirements cannot be read: {error}") from error
-        if previous.digest != recorded:
+        if digest != recorded:
             raise _InvalidInput("the requirements file is not the one the decision records; accept from that file")
     proposed = _read_json(arguments.proposed).get("requirements", [])
     choices = _read_json(arguments.choices)
@@ -797,7 +801,8 @@ def _accept(arguments: argparse.Namespace) -> int:
         if problem:
             raise _InvalidInput(problem)
         parts = {part["id"] for part in decision.record["parts"]}
-        dropped = sorted(set(previous.brief_digests) - parts) if previous else []
+        dropped = sorted(set(previous.brief_digests) - parts) if previous else [p for p in unassigned
+                                                                                 if p != arguments.part]
         revision = merge_revision(previous, accepted, parts)
         path = write_revision(root, arguments.slug, revision)
     except (ValueError, KeyError, TypeError) as error:

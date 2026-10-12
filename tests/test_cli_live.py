@@ -1212,6 +1212,36 @@ class LiveCommandsTest(unittest.TestCase):
         self.assertEqual(code, 2)
         self.assertIn("research support entries use an id more than once: F1", stderr)
 
+    def test_an_older_revision_without_a_part_is_replaced_by_the_next_acceptance(self):
+        import yaml
+
+        from harness_forge.documents import canonical_digest
+        cli = Cli(ResearchRunner([finding()]), self.root)
+        _, workers, _ = cli("workers", "--harness", "claude-code")
+        evidence = cli.write("workers.json", workers)
+        code, _, stderr = cli("research", "--decision", self.decision, "--pass", "deep", "--part", "A", "--harness",
+                              "claude-code", "--evidence", evidence, "--relay", cli.confirm(self.decision, "intake-1"),
+                              "--root", self.root, "--slug", "repro", "--write")
+        self.assertEqual(code, 0, stderr)
+        legacy = {"brief_digest": "0" * 64, "rules": []}
+        legacy["digest"] = canonical_digest(legacy)
+        revision = self.root / ".harness/research/repro.rules.yaml"
+        revision.write_text(yaml.safe_dump(legacy), encoding="utf-8")
+        record = load_decision(self.decision)
+        record.record["accepted_revision"] = {"digest": legacy["digest"], "rule_ids": []}
+        write_decision(self.root, record, slug="repro", date="2026-10-10")
+        code, _, stderr = cli("prepare-contract", "--decision", self.decision, "--revision", revision)
+        self.assertEqual(code, 2)
+        self.assertIn("accept its part's requirements again", stderr)
+        code, output, stderr = cli("accept", "--decision", self.decision, "--part", "A", "--root", self.root,
+                                   "--slug", "repro", "--proposed", cli.write("none.json", {"requirements": []}),
+                                   "--choices", cli.write("choices.json", {}))
+        self.assertEqual(code, 0, stderr)
+        self.assertEqual(sorted(load_revision(revision).brief_digests), ["A"])
+        self.assertEqual(load_decision(self.decision).record["accepted_revision"]["digest"], output["digest"])
+        relay = cli.confirm(self.decision, "after", "--revision", revision)
+        self.assertTrue(Path(relay).is_file())
+
     def test_a_built_part_needs_accepted_requirements(self):
         cli, arguments = self.build_ready(ResearchRunner([finding()]))
         record = load_decision(self.decision)
