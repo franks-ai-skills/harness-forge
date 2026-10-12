@@ -271,13 +271,20 @@ def accept_requirements(proposed: list[Rule], choices: dict, brief_digest: str,
                             brief_digests=briefs, digest=revision_digest(briefs, accepted))
 
 
-def merge_revision(previous: AcceptedRevision | None, accepted: AcceptedRevision) -> AcceptedRevision:
-    """The repository's revision with one part's accepted requirements replaced by ``accepted``'s."""
+def merge_revision(previous: AcceptedRevision | None, accepted: AcceptedRevision,
+                   parts: set[str] | None = None) -> AcceptedRevision:
+    """The repository's revision with one part's accepted requirements replaced by ``accepted``'s.
+
+    With ``parts``, the decision's current parts, requirements of parts it no
+    longer has (combined or split away) are dropped.
+    """
     if previous is None:
         return accepted
     (part_id,) = accepted.brief_digests
-    rules = [entry for entry in previous.rules if entry["part_id"] != part_id] + list(accepted.rules)
-    briefs = {**{key: value for key, value in previous.brief_digests.items() if key != part_id},
+    def kept(key: str) -> bool:
+        return key != part_id and (parts is None or key in parts)
+    rules = [entry for entry in previous.rules if kept(entry["part_id"])] + list(accepted.rules)
+    briefs = {**{key: value for key, value in previous.brief_digests.items() if kept(key)},
               part_id: accepted.brief_digests[part_id]}
     return AcceptedRevision(rule_ids=[entry["rule"]["id"] for entry in rules], rules=rules, brief_digests=briefs,
                             digest=revision_digest(briefs, rules))

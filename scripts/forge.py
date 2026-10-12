@@ -641,7 +641,8 @@ def _stale_requirements(decision: Decision, revision, covered: list[str]) -> str
                 if covered else None)
     parts = {part["id"] for part in decision.record["parts"]}
     for part_id in sorted(set(revision.brief_digests) - parts):
-        return f"the accepted requirements are for part {part_id}, which the decision does not have"
+        return (f"the accepted requirements are for part {part_id}, which the decision does not have; accept the "
+                "requirements of any part again to drop them")
     for part_id in sorted(covered):
         brief = make_brief(decision, "deep", part_id)
         if part_id not in revision.brief_digests:
@@ -796,13 +797,16 @@ def _accept(arguments: argparse.Namespace) -> int:
         problem = _provenance_problem(root, arguments.slug, arguments.part, brief, accepted)
         if problem:
             raise _InvalidInput(problem)
-        revision = merge_revision(previous, accepted)
+        parts = {part["id"] for part in decision.record["parts"]}
+        dropped = sorted(set(previous.brief_digests) - parts) if previous else []
+        revision = merge_revision(previous, accepted, parts)
         path = write_revision(root, arguments.slug, revision)
     except (ValueError, KeyError, TypeError) as error:
         raise _InvalidInput(str(error)) from error
     decision.record["accepted_revision"] = {"digest": revision.digest, "rule_ids": revision.rule_ids}
     _save_decision(arguments, decision)
-    emit({"command": "accept", "digest": revision.digest, "rule_ids": revision.rule_ids, "written": str(path)})
+    emit({"command": "accept", "digest": revision.digest, "rule_ids": revision.rule_ids, "dropped_parts": dropped,
+          "written": str(path)})
     return 0
 
 

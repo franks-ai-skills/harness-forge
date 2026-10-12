@@ -1118,12 +1118,12 @@ class LiveCommandsTest(unittest.TestCase):
         self.assertEqual(accepted.rule_ids, ["idea.repro.a.platform", "idea.repro.b.platform"])
         self.assertEqual(sorted(accepted.brief_digests), ["A", "B"])
 
-        def build(part_id, run_id):
+        def build(part_id, run_id, *extra):
             relay = cli.confirm(self.decision, run_id, "--revision", revision)
             return cli("build", "--decision", self.decision, "--part", part_id, "--revision", revision,
                        "--evidence", evidence, "--relay", relay, "--root", self.root,
                        "--description", cli.write("description.txt", DESCRIPTION),
-                       "--procedure", cli.write("procedure.md", PROCEDURE))
+                       "--procedure", cli.write("procedure.md", PROCEDURE), *extra)
 
         self.assertEqual(build("A", "build-a")[0], 0)
         self.assertEqual(build("B", "build-b")[0], 0)
@@ -1134,6 +1134,23 @@ class LiveCommandsTest(unittest.TestCase):
         self.assertEqual(code, 2)
         self.assertIn("researched for another brief than part B's", stderr)
         code, _, stderr = build("A", "build-a2")
+        self.assertEqual(code, 0, stderr)
+
+        # Combining B into A retires B; the next acceptance drops B's requirements.
+        from harness_forge.contracts import combine_parts
+        write_decision(self.root, combine_parts(load_decision(self.decision), "A", "B"), slug="repro", date="2026-10-10")
+        cli.parts = ["A"]
+        code, _, stderr = build("A", "build-a3")
+        self.assertEqual(code, 2)
+        self.assertIn("accept the requirements of any part again", stderr)
+        code, output, stderr = cli("accept", "--decision", self.decision, "--part", "A", "--proposed",
+                                   self.root / ".scratch/proposed-A.json", "--choices",
+                                   self.root / ".scratch/choices-A.json", "--root", self.root, "--slug", "repro")
+        self.assertEqual(code, 0, stderr)
+        self.assertEqual(output["dropped_parts"], ["B"])
+        self.assertEqual(sorted(load_revision(revision).brief_digests), ["A"])
+        code, _, stderr = build("A", "build-a4", "--replace",
+                                ".agents/skills/reproduction-checklist/references/requirements.md")
         self.assertEqual(code, 0, stderr)
 
     def test_acceptance_needs_the_parts_deep_research_and_its_sources(self):
