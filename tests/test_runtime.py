@@ -188,6 +188,31 @@ class RuntimeTest(unittest.TestCase):
         self.assertIn(f"a user-level skill named {NAME} takes precedence over the candidate", shadowed.reason)
         self.assertEqual(len(runner.worker_calls), 2, "no case launches under a shadowing skill")
 
+    def test_each_case_turns_the_user_level_skills_off(self):
+        """Skills still listed with bundled skills off (the user's, or built-ins that setting keeps) are turned
+        off for the case only; the case's own listing shows whether that worked."""
+        class Origins(FakeRunner):
+            def __call__(self, command, *, cwd, env, stdin, timeout):
+                answer = super().__call__(command, cwd=cwd, env=env, stdin=stdin, timeout=timeout)
+                if "--settings" not in command:
+                    return answer
+                settings = json.loads(command[command.index("--settings") + 1])
+                if stdin != BASELINE_PROMPT:
+                    off = {name for name, mode in settings.get("skillOverrides", {}).items() if mode == "off"}
+                    return Completed(0, claude_run(skills=tuple(s for s in (NAME, "debug", "doctor", "my-personal")
+                                                                if s not in off)), "", False)
+                skills = ("doctor", "my-personal") + (() if settings.get("disableBundledSkills") else ("debug",))
+                return Completed(0, claude_run(skills=skills, skill_call=None), "", False)
+
+        runner = Origins(worker=claude_run())
+        result = self.run_cases("claude-code", None, runner=runner, baseline_skills=None)[0][0]
+        self.assertEqual(result.result, "pass", result.reason)
+        baseline, without_bundled, case_call = runner.worker_calls
+        for probe in (baseline, without_bundled):
+            self.assertNotIn("skillOverrides", probe["command"][probe["command"].index("--settings") + 1])
+        settings = json.loads(case_call["command"][case_call["command"].index("--settings") + 1])
+        self.assertEqual(settings["skillOverrides"], {"doctor": "off", "my-personal": "off"})
+
     def test_an_unobserved_bundled_off_probe_exempts_nothing(self):
         def stream_without(key):
             events = [json.loads(line) for line in claude_run(skills=(), skill_call=None).splitlines()]

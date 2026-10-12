@@ -20,7 +20,7 @@ import re
 import shlex
 import tempfile
 from pathlib import Path
-from typing import Mapping
+from typing import Iterable, Mapping
 
 
 from harness_forge.adapters import codex
@@ -80,17 +80,20 @@ def load_cases(path: Path) -> list[dict]:
     return cases
 
 
-def _claude_command(tools: list[str], *, bundled: bool = True) -> list[str]:
+def _claude_command(tools: list[str], *, bundled: bool = True, off: Iterable[str] = ()) -> list[str]:
     """Project settings only: the candidate's skills load, the user's plugins and hooks do not.
 
     `--restricted` cannot be used here: it also drops the project's skills.
     Personal and managed skills still load; claude_skill_origins tells them
-    from the bundled ones. ``bundled=False`` turns the bundled skills off.
+    from the bundled ones. ``bundled=False`` turns the bundled skills off;
+    ``off`` turns the named skills off for this launch only.
     """
     listed = ",".join(tools)
     settings = {"disableAllHooks": True, "autoMemoryEnabled": False, "disableSkillShellExecution": True}
     if not bundled:
         settings["disableBundledSkills"] = True
+    if off:
+        settings["skillOverrides"] = {name: "off" for name in sorted(off)}
     return [
         "claude", "--print", "--output-format", "stream-json", "--verbose", "--no-session-persistence",
         "--setting-sources", "project", "--strict-mcp-config", "--mcp-config", '{"mcpServers":{}}',
@@ -376,7 +379,7 @@ def activation_case(
     harness: str, files: Mapping[str, bytes], skill_dirs: list[str], target: str, prompt: str, expected: str,
     permitted: list[str], fixtures: Mapping[str, str], *, runner: Runner, environ: Mapping[str, str],
     baseline: set[str], timeout: int = RUNTIME_TIMEOUT, workspace_root: str | None = None, slash: bool = False,
-    links: Mapping[str, str] | None = None,
+    links: Mapping[str, str] | None = None, off: Iterable[str] = (),
 ) -> tuple[str, str, str | None, str]:
     """Run one prompt in a throwaway workspace holding ``files``; judge whether ``target`` activated.
 
@@ -389,7 +392,8 @@ def activation_case(
     stays missing; without them, each skill directory gets its link (the
     routing smoke installs Forge's own skills that way). A slash or $
     invocation (``slash``) may load the skill without a tool call; with no
-    observed signal it is not-run.
+    observed signal it is not-run. ``off`` names the user-level skills
+    turned off for Claude; one the case still lists competes.
     """
     name = target.rsplit("/", 1)[-1]
     companions = {directory.rsplit("/", 1)[-1] for directory in skill_dirs} - {name}
@@ -418,7 +422,7 @@ def activation_case(
                 link = safe_path(workspace, path)
                 link.parent.mkdir(parents=True, exist_ok=True)
                 link.symlink_to(link_target)
-            command = _claude_command(permitted)
+            command = _claude_command(permitted, off=off)
         else:
             command = codex.command("review", str(workspace), structured=False)
         try:
@@ -455,6 +459,8 @@ def run_skill_runtime(
     competing. Left out, Claude's come from empty launches with the cases'
     own settings (claude_skill_origins), and a personal or managed skill
     with the candidate's name, which takes precedence, stops its cases.
+    Every other skill that launch lists without the bundled ones is turned
+    off for each case; one that stays listed competes.
     """
     if harness not in run.targets:
         raise ValueError(f"{harness} is not a target of this run")
@@ -519,6 +525,6 @@ def run_skill_runtime(
         outcome, reason, activation, inventory = activation_case(
             harness, staged, [directory], directory, test_case["prompt"], test_case["expected"], permitted, fixtures,
             runner=runner, environ=environ, baseline=set(baseline_skills), timeout=timeout,
-            workspace_root=workspace_root, links=links)
+            workspace_root=workspace_root, links=links, off=user_skills or ())
         results.append(result(outcome, reason, activation, inventory))
     return results

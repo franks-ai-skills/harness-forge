@@ -502,7 +502,8 @@ def routing_smoke(harness: str, out: Path, *, runner=run_command, environ=None) 
             else:
                 outcome, reason, activation, inventory = activation_case(
                     harness, files, directories, f".agents/skills/{skill}", prompt, expected, permitted, {},
-                    runner=runner, environ=environ, baseline=baseline, slash=case["mode"] == "explicit")
+                    runner=runner, environ=environ, baseline=baseline, slash=case["mode"] == "explicit",
+                    off=user)
             summary["results"].append({"skill": skill, "case_id": case["id"], "mode": case["mode"], "prompt": prompt,
                                        "expected": expected, "result": outcome, "reason": reason,
                                        "observed_activation": activation, "inventory": inventory})

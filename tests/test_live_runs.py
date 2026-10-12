@@ -218,6 +218,26 @@ class RoutingSmokeTest(unittest.TestCase):
         self.assertFalse(summary["clean"])
         self.assertTrue(all(result["result"] == "not-run" for result in summary["results"]))
 
+    def test_the_user_level_skills_are_turned_off_in_each_case(self):
+        class Listed(RoutingRunner):
+            """The cases list the user-level skills too, unless their settings turn them off."""
+            def __call__(self, command, *, cwd, env, stdin, timeout):
+                answer = super().__call__(command, cwd=cwd, env=env, stdin=stdin, timeout=timeout)
+                if stdin == BASELINE_PROMPT or "--settings" not in command:
+                    return answer
+                overrides = json.loads(command[command.index("--settings") + 1]).get("skillOverrides", {})
+                events = [json.loads(line) for line in answer.stdout.splitlines()]
+                events[0]["skills"] += [skill for skill in self.user if overrides.get(skill) != "off"]
+                return Completed(0, "\n".join(json.dumps(e) for e in events) + "\n", "", False)
+
+        runner = Listed(user_skills=["doctor"])
+        summary = self.run_smoke(runner)
+        self.assertTrue(summary["clean"])
+        self.assertFalse([result for result in summary["results"] if "competing" in result["reason"]])
+        for call in runner.worker_calls[2:]:
+            settings = json.loads(call["command"][call["command"].index("--settings") + 1])
+            self.assertEqual(settings["skillOverrides"], {"doctor": "off"})
+
     def test_unknown_skill_origins_stop_the_smoke_run(self):
         class FailedProbe(RoutingRunner):
             def __call__(self, command, *, cwd, env, stdin, timeout):
