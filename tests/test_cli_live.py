@@ -896,6 +896,37 @@ class LiveCommandsTest(unittest.TestCase):
         runtime = report[report.index("## Runtime tests"):report.index("## Checked files")]
         self.assertEqual(runtime.count("(kept from run verify-1) |"), len(first["runtime"]))
 
+    def test_a_review_keeps_no_part_whose_runtime_evidence_does_not_hold(self):
+        import json as json_module
+        cli, arguments = self.build_ready(ResearchRunner([finding()]))
+        self.assertEqual(cli("verify", *arguments)[0], 0)
+        report = self.root / ".harness/reports/repro.md"
+        original = report.read_text(encoding="utf-8")
+        self.assertEqual(self.scope_parts(cli, arguments), [], "unchanged and settled: A is kept")
+
+        def edited(change):
+            start = original.index("```json\n", original.index("## Report data")) + len("```json\n")
+            end = original.index("\n```", start)
+            data = json_module.loads(original[start:end])
+            change(data["runtime_results"])
+            return original[:start] + json_module.dumps(data, indent=2) + original[end:]
+
+        def failed(results):
+            results[0]["result"] = "fail"
+
+        def other_files(results):
+            for item in results:
+                item["file_hashes"] = {path: "0" * 64 for path in item["file_hashes"]}
+
+        def none(results):
+            results.clear()
+
+        for name, change in (("a failed case", failed), ("other files", other_files), ("no runtime evidence", none)):
+            with self.subTest(name):
+                report.write_text(edited(change), encoding="utf-8")
+                self.assertEqual(self.scope_parts(cli, arguments), ["A"])
+        report.write_text(original, encoding="utf-8")
+
     def scope_parts(self, cli, arguments, fixed=""):
         code, output, stderr = cli("scope", "--decision", self.decision, "--root", self.root, "--revision",
                                    self.root / ".harness/research/repro.rules.yaml", "--slug", "repro", "--fixed", fixed,

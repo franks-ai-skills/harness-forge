@@ -536,7 +536,7 @@ def _review_plan(earlier, decision: Decision, current: dict, fixed: set[str], co
     changed = affected_parts(run, current, owners) & every
     confirmation = Confirmation(run_id="", contract_digest=contract_digest, part_ids=sorted(confirmed_parts))
     preserved = {part_id for part_id in preserved_parts(run, current, confirmation, owners) & set(results)
-                 if settled(results[part_id])}
+                 if settled(results[part_id]) and _runtime_holds(run, part_id, current, owners)}
     judged = review_scope(decision, fixed, changed) | (every - preserved)
     kept = {part_id: results[part_id] for part_id in sorted(every - judged)}
     kept_runtime = [asdict(result) for result in run.runtime_results if result.part_id in kept]
@@ -549,6 +549,17 @@ def _review_plan(earlier, decision: Decision, current: dict, fixed: set[str], co
                                "contract": contract_digest, "confirmed": sorted(confirmed_parts)})
     return {"earlier_run": run.run_id, "changed": sorted(changed), "judged": sorted(judged), "kept": kept,
             "kept_runtime": kept_runtime, "digest": digest}
+
+
+def _runtime_holds(run, part_id: str, current: dict, owners) -> bool:
+    """A built part's earlier runtime evidence can stand for it: some, none failed, each for its files now."""
+    if part_id not in owners.part_dirs:
+        return True
+    directory = owners.part_dirs[part_id] + "/"
+    files = {path: digest for path, digest in current["files"].items() if path.startswith(directory)}
+    evidence = [result for result in run.runtime_results if result.part_id == part_id]
+    return bool(evidence) and all(result.result not in ("fail", "error") and result.file_hashes == files
+                                  for result in evidence)
 
 
 def _current(decision: Decision, files, symlinks, rules, revision, overrides, evidence, cases) -> dict:
