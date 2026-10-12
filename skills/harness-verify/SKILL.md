@@ -38,11 +38,13 @@ this skill's folder; run it with the Forge environment's Python.
 
 1. Confirm the contract (goal, requirements, overrides and the worker
    policy disclosure).
-2. If this is a re-verification, run `scripts/forge.py scope --decision
-   <record> --root <repository> --revision <rules file> --evidence
-   <workers output> --relay <relay> --slug <slug> --fixed <parts the
-   builder fixed> --cases <runtime cases>` with the confirmation from
-   step 1 and the cases step 3 will run, and ask once:
+2. If this is a re-verification, run `scripts/forge.py scope --harness
+   <harness> --decision <record> --root <repository> --revision <rules
+   file> --evidence <workers output> --relay <relay> --slug <slug> --fixed
+   <parts the builder fixed> --cases <runtime cases>` with the
+   confirmation from step 1 and the harness and cases step 3 will run
+   (only that harness's earlier runtime evidence can be kept), and ask
+   once:
    `Review (recommended)` or `Extensive review (rarely needed)`, showing
    each option's parts and judged-rule count. Review judges the fixed
    parts, every part linked to them and every part whose inputs or

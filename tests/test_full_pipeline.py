@@ -121,7 +121,7 @@ class FullPipelineTest(unittest.TestCase):
         output = self.run_ok(*build, code=1)
         self.assertIn("-name: Broken_Name", output["diff"])
         self.run_ok(*build, "--replace", f".agents/skills/{NAME}/SKILL.md")
-        options = self.run_ok("scope", "--decision", decision_path, "--root", root, "--revision", revision,
+        options = self.run_ok("scope", "--harness", "claude-code", "--decision", decision_path, "--root", root, "--revision", revision,
                               "--evidence", workers, "--relay", verify[verify.index("--relay") + 1], "--slug", "repro",
                               "--fixed", "A1", "--cases", cases_path)["options"]
         self.assertEqual(options[0]["parts"], ["A1", "A2"], "A2 links to the fixed A1")

@@ -759,7 +759,7 @@ class LiveCommandsTest(unittest.TestCase):
 
         def scope(fixed="A"):
             relay = arguments[arguments.index("--relay") + 1]
-            code, output, stderr = cli("scope", "--decision", self.decision, "--root", self.root, *revision,
+            code, output, stderr = cli("scope", "--harness", "claude-code", "--decision", self.decision, "--root", self.root, *revision,
                                        "--evidence", workers, "--relay", relay, "--slug", "repro", "--fixed", fixed,
                                        "--cases", FORGE / "evals/smoke/vertical.yaml")
             self.assertEqual(code, 0, stderr)
@@ -786,7 +786,7 @@ class LiveCommandsTest(unittest.TestCase):
         self.assertEqual((code, output["parts"][0]["harness_result"]), (1, "not verified"))
         skill.write_text(original, encoding="utf-8")  # the builder's repair of the requested artifact
 
-        code, _, stderr = cli("scope", "--decision", self.decision, "--root", self.root, *revision,
+        code, _, stderr = cli("scope", "--harness", "claude-code", "--decision", self.decision, "--root", self.root, *revision,
                               "--evidence", workers, "--slug", "repro", "--fixed", "A")
         self.assertEqual(code, 2, "the scope is computed for the confirmed contract")
         review, extensive = scope()["options"]
@@ -864,7 +864,7 @@ class LiveCommandsTest(unittest.TestCase):
         self.assertEqual(code, 0, stderr)
         (self.root / "README.md").write_text((self.root / "README.md").read_text(encoding="utf-8") + "\nMore.\n",
                                              encoding="utf-8")
-        code, output, stderr = cli("scope", "--decision", self.decision, "--root", self.root, "--revision",
+        code, output, stderr = cli("scope", "--harness", "claude-code", "--decision", self.decision, "--root", self.root, "--revision",
                                    self.root / ".harness/research/repro.rules.yaml", "--slug", "repro", "--fixed", "",
                                    "--evidence", self.root / ".scratch/workers.json",
                                    "--relay", arguments[arguments.index("--relay") + 1])
@@ -877,7 +877,7 @@ class LiveCommandsTest(unittest.TestCase):
         code, first, stderr = cli("verify", *arguments)
         self.assertEqual(code, 0, stderr)
         relay = arguments[arguments.index("--relay") + 1]
-        code, output, stderr = cli("scope", "--decision", self.decision, "--root", self.root, "--revision",
+        code, output, stderr = cli("scope", "--harness", "claude-code", "--decision", self.decision, "--root", self.root, "--revision",
                                    self.root / ".harness/research/repro.rules.yaml", "--slug", "repro", "--fixed", "",
                                    "--evidence", self.root / ".scratch/workers.json", "--relay", relay,
                                    "--cases", arguments[arguments.index("--cases") + 1])
@@ -921,15 +921,26 @@ class LiveCommandsTest(unittest.TestCase):
         def none(results):
             results.clear()
 
-        for name, change in (("a failed case", failed), ("other files", other_files), ("no runtime evidence", none)):
+        def not_run(results):
+            for item in results:
+                item["result"] = "not-run"
+
+        def near_miss_only(results):
+            results[:] = [item for item in results if item["expected"] == "does-not-activate"]
+
+        for name, change in (("a failed case", failed), ("other files", other_files), ("no runtime evidence", none),
+                             ("nothing ran", not_run), ("no explicit activation", near_miss_only)):
             with self.subTest(name):
                 report.write_text(edited(change), encoding="utf-8")
                 self.assertEqual(self.scope_parts(cli, arguments), ["A"])
         report.write_text(original, encoding="utf-8")
+        self.assertEqual(self.scope_parts(cli, arguments, harness="codex"), ["A"],
+                         "Claude's runtime evidence does not stand for Codex")
 
-    def scope_parts(self, cli, arguments, fixed=""):
-        code, output, stderr = cli("scope", "--decision", self.decision, "--root", self.root, "--revision",
-                                   self.root / ".harness/research/repro.rules.yaml", "--slug", "repro", "--fixed", fixed,
+    def scope_parts(self, cli, arguments, fixed="", harness="claude-code"):
+        code, output, stderr = cli("scope", "--harness", harness, "--decision", self.decision, "--root", self.root,
+                                   "--revision", self.root / ".harness/research/repro.rules.yaml", "--slug", "repro",
+                                   "--fixed", fixed,
                                    "--evidence", self.root / ".scratch/workers.json",
                                    "--relay", arguments[arguments.index("--relay") + 1],
                                    "--cases", FORGE / "evals/smoke/vertical.yaml")
@@ -966,7 +977,7 @@ class LiveCommandsTest(unittest.TestCase):
             if item["mode"] == "negative":
                 item["prompt"] = "Summarize this changelog for me."
         changed = cli.write("changed-cases.yaml", yaml.safe_dump(cases))
-        code, output, stderr = cli("scope", "--decision", self.decision, "--root", self.root, "--revision",
+        code, output, stderr = cli("scope", "--harness", "claude-code", "--decision", self.decision, "--root", self.root, "--revision",
                                    self.root / ".harness/research/repro.rules.yaml", "--slug", "repro", "--fixed", "",
                                    "--evidence", self.root / ".scratch/workers.json",
                                    "--relay", arguments[arguments.index("--relay") + 1], "--cases", changed)

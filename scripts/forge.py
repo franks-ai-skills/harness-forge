@@ -518,7 +518,7 @@ def _fixed(arguments: argparse.Namespace, decision: Decision) -> set[str]:
 
 
 def _review_plan(earlier, decision: Decision, current: dict, fixed: set[str], contract_digest: str,
-                 confirmed_parts, owners) -> dict:
+                 confirmed_parts, owners, harness: str, cases: list[dict]) -> dict:
     """The Review a re-verification runs, computed the same way for scope and for verify.
 
     It judges the fixed parts, the parts linked to them and every part whose
@@ -528,7 +528,8 @@ def _review_plan(earlier, decision: Decision, current: dict, fixed: set[str], co
     plan's digest: a repository report proves nothing on its own.
     ``owners`` is a run prepared from the current decision, whose file
     ownership counts beside the earlier report's. Only a settled earlier
-    result is kept; anything unresolved or failed is judged again.
+    result is kept, with runtime evidence that holds for ``harness`` and
+    ``cases`` (_runtime_holds); anything else is judged again.
     """
     run, results = earlier
     every = {part["id"] for part in decision.record["parts"]}
@@ -536,30 +537,38 @@ def _review_plan(earlier, decision: Decision, current: dict, fixed: set[str], co
     changed = affected_parts(run, current, owners) & every
     confirmation = Confirmation(run_id="", contract_digest=contract_digest, part_ids=sorted(confirmed_parts))
     preserved = {part_id for part_id in preserved_parts(run, current, confirmation, owners) & set(results)
-                 if settled(results[part_id]) and _runtime_holds(run, part_id, current, owners)}
+                 if settled(results[part_id]) and _runtime_holds(run, part_id, current, owners, harness, cases)}
     judged = review_scope(decision, fixed, changed) | (every - preserved)
     kept = {part_id: results[part_id] for part_id in sorted(every - judged)}
-    kept_runtime = [asdict(result) for result in run.runtime_results if result.part_id in kept]
+    kept_runtime = [asdict(result) for result in run.runtime_results
+                    if result.part_id in kept and result.harness == harness]
     # The user's choice binds the parts, the kept results with their runtime evidence, the earlier inputs they
     # rest on and the inputs now: anything that changes after the choice makes it another plan.
     digest = canonical_digest({"earlier_run": run.run_id, "judged": sorted(judged),
                                "kept": {part_id: canonical_digest(result) for part_id, result in kept.items()},
                                "kept_runtime": kept_runtime,
                                "earlier_inputs": run.frozen_inputs, "current_inputs": current,
-                               "contract": contract_digest, "confirmed": sorted(confirmed_parts)})
+                               "contract": contract_digest, "confirmed": sorted(confirmed_parts),
+                               "harness": harness})
     return {"earlier_run": run.run_id, "changed": sorted(changed), "judged": sorted(judged), "kept": kept,
             "kept_runtime": kept_runtime, "digest": digest}
 
 
-def _runtime_holds(run, part_id: str, current: dict, owners) -> bool:
-    """A built part's earlier runtime evidence can stand for it: some, none failed, each for its files now."""
+def _runtime_holds(run, part_id: str, current: dict, owners, harness: str, cases: list[dict]) -> bool:
+    """A built part's earlier runtime evidence can stand for it in ``harness``: one result for each of the
+    part's ``cases``, none failed, every explicit activation passed, each for the part's files now."""
     if part_id not in owners.part_dirs:
         return True
     directory = owners.part_dirs[part_id] + "/"
     files = {path: digest for path, digest in current["files"].items() if path.startswith(directory)}
-    evidence = [result for result in run.runtime_results if result.part_id == part_id]
-    return bool(evidence) and all(result.result not in ("fail", "error") and result.file_hashes == files
-                                  for result in evidence)
+    declared = {case["id"]: case for case in cases if case["part_id"] == part_id}
+    evidence = [result for result in run.runtime_results if result.part_id == part_id and result.harness == harness]
+    explicit = {case_id for case_id, case in declared.items()
+                if case["mode"] == "explicit" and case["expected"] == "activates"}
+    passed = {result.case_id for result in evidence if result.result == "pass"}
+    return (bool(explicit) and sorted(result.case_id for result in evidence) == sorted(declared)
+            and explicit <= passed
+            and all(result.result not in ("fail", "error") and result.file_hashes == files for result in evidence))
 
 
 def _current(decision: Decision, files, symlinks, rules, revision, overrides, evidence, cases) -> dict:
@@ -598,7 +607,8 @@ def _scope(arguments: argparse.Namespace) -> int:
     if earlier is not None:
         plan = _review_plan(earlier, decision, _current(decision, files, symlinks, rules, revision, overrides,
                                                         evidence, _cases(arguments)), fixed,
-                            confirmation.contract_digest, confirmation.part_ids, run)
+                            confirmation.contract_digest, confirmation.part_ids, run, arguments.harness,
+                            _cases(arguments))
         options.append({"label": "Review (recommended)", "parts": plan["judged"],
                         "judged_rules": sum(counts.get(p, 0) for p in plan["judged"]), "link_checks": True,
                         "kept": [{"part_id": part_id, "run_id": plan["earlier_run"], "status": result["status"],
@@ -1125,7 +1135,8 @@ def _verify(arguments: argparse.Namespace) -> int:
             raise _InvalidInput(str(error)) from error
         plan = _review_plan(earlier, decision, _current(decision, files, symlinks, rules, revision, overrides,
                                                         approval["worker_evidence"], cases),
-                            fixed, confirmation.contract_digest, confirmation.part_ids, owners)
+                            fixed, confirmation.contract_digest, confirmation.part_ids, owners, arguments.harness,
+                            cases)
         relay = _read_json(arguments.scope_relay)
         if (set(relay) != {"choice", "displayed_digest", "run_id"} or relay["choice"] != "review"
                 or relay["displayed_digest"] != plan["digest"] or relay["run_id"] != confirmation.run_id):
@@ -1326,6 +1337,8 @@ def build_parser() -> argparse.ArgumentParser:
     scope.add_argument("--evidence", required=True, help="JSON with the worker_evidence the contract shows")
     scope.add_argument("--relay", required=True, help="JSON relay of the user's confirmation of the current contract")
     scope.add_argument("--slug", required=True, help="the report to compare with, .harness/reports/<slug>.md")
+    scope.add_argument("--harness", required=True, choices=["claude-code", "codex"],
+                       help="the harness verify will run; only its earlier runtime evidence can be kept")
     scope.add_argument("--fixed", help="comma-separated ids of the parts the builder fixed")
     scope.add_argument("--cases", help="the runtime cases verify will run; changed cases change their part")
     scope.set_defaults(handler=_scope)

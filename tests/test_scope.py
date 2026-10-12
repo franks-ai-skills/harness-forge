@@ -313,7 +313,7 @@ class CliTest(unittest.TestCase):
             relay = root / "relay.json"
             relay.write_text(json.dumps({"choice": "confirm", "displayed_digest": contract["digest"],
                                          "part_ids": ["A"], "run_id": "scope-1"}), encoding="utf-8")
-            code, output = self.run_cli("scope", "--decision", str(decision_path), "--root", str(root), "--revision",
+            code, output = self.run_cli("scope", "--harness", "claude-code", "--decision", str(decision_path), "--root", str(root), "--revision",
                                         str(revision_path), "--evidence", str(evidence), "--relay", str(relay),
                                         "--slug", "repro", "--fixed", "A")
             self.assertEqual(code, 0, output)

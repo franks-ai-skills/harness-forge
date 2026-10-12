@@ -410,7 +410,8 @@ def flows(harness: str, out: Path, *, forge: Forge | None = None,
     session.build("flows-repair", "--replace", skill.relative_to(repo).as_posix())
     def review_choice(relay):
         """The scope question asked again before each attempt, answered by the runner (see TEST_RELAY)."""
-        _, scope = session.run("scope", "scope", "--decision", session.decision, "--root", repo, "--revision",
+        _, scope = session.run("scope", "scope", "--harness", session.harness, "--decision", session.decision,
+                               "--root", repo, "--revision",
                                session.revision, "--evidence", session.evidence, "--relay", relay, "--slug",
                                inputs["slug"], "--fixed", "A", "--cases", session.cases_path)
         review = next((option for option in (scope or {}).get("options", [])
