@@ -101,6 +101,30 @@ class ResearchPassTest(unittest.TestCase):
                               fetch=fetch_page)
         self.assertEqual(runner.worker_calls, [])
 
+    def test_research_launches_nothing_for_a_decision_changed_after_confirmation(self):
+        import copy
+
+        from harness_forge.contracts import confirm_contract, render_contract
+        record = skill_decision(status="decided")
+        record.record["accepted_revision"] = None
+        runner = ResearchRunner([finding()])
+        planned = [preflight("claude-code", role, runner=runner, environ=PARENT)["configuration"] for role in ROLES]
+        contract = render_contract(record, None, [], worker_evidence=planned)
+        relay = {"choice": "confirm", "displayed_digest": contract.digest, "part_ids": ["A"], "run_id": "intake-1"}
+        confirmation = confirm_contract(contract, relay, run_id="intake-1")
+        for field, change in (("goals", lambda r: r.record.update(goals=["Something else"])),
+                              ("picture", lambda r: r.record.update(picture="Another picture")),
+                              ("part goal", lambda r: r.part("A").update(goal="Another goal"))):
+            changed = copy.deepcopy(record)
+            change(changed)
+            for pass_name, part_id in (("deep", "A"), ("survey", None)):
+                with self.subTest(field=field, pass_name=pass_name), \
+                        self.assertRaisesRegex(ValueError, "changed after the contract was confirmed"):
+                    research_pass(changed, pass_name, part_id, "claude-code", contract=contract,
+                                  confirmation=confirmation, worker_evidence=planned, run_id="intake-1",
+                                  runner=runner, environ=PARENT, fetch=fetch_page)
+        self.assertEqual(runner.worker_calls, [])
+
     def run_pass(self, findings, support="supported", existing=(), fetch=fetch_page):
         runner = ResearchRunner(findings, support)
         planned = [preflight("claude-code", role, runner=runner, environ=PARENT)["configuration"] for role in ROLES]

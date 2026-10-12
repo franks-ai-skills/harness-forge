@@ -12,7 +12,7 @@ import re
 from typing import Callable, Mapping
 
 from harness_forge.adapters.base import Runner, run_command, run_worker
-from harness_forge.documents import validate
+from harness_forge.documents import canonical_digest, validate
 from harness_forge.fetch import FetchError, fetch_text
 from harness_forge.models import AcceptedRevision, Confirmation, Contract, Decision, ReviewResponse, Rule
 from harness_forge.research import (
@@ -26,6 +26,17 @@ def _next_ids(existing: list[str], count: int) -> list[str]:
     numbers = [int(item[1:]) for item in existing if re.fullmatch(r"F[0-9]+", item)]
     start = max(numbers, default=0) + 1
     return [f"F{start + offset}" for offset in range(count)]
+
+
+def _brief_problem(brief, contract: Contract) -> bool:
+    """Whether the brief holds anything other than the confirmed contract shows."""
+    content = contract.content
+    if canonical_digest(content) != contract.digest:
+        return True
+    shown = {part["id"]: {"id": part["id"], "goal": part["goal"], "answers": part["answers"],
+                          "outcome": part["outcome"], "chosen": part["mechanism"]} for part in content["parts"]}
+    return (any(brief.content[key] != content[key] for key in ("goals", "picture", "targets", "reach"))
+            or any(shown.get(part["id"]) != part for part in brief.content["parts"]))
 
 
 def research_pass(
@@ -49,6 +60,9 @@ def research_pass(
     if needed - covered:
         raise ValueError(f"part {', '.join(sorted(needed - covered))} is not confirmed in this session; "
                          "confirm it before researching it")
+    if _brief_problem(brief, contract):
+        raise ValueError("the decision changed after the contract was confirmed: the goals, picture, targets, reach "
+                         "or a part's goal, answers or mechanism; confirm the current contract")
     approval = {"contract": contract, "confirmation": confirmation, "worker_evidence": worker_evidence,
                 "runner": runner, "environ": environ, "login_answer": login_answer}
     request = research_request(brief, run_id, f"{pass_name}-{(part_id or 'idea').lower()}")

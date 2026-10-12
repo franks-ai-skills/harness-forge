@@ -171,6 +171,7 @@ class Contract:
     worker_policy: dict
     text: str
     digest: str
+    content: dict  # everything the digest binds
 
 
 @dataclass(frozen=True)

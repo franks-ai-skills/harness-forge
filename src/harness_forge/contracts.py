@@ -294,7 +294,7 @@ def render_contract(
     lines.append(f"Contract digest: {digest}")
     lines += _hint(previous, parts)
     return Contract(parts=parts, overrides=override_entries, worker_policy=worker_policy,
-                    text="\n".join(lines) + "\n", digest=digest)
+                    text="\n".join(lines) + "\n", digest=digest, content=content)
 
 
 def _drift_shown(entry: dict) -> dict:
