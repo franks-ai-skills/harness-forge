@@ -271,9 +271,14 @@ def render_contract(
         lines.append("Rule overrides: none")
     if shown_drift:
         lines.append("Recorded drift:")
-        lines += [f"  - {entry['rule_id']} (finding {entry['finding_id']} of research {entry['slug']}, "
-                  f"{entry['category']}): {entry['summary']} Source: {entry['finding'].get('source')}: "
-                  f"\"{entry['finding'].get('quote')}\"" for entry in shown_drift]
+        for entry in shown_drift:
+            # What the user judges the drift by: the claim, and the quote within its context.
+            finding = entry["finding"]
+            lines += [f"  - {entry['rule_id']} (finding {entry['finding_id']} of research {entry['slug']}, "
+                      f"{entry['category']}): {entry['summary']}",
+                      f"    Claim: {finding.get('claim')}",
+                      f"    Source: {finding.get('source')} (fetched {finding.get('fetched')}): \"{finding.get('quote')}\"",
+                      f"    Context: \"{finding.get('context')}\""]
     else:
         lines.append("Recorded drift: none")
     drift_decisions = decision.record.get("drift_decisions", [])
