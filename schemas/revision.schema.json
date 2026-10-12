@@ -3,18 +3,7 @@
   "$id": "urn:harness-forge:schema:revision",
   "title": "Accepted Idea KB revision (.harness/research/<slug>.rules.yaml)",
   "type": "object",
-  "properties": {
-    "briefs": {
-      "type": "object",
-      "propertyNames": {
-        "pattern": "^[A-Z][0-9]*$"
-      },
-      "additionalProperties": {
-        "type": "string",
-        "pattern": "^[0-9a-f]{64}$"
-      },
-      "minProperties": 1
-    },
+  "$defs": {
     "digest": {
       "type": "string",
       "pattern": "^[0-9a-f]{64}$"
@@ -40,10 +29,55 @@
       }
     }
   },
-  "additionalProperties": false,
-  "required": [
-    "briefs",
-    "digest",
-    "rules"
+  "oneOf": [
+    {
+      "type": "object",
+      "properties": {
+        "briefs": {
+          "type": "object",
+          "propertyNames": {
+            "pattern": "^[A-Z][0-9]*$"
+          },
+          "additionalProperties": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$"
+          },
+          "minProperties": 1
+        },
+        "digest": {
+          "$ref": "#/$defs/digest"
+        },
+        "rules": {
+          "$ref": "#/$defs/rules"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "briefs",
+        "digest",
+        "rules"
+      ]
+    },
+    {
+      "description": "Accepted before per-part briefs: one brief for one part's requirements; read, never written.",
+      "type": "object",
+      "properties": {
+        "brief_digest": {
+          "$ref": "#/$defs/digest"
+        },
+        "digest": {
+          "$ref": "#/$defs/digest"
+        },
+        "rules": {
+          "$ref": "#/$defs/rules"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "brief_digest",
+        "digest",
+        "rules"
+      ]
+    }
   ]
 }

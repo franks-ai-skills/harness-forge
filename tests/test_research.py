@@ -242,6 +242,36 @@ class AcceptanceTest(unittest.TestCase):
                 with self.assertRaisesRegex(ValueError, message):
                     load_revision(path)
 
+    def test_a_legacy_single_brief_revision_loads_as_its_one_part(self):
+        """Revisions accepted before per-part briefs keep their digest, which decisions record."""
+        import yaml
+
+        rules = accept_requirements(self.proposed, {"idea.repro.a.numbered-steps": "accept"}, BRIEF).rules
+        def legacy(rules):
+            return {"brief_digest": BRIEF, "digest": canonical_digest({"brief_digest": BRIEF, "rules": rules}),
+                    "rules": rules}
+        with tempfile.TemporaryDirectory(prefix="forge-research-") as directory:
+            path = Path(directory) / "repro.rules.yaml"
+            path.write_text(yaml.safe_dump(legacy(rules), sort_keys=False), encoding="utf-8")
+            loaded = load_revision(path)
+            self.assertEqual((loaded.brief_digests, loaded.digest, loaded.rule_ids),
+                             ({"A": BRIEF}, legacy(rules)["digest"], ["idea.repro.a.numbered-steps"]))
+            path.write_text(path.read_text(encoding="utf-8").replace("numbers each", "may number"), encoding="utf-8")
+            with self.assertRaisesRegex(ValueError, "changed after acceptance"):
+                load_revision(path)
+            path.write_text(yaml.safe_dump(legacy([])), encoding="utf-8")
+            with self.assertRaisesRegex(ValueError, "accept its part's requirements again"):
+                load_revision(path)
+            both = rules + [{"part_id": "B", "rule": idea_rule("idea.repro.b.steps", "Steps").to_dict()}]
+            path.write_text(yaml.safe_dump(legacy(both)), encoding="utf-8")
+            with self.assertRaisesRegex(ValueError, "accept its part's requirements again"):
+                load_revision(path)
+            for extra in ({"briefs": {"A": BRIEF}}, {"unknown": 1}):
+                with self.subTest(extra=extra):
+                    path.write_text(yaml.safe_dump({**legacy(rules), **extra}), encoding="utf-8")
+                    with self.assertRaises(ValueError):
+                        load_revision(path)
+
     def test_research_check_cli_reports_kept_and_dropped(self):
         import contextlib
         import importlib.util

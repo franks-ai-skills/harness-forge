@@ -397,9 +397,21 @@ def write_revision(root: Path, slug: str, revision: AcceptedRevision) -> Path:
 
 
 def load_revision(path: Path, *, root: Path | None = None) -> AcceptedRevision:
-    """Load a revision and recompute its digest; a mismatch is an edit."""
+    """Load a revision and recompute its digest; a mismatch is an edit.
+
+    A revision accepted before per-part briefs has one ``brief_digest``. It
+    loads as its one part's, keeping the digest its decision records; the
+    next acceptance writes the current format.
+    """
     value = load_document(path, "revision", root=root)
-    digest = revision_digest(value["briefs"], value["rules"])
+    if "brief_digest" in value:
+        digest = canonical_digest({"brief_digest": value["brief_digest"], "rules": value["rules"]})
+        owners = {entry["part_id"] for entry in value["rules"]}
+        if digest == value["digest"] and len(owners) != 1:
+            raise ValueError(f"{path}: an older revision names no single part; accept its part's requirements again")
+        value = {**value, "briefs": {owner: value["brief_digest"] for owner in owners}}
+    else:
+        digest = revision_digest(value["briefs"], value["rules"])
     if digest != value["digest"]:
         raise ValueError(f"{path}: accepted requirements changed after acceptance")
     unbriefed = sorted({entry["part_id"] for entry in value["rules"]} - set(value["briefs"]))
