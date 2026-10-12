@@ -102,7 +102,10 @@ class RenderTest(unittest.TestCase):
                   "finding": {"source": "https://docs.example.com/limits", "quote": "Up to 2048."}}]
         with_drift = render_contract(decision(), None, [], worker_evidence=EVIDENCE, drift=drift)
         self.assertIn("Recorded drift:\n  - skills.description.length (finding F1 of research repro, compatibility): "
-                      "The limit grew. Source: https://docs.example.com/limits", with_drift.text)
+                      'The limit grew. Source: https://docs.example.com/limits: "Up to 2048."', with_drift.text)
+        changed = [{**drift[0], "finding": {**drift[0]["finding"], "context": "Another context."}}]
+        self.assertNotEqual(render_contract(decision(), None, [], worker_evidence=EVIDENCE, drift=changed).digest,
+                            with_drift.digest, "the whole drift entry is bound, as drift_state compares it")
         self.assertNotEqual(with_drift.digest, base.digest, "adding or deleting drift changes the contract")
         self.assertIn("Recorded drift: none", base.text)
 

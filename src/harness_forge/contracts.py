@@ -272,7 +272,8 @@ def render_contract(
     if shown_drift:
         lines.append("Recorded drift:")
         lines += [f"  - {entry['rule_id']} (finding {entry['finding_id']} of research {entry['slug']}, "
-                  f"{entry['category']}): {entry['summary']} Source: {entry['source']}" for entry in shown_drift]
+                  f"{entry['category']}): {entry['summary']} Source: {entry['finding'].get('source')}: "
+                  f"\"{entry['finding'].get('quote')}\"" for entry in shown_drift]
     else:
         lines.append("Recorded drift: none")
     drift_decisions = decision.record.get("drift_decisions", [])
@@ -297,11 +298,12 @@ def render_contract(
 
 
 def _drift_shown(entry: dict) -> dict:
-    """What the contract shows and binds of one recorded drift; its issue answer is not a decision."""
-    finding = entry.get("finding") or {}
+    """What the contract binds of one recorded drift: the whole entry with its finding, as drift_state compares it.
+
+    Its issue answer is not a decision and stays out.
+    """
     return {"rule_id": entry["rule_id"], "finding_id": entry["finding_id"], "slug": entry.get("slug"),
-            "category": entry["category"], "summary": entry["summary"], "source": finding.get("source"),
-            "quote": finding.get("quote")}
+            "category": entry["category"], "summary": entry["summary"], "finding": dict(entry.get("finding") or {})}
 
 
 def confirmation_problem(
