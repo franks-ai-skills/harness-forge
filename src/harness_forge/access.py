@@ -94,6 +94,8 @@ def claude_outside(stdout: str, workspace: Path) -> list[str]:
 # expansion, and ;, | or a newline between commands. Whatever it does not cover fails the worker; a
 # rerun of the reviewer is cheaper than trusting a line Forge cannot read exactly.
 _SAFE = re.compile(r"[A-Za-z0-9._/,=:+@%-]")
+# The wrapper Codex runs commands in; a program elsewhere named like a shell is not unwrapped.
+_SYSTEM_SHELLS = {"/bin/zsh", "/bin/bash", "/bin/sh", "/bin/dash", "/usr/bin/zsh", "/usr/bin/bash", "/usr/bin/sh"}
 _DEVNULL = "2>/dev/null"
 _NUMBER = re.compile(r"^\d+$")
 # Per command: options without a value, options that take one (as the next word or attached), and
@@ -115,8 +117,8 @@ _COMMANDS = {
            {"-A", "-B", "-C", "-m", "-e", "--regexp", "-g", "--glob"}, "pattern"),
     "sed": ({"-n"}, {"-e"}, "script"),
     "tr": ({"-d", "-s"}, set(), "text"),
+    # Not printf: its %n assigns to a variable named by an argument, such as PATH.
     "echo": ({"-n"}, set(), "text"),
-    "printf": (set(), set(), "text"),
     "pwd": (set(), set(), "text"),
     "true": (set(), set(), "text"),
 }
@@ -137,6 +139,8 @@ def _script(command: str) -> str:
     except ValueError as error:
         raise Unreadable(f"unbalanced quoting: {error}") from error
     if len(words) == 3 and os.path.basename(words[0]) in _SHELLS and words[1] in ("-c", "-lc"):
+        if words[0] not in _SYSTEM_SHELLS:
+            raise Unreadable(f"a shell at {words[0]}")
         return words[2]
     return command
 
@@ -149,8 +153,12 @@ def _commands(script: str) -> list[list[str]]:
         character = script[index]
         if character in " \t":
             index += 1
-        elif character in ";\n" or (character == "|" and not script.startswith("||", index)):
-            commands.append([])
+        elif script.startswith("||", index):
+            raise Unreadable("||")
+        elif character in ";\n|":
+            if character == "|" and commands[-1] in ([], ["|"]):
+                raise Unreadable("a pipe without a command before it")
+            commands.append(["|"] if character == "|" else [])
             index += 1
         elif script.startswith(_DEVNULL, index) and (index + len(_DEVNULL) == length
                                                      or script[index + len(_DEVNULL)] in " \t;\n|"):
@@ -174,7 +182,10 @@ def _commands(script: str) -> list[list[str]]:
                 else:
                     raise Unreadable(f"the character {character!r} outside quotes")
             commands[-1].append(word)
-    return [words for words in commands if words]
+    if commands[-1] == ["|"]:
+        raise Unreadable("a pipe without a command after it")
+    # A command after a pipe was marked with "|" to catch an empty one; the mark is not a word.
+    return [words[1:] if words[:1] == ["|"] else words for words in commands if words and words != ["|"]]
 
 
 def _arguments(name: str, words: list[str]) -> tuple[list[str], list[str]]:
@@ -217,7 +228,7 @@ def _path_problem(path: str, workspace: Path) -> str | None:
         return f"{path}: a path may not start with -"
     if ".." in Path(path).parts:
         return f"{path}: leaves the directory with .."
-    if os.path.isabs(path) and not inside(path, workspace):
+    if not inside(path, workspace):  # resolved through links, which may point out of the workspace
         return f"{path}: outside the workspace"
     return None
 

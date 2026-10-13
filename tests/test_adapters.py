@@ -405,6 +405,29 @@ class LaunchTest(unittest.TestCase):
                     self.assertIn("outside the worker's workspace", response["reason"])
                     self.assertNotIn("output", response)
 
+    def test_the_command_grammar_ends_refuses_printf_and_resolves_links(self):
+        """Every line ends in a verdict; printf can assign variables; a link in the workspace may point out."""
+        import subprocess
+        import sys
+        source = Path(__file__).resolve().parents[1] / "src"
+        for line in ("cat notes.md || true", "cat notes.md && true", "cat notes.md & true", "cat notes.md |"):
+            with self.subTest(line=line):
+                code = ("import sys; from pathlib import Path; sys.path.insert(0, %r); "
+                        "from harness_forge.access import command_problems; "
+                        "print(bool(command_problems(%r, Path('.'))))" % (str(source), line))
+                done = subprocess.run([sys.executable, "-c", code], capture_output=True, text=True, timeout=10)
+                self.assertEqual(done.stdout.strip(), "True", done.stderr)
+        from harness_forge.access import command_problems
+        with tempfile.TemporaryDirectory() as directory:
+            workspace = Path(directory) / "workspace"
+            workspace.mkdir()
+            (Path(directory) / "secret.txt").write_text("x", encoding="utf-8")
+            (workspace / "link").symlink_to("..")
+            self.assertTrue(command_problems("cat link/secret.txt", workspace))
+            self.assertTrue(command_problems("printf '%n' PATH", workspace))
+            self.assertTrue(command_problems("/tmp/helper/zsh -lc 'cat notes.md'", workspace))
+            self.assertEqual(command_problems("/bin/zsh -lc 'cat notes.md'", workspace), [])
+
     def test_the_codex_review_worker(self):
         request, files, verdicts = review_case()
         runner = FakeRunner(worker=codex_stream(verdicts, items=("command_execution",)))

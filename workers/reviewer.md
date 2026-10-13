@@ -52,7 +52,7 @@ command line makes it discard your answer:
 - Commands: `cat`, `nl -ba`, `head -n N`, `tail -n N`, `wc`, `ls`,
   `sort`, `uniq`, `cut`, `diff`, `grep` or `rg` with a pattern, and
   `sed -n` with a line-range `p` or an `s/…/…/p` script; `echo`,
-  `printf`, `tr`, `pwd` and `true`.
+  `tr`, `pwd` and `true`.
 - Separate commands with `;`, `|` or a new line. The only redirection
   is `2>/dev/null`. Quote with single quotes, or double quotes without
   `$`, backticks or backslashes; no variables, globs or braces outside
