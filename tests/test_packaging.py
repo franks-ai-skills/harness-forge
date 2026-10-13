@@ -324,6 +324,18 @@ class SetupTest(unittest.TestCase):
                          Path(self.temporary.name).resolve() / "wheels")
         self.assertTrue((Path(result["environment"]) / environment.MARKER).exists())
 
+    def test_a_home_through_a_link_and_dot_dot_gets_one_real_environment(self):
+        """venv normalizes `link/..` lexically while the file system follows the link: setup resolves first."""
+        base = Path(self.temporary.name).resolve()
+        (base / "deep" / "inner").mkdir(parents=True)
+        (base / "linked").symlink_to(base / "deep" / "inner")
+        environ = {**self.environ, environment.HOME_VARIABLE: str(base / "linked" / ".." / "forge-home")}
+        result = self.setup.setup(FORGE, environ, run=self.runner())
+        self.assertTrue(result["ok"], result)
+        self.assertEqual(Path(result["environment"]).parent, base / "deep" / "forge-home")
+        self.assertTrue(environment.python_of(Path(result["environment"])).exists())
+        self.assertFalse((base / "forge-home").exists(), "nothing is built where venv's spelling points")
+
     def test_an_install_whose_packages_cannot_be_imported_is_not_finished(self):
         result = self.setup.setup(FORGE, self.environ, run=self.runner(imports=1), create=fake_venv)
         self.assertFalse(result["ok"])
@@ -335,7 +347,8 @@ class SetupTest(unittest.TestCase):
         result = self.setup.setup(FORGE, self.environ, run=self.runner(),
                                   create=lambda path: (created.append(path), fake_venv(path)))
         self.assertTrue(result["ok"], result)
-        self.assertEqual(created, [self.target], "a virtual environment cannot be moved after creation")
+        self.assertEqual([path.resolve() for path in created], [self.target.resolve()],
+                         "a virtual environment cannot be moved after creation")
         self.assertTrue(all(call["locked"] for call in self.calls))
         self.assertFalse(self.setup.lock_path(self.target).exists(), "the lock is released")
         self.assertEqual(environment.decide(FORGE, "/x", self.environ)[0], "exec")

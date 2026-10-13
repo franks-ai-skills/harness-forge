@@ -189,8 +189,9 @@ def _tool_paths(tool: str, arguments: dict) -> list[str]:
         base, pattern = text("path") or ".", text("pattern") or ""
         prefix = _GLOB_CHARACTERS.split(pattern, maxsplit=1)[0]
         directory = os.path.dirname(prefix) if prefix != pattern else prefix
-        if os.path.isabs(pattern) or pattern.startswith("~"):
-            return [directory]  # an absolute pattern replaces path as the search directory
+        if os.path.isabs(pattern):
+            return [directory or os.sep]  # an absolute pattern replaces path as the search directory
+        # A relative pattern, also one starting with ~, searches under path.
         return [base, os.path.join(base, directory)] if directory else [base]
     return []
 

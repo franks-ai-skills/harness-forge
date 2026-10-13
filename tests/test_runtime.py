@@ -260,6 +260,8 @@ class RuntimeTest(unittest.TestCase):
         for tool, arguments, failed, expected in (
                 ("Glob", {"pattern": f"@@WORKSPACE@@/{SKILL_DIR}/*.md", "path": "/tmp"}, False, "pass"),
                 ("Glob", {"pattern": "/tmp/*.md", "path": "."}, False, "not-run"),
+                ("Glob", {"pattern": "~*.md", "path": "/tmp/external"}, False, "not-run"),
+                ("Glob", {"pattern": "~*.md"}, False, "pass"),
                 ("Read", {"file_path": "bad\u0000path"}, True, "pass"),
                 ("Read", {"file_path": "bad\u0000path"}, False, "not-run")):
             with self.subTest(tool=tool, arguments=arguments, failed=failed):

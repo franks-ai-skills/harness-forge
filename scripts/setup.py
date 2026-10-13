@@ -89,7 +89,10 @@ def setup(root: Path, environ, *, run=_run, create=_create, wheelhouse: Path | N
     """
     # Relative paths mean the caller's directory; setup later works from Forge's data directory.
     root = Path(root).resolve()
-    target = environment.environment_dir(root, environ).absolute()
+    # The parent resolved: venv spells `link/..` lexically, the file system follows the link. The last
+    # component stays as it is, so a symlink there is still refused.
+    named = environment.environment_dir(root, environ).absolute()
+    target = named.parent.resolve() / named.name
     wheelhouse = Path(wheelhouse).absolute() if wheelhouse is not None else None
     if environment.complete(root, target):
         return {"ok": True, "existing": True, "environment": str(target)}
