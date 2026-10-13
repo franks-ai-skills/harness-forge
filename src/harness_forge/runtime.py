@@ -186,12 +186,12 @@ def _tool_paths(tool: str, arguments: dict) -> list[str]:
     if tool == "Grep":
         return [path for path in (text("path"), text("file_path")) if path]
     if tool == "Glob":
-        base = text("path") or "."
-        paths = [base]
-        if text("pattern"):
-            prefix = _GLOB_CHARACTERS.split(text("pattern"), maxsplit=1)[0]
-            paths.append(os.path.join(base, os.path.dirname(prefix) if prefix != text("pattern") else prefix))
-        return paths
+        base, pattern = text("path") or ".", text("pattern") or ""
+        prefix = _GLOB_CHARACTERS.split(pattern, maxsplit=1)[0]
+        directory = os.path.dirname(prefix) if prefix != pattern else prefix
+        if os.path.isabs(pattern) or pattern.startswith("~"):
+            return [directory]  # an absolute pattern replaces path as the search directory
+        return [base, os.path.join(base, directory)] if directory else [base]
     return []
 
 
@@ -199,11 +199,11 @@ def _inside(path: str, workspace: Path) -> bool:
     """Whether a tool's path stays in the throwaway workspace once links resolve; relative paths start there."""
     if path.startswith("~"):
         return False
-    root = os.path.realpath(workspace)
-    target = os.path.realpath(os.path.join(root, path))
     try:
+        root = os.path.realpath(workspace)
+        target = os.path.realpath(os.path.join(root, path))
         return os.path.commonpath([root, target]) == root
-    except ValueError:  # another drive on Windows
+    except (ValueError, OSError):  # another drive on Windows, or a path that cannot be resolved
         return False
 
 
@@ -218,7 +218,7 @@ def _observe_claude(stdout: str, name: str, baseline: set[str], workspace: Path 
                 "loaded": None, "completed": False, "errored": False, "inventory": "not observable", "outside": []}
     other_skill = False
     pending: dict[str, str] = {}
-    reads: dict[str, str] = {}
+    reads: dict[str, tuple[str, dict]] = {}
     # Only the candidate in the throwaway workspace counts; a same-named skill elsewhere is not it.
     roots = ({str(workspace), str(Path(workspace).resolve())} if workspace is not None else {""})
     for event in _events(stdout):
@@ -241,10 +241,8 @@ def _observe_claude(stdout: str, name: str, baseline: set[str], workspace: Path 
                     continue
                 observed["calls"].append(str(block.get("name")))
                 arguments = block.get("input") if isinstance(block.get("input"), dict) else {}
-                outside = [path for path in _tool_paths(str(block.get("name")), arguments)
-                           if workspace is not None and not _inside(path, Path(workspace))]
-                if outside:
-                    reads[str(block.get("id"))] = ", ".join(outside)
+                if workspace is not None and _tool_paths(str(block.get("name")), arguments):
+                    reads[str(block.get("id"))] = (str(block.get("name")), arguments)
                 signal = None
                 if block.get("name") == "Skill":
                     if name in (arguments.get("skill"), arguments.get("command")):
@@ -269,7 +267,11 @@ def _observe_claude(stdout: str, name: str, baseline: set[str], workspace: Path 
                 if str(block.get("tool_use_id")) in pending:
                     observed["activation"] = observed["activation"] or pending[str(block["tool_use_id"])]
                 if str(block.get("tool_use_id")) in reads:
-                    observed["outside"].append(reads[str(block["tool_use_id"])])
+                    # Judged only once the call succeeded: a failed call reached nothing.
+                    tool, arguments = reads[str(block["tool_use_id"])]
+                    outside = [path for path in _tool_paths(tool, arguments) if not _inside(path, Path(workspace))]
+                    if outside:
+                        observed["outside"].append(", ".join(repr(path)[1:-1] for path in outside))
             # The invocation marker counts only in the prompt's own text: a tool result is data, such as a
             # fixture that quotes a transcript.
             content = message.get("content") if isinstance(message, dict) else None
@@ -489,6 +491,12 @@ def activation_case(
     outside = sorted(set(observed["calls"]) - set(permitted))
     if outside:
         return "fail", f"tool outside the declared list: {', '.join(outside)}", None, observed["inventory"]
+    if observed.get("outside"):
+        # The case's evidence is spoiled whatever happened next; the reason keeps how the run ended.
+        ending = (f"; the run then timed out after {timeout} s" if completed.timed_out else
+                  f"; the harness exited with {completed.returncode}" if completed.returncode else "")
+        return ("not-run", f"read outside the throwaway workspace: {', '.join(observed['outside'][:5])}{ending}",
+                None, observed["inventory"])
     if completed.timed_out:
         return "not-run", f"timed out after {timeout} s", None, observed["inventory"]
     if completed.returncode:

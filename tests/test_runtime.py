@@ -234,6 +234,38 @@ class RuntimeTest(unittest.TestCase):
                 result = self.run_cases("claude-code", stream(tool, arguments), cases=[permitted])[0][0]
                 self.assertEqual(result.result, expected, result.reason)
 
+    def test_an_outside_read_is_kept_when_the_run_then_times_out_or_fails(self):
+        events = [json.loads(line) for line in claude_run(skill_call=None).splitlines()]
+        partial = "\n".join(json.dumps(event) for event in [
+            events[0], {"type": "assistant", "message": {"content": [
+                {"type": "tool_use", "id": "r", "name": "Read", "input": {"file_path": "/etc/hosts"}}]}},
+            tool_result("r")]) + "\n"
+        for options, also in (({"timed_out": True}, "timed out"), ({"returncode": 1}, "exited with 1")):
+            with self.subTest(**options):
+                result = self.run_cases("claude-code", partial, runner_options=options)[0][0]
+                self.assertEqual(result.result, "not-run")
+                self.assertIn("outside the throwaway workspace: /etc/hosts", result.reason)
+                self.assertIn(also, result.reason)
+
+    def test_only_a_successful_file_call_is_judged_and_globs_by_where_they_search(self):
+        def stream(tool, arguments, failed=False):
+            events = [json.loads(line) for line in claude_run(skill_call=None).splitlines()]
+            calls = [{"type": "tool_use", "id": "t", "name": tool, "input": arguments},
+                     {"type": "tool_use", "id": "s", "name": "Skill", "input": {"skill": NAME}}]
+            return "\n".join(json.dumps(event) for event in [
+                events[0], {"type": "assistant", "message": {"content": calls}},
+                tool_result("t", failed), tool_result("s"), events[-1]]) + "\n"
+
+        permitted = case(permitted_tools={"claude-code": ["Skill", "Read", "Glob"], "codex": ["command_execution"]})
+        for tool, arguments, failed, expected in (
+                ("Glob", {"pattern": f"@@WORKSPACE@@/{SKILL_DIR}/*.md", "path": "/tmp"}, False, "pass"),
+                ("Glob", {"pattern": "/tmp/*.md", "path": "."}, False, "not-run"),
+                ("Read", {"file_path": "bad\u0000path"}, True, "pass"),
+                ("Read", {"file_path": "bad\u0000path"}, False, "not-run")):
+            with self.subTest(tool=tool, arguments=arguments, failed=failed):
+                result = self.run_cases("claude-code", stream(tool, arguments, failed), cases=[permitted])[0][0]
+                self.assertEqual(result.result, expected, result.reason)
+
     def test_a_path_through_a_link_is_judged_where_the_link_points(self):
         """A link to a shallower folder: three steps up stay inside by spelling, but leave the workspace."""
         import tempfile
