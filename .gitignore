@@ -7,3 +7,6 @@ evals/canaries/results/private/
 
 # The global ignore pattern coverage*.json would hide this schema.
 !**/schemas/coverage.schema.json
+
+# The owner's publication check reads its markers from this local file only.
+/personal-markers.txt

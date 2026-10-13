@@ -24,8 +24,18 @@ RUNTIME = ("scripts/forge.py", "scripts/setup.py", "src/harness_forge/__init__.p
 EXECUTABLE_COMPONENTS = ("hooks", "hooks.json", ".mcp.json", "mcp.json", ".lsp.json", "bin", "monitors",
                          "settings.json")
 EXECUTABLE_KEYS = {"hooks", "mcpServers", "lspServers", "monitors", "channels", "experimental"}
-# The owner's local development setup; published files must not name it.
-PERSONAL = ("personal-profile", "team-profile", "frankreichenbach", "Frank.W.Reichenbach", "harness-forge-local-development")
+# The owner's personal setup (profile names, home folder, email addresses, the local note) is listed only in this
+# git-ignored file, so the check itself publishes none of it.
+PERSONAL_MARKERS = FORGE / "personal-markers.txt"
+# Historical evidence that names personal profiles; the owner decides before publication whether it is reworded,
+# kept unpublished or published as it is. No other tracked file may name the owner's setup.
+AWAITING_OWNER_DECISION = {
+    "evals/canaries/results/diagnostic-2026-10-08-index.json",
+    "evals/canaries/results/diagnostic-2026-10-08-resumed-index.json",
+    "evals/canaries/results/diagnostic-2026-10-08.md",
+    "evals/canaries/results/offline-init-2026-10-08-index.json",
+    "evals/canaries/results/offline-init-2026-10-08.md",
+}
 
 
 def tracked() -> list[str]:
@@ -146,11 +156,17 @@ class InstalledCopyTest(unittest.TestCase):
             self.assertEqual(completed.returncode, 0, completed.stderr)
 
     def test_published_files_name_no_owner_setup(self):
-        published = [path for path in tracked() if not path.startswith(("evals/", "tests/"))]
-        for relative in published:
-            text = (FORGE / relative).read_bytes().decode("utf-8", "replace")
-            for personal in PERSONAL:
-                self.assertNotIn(personal, text, f"{relative} names {personal}")
+        if not PERSONAL_MARKERS.exists():
+            self.skipTest("the owner's publication check needs the local personal-markers.txt")
+        markers = [line.strip().lower() for line in PERSONAL_MARKERS.read_text(encoding="utf-8").splitlines()
+                   if line.strip()]
+        self.assertTrue(markers)
+        naming = set()
+        for relative in tracked():
+            text = (FORGE / relative).read_bytes().decode("utf-8", "replace").lower()
+            if any(marker in text for marker in markers):
+                naming.add(relative)
+        self.assertEqual(naming, AWAITING_OWNER_DECISION)
 
 
 class EnvironmentTest(unittest.TestCase):
@@ -228,53 +244,100 @@ class EnvironmentTest(unittest.TestCase):
         self.assertEqual(completed.returncode, 0, completed.stderr)
 
 
+def load_setup():
+    sys.path.insert(0, str(FORGE / "scripts"))
+    try:
+        import setup
+    finally:
+        sys.path.remove(str(FORGE / "scripts"))
+    return setup
+
+
+def fake_venv(path):
+    python = environment.python_of(path)
+    python.parent.mkdir(parents=True)
+    python.touch()
+
+
 class SetupTest(unittest.TestCase):
-    def test_setup_installs_exactly_the_locked_wheels(self):
-        sys.path.insert(0, str(FORGE / "scripts"))
-        try:
-            import setup
-        finally:
-            sys.path.remove(str(FORGE / "scripts"))
+    def setUp(self):
+        self.setup = load_setup()
+        self.temporary = tempfile.TemporaryDirectory(prefix="forge-setup-")
+        self.environ = {environment.HOME_VARIABLE: self.temporary.name, "PIP_TARGET": "/elsewhere",
+                        "PIP_CONFIG_FILE": "/elsewhere/pip.conf", "PATH": os.environ.get("PATH", "")}
+        self.target = environment.environment_dir(FORGE, self.environ)
+        self.calls = []
+
+    def tearDown(self):
+        self.temporary.cleanup()
+
+    def runner(self, *, install=0, imports=0):
+        def run(command, **options):
+            self.calls.append({"command": command, "env": options.get("env"),
+                               "locked": self.setup.lock_path(self.target).exists(), "target": self.target.exists()})
+            code = install if "install" in command else imports
+            return subprocess.CompletedProcess(command, code, "", "" if code == 0 else "failed")
+        return run
+
+    def test_setup_installs_exactly_the_locked_wheels_with_pip_isolated(self):
         python = Path("/env/bin/python")
-        self.assertEqual(setup.install_command(python, FORGE / "requirements.lock"),
-                         [str(python), "-m", "pip", "install", "--require-hashes", "--only-binary", ":all:",
-                          "--no-deps", "-r", str(FORGE / "requirements.lock")])
-        offline = setup.install_command(python, FORGE / "requirements.lock", wheelhouse=Path("/w"))
+        self.assertEqual(self.setup.install_command(python, FORGE / "requirements.lock"),
+                         [str(python), "-m", "pip", "--isolated", "--no-input", "install", "--require-hashes",
+                          "--only-binary", ":all:", "--no-deps", "-r", str(FORGE / "requirements.lock")])
+        offline = self.setup.install_command(python, FORGE / "requirements.lock", wheelhouse=Path("/w"))
         self.assertEqual(offline[offline.index("--find-links") - 1:offline.index("--find-links") + 2],
                          ["--no-index", "--find-links", "/w"])
 
-    def test_setup_finishes_only_after_a_successful_install(self):
-        sys.path.insert(0, str(FORGE / "scripts"))
-        try:
-            import setup
-        finally:
-            sys.path.remove(str(FORGE / "scripts"))
-        def fake_venv(path):
-            python = environment.python_of(path)
-            python.parent.mkdir(parents=True)
-            python.touch()
+    def test_pip_settings_from_the_environment_never_reach_the_install(self):
+        result = self.setup.setup(FORGE, self.environ, run=self.runner(), create=fake_venv)
+        self.assertTrue(result["ok"], result)
+        for call in self.calls:
+            self.assertFalse([name for name in call["env"] if name.startswith("PIP_")], call["command"])
 
-        with tempfile.TemporaryDirectory(prefix="forge-setup-") as home:
-            environ = {environment.HOME_VARIABLE: home}
-            calls = []
+    def test_an_install_whose_packages_cannot_be_imported_is_not_finished(self):
+        result = self.setup.setup(FORGE, self.environ, run=self.runner(imports=1), create=fake_venv)
+        self.assertFalse(result["ok"])
+        self.assertEqual(environment.decide(FORGE, "/x", self.environ)[0], "missing")
+        self.assertFalse(self.target.exists(), "a failed setup leaves nothing")
 
-            def failing(command, **_):
-                calls.append(command)
-                return subprocess.CompletedProcess(command, 1, "", "no network")
+    def test_setup_builds_at_the_final_path_under_a_lock(self):
+        created = []
+        result = self.setup.setup(FORGE, self.environ, run=self.runner(),
+                                  create=lambda path: (created.append(path), fake_venv(path)))
+        self.assertTrue(result["ok"], result)
+        self.assertEqual(created, [self.target], "a virtual environment cannot be moved after creation")
+        self.assertTrue(all(call["locked"] for call in self.calls))
+        self.assertFalse(self.setup.lock_path(self.target).exists(), "the lock is released")
+        self.assertEqual(environment.decide(FORGE, "/x", self.environ)[0], "exec")
+        again = self.setup.setup(FORGE, self.environ, run=self.runner(install=1), create=None)
+        self.assertTrue(again["ok"] and again["existing"], "an existing environment is reused")
 
-            result = setup.setup(FORGE, environ, run=failing, create=fake_venv)
-            self.assertFalse(result["ok"])
-            self.assertEqual(environment.decide(FORGE, "/x", environ)[0], "missing")
-            self.assertFalse(environment.environment_dir(FORGE, environ).exists(), "a failed setup leaves nothing")
+    def test_a_running_setup_is_left_alone(self):
+        self.target.parent.mkdir(parents=True, exist_ok=True)
+        self.setup.lock_path(self.target).mkdir()
+        fake_venv(self.target)
+        result = self.setup.setup(FORGE, self.environ, run=self.runner(), create=fake_venv)
+        self.assertFalse(result["ok"])
+        self.assertIn("another setup", result["error"])
+        self.assertTrue(environment.python_of(self.target).exists(), "nothing of the other setup is deleted")
+        self.assertEqual(self.calls, [])
 
-            def passing(command, **_):
-                return subprocess.CompletedProcess(command, 0, "", "")
+    def test_an_environment_finished_while_waiting_for_the_lock_is_reused(self):
+        def finish_first(path):
+            raise AssertionError("must not create")
 
-            result = setup.setup(FORGE, environ, run=passing, create=fake_venv)
-            self.assertTrue(result["ok"], result)
-            self.assertEqual(environment.decide(FORGE, "/x", environ)[0], "exec")
-            again = setup.setup(FORGE, environ, run=failing, create=None)
-            self.assertTrue(again["ok"] and again["existing"], "an existing environment is reused")
+        fake_venv(self.target)
+        (self.target / environment.MARKER).write_text(environment.lock_digest(FORGE), encoding="utf-8")
+        result = self.setup.setup(FORGE, self.environ, run=self.runner(install=1), create=finish_first)
+        self.assertTrue(result["ok"] and result["existing"])
+
+    def test_something_else_at_the_target_is_reported_not_deleted(self):
+        self.target.parent.mkdir(parents=True, exist_ok=True)
+        self.target.write_text("not an environment", encoding="utf-8")
+        result = self.setup.setup(FORGE, self.environ, run=self.runner(), create=fake_venv)
+        self.assertFalse(result["ok"])
+        self.assertIn(str(self.target), result["error"])
+        self.assertEqual(self.target.read_text(encoding="utf-8"), "not an environment")
 
 
 if __name__ == "__main__":

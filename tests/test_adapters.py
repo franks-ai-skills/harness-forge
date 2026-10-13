@@ -235,8 +235,8 @@ class PreflightTest(unittest.TestCase):
             self.assertIn(harness.command("review", "/w")[0], ("claude", "codex"))
         for path in (FORGE / "src" / "harness_forge" / "adapters").glob("*.py"):
             text = path.read_text(encoding="utf-8")
-            for personal in ("personal-profile", ".personal-profile", "team-profile", "zshrc"):
-                self.assertNotIn(personal, text, path.name)
+            # The owner's own names are checked by test_packaging from a local, unpublished list.
+            self.assertNotIn("zshrc", text, path.name)
 
 
 class LaunchTest(unittest.TestCase):

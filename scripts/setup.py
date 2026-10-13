@@ -32,49 +32,88 @@ INSTALL_TIMEOUT = 600
 
 
 def install_command(python: Path, lock: Path, *, wheelhouse: Path | None = None) -> list[str]:
-    command = [str(python), "-m", "pip", "install", "--require-hashes", "--only-binary", ":all:", "--no-deps"]
+    """pip in isolated mode: no pip configuration files or PIP_* variables can redirect or widen the install."""
+    command = [str(python), "-m", "pip", "--isolated", "--no-input", "install", "--require-hashes", "--only-binary",
+               ":all:", "--no-deps"]
     if wheelhouse is not None:
         command += ["--no-index", "--find-links", str(wheelhouse)]
     return command + ["-r", str(lock)]
 
 
+IMPORT_CHECK = "import jsonschema, referencing, yaml"
+
+
+def lock_path(target: Path) -> Path:
+    return target.with_name(target.name + ".lock")
+
+
 def _create(path: Path) -> None:
-    venv.EnvBuilder(with_pip=True, clear=True).create(path)
+    venv.EnvBuilder(with_pip=True).create(path)
 
 
 def _run(command: list[str], **kwargs) -> subprocess.CompletedProcess:
     return subprocess.run(command, capture_output=True, text=True, timeout=INSTALL_TIMEOUT, **kwargs)
 
 
+def _clean_environment(environ) -> dict[str, str]:
+    return {name: value for name, value in environ.items() if not name.startswith(("PIP_", "PYTHON"))}
+
+
+def _failure(target: Path, error: str, detail: list[str] | None = None) -> dict:
+    result = {"ok": False, "existing": False, "environment": str(target), "error": error}
+    if detail:
+        result["detail"] = detail
+    return result
+
+
 def setup(root: Path, environ, *, run=_run, create=_create, wheelhouse: Path | None = None) -> dict:
-    """Create the environment unless a finished one exists; a failed attempt leaves nothing behind."""
+    """Create the environment at its final path under a lock, unless a finished one exists.
+
+    A virtual environment cannot be moved, so it is built in place and counts only once the marker is written;
+    a failed attempt removes what it built. A second setup while one runs stops instead of waiting.
+    """
     target = environment.environment_dir(root, environ)
     if environment.complete(root, target):
         return {"ok": True, "existing": True, "environment": str(target)}
     if sys.version_info < MINIMUM_PYTHON:
-        return {"ok": False, "existing": False, "environment": str(target),
-                "error": f"Python {'.'.join(map(str, MINIMUM_PYTHON))} or newer is needed"}
-    staging = target.with_name(target.name + ".partial")
-    for path in (staging, target):
-        if path.exists():
-            shutil.rmtree(path)
+        return _failure(target, f"Python {'.'.join(map(str, MINIMUM_PYTHON))} or newer is needed")
+    lock = lock_path(target)
     try:
-        staging.parent.mkdir(parents=True, exist_ok=True)
-        create(staging)
-        completed = run(install_command(environment.python_of(staging), root / "requirements.lock",
-                                        wheelhouse=wheelhouse))
+        target.parent.mkdir(parents=True, exist_ok=True)
+        lock.mkdir()
+    except FileExistsError:
+        return _failure(target, f"another setup is running; if none is, remove {lock} and try again")
+    except OSError as error:
+        return _failure(target, str(error))
+    built = False
+    try:
+        if environment.complete(root, target):
+            return {"ok": True, "existing": True, "environment": str(target)}
+        if target.is_symlink() or (target.exists() and not target.is_dir()):
+            return _failure(target, f"{target} exists and is not a Forge environment; remove it and try again")
+        if target.exists():
+            shutil.rmtree(target)
+        built = True
+        create(target)
+        python = environment.python_of(target)
+        clean = _clean_environment(environ)
+        completed = run(install_command(python, root / "requirements.lock", wheelhouse=wheelhouse), env=clean)
         if completed.returncode != 0:
             tail = (completed.stderr or completed.stdout or "").strip().splitlines()[-5:]
-            return {"ok": False, "existing": False, "environment": str(target),
-                    "error": "pip could not install the locked packages", "detail": tail}
-        (staging / environment.MARKER).write_text(environment.lock_digest(root), encoding="utf-8")
-        staging.rename(target)
+            return _failure(target, "pip could not install the locked packages", tail)
+        imported = run([str(python), "-I", "-c", IMPORT_CHECK], env=clean)
+        if imported.returncode != 0:
+            tail = (imported.stderr or imported.stdout or "").strip().splitlines()[-5:]
+            return _failure(target, "the installed packages cannot be imported", tail)
+        (target / environment.MARKER).write_text(environment.lock_digest(root), encoding="utf-8")
+        built = False
         return {"ok": True, "existing": False, "environment": str(target)}
     except (OSError, subprocess.SubprocessError) as error:
-        return {"ok": False, "existing": False, "environment": str(target), "error": str(error)}
+        return _failure(target, str(error))
     finally:
-        if staging.exists():
-            shutil.rmtree(staging, ignore_errors=True)
+        if built:
+            shutil.rmtree(target, ignore_errors=True)
+        lock.rmdir()
 
 
 def main(argv: list[str] | None = None) -> int:
