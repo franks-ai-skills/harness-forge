@@ -300,7 +300,8 @@ def prepare_run(
             run.part_dirs[part_id] = directory
             name = directory.rsplit("/", 1)[-1]
             run.part_links[part_id] = [link for link in symlinks if link == f".claude/skills/{name}"]
-        in_scope = scope is None or part_id in scope
+        # Only confirmed parts reach the reviewer: an unconfirmed part's files and goal stay out of the request.
+        in_scope = (scope is None or part_id in scope) and (confirmation is None or part_id in confirmed)
         link = _link_check(part, record, files)
         if link is not None:
             run.rule_index[LINK_RULE["id"]] = dict(LINK_RULE["info"])
@@ -361,6 +362,10 @@ def review_request(run: VerificationRun, request_id: str) -> dict:
     paths = sorted({path for part_id in requested for path in run.part_files.get(part_id, [])})
     inputs = {
         "files": [{"path": path, "sha256": run.frozen_inputs["files"][path]} for path in paths],
+        # The repository's links for these parts, such as .claude/skills/<name>: a link is not a staged file.
+        "links": [{"path": link, "target": run.frozen_inputs["symlinks"][link]}
+                  for link in sorted({link for part_id in requested for link in run.part_links.get(part_id, [])})
+                  if link in run.frozen_inputs["symlinks"]],
         "rules": [{"part_id": r["part_id"], "rule_id": r["rule_id"], "statement": r["statement"],
                    "rule_kind": r["rule_kind"], "applicability": r["applicability"]}
                   for r in run.judged_requests if r["kind"] == "rule"],

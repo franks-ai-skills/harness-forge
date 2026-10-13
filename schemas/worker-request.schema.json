@@ -333,6 +333,27 @@
                   "facts",
                   "parts"
                 ]
+              },
+              "links": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "path": {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "target": {
+                      "type": "string",
+                      "minLength": 1
+                    }
+                  },
+                  "additionalProperties": false,
+                  "required": [
+                    "path",
+                    "target"
+                  ]
+                }
               }
             },
             "additionalProperties": false,
@@ -341,7 +362,8 @@
               "rules",
               "goals",
               "decision_digest",
-              "context"
+              "context",
+              "links"
             ]
           }
         }

@@ -191,6 +191,20 @@ class SelectCliTest(unittest.TestCase):
         self.assertIsNone(output["outcome"])
         self.assertIn("id", output["question"])
 
+    def test_select_rejects_malformed_reuse_candidates(self):
+        case = CASES["reference-reproduction-checklist"]
+        good = {"name": "repro", "source": "https://example.com/repro", "license": "MIT", "maintenance": "maintained",
+                "fit": "confirmed", "concept": "skills"}
+        for candidate in (None, "repro", {key: value for key, value in good.items() if key != "name"},
+                          {**good, "stars": 5}, {**good, "concept": "magic"}, {**good, "name": 7}):
+            with self.subTest(candidate=candidate):
+                code, output = self.run_select({"answers": case["answers"], "whole_idea": case["whole_idea"],
+                                                "candidates": [candidate]})
+                self.assertEqual((code, output), (2, {}))
+        code, output = self.run_select({"answers": case["answers"], "whole_idea": case["whole_idea"],
+                                        "candidates": [good]})
+        self.assertEqual(code, 0)
+
     def test_select_rejects_undeclared_facts_and_values(self):
         case = CASES["concept-skills"]
         for answers in ({**case["answers"], "mood": "happy"}, {**case["answers"], "job": "anything"}, {**case["answers"], "own_context": "yes"}):

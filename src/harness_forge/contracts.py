@@ -346,7 +346,8 @@ def confirm_contract(contract: Contract, relay: dict | None, run_id: str) -> Con
         or relay["displayed_digest"] != contract.digest
         or relay["run_id"] != run_id
         or not isinstance(part_ids, list)
-        or not part_ids
+        # No part ids only for an idea before its split, which has no parts to confirm yet.
+        or (not part_ids and bool(known))
         or len(set(part_ids)) != len(part_ids)
         or not set(part_ids) <= known
     ):

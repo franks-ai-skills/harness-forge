@@ -366,13 +366,32 @@ class SetupTest(unittest.TestCase):
         self.assertEqual(self.calls, [])
 
     def test_an_environment_finished_while_waiting_for_the_lock_is_reused(self):
-        def finish_first(path):
+        """Another setup finishes between the first check and taking the lock: the second check sees it."""
+        checks = []
+        real_complete = environment.complete
+
+        def complete(root, directory):
+            checks.append(directory)
+            if len(checks) == 1:  # the other setup finishes right after this first check
+                fake_venv(directory)
+                (directory / environment.MARKER).write_text(environment.lock_digest(FORGE), encoding="utf-8")
+                return False
+            return real_complete(root, directory)
+
+        def never(path):
             raise AssertionError("must not create")
 
-        fake_venv(self.target)
-        (self.target / environment.MARKER).write_text(environment.lock_digest(FORGE), encoding="utf-8")
-        result = self.setup.setup(FORGE, self.environ, run=self.runner(install=1), create=finish_first)
-        self.assertTrue(result["ok"] and result["existing"])
+        original = self.setup.environment.complete
+        self.setup.environment.complete = complete
+        try:
+            result = self.setup.setup(FORGE, self.environ, run=self.runner(install=1), create=never)
+        finally:
+            self.setup.environment.complete = original
+        self.assertTrue(result["ok"] and result["existing"], result)
+        self.assertEqual(len(checks), 2, "checked again after taking the lock")
+        self.assertEqual(self.calls, [])
+        self.assertTrue((self.target / environment.MARKER).exists(), "the other setup's environment survives")
+        self.assertFalse(self.setup.lock_path(self.target).exists())
 
     def test_something_else_at_the_target_is_reported_not_deleted(self):
         self.target.parent.mkdir(parents=True, exist_ok=True)

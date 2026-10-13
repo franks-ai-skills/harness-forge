@@ -57,7 +57,7 @@ from harness_forge.verify import (  # noqa: E402
 )
 from harness_forge.models import ReviewResponse, RuntimeResult  # noqa: E402
 from harness_forge.selection import (  # noqa: E402
-    CONFLICT_CHOICES, answers_problem, conflict_kept, goal_conflict, next_question, recommend, selection_state,
+    CONCEPTS, CONFLICT_CHOICES, answers_problem, conflict_kept, goal_conflict, next_question, recommend, selection_state,
 )
 
 MAX_OUTPUT_BYTES = 64 * 1024
@@ -144,6 +144,26 @@ def _domains(selection: dict) -> dict[str, list]:
     return {fact["id"]: list(fact["values"]) for fact in selection["facts"]}
 
 
+_CANDIDATE_TEXT = ("name", "source", "license", "maintenance", "fit", "concept")
+
+
+def _check_candidates(candidates: list) -> None:
+    """Each reuse candidate as the intake records it from the survey, before any recommendation reads it."""
+    for number, candidate in enumerate(candidates, 1):
+        if not isinstance(candidate, dict):
+            raise _InvalidInput(f"candidate {number} must be an object")
+        unknown = set(candidate) - set(_CANDIDATE_TEXT) - {"variant", "path"}
+        missing = [key for key in _CANDIDATE_TEXT if key not in candidate]
+        if unknown or missing:
+            raise _InvalidInput(f"candidate {number}: unknown keys {sorted(unknown)}, missing {missing}")
+        if not all(isinstance(value, str) and value.strip() for value in candidate.values()):
+            raise _InvalidInput(f"candidate {number}: every value must be non-empty text")
+        if candidate["concept"] not in CONCEPTS:
+            raise _InvalidInput(f"candidate {number}: concept {candidate['concept']!r} is not one of {list(CONCEPTS)}")
+        if not candidate["source"].startswith("https://"):
+            raise _InvalidInput(f"candidate {number}: source must be an https URL")
+
+
 def _select(arguments: argparse.Namespace) -> int:
     """Recommend from confirmed answers; with the user's ``chosen`` mechanism, also its goal conflict."""
     request = _read_json(arguments.input)
@@ -156,6 +176,7 @@ def _select(arguments: argparse.Namespace) -> int:
     candidates = request.get("candidates", [])
     if not all(isinstance(value, dict) for value in (answers, whole_idea)) or not isinstance(candidates, list):
         raise _InvalidInput("answers and whole_idea must be objects, candidates a list")
+    _check_candidates(candidates)
     _check_declared(answers, "part", declared)
     _check_declared(whole_idea, "idea", declared)
     pinned = [Rule.from_dict(rule) for rule in selection["rules"]]
@@ -1069,13 +1090,21 @@ def _publish_issue(arguments: argparse.Namespace) -> int:
     return 0
 
 
-def _current_inputs(arguments: argparse.Namespace, root: Path, drift: list[dict], overrides: list[dict]):
+def _current_inputs(arguments: argparse.Namespace, root: Path, drift: list[dict], overrides: list[dict],
+                    cases: list[dict] | tuple = ()):
     """The target as it is now: files, links, decision record and requirements file, read again.
 
-    Overrides or drift that changed while the workers ran make the inputs
-    unusable, which invalidates every part.
+    Overrides, drift or runtime cases that changed while the workers ran
+    make the inputs unusable, which invalidates every part.
     """
     try:
+        if arguments.cases:
+            try:
+                current_cases = load_cases(Path(arguments.cases))
+            except (OSError, ValueError) as error:
+                raise _InvalidInput(f"the runtime cases could not be read again: {error}") from error
+            if current_cases != list(cases):
+                raise _InvalidInput("the runtime cases changed during verification")
         decision, revision = _decision_and_revision(arguments, root)
         try:
             current = load_overrides(root)
@@ -1175,7 +1204,7 @@ def _verify(arguments: argparse.Namespace) -> int:
                                    arguments.harness, **approval, overrides=overrides, scope=scope,
                                    scope_label=label, kept=kept, cited=cited, recorded_drift=drift,
                                    cases=cases, runner=RUNNER, environ=_environ(), kb_version=manifest["kb_version"],
-                                   login_answer=arguments.login_answer, collect=lambda: _current_inputs(arguments, root, drift, overrides),
+                                   login_answer=arguments.login_answer, collect=lambda: _current_inputs(arguments, root, drift, overrides, cases),
                                    confirmed_exclusions=exclusions, drift=unresolved, selection=failures)
     except ValueError as error:
         raise _InvalidInput(str(error)) from error

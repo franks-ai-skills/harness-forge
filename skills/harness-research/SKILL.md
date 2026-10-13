@@ -36,9 +36,10 @@ root, which downloads Forge's pinned packages from PyPI once.
 1. **Brief.** Build the brief from the decision record: the goals, the
    user's picture, targets, reach, and the parts with their confirmed
    answers. Nothing else from the conversation or repository goes in.
-2. **Survey pass** (from harness-intake, before the split): what people
-   already do, existing skills, plugins or tools that meet the goal, and
-   findings that suggest parts or answers.
+2. **Survey pass** (from harness-intake, before the split, on the
+   confirmed record of the whole idea, which has no parts yet): what
+   people already do, existing skills, plugins or tools that meet the
+   goal, and findings that suggest parts or answers.
 3. **Deep pass,** once per chosen part: what the result must contain, the
    domain's pitfalls and security concerns, and proposed requirements as
    `idea.<slug>.<part>.<name>` rules that are judged or use a catalog

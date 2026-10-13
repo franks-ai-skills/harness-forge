@@ -466,7 +466,8 @@
           "outside_controls"
         ]
       },
-      "minItems": 1
+      "minItems": 0,
+      "description": "Empty only before the split: the survey runs on the whole idea."
     },
     "retired_ids": {
       "type": "array",
@@ -666,5 +667,22 @@
     "retired_ids",
     "research",
     "accepted_revision"
-  ]
+  ],
+  "if": {
+    "required": [
+      "split_confirmed"
+    ],
+    "properties": {
+      "split_confirmed": {
+        "const": true
+      }
+    }
+  },
+  "then": {
+    "properties": {
+      "parts": {
+        "minItems": 1
+      }
+    }
+  }
 }

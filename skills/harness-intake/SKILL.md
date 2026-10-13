@@ -56,9 +56,13 @@ command prints bounded JSON.
    without permission prompts (the agent's prompts, not questions a skill
    asks the user), works in untrusted repositories, or combines
    untrusted input with secrets and network access.
-4. **Survey.** Start the harness-research skill's survey pass with the
-   goal, picture, targets and reach. Show its findings and ask which to
-   use; record the finding ids in `survey_findings_used`.
+4. **Survey.** Write the record as it stands, with the goal, picture,
+   whole-idea answers and `parts: []`, render it with `prepare-contract`
+   and ask the user to confirm the idea; that confirmation names no
+   parts. Then start the harness-research skill's survey pass. Show its
+   findings and ask which to use; record the finding ids in
+   `survey_findings_used`. The split changes the contract, so it is
+   confirmed again before any deep research.
 5. **Split into parts.** Propose parts with letters A, B, C, one job
    each. The user can combine ("A and C": A stays, C is retired and never
    reused), split ("B" becomes B1 and B2) or add parts (the next unused

@@ -9,7 +9,7 @@ from harness_forge.contracts import confirm_contract, render_contract
 from harness_forge.documents import canonical_digest
 from harness_forge.documents import load_document
 from harness_forge.models import Confirmation, Decision, RuntimeResult, Rule
-from harness_forge.verify import bound_inputs, exclusion_token, finish_run, prepare_run, validate_review
+from harness_forge.verify import bound_inputs, exclusion_token, finish_run, prepare_run, review_request, validate_review
 from tests.builders import EVIDENCE, decision, part
 from tests.test_build_skill import DESCRIPTION, NAME, PROCEDURE, REVISION
 
@@ -111,6 +111,20 @@ class PrecedenceTest(unittest.TestCase):
         result = Scenario(skill_decision(), confirmed=()).finish()["A"]
         assert_result(self, result, "not verified", "not assessed")
         self.assertEqual(result.status, "blocked")
+
+    def test_only_confirmed_parts_reach_the_reviewer(self):
+        outside = part("B", "Never merge without review", outcome="outside-instead", recommended=None, chosen=None,
+                       outside_controls=[GATE])
+        both = Scenario(skill_decision(outside), confirmed=("A", "B")).run
+        self.assertIn("B", {request["part_id"] for request in both.judged_requests}, "B has judged rules")
+        run = Scenario(skill_decision(outside), confirmed=("A",)).run
+        self.assertEqual({request["part_id"] for request in run.judged_requests}, {"A"})
+        inputs = review_request(run, "review-1")["inputs"]
+        self.assertEqual([part["part_id"] for part in inputs["context"]["parts"]], ["A"])
+
+    def test_the_reviewer_sees_the_parts_links(self):
+        inputs = review_request(Scenario(skill_decision()).run, "review-1")["inputs"]
+        self.assertEqual(inputs["links"], [{"path": f".claude/skills/{NAME}", "target": f"../../.agents/skills/{NAME}"}])
 
     def test_failed_build_is_not_met_even_with_outside_dependencies(self):
         scenario = Scenario(skill_decision(outside_controls=[README_CONTROL, GATE]),

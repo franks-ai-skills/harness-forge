@@ -123,6 +123,37 @@ class LiveCommandsTest(unittest.TestCase):
         code, output, _ = cli("workers", "--harness", "claude-code", "--login-answer", "continue")
         self.assertEqual(code, 0)
 
+    def test_the_survey_runs_on_the_idea_before_it_is_split(self):
+        """The intake surveys before the split: the record then holds the idea and no parts yet."""
+        record = load_decision(self.decision)
+        record.record.update(parts=[], split_confirmed=False)
+        record.record.pop("survey_findings_used", None)
+        decision = write_decision(self.root, record, slug="repro-idea", date="2026-10-10")
+        runner = ResearchRunner([finding()])
+        cli = Cli(runner, self.root)
+        cli.parts = []
+        _, workers, _ = cli("workers", "--harness", "claude-code")
+        evidence = cli.write("workers.json", workers)
+        code, contract, stderr = cli("prepare-contract", "--decision", decision, "--evidence", evidence)
+        self.assertEqual((code, contract["parts"]), (0, []), stderr)
+        relay = cli.confirm(decision, "intake-1")
+        research = ["research", "--decision", decision, "--harness", "claude-code", "--evidence", evidence,
+                    "--relay", relay, "--root", self.root, "--slug", "repro", "--write"]
+        code, output, stderr = cli(*research, "--pass", "survey")
+        self.assertEqual(code, 0, stderr)
+        self.assertEqual(len(output["kept"]), 1)
+        code, _, stderr = cli(*research, "--pass", "deep", "--part", "A")
+        self.assertEqual(code, 2)
+        self.assertIn("part A", stderr)
+        # An idea-level confirmation does not stand in for confirming parts that exist.
+        empty = cli.write("relay-empty.json", {"choice": "confirm", "part_ids": [], "run_id": "intake-2",
+                                               "displayed_digest": cli("prepare-contract", "--decision",
+                                                                       self.decision, "--evidence", evidence)[1]["digest"]})
+        code, _, stderr = cli("research", "--decision", self.decision, "--harness", "claude-code", "--evidence",
+                              evidence, "--relay", empty, "--root", self.root, "--slug", "repro", "--pass", "survey")
+        self.assertEqual(code, 2)
+        self.assertIn("does not confirm", stderr)
+
     def test_research_refuses_a_relay_for_another_contract(self):
         cli = Cli(ResearchRunner([finding()]), self.root)
         _, workers, _ = cli("workers", "--harness", "claude-code")
@@ -210,6 +241,29 @@ class LiveCommandsTest(unittest.TestCase):
         self.assertEqual(code, 1, stderr)
         self.assertEqual(output["parts"][0]["harness_result"], "not verified")
         self.assertIn("every_time: always", Path(decision).read_text(encoding="utf-8"))
+
+    def test_runtime_cases_edited_during_review_are_not_verified(self):
+        cases_path = []
+
+        class Editing(ResearchRunner):
+            def __call__(self, command, *, cwd, env, stdin, timeout):
+                answer = super().__call__(command, cwd=cwd, env=env, stdin=stdin, timeout=timeout)
+                if cases_path and self.roles and self.roles[-1] == "review" and stdin and "```json" in stdin:
+                    path = Path(cases_path[0])
+                    path.write_text(path.read_text(encoding="utf-8").replace("give me the checklist",
+                                                                             "give me a summary"), encoding="utf-8")
+                return answer
+
+        cli, arguments = self.build_ready(Editing([finding()]))
+        # A copy: the shared smoke cases in the repository stay unchanged.
+        copy = self.root / ".scratch" / "cases.yaml"
+        copy.write_text((FORGE / "evals/smoke/vertical.yaml").read_text(encoding="utf-8"), encoding="utf-8")
+        arguments[arguments.index("--cases") + 1] = str(copy)
+        cases_path.append(copy)
+        code, output, stderr = cli("verify", *arguments)
+        self.assertIn("give me a summary", copy.read_text(encoding="utf-8"), "the cases changed during the review")
+        self.assertEqual(code, 1, stderr)
+        self.assertEqual(output["parts"][0]["harness_result"], "not verified")
 
     def test_a_not_applicable_error_rule_waits_for_the_users_confirmation(self):
         rule = "skills.invocation.side-effects-user-invoked"
