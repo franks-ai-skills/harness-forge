@@ -1,23 +1,76 @@
 # Harness Forge
 
-Harness Forge is being built as a workflow for Claude Code and Codex,
-run through their CLIs with your existing login: intake, research,
-mechanism selection, accepted requirements, portable builds and
-verification against a pinned knowledge base.
+Harness Forge is a plugin for Claude Code and Codex. It takes an idea
+for agent tooling through intake, research, mechanism selection,
+accepted requirements, a portable skill build and verification against
+a pinned harness knowledge base. It runs through the vendors' CLIs with
+your existing login.
 
-Status: the workflow runs live in Claude Code and Codex from a local
-checkout, with research, source-support and review workers launched as
-separate CLI processes and runtime tests of the built skill. On
-2026-10-11 the automated live runs and one hands-on session per harness
-completed it. Goal conflicts, repository rule overrides, knowledge-base
-drift with its issue proposals, checks of the links between parts and
-re-verification with a Review or Extensive scope followed the same day.
-The reference checks and installation are not done yet, so no harness
-is supported for general use yet. The feasibility probes and their evidence remain in
-`evals/canaries/`.
-Implementation follows the sibling playground's
-[design](../playground/specs/2026-10-06-harness-forge-design.md) and
-[plan](../playground/plans/2026-10-07-harness-forge-thin-slice.md).
+Status: version 0.1.0, not yet published. The workflow passes its
+automated live runs in Claude Code and Codex from a local checkout. The
+installation procedures below were tested in throwaway locations; runs
+from an installed plugin follow before the first release. No harness is
+supported for general use yet.
+
+## Installation
+
+Requirements:
+
+- Claude Code or the Codex CLI, logged in. See [Model access](#model-access)
+  for what a run costs with each login type.
+- Python 3.11 to 3.14 with `venv` and `pip`, as `python3`. Some Linux
+  distributions package `venv` separately.
+- The GitHub CLI `gh` only for reporting knowledge-base drift as an
+  issue.
+
+Claude Code:
+
+```sh
+claude plugin marketplace add franks-ai-skills/harness-forge
+claude plugin install harness-forge@harness-forge
+```
+
+Codex:
+
+```sh
+codex plugin marketplace add franks-ai-skills/harness-forge
+codex plugin add harness-forge@harness-forge
+```
+
+Start a new session afterwards. The plugin adds four skills:
+`harness-intake`, `harness-research`, `build-skill` and
+`harness-verify`. It adds no hooks, MCP servers or other components that
+run code when the harness starts.
+
+Install from the GitHub repository, not from a local working copy. A
+local-path marketplace makes Codex copy the whole directory into its
+plugin cache, including ignored files such as a virtual environment or
+private evidence.
+
+### Forge's Python environment
+
+Forge validates its records with `jsonschema` and `PyYAML`. The first
+`scripts/forge.py` command, run by a skill, stops and names the setup
+command; the skill asks you before running it:
+
+```sh
+python3 <plugin root>/scripts/setup.py
+```
+
+It creates a virtual environment in Forge's own data directory,
+`~/.local/share/harness-forge/env-<lock digest>/` (`$XDG_DATA_HOME`
+when set; `%LOCALAPPDATA%\harness-forge` on Windows; `HARNESS_FORGE_HOME`
+overrides all three). It installs exactly the wheels pinned with hashes
+in `requirements.lock`, downloaded from PyPI once, and runs no build
+code. It changes no user configuration. Later `forge.py` commands switch
+to that environment by themselves. A plugin update with a new lock gets
+a new environment; delete the directory to remove it.
+
+Without network access, download the wheels elsewhere with
+`pip download --require-hashes --only-binary :all: -r requirements.lock -d wheelhouse`
+and run `python3 scripts/setup.py --wheelhouse wheelhouse`. The tested
+and expected platforms are in
+[packaging/assessment.md](packaging/assessment.md#supported-environments).
 
 ## Worker isolation limitations
 
@@ -43,27 +96,27 @@ Observed boundary violations reject those tested launch configurations;
 accepting the policy does not rehabilitate them or prove all native
 subagents incapable of stronger restrictions.
 
-The planned adapters must use an initially empty temporary working
-directory outside the target repository, stage only the role's supplied
-inputs, pass a small environment allowlist (plus `CLAUDE_CONFIG_DIR` or
-`CODEX_HOME` when the user has set them), close inherited extra file
-descriptors, and suppress optional configuration/hook/plugin discovery.
-Do not resume/fork a prior session or fall back to native delegation.
-Use no configured MCP servers or apps: Codex must explicitly disable
-apps (including `apps._default.enabled=false`), suppress user/project
-server discovery and disable any remaining configured server by ID;
-Claude must use its strict empty-MCP configuration and role tool lists.
+The adapters use an initially empty temporary working directory outside
+the target repository, stage only the role's supplied inputs, pass a
+small environment allowlist (plus `CLAUDE_CONFIG_DIR` or `CODEX_HOME`
+when the user has set them), close inherited extra file descriptors, and
+suppress optional configuration, hook and plugin discovery. They never
+resume or fork a prior session or fall back to native delegation. They
+use no configured MCP servers or apps: Codex runs disable apps
+(including `apps._default.enabled=false`) and user and project server
+discovery; Claude runs use the strict empty-MCP configuration and role
+tool lists.
 An empty Codex table alone is not proof that lower-layer servers vanished.
 Known failure to apply a required baseline control blocks launch;
 unobserved runtime containment remains disclosed rather than invented.
 
-Per-role launch restrictions are also required: Claude research gets only
+Each role has its own launch restrictions: Claude research gets only
 web tools, source support an empty tool list, and review only read tools.
 Codex uses a no-write filesystem policy, web search only for research,
-and disabled shell/local-image tools for source support. Configure input
-read limits and additional tool removal wherever supported. These settings
-are checked against supported CLI versions; they do not prove all remaining
-tools, reads or outbound channels are blocked.
+and disabled shell and local-image tools for source support. Forge checks
+these settings against the installed CLI version before each launch; they
+do not prove that all remaining tools, reads or outbound channels are
+blocked.
 
 Use this mode only for trusted projects and operator-approved inputs.
 Do not rely on it to protect secrets, unrelated files or login credentials
@@ -72,8 +125,8 @@ Fresh sessions and instructions reduce intended context and actions; they
 do not prove that the harness cannot discover more. Accepting findings
 afterward cannot undo an earlier read, write or transmission.
 
-The implementation will disclose configured controls, observed behavior
-and unknowns in each run's contract and `.harness/reports/<slug>.md`.
+Each run's contract and `.harness/reports/<slug>.md` disclose the
+configured controls, observed behavior and unknowns.
 Generated artifacts do not need a generic Forge-isolation README section;
 their own runtime limitations and required outside controls still belong
 in their README.
@@ -83,11 +136,22 @@ still fail the affected run. Requirements need user acceptance before
 building. No broader tool configuration or account switch is an automatic
 fallback.
 
-An artifact result of `verified` will mean its confirmed rules and goals
-were checked under this policy; it will **not certify worker containment**.
+An artifact result of `verified` means its confirmed rules and goals
+were checked under this policy; it does **not certify worker containment**.
 A goal requiring enforced isolation cannot be met by this policy alone.
 The exception does not relax deterministic-checker protections or the
 separate disposable environments required for candidate runtime tests.
+
+### Gaps in the runtime tests of a built skill
+
+Forge runs each built skill's test prompts in a throwaway workspace that
+holds only the skill and the case's files. What the harness reports
+limits what those tests can prove:
+
+| Harness | Gap |
+| --- | --- |
+| Claude Code | The cases run without a sandbox, so only the `Skill` and `Read` tools can be permitted. Skills that stay listed with bundled skills turned off (your own, or built-ins that this setting keeps, such as `design`, `doctor` and `plugin-authoring` in 2.1.296) are turned off for each case with `skillOverrides`; a skill that still loads makes the case `not-run`. An explicit `/skill` invocation in print mode leaves no observable signal, so such a case reports `not-run`, not a pass. |
+| Codex | Codex does not report which skills, plugins and MCP servers it loaded, so its runs are best-effort: `clean` is null and the summary states the gap. Activation counts only when Codex prints the skill's whole `SKILL.md` in one reading command. A near-miss case has no signal that proves non-activation and reports `not-run`. Codex 0.162 starts a `codex-code-mode-host` helper by default; on macOS, when the Homebrew cask installed it, Gatekeeper can stop its first launch at a prompt. |
 
 ## Outside controls
 
@@ -148,6 +212,15 @@ observations only; they do not specify public account behavior.
 
 ## License
 
-[AGPL-3.0-only](LICENSE). A generated-output permission is planned, but
-its exact wording still needs approval before publication. This README
-does not itself grant that exception.
+[AGPL-3.0-only](LICENSE). A permission for the files Forge generates in
+your repository is drafted in
+[legal/generated-output-permission.md](legal/generated-output-permission.md);
+its wording needs approval before publication. Until then, this README
+and the draft grant no exception.
+
+## Development
+
+[AGENTS.md](AGENTS.md) describes the contributor rules and the test
+command. `tools/live_checks.py` runs the automated live checks with your
+subscription; with an API-key or unknown login, pass
+`--login-answer continue` on each run to accept that it can cost extra.
