@@ -273,7 +273,7 @@ class SetupTest(unittest.TestCase):
 
     def runner(self, *, install=0, imports=0):
         def run(command, **options):
-            self.calls.append({"command": command, "env": options.get("env"),
+            self.calls.append({"command": command, "env": options.get("env"), "cwd": options.get("cwd"),
                                "locked": self.setup.lock_path(self.target).exists(), "target": self.target.exists()})
             code = install if "install" in command else imports
             return subprocess.CompletedProcess(command, code, "", "" if code == 0 else "failed")
@@ -282,7 +282,7 @@ class SetupTest(unittest.TestCase):
     def test_setup_installs_exactly_the_locked_wheels_with_pip_isolated(self):
         python = Path("/env/bin/python")
         self.assertEqual(self.setup.install_command(python, FORGE / "requirements.lock"),
-                         [str(python), "-m", "pip", "--isolated", "--no-input", "install", "--require-hashes",
+                         [str(python), "-I", "-m", "pip", "--isolated", "--no-input", "install", "--require-hashes",
                           "--only-binary", ":all:", "--no-deps", "-r", str(FORGE / "requirements.lock")])
         offline = self.setup.install_command(python, FORGE / "requirements.lock", wheelhouse=Path("/w"))
         self.assertEqual(offline[offline.index("--find-links") - 1:offline.index("--find-links") + 2],
@@ -292,7 +292,21 @@ class SetupTest(unittest.TestCase):
         result = self.setup.setup(FORGE, self.environ, run=self.runner(), create=fake_venv)
         self.assertTrue(result["ok"], result)
         for call in self.calls:
-            self.assertFalse([name for name in call["env"] if name.startswith("PIP_")], call["command"])
+            self.assertEqual([name for name in call["env"] if name.startswith("PIP_")], ["PIP_CONFIG_FILE"])
+
+    def test_no_pip_configuration_file_or_working_directory_module_takes_part(self):
+        """--isolated skips user configuration only; a pip.py or ensurepip.py in the caller's directory would run."""
+        seen = []
+        result = self.setup.setup(FORGE, self.environ, run=self.runner(),
+                                  create=lambda path: (seen.append(os.getcwd()), fake_venv(path)))
+        self.assertTrue(result["ok"], result)
+        home = os.path.realpath(self.target.parent)
+        self.assertEqual([os.path.realpath(directory) for directory in seen], [home])
+        for call in self.calls:
+            self.assertEqual(call["env"]["PIP_CONFIG_FILE"], os.devnull)
+            self.assertEqual(os.path.realpath(call["cwd"]), home)
+            self.assertEqual(call["command"][1], "-I")
+        self.assertNotEqual(os.path.realpath(os.getcwd()), home, "the caller's directory is restored")
 
     def test_an_install_whose_packages_cannot_be_imported_is_not_finished(self):
         result = self.setup.setup(FORGE, self.environ, run=self.runner(imports=1), create=fake_venv)

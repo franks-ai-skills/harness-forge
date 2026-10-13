@@ -13,6 +13,7 @@ digest; nothing else on the system changes. Prints one JSON object.
 from __future__ import annotations
 
 import argparse
+import contextlib
 import json
 import os
 import shutil
@@ -32,8 +33,8 @@ INSTALL_TIMEOUT = 600
 
 
 def install_command(python: Path, lock: Path, *, wheelhouse: Path | None = None) -> list[str]:
-    """pip in isolated mode: no pip configuration files or PIP_* variables can redirect or widen the install."""
-    command = [str(python), "-m", "pip", "--isolated", "--no-input", "install", "--require-hashes", "--only-binary",
+    """Python and pip isolated: no module from the working directory, no PIP_* variable or user configuration."""
+    command = [str(python), "-I", "-m", "pip", "--isolated", "--no-input", "install", "--require-hashes", "--only-binary",
                ":all:", "--no-deps"]
     if wheelhouse is not None:
         command += ["--no-index", "--find-links", str(wheelhouse)]
@@ -56,7 +57,21 @@ def _run(command: list[str], **kwargs) -> subprocess.CompletedProcess:
 
 
 def _clean_environment(environ) -> dict[str, str]:
-    return {name: value for name, value in environ.items() if not name.startswith(("PIP_", "PYTHON"))}
+    """Without PIP_* and PYTHON* variables; PIP_CONFIG_FILE=os.devnull makes pip skip every configuration file,
+    including global and site ones that --isolated still reads."""
+    clean = {name: value for name, value in environ.items() if not name.startswith(("PIP_", "PYTHON"))}
+    return {**clean, "PIP_CONFIG_FILE": os.devnull}
+
+
+@contextlib.contextmanager
+def _working_directory(path: Path):
+    """venv runs `python -m ensurepip`, which would import an ensurepip.py from the working directory."""
+    previous = os.getcwd()
+    os.chdir(path)
+    try:
+        yield
+    finally:
+        os.chdir(previous)
 
 
 def _failure(target: Path, error: str, detail: list[str] | None = None) -> dict:
@@ -94,14 +109,16 @@ def setup(root: Path, environ, *, run=_run, create=_create, wheelhouse: Path | N
         if target.exists():
             shutil.rmtree(target)
         built = True
-        create(target)
+        with _working_directory(target.parent):
+            create(target)
         python = environment.python_of(target)
         clean = _clean_environment(environ)
-        completed = run(install_command(python, root / "requirements.lock", wheelhouse=wheelhouse), env=clean)
+        completed = run(install_command(python, root / "requirements.lock", wheelhouse=wheelhouse), env=clean,
+                        cwd=str(target.parent))
         if completed.returncode != 0:
             tail = (completed.stderr or completed.stdout or "").strip().splitlines()[-5:]
             return _failure(target, "pip could not install the locked packages", tail)
-        imported = run([str(python), "-I", "-c", IMPORT_CHECK], env=clean)
+        imported = run([str(python), "-I", "-c", IMPORT_CHECK], env=clean, cwd=str(target.parent))
         if imported.returncode != 0:
             tail = (imported.stderr or imported.stdout or "").strip().splitlines()[-5:]
             return _failure(target, "the installed packages cannot be imported", tail)
