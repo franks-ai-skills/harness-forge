@@ -110,6 +110,14 @@ An empty Codex table alone is not proof that lower-layer servers vanished.
 Known failure to apply a required baseline control blocks launch;
 unobserved runtime containment remains disclosed rather than invented.
 
+Forge also checks what each worker reports doing. A Claude worker's
+successful file access outside its workspace fails it. A Codex worker
+may run only reading commands (`cat`, `nl`, `sed` printing, `grep`, `rg`
+and similar) on paths inside its workspace; a network client, another
+command, a command substitution or a path outside fails it, and its
+output is discarded. This check sees only what the harness reports; it
+does not replace the sandbox and does not prove containment.
+
 Each role has its own launch restrictions: Claude research gets only
 web tools, source support an empty tool list, and review only read tools.
 Codex uses a no-write filesystem policy, web search only for research,

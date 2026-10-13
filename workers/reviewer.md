@@ -46,6 +46,8 @@ Print one JSON object and nothing else:
 ```
 
 Read the files with your read-only tools. Where reading goes through a
-shell, as in Codex, run only commands that read, such as `cat`, `sed -n`,
-`grep` and `ls`. Do not write or change files and do not use the
-network.
+shell, as in Codex, run only `cat`, `nl`, `head`, `tail`, `sed -n` with a
+printing script, `grep`, `rg`, `ls` or `wc` on the files in your working
+directory, without command substitution, other programs or paths outside
+it; any other command makes Forge discard your answer. Do not write or
+change files and do not use the network.

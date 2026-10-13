@@ -16,7 +16,7 @@ from pathlib import Path
 
 _GLOB_CHARACTERS = re.compile(r"[*?\[{]")
 _SHELLS = {"sh", "bash", "zsh", "dash"}
-# Clients that send or fetch over the network; a worker's shell has no reason to run them.
+# Clients that send or fetch over the network; named in the reason when a worker runs one.
 NETWORK_CLIENTS = {"curl", "wget", "nc", "ncat", "netcat", "telnet", "ssh", "scp", "sftp", "ftp", "rsync", "http",
                    "https", "socat"}
 
@@ -89,78 +89,138 @@ def claude_outside(stdout: str, workspace: Path) -> list[str]:
     return outside
 
 
-_OPERATORS = {";", "|", "&&", "||", "&", "|&", "\n"}
-# Commands that run the next word as the command: the client behind them is what runs.
-_WRAPPERS = {"env", "command", "exec", "nohup", "xargs", "sudo", "time", "nice", "timeout", "stdbuf"}
-DEVICES = {"/dev/null", "/dev/stdin", "/dev/stdout", "/dev/stderr", "/dev/tty", "/dev/zero", "/dev/urandom"}
+_OPERATORS = {";", "|", "&&", "||", "&", "|&"}
+DEVICES = {"/dev/null", "/dev/stdin", "/dev/stdout", "/dev/stderr"}
+# What a worker's shell may run: commands that only read and print. Anything else, a shell, a wrapper
+# such as env or xargs, or a form that runs code (command substitution, sed's e and w), cannot be verified
+# from the event and fails the worker; a rerun is cheaper than trusting it.
+READERS = {"cat", "nl", "head", "tail", "sed", "grep", "rg", "ls", "wc", "sort", "uniq", "cut", "tr", "diff",
+           "echo", "printf", "pwd", "true"}
+_TEXT_ARGUMENTS = {"echo", "printf", "pwd", "true", "tr"}
+_PATTERN_FIRST = {"grep", "rg"}
+_PATTERN_OPTIONS = {"-e", "--regexp"}
+# sed scripts that only print: a line range with p, or a substitution whose flags are g, p, I or a number.
+_SED_PRINT = re.compile(r"^(\d+|\$)?(,(\d+|\$))?p$|^s(.)(?:(?!\4).)*\4(?:(?!\4).)*\4[gpI0-9]*$")
 
 
-def simple_commands(command: str) -> list[list[str]]:
-    """The words of each simple command a shell line runs, split at ;, |, &&, || and &, `sh -c '...'` unwrapped.
+def _scan(script: str) -> tuple[str, bool]:
+    """The script with unquoted newlines as `;`, and whether it substitutes a command outside single quotes."""
+    out, quote, substitutes, index = [], None, False, 0
+    while index < len(script):
+        character = script[index]
+        if quote == "'":
+            quote = None if character == "'" else quote
+        elif character == "\\" and index + 1 < len(script):
+            out.append(script[index:index + 2])
+            index += 2
+            continue
+        elif quote == '"':
+            if character == '"':
+                quote = None
+            elif character == "`" or script.startswith("$(", index):
+                substitutes = True
+        elif character in "'\"":
+            quote = character
+        elif character == "`" or script.startswith(("$(", "<(", ">("), index):
+            substitutes = True
+        elif character == "\n":
+            out.append(";")
+            index += 1
+            continue
+        out.append(character)
+        index += 1
+    return "".join(out), substitutes
 
-    A line the lexer cannot split comes back as its whitespace words, one command."""
-    lexer = shlex.shlex(command, posix=True, punctuation_chars=True)
+
+def _script(command: str) -> str:
+    """The script of the `zsh -lc '...'` wrapper Codex runs every command in; other lines as they are."""
+    try:
+        words = shlex.split(command)
+    except ValueError:
+        return command
+    if len(words) == 3 and os.path.basename(words[0]) in _SHELLS and words[1] in ("-c", "-lc"):
+        return words[2]
+    return command
+
+
+def simple_commands(command: str) -> tuple[list[list[str]], bool]:
+    """The words of each simple command a line runs, split at ;, |, &&, ||, &, ( ), ) and unquoted newlines,
+    and whether it substitutes a command. A line the lexer cannot split is one command of its words."""
+    script, substitutes = _scan(_script(command))
+    lexer = shlex.shlex(script, posix=True, punctuation_chars=True)
     lexer.whitespace_split = True
     segments: list[list[str]] = [[]]
     try:
         for token in lexer:
             if token in _OPERATORS or (token and set(token) <= set(";|&()")):
-                segments.append([])  # ( and ) open and close a subshell or a $( ) substitution: a new command
-            elif token != "$":
-                segments[-1].append(token.lstrip("`"))
+                segments.append([])
+            else:
+                segments[-1].append(token)
     except ValueError:
-        return [command.split()]
-    commands = []
-    for words in segments:
-        if len(words) >= 3 and os.path.basename(words[0]) in _SHELLS and words[1] in ("-c", "-lc"):
-            commands += simple_commands(words[2])
-        elif words:
-            commands.append(words)
-    return commands
+        return [script.split()], substitutes
+    return [words for words in segments if words], substitutes
 
 
-def _executables(words: list[str]) -> list[str]:
-    """The command a simple command runs, behind assignments and wrappers."""
-    names = []
-    for word in words:
-        if "=" in word and word.split("=", 1)[0].isidentifier():
-            continue  # VAR=value before the command
-        if os.path.basename(word) in _WRAPPERS or word.startswith("-") or word.isdigit():
+def _operands(name: str, arguments: list[str]) -> tuple[list[str], list[str]]:
+    """(paths, sed scripts) among a reader's arguments; options and search patterns are neither."""
+    paths, scripts, explicit, skip_next = [], [], False, False
+    for word in arguments:
+        if skip_next:
+            (scripts if name == "sed" else []).append(word)
+            skip_next = False
             continue
-        names.append(word)
-        break
-    return [os.path.basename(name) for name in names if name]
+        if name == "sed" and word in ("-e", "--expression") or name in _PATTERN_FIRST and word in _PATTERN_OPTIONS:
+            explicit, skip_next = True, True
+            continue
+        if word.startswith("-") and word != "-":
+            continue
+        paths.append(word)
+    if name == "sed" and not explicit and paths:
+        scripts.append(paths.pop(0))
+    elif name in _PATTERN_FIRST and not explicit and paths:
+        paths.pop(0)  # the search pattern
+    return paths, scripts
 
 
-def command_problems(command: str, workspace: Path, home: str) -> list[str]:
-    """Network clients run, and paths reached outside the workspace, in one shell command line.
+def _outside(path: str, workspace: Path) -> bool:
+    """A path operand outside the workspace; a glob is judged by its root, existing or not."""
+    if path in DEVICES or path in ("-", ">", ">>", "<", "2", "1"):
+        return False
+    root = _GLOB_CHARACTERS.split(path, maxsplit=1)[0]
+    if root != path:
+        root = os.path.dirname(root) or "."
+    return root.startswith("~") or not inside(root, workspace)
 
-    A path counts when it starts with ~, leaves the workspace with .., or is
-    an absolute path outside it that exists or lies in the user's home; a
-    word like a search pattern "/api/" names no file and does not count.
-    """
-    problems = []
-    for words in simple_commands(command):
-        problems += [f"network client {name}" for name in _executables(words) if name in NETWORK_CLIENTS]
-        for word in words[1:]:
-            token = word.split("=", 1)[1] if word.startswith("-") and "=" in word else word
-            if not token or token in DEVICES:
-                continue
-            if token.startswith("~"):
-                problems.append(token)
-            elif os.path.isabs(token):
-                if inside(token, workspace):
-                    continue
-                in_home = os.path.commonpath([os.path.abspath(token), os.path.abspath(home)]) == os.path.abspath(home)
-                if in_home or os.path.lexists(token):
-                    problems.append(token)
-            elif ".." in Path(token).parts and not inside(token, workspace):
-                problems.append(token)
+
+def command_problems(command: str, workspace: Path, home: str = "") -> list[str]:
+    """Why a worker's shell line cannot be accepted: a network client, a command that is not a reader or
+    cannot be verified, or a path outside the workspace. Paths are judged by name, not by whether the file
+    exists afterwards."""
+    commands, substitutes = simple_commands(command)
+    problems = ["command substitution"] if substitutes else []
+    for words in commands:
+        while words and "=" in words[0] and words[0].split("=", 1)[0].isidentifier():
+            words = words[1:]  # VAR=value before the command
+        if not words:
+            continue
+        name = os.path.basename(words[0])
+        if name in NETWORK_CLIENTS:
+            problems.append(f"network client {name}")
+            continue
+        if name not in READERS:
+            problems.append(f"{name} is not a reading command")
+            continue
+        if name == "sed" and any(word == "-i" or word.startswith(("-i", "--in-place")) for word in words[1:]):
+            problems.append("sed -i writes")
+        paths, scripts = _operands(name, words[1:])
+        problems += [f"sed script {script!r} may run or write" for script in scripts if not _SED_PRINT.match(script)]
+        if name not in _TEXT_ARGUMENTS:
+            problems += [path for path in paths if _outside(path, workspace)]
     return problems
 
 
-def codex_outside(stdout: str, workspace: Path, home: str) -> list[str]:
-    """What Codex commands reached outside the workspace.
+def codex_outside(stdout: str, workspace: Path, home: str = "") -> list[str]:
+    """What Codex commands did that the worker may not.
 
     A successful command counts; so does a compound line whatever its exit
     code, since a later failure does not show that an earlier part failed.
@@ -172,6 +232,6 @@ def codex_outside(stdout: str, workspace: Path, home: str) -> list[str]:
         if not (event.get("type") == "item.completed" and item.get("type") == "command_execution"
                 and isinstance(item.get("command"), str)):
             continue
-        if item.get("exit_code") == 0 or len(simple_commands(item["command"])) > 1:
+        if item.get("exit_code") == 0 or len(simple_commands(item["command"])[0]) > 1:
             found += command_problems(item["command"], workspace, home)
     return found
