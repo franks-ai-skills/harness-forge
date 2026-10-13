@@ -429,6 +429,10 @@ class LaunchTest(unittest.TestCase):
             self.assertEqual(command_problems("/bin/zsh -lc 'cat notes.md'", workspace), [])
             (workspace / "~notes.md").write_text("x", encoding="utf-8")
             self.assertEqual(command_problems("cat '~notes.md'", workspace), [], "a quoted ~ is a literal name")
+            # zsh expands an unquoted word starting with = to a program's path.
+            self.assertTrue(command_problems("cat =cat", workspace))
+            self.assertTrue(command_problems("/bin/zsh -lc 'cat =cat'", workspace))
+            self.assertEqual(command_problems("cat '=cat' ./=cat", workspace), [])
             for line in ("'|' cat notes.md", "cat notes.md -n", "diff -u notes.md other.md", "sort notes.md",
                          "cat notes.md | ; true", "cat notes.md |\n", "cat notes.md |\nhead -n 2"):
                 with self.subTest(line=line):

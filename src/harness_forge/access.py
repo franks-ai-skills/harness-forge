@@ -188,6 +188,8 @@ def _commands(script: str) -> list[list[str]]:
                         raise Unreadable("an expansion inside double quotes")
                     word += inner
                     index = end + 1
+                elif character == "=" and not word:
+                    raise Unreadable("a word starting with = outside quotes, which zsh expands to a program's path")
                 elif _SAFE.match(character):
                     word += character
                     index += 1
