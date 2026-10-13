@@ -1,4 +1,4 @@
-# Generated-output permission (draft 2)
+# Generated-output permission (draft 3)
 
 Status: **draft, not in effect.** The wording needs the project owner's
 approval before either repository or the plugin is published. Until
@@ -8,65 +8,64 @@ lawyer.
 
 ## Proposed text
 
-To be published as `LICENSE-OUTPUT-EXCEPTION` in Forge, and as the same
-text with "Agent Harness KB" in the knowledge-base repository, whose rule
-text Forge copies into its output.
+Adapted from the FSF's
+[Autoconf Configure Script Exception 3.0](https://www.gnu.org/licenses/autoconf-exception-3.0.html).
+Only the program's name, the license (AGPLv3 instead of GPLv3), the
+title and what counts as the program's output differ; the structure
+and the remaining wording are Autoconf's. To be published as
+`LICENSE-OUTPUT-EXCEPTION`.
 
 ```text
-Harness Forge Generated-Output Permission
+HARNESS FORGE GENERATED OUTPUT EXCEPTION
+Version 1.0
 
-Additional permission under section 7 of the GNU Affero General Public
-License, version 3 ("AGPLv3").
+This Exception is an additional permission under section 7 of the GNU
+Affero General Public License, version 3 ("AGPLv3"). It applies to a
+given file that bears a notice placed by the copyright holder of the
+file stating that the file is governed by AGPLv3 along with this
+Exception.
 
-The licensors of Harness Forge grant the following additional
-permission. It applies to each file of Harness Forge that bears a notice
-stating that the file is governed by the AGPLv3 along with this
-permission.
+The purpose of this Exception is to allow distribution of Harness
+Forge's typical output under terms of the recipient's choice
+(including proprietary).
 
-1. Definitions.
+0. Definitions.
 
-"Generated Output" means only the files and file sections that Harness
-Forge creates in a repository on which it operates: the skill packages
-it builds and the links it creates for them; the decision, research,
-override and report records under .harness/; and the sections it
-writes into that repository's README.md.
+"Covered Code" is the source or object code of a version of Harness
+Forge that is a covered work under this License, including the
+knowledge-base snapshot it contains.
 
-"Eligible Forge Material" means the parts of Harness Forge, as released
-by its licensors, that it is designed to copy into Generated Output in
-normal operation, such as the text of its templates, rules and
-knowledge-base snapshot, to the extent the licensors are authorized to
-license that material.
+"Output" means the files and file sections that Harness Forge writes
+in a repository it operates on: skill packages and the links it creates
+for them, the records under .harness/, and the sections it writes into
+that repository's README.md.
 
-2. Grant of additional permission.
+"Normally Copied Code" for a version of Harness Forge means all parts
+of its Covered Code which that version can copy from its code (i.e.,
+not from its input or from research it fetches) into its Output.
 
-To the extent Generated Output contains Eligible Forge Material, you may
-use, reproduce, modify, propagate, convey and license that material, as
-it appears in the Generated Output, under terms of your choice,
-including proprietary terms, without complying with the conditions of
-the AGPLv3 for that material. Including Eligible Forge Material does
-not by itself make the Generated Output subject to the AGPLv3.
+"Ineligible Code" is Covered Code that is not Normally Copied Code.
 
-3. Limits.
+1. Grant of Additional Permission.
 
-This permission grants no rights in material in Generated Output that
-belongs to you or to third parties; that material keeps its own
-copyright and license terms.
+You have permission to propagate Output of Harness Forge, even if such
+propagation would otherwise violate the terms of AGPLv3. However, if
+by modifying Harness Forge you cause any Ineligible Code of the version
+you received to become Normally Copied Code of your modified version,
+then you void this Exception for the resulting covered work. If you
+convey that resulting covered work, you must remove this Exception in
+accordance with the second paragraph of Section 7 of AGPLv3.
 
-This permission does not apply to Harness Forge itself. Its source
-code, skills, worker instructions, rules, templates, knowledge-base
-snapshot and other project files remain licensed under the AGPLv3 only;
-only Eligible Forge Material, as copied into Generated Output, is
-covered.
+2. No Weakening of Harness Forge Copyleft.
 
-If you modify Harness Forge, material that you cause to be copied into
-Generated Output and that the version released by the licensors does
-not copy there is not Eligible Forge Material. You may extend this
-permission to material you add or modify, if you have the authority to
-do so, but you are not required to.
-
-You may remove this permission from a copy or a modified version of
-Harness Forge, as section 7 of the AGPLv3 permits.
+The availability of this Exception does not imply any general
+presumption that third-party software is unaffected by the copyleft
+requirements of the license of Harness Forge.
 ```
+
+The Agent Harness KB repository adds the same exception for its files
+that Forge copies into its snapshot (its rule files), so the notice
+travels with them.
 
 ## Proposed placement
 
@@ -106,20 +105,25 @@ Harness Forge, as section 7 of the AGPLv3 permits.
   template or rule text copied into a generated skill would stay under
   the AGPL and could impose its conditions on that file.
 - Copyright in the rest of the output follows its input, often the
-  user's ([GPL FAQ](https://www.gnu.org/licenses/gpl-faq.html#GPLOutput)),
-  so the grant covers only Forge's own material.
+  user's ([GPL FAQ](https://www.gnu.org/licenses/gpl-faq.html#GPLOutput)).
 - AGPLv3 section 7 allows additional permissions, lets recipients
   remove them, and allows placing them only on material "for which you
   have or can give appropriate copyright permission"; the FSF adds that
   people who modify a program "do not have to make the same exception
   for their code" ([GPL FAQ](https://www.gnu.org/licenses/gpl-faq.html#GPLIncompatibleLibs)).
   Hence the contribution rule.
-- The modification clause follows the
-  [Autoconf exception](https://www.gnu.org/licenses/autoconf-exception-3.0.html),
-  which limits its permission to "Normally Copied Code". Autoconf voids
-  the whole exception for a modified version that copies other code;
-  this draft only excludes that material, which keeps the permission
-  usable for forks.
+- The text reuses the Autoconf exception's structure and wording,
+  including its rule that a modified version which copies other code
+  into its output voids the exception. The Autoconf text says "changing
+  it is not allowed"; for its own license texts the FSF accepts modified
+  terms under another name and without its preamble, and asks people to
+  use the GPLv3 exception mechanism instead of new licenses
+  ([GPL FAQ](https://www.gnu.org/licenses/gpl-faq.html#ModifyGPL)).
+  Applying that to an exception text is an inference; hence the new
+  title and no GNU name in it.
+- Like Autoconf's, the grant only lifts AGPLv3 conditions for
+  propagating the output; it gives no rights in the user's own or third
+  parties' material in that output, which the licensors could not grant.
 - The line "Everyone is permitted to copy and distribute verbatim copies
   of this license document, but changing it is not allowed" stands before
   the AGPL's preamble; it is why the exception does not go into
