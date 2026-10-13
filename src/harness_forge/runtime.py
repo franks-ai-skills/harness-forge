@@ -168,6 +168,19 @@ def _invoked(text: str) -> str | None:
     return names[0] if len(names) == 1 else None
 
 
+# The file argument of each tool a Claude case may permit; Skill names a skill, not a path.
+_PATH_ARGUMENTS = {"Read": "file_path", "Grep": "path", "Glob": "path"}
+
+
+def _inside(path: str, roots: set[str]) -> bool:
+    """Whether a tool's path argument stays in the throwaway workspace; relative paths start there."""
+    if path.startswith("~"):
+        return False
+    base = next(iter(sorted(roots)))
+    normal = posixpath.normpath(path if posixpath.isabs(path) else posixpath.join(base, path))
+    return any(normal == root or normal.startswith(root.rstrip("/") + "/") for root in roots)
+
+
 def _observe_claude(stdout: str, name: str, baseline: set[str], workspace: Path | None = None) -> dict:
     """Activation, tool calls and what else stayed loaded, from the init, assistant and tool-result events.
 
@@ -176,9 +189,10 @@ def _observe_claude(stdout: str, name: str, baseline: set[str], workspace: Path 
     shows the skill was chosen (``attempted``).
     """
     observed = {"activation": None, "attempted": None, "calls": [], "unavailable": [], "competing": [],
-                "loaded": None, "completed": False, "errored": False, "inventory": "not observable"}
+                "loaded": None, "completed": False, "errored": False, "inventory": "not observable", "outside": []}
     other_skill = False
     pending: dict[str, str] = {}
+    reads: dict[str, str] = {}
     # Only the candidate in the throwaway workspace counts; a same-named skill elsewhere is not it.
     roots = ({str(workspace), str(Path(workspace).resolve())} if workspace is not None else {""})
     for event in _events(stdout):
@@ -201,6 +215,9 @@ def _observe_claude(stdout: str, name: str, baseline: set[str], workspace: Path 
                     continue
                 observed["calls"].append(str(block.get("name")))
                 arguments = block.get("input") if isinstance(block.get("input"), dict) else {}
+                path = arguments.get(_PATH_ARGUMENTS.get(str(block.get("name")), ""))
+                if workspace is not None and isinstance(path, str) and not _inside(path, roots):
+                    reads[str(block.get("id"))] = path
                 signal = None
                 if block.get("name") == "Skill":
                     if name in (arguments.get("skill"), arguments.get("command")):
@@ -220,9 +237,12 @@ def _observe_claude(stdout: str, name: str, baseline: set[str], workspace: Path 
                     pending[str(block.get("id"))] = signal
         if event.get("type") == "user":
             for block in blocks:
-                if (isinstance(block, dict) and block.get("type") == "tool_result" and block.get("is_error") is not True
-                        and str(block.get("tool_use_id")) in pending):
+                if not (isinstance(block, dict) and block.get("type") == "tool_result" and block.get("is_error") is not True):
+                    continue
+                if str(block.get("tool_use_id")) in pending:
                     observed["activation"] = observed["activation"] or pending[str(block["tool_use_id"])]
+                if str(block.get("tool_use_id")) in reads:
+                    observed["outside"].append(reads[str(block["tool_use_id"])])
             # The invocation marker counts only in the prompt's own text: a tool result is data, such as a
             # fixture that quotes a transcript.
             content = message.get("content") if isinstance(message, dict) else None
@@ -353,6 +373,9 @@ def _decide(harness: str, test_case: dict, observed: dict, permitted: list[str])
         return "error", "the candidate skill was not loaded"
     if observed["competing"]:
         return "not-run", f"a competing skill was loaded: {', '.join(observed['competing'])}"
+    if observed.get("outside"):
+        # Claude runs the case without a sandbox: a skill turned off is only hidden, and its files stay readable.
+        return "not-run", f"read outside the throwaway workspace: {', '.join(observed['outside'][:5])}"
     activated = observed["activation"] is not None
     if test_case["expected"] == "activates":
         if activated:

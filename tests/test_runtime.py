@@ -188,6 +188,26 @@ class RuntimeTest(unittest.TestCase):
         self.assertIn(f"a user-level skill named {NAME} takes precedence over the candidate", shadowed.reason)
         self.assertEqual(len(runner.worker_calls), 2, "no case launches under a shadowing skill")
 
+    def test_a_successful_read_outside_the_workspace_stops_the_case(self):
+        """A skill turned off is only hidden: its files stay readable, so reading one brings it in anyway."""
+        def stream(path, failed):
+            events = [json.loads(line) for line in claude_run(skill_call=None).splitlines()]
+            reads = [{"type": "tool_use", "id": "r", "name": "Read", "input": {"file_path": path}},
+                     {"type": "tool_use", "id": "s", "name": "Skill", "input": {"skill": NAME}}]
+            return "\n".join(json.dumps(event) for event in [
+                events[0], {"type": "assistant", "message": {"content": reads}},
+                tool_result("r", failed), tool_result("s"), events[-1]]) + "\n"
+
+        outside = "/home/someone/.claude/skills/my-personal/SKILL.md"
+        for path, failed, expected in ((outside, False, "not-run"), (outside, True, "pass"),
+                                       ("../elsewhere/notes.md", False, "not-run"),
+                                       (f"{SKILL_DIR}/SKILL.md", False, "pass")):
+            with self.subTest(path=path, failed=failed):
+                result = self.run_cases("claude-code", stream(path, failed))[0][0]
+                self.assertEqual(result.result, expected, result.reason)
+                if expected == "not-run":
+                    self.assertIn("outside the throwaway workspace", result.reason)
+
     def test_each_case_turns_the_user_level_skills_off(self):
         """Skills still listed with bundled skills off (the user's, or built-ins that setting keeps) are turned
         off for the case only; the case's own listing shows whether that worked."""
@@ -264,7 +284,8 @@ class RuntimeTest(unittest.TestCase):
         outside = read("@@WORKSPACE@@/bug-report.md")
         self.assertEqual(self.run_cases("claude-code", outside)[0][0].result, "fail")
         elsewhere = read(f"/home/u/.claude/skills/{NAME}/SKILL.md")
-        self.assertEqual(self.run_cases("claude-code", elsewhere)[0][0].result, "fail",
+        result = self.run_cases("claude-code", elsewhere)[0][0]
+        self.assertEqual((result.result, result.observed_activation), ("not-run", None),
                          "a same-named skill outside the throwaway workspace is not the candidate")
         near_miss = self.run_cases("claude-code", inside, cases=[case("implicit", "does-not-activate")])[0][0]
         self.assertEqual(near_miss.result, "fail")
