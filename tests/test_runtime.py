@@ -29,10 +29,15 @@ def case(mode="explicit", expected="activates", **extra):
     return value
 
 
-def tool_result(tool_id, failed=False):
+def tool_result(tool_id, failed=False, content="ok"):
     """The user event that carries a tool call's result, as Claude's stream-json reports it."""
     return {"type": "user", "message": {"content": [
-        {"type": "tool_result", "tool_use_id": tool_id, "content": "Error" if failed else "ok", "is_error": failed}]}}
+        {"type": "tool_result", "tool_use_id": tool_id, "content": "Error" if failed else content, "is_error": failed}]}}
+
+
+def numbered(text):
+    """A file as Claude's Read tool returns it: each line with its number."""
+    return "\n".join(f"{number:6}\t{line}" for number, line in enumerate(text.splitlines(), 1))
 
 
 def claude_run(skills=(NAME,), plugins=BUILTIN_PLUGINS, mcp=(), skill_call=NAME, calls=(), failed=()):
@@ -339,17 +344,21 @@ class RuntimeTest(unittest.TestCase):
 
     def test_a_claude_read_of_the_candidates_skill_md_counts_as_activation(self):
         """Its instructions reached the model; a read of a reference alone shows file access, not activation."""
-        def read(path, failed=False):
+        def read(path, failed=False, content=numbered(BUILT)):
             events = [json.loads(line) for line in claude_run(skill_call=None).splitlines()]
             events[1:1] = [{"type": "assistant", "message": {"content": [
                 {"type": "tool_use", "id": "r", "name": "Read", "input": {"file_path": path}}]}},
-                tool_result("r", failed)]
+                tool_result("r", failed, content)]
             return "\n".join(json.dumps(event) for event in events) + "\n"
 
         inside = read(f"@@WORKSPACE@@/.claude/skills/{NAME}/SKILL.md")
         result = self.run_cases("claude-code", inside)[0][0]
         self.assertEqual(result.result, "pass", result.reason)
         self.assertEqual(result.observed_activation, f"read SKILL.md from the {NAME} skill")
+        # Only a read that returned the whole SKILL.md brought its instructions to the model.
+        first_line = read(f"@@WORKSPACE@@/.claude/skills/{NAME}/SKILL.md", content=numbered(BUILT.splitlines()[0]))
+        result = self.run_cases("claude-code", first_line)[0][0]
+        self.assertEqual((result.result, result.observed_activation), ("fail", None), result.reason)
         reference = read(f"@@WORKSPACE@@/.claude/skills/{NAME}/references/requirements.md")
         self.assertEqual(self.run_cases("claude-code", reference)[0][0].result, "fail", "a reference is not the skill")
         escaping = read(f"@@WORKSPACE@@/.claude/skills/{NAME}/../../../outside/SKILL.md")

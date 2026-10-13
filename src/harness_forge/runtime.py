@@ -23,6 +23,7 @@ from pathlib import Path
 from typing import Iterable, Mapping
 
 
+from harness_forge.access import inside, tool_paths
 from harness_forge.adapters import codex
 from harness_forge.adapters.base import Runner, preflight, run_command, worker_environment
 from harness_forge.documents import load_document, safe_path
@@ -168,47 +169,19 @@ def _invoked(text: str) -> str | None:
     return names[0] if len(names) == 1 else None
 
 
-_GLOB_CHARACTERS = re.compile(r"[*?\[{]")
+# Shared with the worker launch: where a file tool reached, judged through the workspace's links.
+_tool_paths, _inside = tool_paths, inside
 
 
-def _tool_paths(tool: str, arguments: dict) -> list[str]:
-    """Every location a Claude file tool can reach with these arguments; Skill names a skill, not a path.
-
-    Glob searches under ``path`` unless its pattern is absolute, so the pattern's directory part counts
-    too; Grep also accepts ``file_path``.
-    """
-    def text(key):
-        value = arguments.get(key)
-        return value if isinstance(value, str) and value else None
-
-    if tool == "Read":
-        return [path for path in (text("file_path"),) if path]
-    if tool == "Grep":
-        return [path for path in (text("path"), text("file_path")) if path]
-    if tool == "Glob":
-        base, pattern = text("path") or ".", text("pattern") or ""
-        prefix = _GLOB_CHARACTERS.split(pattern, maxsplit=1)[0]
-        directory = os.path.dirname(prefix) if prefix != pattern else prefix
-        if os.path.isabs(pattern):
-            return [directory or os.sep]  # an absolute pattern replaces path as the search directory
-        # A relative pattern, also one starting with ~, searches under path.
-        return [base, os.path.join(base, directory)] if directory else [base]
-    return []
+def _result_text(block: dict) -> str:
+    content = block.get("content")
+    if isinstance(content, str):
+        return content
+    return "\n".join(item.get("text", "") for item in content or [] if isinstance(item, dict))
 
 
-def _inside(path: str, workspace: Path) -> bool:
-    """Whether a tool's path stays in the throwaway workspace once links resolve; relative paths start there."""
-    if path.startswith("~"):
-        return False
-    try:
-        root = os.path.realpath(workspace)
-        target = os.path.realpath(os.path.join(root, path))
-        return os.path.commonpath([root, target]) == root
-    except (ValueError, OSError):  # another drive on Windows, or a path that cannot be resolved
-        return False
-
-
-def _observe_claude(stdout: str, name: str, baseline: set[str], workspace: Path | None = None) -> dict:
+def _observe_claude(stdout: str, name: str, baseline: set[str], workspace: Path | None = None,
+                    markers: list[str] | None = None) -> dict:
     """Activation, tool calls and what else stayed loaded, from the init, assistant and tool-result events.
 
     A Skill or Read call activates only once its tool result arrives without
@@ -220,6 +193,7 @@ def _observe_claude(stdout: str, name: str, baseline: set[str], workspace: Path 
     other_skill = False
     pending: dict[str, str] = {}
     reads: dict[str, tuple[str, dict]] = {}
+    skill_reads: set[str] = set()
     # Only the candidate in the throwaway workspace counts; a same-named skill elsewhere is not it.
     roots = ({str(workspace), str(Path(workspace).resolve())} if workspace is not None else {""})
     for event in _events(stdout):
@@ -261,12 +235,17 @@ def _observe_claude(stdout: str, name: str, baseline: set[str], workspace: Path 
                 if signal:
                     observed["attempted"] = observed["attempted"] or signal
                     pending[str(block.get("id"))] = signal
+                    if block.get("name") == "Read":
+                        skill_reads.add(str(block.get("id")))
         if event.get("type") == "user":
             for block in blocks:
                 if not (isinstance(block, dict) and block.get("type") == "tool_result" and block.get("is_error") is not True):
                     continue
-                if str(block.get("tool_use_id")) in pending:
-                    observed["activation"] = observed["activation"] or pending[str(block["tool_use_id"])]
+                signal = pending.get(str(block.get("tool_use_id")))
+                # A read activates only when it returned the whole SKILL.md: a line or two loads no instructions.
+                if signal and (str(block.get("tool_use_id")) not in skill_reads
+                               or all(marker in _result_text(block) for marker in markers or [])):
+                    observed["activation"] = observed["activation"] or signal
                 if str(block.get("tool_use_id")) in reads:
                     # Judged only once the call succeeded: a failed call reached nothing.
                     tool, arguments = reads[str(block["tool_use_id"])]
@@ -485,7 +464,7 @@ def activation_case(
             return "not-run", f"unavailable: the harness could not start: {error}", None, "not observable"
         # What the harness did before it stopped counts, also when it timed out or failed. Observed while the
         # workspace and its links exist, so paths resolve where the harness found them.
-        observed = (_observe_claude(completed.stdout, name, baseline | companions, workspace)
+        observed = (_observe_claude(completed.stdout, name, baseline | companions, workspace, _markers(files, target))
                     if harness == "claude-code"
                     else _observe_codex(completed.stdout, target, _markers(files, target), workspace,
                                         workspace.resolve()))

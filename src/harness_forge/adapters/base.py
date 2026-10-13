@@ -20,6 +20,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable, Mapping
 
+from harness_forge import access
 from harness_forge.adapters import claude_code, codex
 from harness_forge.contracts import WORKER_DISCLOSURE, WORKER_POLICY
 from harness_forge.documents import canonical_digest, safe_path, validate
@@ -217,6 +218,9 @@ def run_worker(request: dict, harness: str, *, contract: Contract, confirmation:
                                env=worker_environment(environ, harness), stdin=_prompt(role, request), timeout=timeout)
         except OSError as error:
             return _response(request, "unavailable", configuration, reason=f"the worker could not start: {error}")
+        # Judged while the workspace exists, so paths resolve as the worker saw them.
+        reached = (access.claude_outside(completed.stdout, workspace) if harness == "claude-code" else
+                   access.codex_outside(completed.stdout, workspace, environ.get("HOME") or os.path.expanduser("~")))
 
     observation = adapter.observe(completed.stdout)
     outside = sorted(set(call for call in observation["calls"] if call not in adapter.allowed_calls(role)))
@@ -229,6 +233,11 @@ def run_worker(request: dict, harness: str, *, contract: Contract, confirmation:
                 else {"status": "unknown"}, "observed_behavior": behavior}
     if outside:
         return _response(request, "failed", evidence, reason=f"out of scope: {', '.join(outside)}; output discarded")
+    if reached:
+        # Isolation is best-effort, but an observed access outside the staged inputs still fails the worker.
+        behavior.append(f"reached outside the worker's workspace: {', '.join(reached[:5])}")
+        return _response(request, "failed", evidence, reason="out of scope: reached outside the worker's workspace: "
+                                                             f"{', '.join(reached[:5])}; output discarded")
     if completed.timed_out:
         return _response(request, "unavailable", evidence, reason=f"the worker timed out after {timeout} s")
     if completed.returncode or observation["errored"] or not observation["completed"]:
