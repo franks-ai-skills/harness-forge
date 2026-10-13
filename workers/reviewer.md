@@ -50,13 +50,14 @@ shell, as in Codex, Forge accepts only these forms, and any other
 command line makes it discard your answer:
 
 - Commands: `cat`, `nl -ba`, `head -n N`, `tail -n N`, `wc`, `ls`,
-  `sort`, `uniq`, `cut`, `diff`, `grep` or `rg` with a pattern, and
+  `uniq`, `cut`, `grep` or `rg` with a pattern, and
   `sed -n` with a line-range `p` or an `s/…/…/p` script; `echo`,
   `tr`, `pwd` and `true`.
 - Separate commands with `;`, `|` or a new line. The only redirection
   is `2>/dev/null`. Quote with single quotes, or double quotes without
   `$`, backticks or backslashes; no variables, globs or braces outside
   quotes.
-- Name only files in your working directory, without `..`.
+- Put options before file names. Name only files in your working
+  directory, without `..`.
 
 Do not write or change files and do not use the network.

@@ -46,9 +46,12 @@ def tool_paths(tool: str, arguments: dict) -> list[str]:
     return []
 
 
-def inside(path: str, workspace: Path) -> bool:
-    """Whether a path stays in the workspace once links resolve; relative paths start there."""
-    if path.startswith("~"):
+def inside(path: str, workspace: Path, *, literal: bool = False) -> bool:
+    """Whether a path stays in the workspace once links resolve; relative paths start there.
+
+    A tool's ~ path means the home folder; a ``literal`` word from the shell grammar, where ~ was quoted,
+    is a file name like any other."""
+    if path.startswith("~") and not literal:
         return False
     try:
         root = os.path.realpath(workspace)
@@ -100,6 +103,7 @@ _DEVNULL = "2>/dev/null"
 _NUMBER = re.compile(r"^\d+$")
 # Per command: options without a value, options that take one (as the next word or attached), and
 # what its positional words are: paths, a pattern then paths, a sed script then paths, or text.
+# Not sort, which can spill its input into temporary files, nor diff, which picks files in a directory itself.
 _COMMANDS = {
     "cat": ({"-n", "-b"}, set(), "paths"),
     "nl": ({"-ba"}, {"-b"}, "paths"),
@@ -107,10 +111,8 @@ _COMMANDS = {
     "tail": (set(), {"-n"}, "paths"),
     "wc": ({"-l", "-w", "-c", "-m"}, set(), "paths"),
     "ls": ({"-l", "-a", "-la", "-al", "-1", "-R"}, set(), "paths"),
-    "sort": ({"-n", "-r", "-u"}, set(), "paths"),
     "uniq": ({"-c", "-d", "-u"}, set(), "one path"),
     "cut": (set(), {"-d", "-f"}, "paths"),
-    "diff": ({"-u"}, set(), "paths"),
     "grep": ({"-n", "-i", "-F", "-E", "-w", "-c", "-l", "-H", "-h", "-r", "-v", "-o", "-s"},
              {"-A", "-B", "-C", "-m", "-e", "--regexp"}, "pattern"),
     "rg": ({"-n", "-i", "-F", "-w", "-c", "-l", "-H", "-v", "-o", "-N", "--no-heading", "--hidden"},
@@ -146,8 +148,12 @@ def _script(command: str) -> str:
 
 
 def _commands(script: str) -> list[list[str]]:
-    """The words of each command, split at unquoted ;, | and newlines; 2>/dev/null dropped."""
+    """The words of each command, split at unquoted ;, | and newlines; 2>/dev/null dropped.
+
+    A pipe needs a command on both sides; its state is kept apart from the words, so a quoted "|" stays
+    a word."""
     commands: list[list[str]] = [[]]
+    pending = False  # a | that still waits for its command
     index, length = 0, len(script)
     while index < length:
         character = script[index]
@@ -155,10 +161,16 @@ def _commands(script: str) -> list[list[str]]:
             index += 1
         elif script.startswith("||", index):
             raise Unreadable("||")
-        elif character in ";\n|":
-            if character == "|" and commands[-1] in ([], ["|"]):
+        elif character in ";\n":
+            if pending:
+                raise Unreadable("a pipe without a command after it")
+            commands.append([])
+            index += 1
+        elif character == "|":
+            if not commands[-1]:
                 raise Unreadable("a pipe without a command before it")
-            commands.append(["|"] if character == "|" else [])
+            commands.append([])
+            pending = True
             index += 1
         elif script.startswith(_DEVNULL, index) and (index + len(_DEVNULL) == length
                                                      or script[index + len(_DEVNULL)] in " \t;\n|"):
@@ -182,10 +194,10 @@ def _commands(script: str) -> list[list[str]]:
                 else:
                     raise Unreadable(f"the character {character!r} outside quotes")
             commands[-1].append(word)
-    if commands[-1] == ["|"]:
+            pending = False
+    if pending:
         raise Unreadable("a pipe without a command after it")
-    # A command after a pipe was marked with "|" to catch an empty one; the mark is not a word.
-    return [words[1:] if words[:1] == ["|"] else words for words in commands if words and words != ["|"]]
+    return [words for words in commands if words]
 
 
 def _arguments(name: str, words: list[str]) -> tuple[list[str], list[str]]:
@@ -197,6 +209,9 @@ def _arguments(name: str, words: list[str]) -> tuple[list[str], list[str]]:
         word = words[index]
         if not word.startswith("-") or word == "-":
             positionals.append(word)
+        elif positionals:
+            # BSD readers stop reading options at the first file, so a later -x would be a file name.
+            raise Unreadable(f"{name} option {word} after a file")
         else:
             option, value = (word.split("=", 1) + [None])[:2] if word.startswith("--") else (word, None)
             attached = next((prefix for prefix in sorted(valued, key=len, reverse=True)
@@ -228,7 +243,7 @@ def _path_problem(path: str, workspace: Path) -> str | None:
         return f"{path}: a path may not start with -"
     if ".." in Path(path).parts:
         return f"{path}: leaves the directory with .."
-    if not inside(path, workspace):  # resolved through links, which may point out of the workspace
+    if not inside(path, workspace, literal=True):  # resolved through links, which may point out of it
         return f"{path}: outside the workspace"
     return None
 

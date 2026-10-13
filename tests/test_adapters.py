@@ -427,6 +427,12 @@ class LaunchTest(unittest.TestCase):
             self.assertTrue(command_problems("printf '%n' PATH", workspace))
             self.assertTrue(command_problems("/tmp/helper/zsh -lc 'cat notes.md'", workspace))
             self.assertEqual(command_problems("/bin/zsh -lc 'cat notes.md'", workspace), [])
+            (workspace / "~notes.md").write_text("x", encoding="utf-8")
+            self.assertEqual(command_problems("cat '~notes.md'", workspace), [], "a quoted ~ is a literal name")
+            for line in ("'|' cat notes.md", "cat notes.md -n", "diff -u notes.md other.md", "sort notes.md",
+                         "cat notes.md | ; true", "cat notes.md |\n", "cat notes.md |\nhead -n 2"):
+                with self.subTest(line=line):
+                    self.assertTrue(command_problems(line, workspace))
 
     def test_the_codex_review_worker(self):
         request, files, verdicts = review_case()
