@@ -1,0 +1,21 @@
+{
+  "name": "harness-forge",
+  "description": "Harness Forge for Claude Code and Codex",
+  "owner": {
+    "name": "franks-ai-skills",
+    "url": "https://github.com/franks-ai-skills"
+  },
+  "plugins": [
+    {
+      "name": "harness-forge",
+      "source": "./",
+      "description": "Turns an idea for Claude Code or Codex tooling into a confirmed plan, researched requirements, a portable skill and its verification against a pinned harness knowledge base.",
+      "version": "0.1.0",
+      "category": "development",
+      "policy": {
+        "installation": "AVAILABLE",
+        "authentication": "ON_INSTALL"
+      }
+    }
+  ]
+}

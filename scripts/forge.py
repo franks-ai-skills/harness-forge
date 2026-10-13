@@ -13,6 +13,11 @@ from pathlib import Path
 _SOURCE = str(Path(__file__).resolve().parents[1] / "src")
 if _SOURCE not in sys.path:
     sys.path.insert(0, _SOURCE)
+if __name__ == "__main__":
+    # Before the locked packages are imported: continue, switch to the Forge environment, or name its setup.
+    from harness_forge.environment import ensure  # noqa: E402
+
+    ensure(Path(__file__).resolve().parents[1], str(Path(__file__).resolve()), sys.argv[1:])
 
 from dataclasses import asdict  # noqa: E402
 

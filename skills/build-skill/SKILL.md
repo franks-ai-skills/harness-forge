@@ -10,6 +10,12 @@ write the description and the domain procedure; Forge checks the
 bindings, renders the package from its templates and writes only inside
 the skill's own directories.
 
+`scripts/forge.py` is in the Forge plugin root, two directories above
+this skill's folder. Run it with `python3`: it switches to Forge's own
+Python environment. If it stops because that environment is not set up,
+ask the user before running `python3 scripts/setup.py` from the plugin
+root, which downloads Forge's pinned packages from PyPI once.
+
 ## Rules that are easy to get wrong
 
 - **Build only what was confirmed.** The part must be confirmed in this

@@ -6,9 +6,8 @@ account locations and the user's existing login, with a cost warning and
 a continue/stop question for an API-key or unknown login. Do not introduce
 the project owner's aliases, profile paths, plugins or shell setup into
 product code, fixtures or installation requirements. Personal setup is
-a temporary local-development exception only; in the current sibling
-workspace its instructions are at
-`../playground/plans/harness-forge-local-development.md`.
+a temporary local-development exception only and is documented outside
+this repository.
 
 Apply temporary worker restrictions without changing saved user settings.
 Never initiate login/logout, copy credentials, switch accounts or use a

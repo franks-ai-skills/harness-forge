@@ -6,4 +6,4 @@ evals/canaries/results/private/
 .venv/
 
 # The global ignore pattern coverage*.json would hide this schema.
-!schemas/coverage.schema.json
+!**/schemas/coverage.schema.json

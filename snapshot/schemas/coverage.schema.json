@@ -1,0 +1,109 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:harness-forge:schema:coverage",
+  "title": "Extraction coverage of KB pages",
+  "type": "object",
+  "properties": {
+    "pages": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "page": {
+            "type": "string",
+            "pattern": "^(?!.*\\.\\.)docs/[A-Za-z0-9._/-]+\\.md(#[a-z0-9-]+)?$",
+            "maxLength": 300
+          },
+          "sections": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "section": {
+                  "type": "string",
+                  "pattern": "^[a-z0-9-]+$"
+                },
+                "items": {
+                  "type": "array",
+                  "items": {
+                    "oneOf": [
+                      {
+                        "type": "object",
+                        "properties": {
+                          "text": {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 20000
+                          },
+                          "rules": {
+                            "type": "array",
+                            "items": {
+                              "type": "string",
+                              "pattern": "^[a-z][a-z0-9-]*(\\.[a-z0-9-]+)+$",
+                              "maxLength": 200
+                            },
+                            "minItems": 1,
+                            "uniqueItems": true
+                          }
+                        },
+                        "additionalProperties": false,
+                        "required": [
+                          "text",
+                          "rules"
+                        ]
+                      },
+                      {
+                        "type": "object",
+                        "properties": {
+                          "text": {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 20000
+                          },
+                          "status": {
+                            "enum": [
+                              "dropped",
+                              "reworded",
+                              "not-a-rule"
+                            ]
+                          },
+                          "reason": {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 20000
+                          }
+                        },
+                        "additionalProperties": false,
+                        "required": [
+                          "text",
+                          "status",
+                          "reason"
+                        ]
+                      }
+                    ]
+                  },
+                  "minItems": 1
+                }
+              },
+              "additionalProperties": false,
+              "required": [
+                "section",
+                "items"
+              ]
+            },
+            "minItems": 1
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "page",
+          "sections"
+        ]
+      }
+    }
+  },
+  "additionalProperties": false,
+  "required": [
+    "pages"
+  ]
+}

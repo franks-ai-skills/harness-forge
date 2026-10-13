@@ -11,8 +11,11 @@ recommendation comes from `scripts/forge.py select`; you phrase the
 questions and explain the result, you never pick a mechanism yourself.
 
 `scripts/forge.py` is in the Forge plugin root, two directories above
-this skill's folder. Run it with the Forge environment's Python (see the
-plugin README). Every command prints bounded JSON.
+this skill's folder. Run it with `python3`: it switches to Forge's own
+Python environment. If it stops because that environment is not set up,
+ask the user before running `python3 scripts/setup.py` from the plugin
+root, which downloads Forge's pinned packages from PyPI once. Every
+command prints bounded JSON.
 
 ## Rules that are easy to get wrong
 

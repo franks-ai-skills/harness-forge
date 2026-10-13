@@ -10,7 +10,10 @@ confirmed, and reports two results per part: the harness result for
 what was built, and the goal result.
 
 `scripts/forge.py` is in the Forge plugin root, two directories above
-this skill's folder; run it with the Forge environment's Python.
+this skill's folder. Run it with `python3`: it switches to Forge's own
+Python environment. If it stops because that environment is not set up,
+ask the user before running `python3 scripts/setup.py` from the plugin
+root, which downloads Forge's pinned packages from PyPI once.
 
 ## Rules that are easy to get wrong
 

@@ -1,6 +1,6 @@
 [project]
 name = "harness-forge"
-version = "0.0.0"
+version = "0.1.0"
 description = "Portable, contract-bound agent harness builds and verification"
 requires-python = ">=3.11"
 license = "AGPL-3.0-only"
