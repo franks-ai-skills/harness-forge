@@ -89,149 +89,191 @@ def claude_outside(stdout: str, workspace: Path) -> list[str]:
     return outside
 
 
-_OPERATORS = {";", "|", "&&", "||", "&", "|&"}
-DEVICES = {"/dev/null", "/dev/stdin", "/dev/stdout", "/dev/stderr"}
-# What a worker's shell may run: commands that only read and print. Anything else, a shell, a wrapper
-# such as env or xargs, or a form that runs code (command substitution, sed's e and w), cannot be verified
-# from the event and fails the worker; a rerun is cheaper than trusting it.
-READERS = {"cat", "nl", "head", "tail", "sed", "grep", "rg", "ls", "wc", "sort", "uniq", "cut", "tr", "diff",
-           "echo", "printf", "pwd", "true"}
-_TEXT_ARGUMENTS = {"echo", "printf", "pwd", "true", "tr"}
-_PATTERN_FIRST = {"grep", "rg"}
+# A Codex worker's shell lines are accepted only in this grammar, never by emulating the shell: bare
+# reading commands with known options, plain path operands inside the workspace, quotes without
+# expansion, and ;, | or a newline between commands. Whatever it does not cover fails the worker; a
+# rerun of the reviewer is cheaper than trusting a line Forge cannot read exactly.
+_SAFE = re.compile(r"[A-Za-z0-9._/,=:+@%-]")
+_DEVNULL = "2>/dev/null"
+_NUMBER = re.compile(r"^\d+$")
+# Per command: options without a value, options that take one (as the next word or attached), and
+# what its positional words are: paths, a pattern then paths, a sed script then paths, or text.
+_COMMANDS = {
+    "cat": ({"-n", "-b"}, set(), "paths"),
+    "nl": ({"-ba"}, {"-b"}, "paths"),
+    "head": (set(), {"-n"}, "paths"),
+    "tail": (set(), {"-n"}, "paths"),
+    "wc": ({"-l", "-w", "-c", "-m"}, set(), "paths"),
+    "ls": ({"-l", "-a", "-la", "-al", "-1", "-R"}, set(), "paths"),
+    "sort": ({"-n", "-r", "-u"}, set(), "paths"),
+    "uniq": ({"-c", "-d", "-u"}, set(), "one path"),
+    "cut": (set(), {"-d", "-f"}, "paths"),
+    "diff": ({"-u"}, set(), "paths"),
+    "grep": ({"-n", "-i", "-F", "-E", "-w", "-c", "-l", "-H", "-h", "-r", "-v", "-o", "-s"},
+             {"-A", "-B", "-C", "-m", "-e", "--regexp"}, "pattern"),
+    "rg": ({"-n", "-i", "-F", "-w", "-c", "-l", "-H", "-v", "-o", "-N", "--no-heading", "--hidden"},
+           {"-A", "-B", "-C", "-m", "-e", "--regexp", "-g", "--glob"}, "pattern"),
+    "sed": ({"-n"}, {"-e"}, "script"),
+    "tr": ({"-d", "-s"}, set(), "text"),
+    "echo": ({"-n"}, set(), "text"),
+    "printf": (set(), set(), "text"),
+    "pwd": (set(), set(), "text"),
+    "true": (set(), set(), "text"),
+}
+_NUMERIC = {"-n", "-A", "-B", "-C", "-m"}
 _PATTERN_OPTIONS = {"-e", "--regexp"}
-# sed scripts that only print: a line range with p, or a substitution whose flags are g, p, I or a number.
-_SED_PRINT = re.compile(r"^(\d+|\$)?(,(\d+|\$))?p$|^s(.)(?:(?!\4).)*\4(?:(?!\4).)*\4[gpI0-9]*$")
+# sed scripts that only print: a line range with p, or s/// with g, p, I or a number as flags.
+_SED_PRINT = re.compile(r"^(\d+|\$)?(,(\d+|\$))?p$|^s/(?:[^/\\]|\\.)*/(?:[^/\\]|\\.)*/[gpI0-9]*$")
 
 
-def _scan(script: str) -> tuple[str, bool]:
-    """The script with unquoted newlines as `;`, and whether it substitutes a command outside single quotes."""
-    out, quote, substitutes, index = [], None, False, 0
-    while index < len(script):
-        character = script[index]
-        if quote == "'":
-            quote = None if character == "'" else quote
-        elif character == "\\" and index + 1 < len(script):
-            out.append(script[index:index + 2])
-            index += 2
-            continue
-        elif quote == '"':
-            if character == '"':
-                quote = None
-            elif character == "`" or script.startswith("$(", index):
-                substitutes = True
-        elif character in "'\"":
-            quote = character
-        elif character == "`" or script.startswith(("$(", "<(", ">("), index):
-            substitutes = True
-        elif character == "\n":
-            out.append(";")
-            index += 1
-            continue
-        out.append(character)
-        index += 1
-    return "".join(out), substitutes
+class Unreadable(ValueError):
+    """A shell line outside the grammar Forge can read exactly."""
 
 
 def _script(command: str) -> str:
     """The script of the `zsh -lc '...'` wrapper Codex runs every command in; other lines as they are."""
     try:
         words = shlex.split(command)
-    except ValueError:
-        return command
+    except ValueError as error:
+        raise Unreadable(f"unbalanced quoting: {error}") from error
     if len(words) == 3 and os.path.basename(words[0]) in _SHELLS and words[1] in ("-c", "-lc"):
         return words[2]
     return command
 
 
-def simple_commands(command: str) -> tuple[list[list[str]], bool]:
-    """The words of each simple command a line runs, split at ;, |, &&, ||, &, ( ), ) and unquoted newlines,
-    and whether it substitutes a command. A line the lexer cannot split is one command of its words."""
-    script, substitutes = _scan(_script(command))
-    lexer = shlex.shlex(script, posix=True, punctuation_chars=True)
-    lexer.whitespace_split = True
-    segments: list[list[str]] = [[]]
-    try:
-        for token in lexer:
-            if token in _OPERATORS or (token and set(token) <= set(";|&()")):
-                segments.append([])
+def _commands(script: str) -> list[list[str]]:
+    """The words of each command, split at unquoted ;, | and newlines; 2>/dev/null dropped."""
+    commands: list[list[str]] = [[]]
+    index, length = 0, len(script)
+    while index < length:
+        character = script[index]
+        if character in " \t":
+            index += 1
+        elif character in ";\n" or (character == "|" and not script.startswith("||", index)):
+            commands.append([])
+            index += 1
+        elif script.startswith(_DEVNULL, index) and (index + len(_DEVNULL) == length
+                                                     or script[index + len(_DEVNULL)] in " \t;\n|"):
+            index += len(_DEVNULL)
+        else:
+            word = ""
+            while index < length and script[index] not in " \t;\n|":
+                character = script[index]
+                if character in "'\"":
+                    end = script.find(character, index + 1)
+                    if end < 0:
+                        raise Unreadable("an unclosed quote")
+                    inner = script[index + 1:end]
+                    if character == '"' and any(mark in inner for mark in "$`\\"):
+                        raise Unreadable("an expansion inside double quotes")
+                    word += inner
+                    index = end + 1
+                elif _SAFE.match(character):
+                    word += character
+                    index += 1
+                else:
+                    raise Unreadable(f"the character {character!r} outside quotes")
+            commands[-1].append(word)
+    return [words for words in commands if words]
+
+
+def _arguments(name: str, words: list[str]) -> tuple[list[str], list[str]]:
+    """(positional words, option values that are patterns or scripts) after checking every option."""
+    flags, valued, _ = _COMMANDS[name]
+    positionals, given = [], []
+    index = 0
+    while index < len(words):
+        word = words[index]
+        if not word.startswith("-") or word == "-":
+            positionals.append(word)
+        else:
+            option, value = (word.split("=", 1) + [None])[:2] if word.startswith("--") else (word, None)
+            attached = next((prefix for prefix in sorted(valued, key=len, reverse=True)
+                             if not prefix.startswith("--") and word.startswith(prefix) and word != prefix), None)
+            if word in flags:
+                pass
+            elif option in valued and value is not None:
+                given.append((option, value))
+            elif word in valued:
+                if index + 1 >= len(words):
+                    raise Unreadable(f"{name} {word} needs a value")
+                index += 1
+                given.append((word, words[index]))
+            elif attached:
+                given.append((attached, word[len(attached):]))
             else:
-                segments[-1].append(token)
-    except ValueError:
-        return [script.split()], substitutes
-    return [words for words in segments if words], substitutes
+                raise Unreadable(f"{name} option {word} is not one Forge can read")
+        index += 1
+    for option, value in given:
+        if option in _NUMERIC and not _NUMBER.match(value):
+            raise Unreadable(f"{name} {option} needs a number")
+        if name == "nl" and option == "-b" and value != "a":
+            raise Unreadable("nl -b takes only a")
+    return positionals, [value for option, value in given if option in _PATTERN_OPTIONS or name == "sed"]
 
 
-def _operands(name: str, arguments: list[str]) -> tuple[list[str], list[str]]:
-    """(paths, sed scripts) among a reader's arguments; options and search patterns are neither."""
-    paths, scripts, explicit, skip_next = [], [], False, False
-    for word in arguments:
-        if skip_next:
-            (scripts if name == "sed" else []).append(word)
-            skip_next = False
-            continue
-        if name == "sed" and word in ("-e", "--expression") or name in _PATTERN_FIRST and word in _PATTERN_OPTIONS:
-            explicit, skip_next = True, True
-            continue
-        if word.startswith("-") and word != "-":
-            continue
-        paths.append(word)
-    if name == "sed" and not explicit and paths:
-        scripts.append(paths.pop(0))
-    elif name in _PATTERN_FIRST and not explicit and paths:
-        paths.pop(0)  # the search pattern
-    return paths, scripts
-
-
-def _outside(path: str, workspace: Path) -> bool:
-    """A path operand outside the workspace; a glob is judged by its root, existing or not."""
-    if path in DEVICES or path in ("-", ">", ">>", "<", "2", "1"):
-        return False
-    root = _GLOB_CHARACTERS.split(path, maxsplit=1)[0]
-    if root != path:
-        root = os.path.dirname(root) or "."
-    return root.startswith("~") or not inside(root, workspace)
+def _path_problem(path: str, workspace: Path) -> str | None:
+    if path.startswith("-"):
+        return f"{path}: a path may not start with -"
+    if ".." in Path(path).parts:
+        return f"{path}: leaves the directory with .."
+    if os.path.isabs(path) and not inside(path, workspace):
+        return f"{path}: outside the workspace"
+    return None
 
 
 def command_problems(command: str, workspace: Path, home: str = "") -> list[str]:
-    """Why a worker's shell line cannot be accepted: a network client, a command that is not a reader or
-    cannot be verified, or a path outside the workspace. Paths are judged by name, not by whether the file
-    exists afterwards."""
-    commands, substitutes = simple_commands(command)
-    problems = ["command substitution"] if substitutes else []
+    """Why a worker's shell line cannot be accepted, or nothing when the grammar covers all of it."""
+    try:
+        commands = _commands(_script(command))
+    except Unreadable as error:
+        return [f"unreadable command: {error}"]
+    problems = []
     for words in commands:
-        while words and "=" in words[0] and words[0].split("=", 1)[0].isidentifier():
-            words = words[1:]  # VAR=value before the command
-        if not words:
+        name = words[0]
+        if os.path.basename(name) in NETWORK_CLIENTS:
+            problems.append(f"network client {os.path.basename(name)}")
             continue
-        name = os.path.basename(words[0])
-        if name in NETWORK_CLIENTS:
-            problems.append(f"network client {name}")
+        if name not in _COMMANDS:
+            problems.append(f"{name} is not a reading command Forge accepts")
             continue
-        if name not in READERS:
-            problems.append(f"{name} is not a reading command")
+        try:
+            positionals, values = _arguments(name, words[1:])
+        except Unreadable as error:
+            problems.append(str(error))
             continue
-        if name == "sed" and any(word == "-i" or word.startswith(("-i", "--in-place")) for word in words[1:]):
-            problems.append("sed -i writes")
-        paths, scripts = _operands(name, words[1:])
-        problems += [f"sed script {script!r} may run or write" for script in scripts if not _SED_PRINT.match(script)]
-        if name not in _TEXT_ARGUMENTS:
-            problems += [path for path in paths if _outside(path, workspace)]
+        kind = _COMMANDS[name][2]
+        if kind == "text":
+            continue
+        if kind == "pattern" and not values:
+            if not positionals:
+                problems.append(f"{name} needs a pattern")
+                continue
+            positionals = positionals[1:]
+        if kind == "script":
+            if "-n" not in words[1:]:
+                problems.append("sed must run with -n")
+            if values:
+                scripts = values  # given with -e
+            else:
+                scripts, positionals = positionals[:1], positionals[1:]
+            if not scripts:
+                problems.append("sed needs a script")
+            problems += [f"sed script {script!r} may run or write" for script in scripts
+                         if not _SED_PRINT.match(script)]
+        if kind == "one path" and len(positionals) > 1:
+            problems.append(f"{name} with a second file writes to it")
+        problems += [problem for problem in (_path_problem(path, workspace) for path in positionals) if problem]
     return problems
 
 
 def codex_outside(stdout: str, workspace: Path, home: str = "") -> list[str]:
-    """What Codex commands did that the worker may not.
-
-    A successful command counts; so does a compound line whatever its exit
-    code, since a later failure does not show that an earlier part failed.
-    A single command that failed reached nothing.
-    """
+    """Every Codex command line the grammar does not accept, whatever its exit code: a failed command can
+    already have read or sent something, and an attempt is an observed violation too."""
     found = []
     for event in _events(stdout):
         item = event.get("item") if isinstance(event.get("item"), dict) else {}
-        if not (event.get("type") == "item.completed" and item.get("type") == "command_execution"
+        if (event.get("type") == "item.completed" and item.get("type") == "command_execution"
                 and isinstance(item.get("command"), str)):
-            continue
-        if item.get("exit_code") == 0 or len(simple_commands(item["command"])[0]) > 1:
             found += command_problems(item["command"], workspace, home)
     return found
