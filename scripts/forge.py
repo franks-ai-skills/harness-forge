@@ -33,7 +33,7 @@ from harness_forge.contracts import (  # noqa: E402
     write_decision,
 )
 from harness_forge.documents import (  # noqa: E402
-    canonical_digest, load_document, parse_json, safe_path, split_frontmatter, validate, validate_kb,
+    schema_errors, schema_named, canonical_digest, load_document, parse_json, safe_path, split_frontmatter, validate, validate_kb,
 )
 from harness_forge.issues import find_issue, gh_publisher, gh_search, propose, publish  # noqa: E402
 from harness_forge.fetch import fetch_text  # noqa: E402
@@ -160,8 +160,12 @@ def _check_candidates(candidates: list) -> None:
             raise _InvalidInput(f"candidate {number}: every value must be non-empty text")
         if candidate["concept"] not in CONCEPTS:
             raise _InvalidInput(f"candidate {number}: concept {candidate['concept']!r} is not one of {list(CONCEPTS)}")
-        if not candidate["source"].startswith("https://"):
-            raise _InvalidInput(f"candidate {number}: source must be an https URL")
+        # The fields a decision records as the part's reuse must also meet that schema: nothing is recommended
+        # that cannot be recorded.
+        reuse = {key: value for key, value in candidate.items() if key not in ("fit", "concept")}
+        problems = schema_errors(reuse, schema_named("decision")["properties"]["parts"]["items"]["properties"]["reuse"])
+        if problems:
+            raise _InvalidInput(f"candidate {number}: " + "; ".join(problems))
 
 
 def _select(arguments: argparse.Namespace) -> int:

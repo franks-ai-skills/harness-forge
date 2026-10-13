@@ -142,6 +142,11 @@ def schema_names() -> list[str]:
     return sorted(_schemas()[0])
 
 
+def schema_named(name: str) -> dict:
+    """One Forge schema, for checking a value against a part of it."""
+    return _schemas()[0][name]
+
+
 def schema_errors(value: Any, schema: dict) -> list[str]:
     validator = Draft202012Validator(schema, registry=_schemas()[1])
     messages = []

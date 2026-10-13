@@ -244,7 +244,7 @@ def _observe_claude(stdout: str, name: str, baseline: set[str], workspace: Path 
                 signal = pending.get(str(block.get("tool_use_id")))
                 # A read activates only when it returned the whole SKILL.md: a line or two loads no instructions.
                 if signal and (str(block.get("tool_use_id")) not in skill_reads
-                               or all(marker in _result_text(block) for marker in markers or [])):
+                               or _whole(_result_text(block), markers or ["\0no marker"])):
                     observed["activation"] = observed["activation"] or signal
                 if str(block.get("tool_use_id")) in reads:
                     # Judged only once the call succeeded: a failed call reached nothing.
@@ -331,11 +331,16 @@ def _skills_read(item: dict) -> list[tuple[str, str]]:
     return read
 
 
-def _printed(item: dict, markers: list[str]) -> bool:
-    """Whether the command printed the candidate's SKILL.md (_markers) whole: its non-empty lines in order,
-    repeated lines included, as one run of the output's non-empty lines."""
-    lines = [line.rstrip() for line in _lines(str(item.get("aggregated_output", ""))) if line.strip()]
+def _whole(output: str, markers: list[str]) -> bool:
+    """Whether output holds the candidate's SKILL.md (_markers) whole: its non-empty lines in order, repeated
+    lines included, as one run of the output's non-empty lines (line numbers removed)."""
+    lines = [line.rstrip() for line in _lines(output) if line.strip()]
     return any(lines[start:start + len(markers)] == markers for start in range(len(lines) - len(markers) + 1))
+
+
+def _printed(item: dict, markers: list[str]) -> bool:
+    """Whether the command printed the candidate's SKILL.md whole."""
+    return _whole(str(item.get("aggregated_output", "")), markers)
 
 
 def _observe_codex(stdout: str, directory: str, markers: list[str] | None = None, *workspaces: Path) -> dict:

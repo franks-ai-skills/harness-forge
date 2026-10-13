@@ -355,7 +355,10 @@ class RuntimeTest(unittest.TestCase):
         result = self.run_cases("claude-code", inside)[0][0]
         self.assertEqual(result.result, "pass", result.reason)
         self.assertEqual(result.observed_activation, f"read SKILL.md from the {NAME} skill")
-        # Only a read that returned the whole SKILL.md brought its instructions to the model.
+        # Only a read that returned the whole SKILL.md, in order, brought its instructions to the model.
+        shuffled = read(f"@@WORKSPACE@@/.claude/skills/{NAME}/SKILL.md",
+                        content=numbered("\n".join(reversed(BUILT.splitlines()))))
+        self.assertEqual(self.run_cases("claude-code", shuffled)[0][0].observed_activation, None)
         first_line = read(f"@@WORKSPACE@@/.claude/skills/{NAME}/SKILL.md", content=numbered(BUILT.splitlines()[0]))
         result = self.run_cases("claude-code", first_line)[0][0]
         self.assertEqual((result.result, result.observed_activation), ("fail", None), result.reason)

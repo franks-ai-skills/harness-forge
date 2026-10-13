@@ -89,37 +89,89 @@ def claude_outside(stdout: str, workspace: Path) -> list[str]:
     return outside
 
 
-def _words(command: str) -> list[str]:
+_OPERATORS = {";", "|", "&&", "||", "&", "|&", "\n"}
+# Commands that run the next word as the command: the client behind them is what runs.
+_WRAPPERS = {"env", "command", "exec", "nohup", "xargs", "sudo", "time", "nice", "timeout", "stdbuf"}
+DEVICES = {"/dev/null", "/dev/stdin", "/dev/stdout", "/dev/stderr", "/dev/tty", "/dev/zero", "/dev/urandom"}
+
+
+def simple_commands(command: str) -> list[list[str]]:
+    """The words of each simple command a shell line runs, split at ;, |, &&, || and &, `sh -c '...'` unwrapped.
+
+    A line the lexer cannot split comes back as its whitespace words, one command."""
+    lexer = shlex.shlex(command, posix=True, punctuation_chars=True)
+    lexer.whitespace_split = True
+    segments: list[list[str]] = [[]]
     try:
-        words = shlex.split(command)
+        for token in lexer:
+            if token in _OPERATORS or (token and set(token) <= set(";|&()")):
+                segments.append([])  # ( and ) open and close a subshell or a $( ) substitution: a new command
+            elif token != "$":
+                segments[-1].append(token.lstrip("`"))
     except ValueError:
-        return command.split()
-    if len(words) >= 3 and os.path.basename(words[0]) in _SHELLS and words[1] in ("-c", "-lc"):
-        return _words(words[2])
-    return words
+        return [command.split()]
+    commands = []
+    for words in segments:
+        if len(words) >= 3 and os.path.basename(words[0]) in _SHELLS and words[1] in ("-c", "-lc"):
+            commands += simple_commands(words[2])
+        elif words:
+            commands.append(words)
+    return commands
+
+
+def _executables(words: list[str]) -> list[str]:
+    """The command a simple command runs, behind assignments and wrappers."""
+    names = []
+    for word in words:
+        if "=" in word and word.split("=", 1)[0].isidentifier():
+            continue  # VAR=value before the command
+        if os.path.basename(word) in _WRAPPERS or word.startswith("-") or word.isdigit():
+            continue
+        names.append(word)
+        break
+    return [os.path.basename(name) for name in names if name]
 
 
 def command_problems(command: str, workspace: Path, home: str) -> list[str]:
-    """A network client, or a path in the user's home or above the workspace, in one shell command."""
+    """Network clients run, and paths reached outside the workspace, in one shell command line.
+
+    A path counts when it starts with ~, leaves the workspace with .., or is
+    an absolute path outside it that exists or lies in the user's home; a
+    word like a search pattern "/api/" names no file and does not count.
+    """
     problems = []
-    for word in _words(command):
-        token = word.split("=", 1)[1] if word.startswith("-") and "=" in word else word
-        if os.path.basename(token) in NETWORK_CLIENTS:
-            problems.append(f"network client {os.path.basename(token)}")
-        elif token.startswith("~") or (os.path.isabs(token) and not inside(token, workspace)
-                                       and os.path.commonpath([os.path.abspath(token), home]) == home):
-            problems.append(token)
-        elif ".." in Path(token).parts and not inside(token, workspace):
-            problems.append(token)
+    for words in simple_commands(command):
+        problems += [f"network client {name}" for name in _executables(words) if name in NETWORK_CLIENTS]
+        for word in words[1:]:
+            token = word.split("=", 1)[1] if word.startswith("-") and "=" in word else word
+            if not token or token in DEVICES:
+                continue
+            if token.startswith("~"):
+                problems.append(token)
+            elif os.path.isabs(token):
+                if inside(token, workspace):
+                    continue
+                in_home = os.path.commonpath([os.path.abspath(token), os.path.abspath(home)]) == os.path.abspath(home)
+                if in_home or os.path.lexists(token):
+                    problems.append(token)
+            elif ".." in Path(token).parts and not inside(token, workspace):
+                problems.append(token)
     return problems
 
 
 def codex_outside(stdout: str, workspace: Path, home: str) -> list[str]:
-    """What successful Codex commands reached outside the workspace."""
+    """What Codex commands reached outside the workspace.
+
+    A successful command counts; so does a compound line whatever its exit
+    code, since a later failure does not show that an earlier part failed.
+    A single command that failed reached nothing.
+    """
     found = []
     for event in _events(stdout):
         item = event.get("item") if isinstance(event.get("item"), dict) else {}
-        if (event.get("type") == "item.completed" and item.get("type") == "command_execution"
-                and item.get("exit_code") == 0 and isinstance(item.get("command"), str)):
+        if not (event.get("type") == "item.completed" and item.get("type") == "command_execution"
+                and isinstance(item.get("command"), str)):
+            continue
+        if item.get("exit_code") == 0 or len(simple_commands(item["command"])) > 1:
             found += command_problems(item["command"], workspace, home)
     return found

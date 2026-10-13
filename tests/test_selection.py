@@ -196,7 +196,9 @@ class SelectCliTest(unittest.TestCase):
         good = {"name": "repro", "source": "https://example.com/repro", "license": "MIT", "maintenance": "maintained",
                 "fit": "confirmed", "concept": "skills"}
         for candidate in (None, "repro", {key: value for key, value in good.items() if key != "name"},
-                          {**good, "stars": 5}, {**good, "concept": "magic"}, {**good, "name": 7}):
+                          {**good, "stars": 5}, {**good, "concept": "magic"}, {**good, "name": 7},
+                          {**good, "source": "https://"}, {**good, "source": "https://example.com/a b"},
+                          {**good, "path": "../outside"}, {**good, "path": "/tmp/external"}):
             with self.subTest(candidate=candidate):
                 code, output = self.run_select({"answers": case["answers"], "whole_idea": case["whole_idea"],
                                                 "candidates": [candidate]})
