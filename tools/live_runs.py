@@ -149,19 +149,25 @@ def exit_code(summary: dict) -> int:
     return 0 if summary["status"] == "completed" and summary.get("clean") is not False else 1
 
 
+# The forge.py commands that launch workers, and so check the login first.
+WORKER_COMMANDS = ("workers", "research", "verify")
+
+
 class _Session:
     """One throwaway repository driven through scripts/forge.py, with every stage kept in the summary."""
 
     def __init__(self, case: str, harness: str, out: Path, forge: Forge | None, inputs_path: Path,
-                 cases_path: Path):
+                 cases_path: Path, login_answer: str | None = None):
         self.forge = forge or Forge()
         self.forge.module.RUNNER = Recorder(self.forge.module.RUNNER, out / "streams")
         self.harness, self.out, self.cases_path = harness, out, cases_path
         self.inputs = yaml.safe_load(inputs_path.read_text(encoding="utf-8"))
         self.repo, self.scratch = out / "repo", out / "inputs"
         self.repo.mkdir(parents=True)
+        # The contributor's answer to the cost question, given for this run only; never read from disk.
+        self.login_answer = login_answer
         self.summary = {"case": case, "harness": harness, "confirmation": TEST_RELAY, "stages": [],
-                        "status": "stopped", "clean": None, "repository": str(self.repo)}
+                        "status": "stopped", "clean": None, "repository": str(self.repo), "login_answer": login_answer}
         self.decision = self.evidence = self.revision = None
 
     def stage(self, name, result):
@@ -170,6 +176,8 @@ class _Session:
         return code, payload
 
     def run(self, name, *arguments):
+        if self.login_answer and arguments[0] in WORKER_COMMANDS:
+            arguments += ("--login-answer", self.login_answer)
         return self.stage(name, self.forge(*arguments))
 
     def finish(self, status):
@@ -277,9 +285,9 @@ class _Session:
 
 def vertical(harness: str, out: Path, *, forge: Forge | None = None,
              inputs_path: Path = ROOT / "evals" / "smoke" / "vertical-inputs.yaml",
-             cases_path: Path = ROOT / "evals" / "smoke" / "vertical.yaml") -> dict:
+             cases_path: Path = ROOT / "evals" / "smoke" / "vertical.yaml", login_answer: str | None = None) -> dict:
     """Intake record, both research passes, acceptance, build and verification in one throwaway repository."""
-    session = _Session("vertical", harness, out, forge, inputs_path, cases_path)
+    session = _Session("vertical", harness, out, forge, inputs_path, cases_path, login_answer)
     session.record(session.inputs["decision"])
     stopped = session.through_build("vertical")
     if stopped:
@@ -307,7 +315,7 @@ def _fixture_issues():
 
 def flows(harness: str, out: Path, *, forge: Forge | None = None,
           inputs_path: Path = ROOT / "evals" / "smoke" / "vertical-inputs.yaml",
-          cases_path: Path = ROOT / "evals" / "smoke" / "vertical.yaml") -> dict:
+          cases_path: Path = ROOT / "evals" / "smoke" / "vertical.yaml", login_answer: str | None = None) -> dict:
     """T12's flows live: a goal conflict, drift with an adopted override, a break and repair, and both scopes.
 
     The goal conflict, the drift, its override and the issue answer are
@@ -315,7 +323,7 @@ def flows(harness: str, out: Path, *, forge: Forge | None = None,
     fixtures too, so nothing reaches the real KB. Research, review and
     runtime cases run live, as in the vertical.
     """
-    session = _Session("flows", harness, out, forge, inputs_path, cases_path)
+    session = _Session("flows", harness, out, forge, inputs_path, cases_path, login_answer)
     session.forge.module.ISSUES = _fixture_issues()
     inputs, repo, scratch = session.inputs, session.repo, session.scratch
     checks = session.summary["checks"] = {}
@@ -463,13 +471,15 @@ def _baseline(harness: str, runner, environ) -> tuple[set[str], set[str] | None,
                                                     else "unknown")]
 
 
-def routing_smoke(harness: str, out: Path, *, runner=run_command, environ=None) -> dict:
+def routing_smoke(harness: str, out: Path, *, runner=run_command, environ=None,
+                  login_answer: str | None = None) -> dict:
     """Forge's four skills installed together; per skill an explicit, an implicit and a near-miss prompt."""
     environ = os.environ if environ is None else environ
     out.mkdir(parents=True, exist_ok=True)
     runner = Recorder(runner, out / "streams")
-    summary = {"case": "routing-smoke", "harness": harness, "results": [], "status": "stopped", "clean": None}
-    checked = preflight(harness, "review", runner=runner, environ=environ)
+    summary = {"case": "routing-smoke", "harness": harness, "results": [], "status": "stopped", "clean": None,
+               "login_answer": login_answer}
+    checked = preflight(harness, "review", runner=runner, environ=environ, login_answer=login_answer)
     summary["preflight"] = {key: checked[key] for key in ("available", "reason", "version", "login")}
     if not checked["available"]:
         _write_json(out / "summary.json", summary)

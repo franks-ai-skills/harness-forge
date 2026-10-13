@@ -357,7 +357,7 @@ def run_probe(harness, launcher, role, baseline, timeout):
     return result
 
 
-def run_live_case(harness, case):
+def run_live_case(harness, case, login_answer=None):
     """T11's automated live runs (tools/live_runs.py); evidence goes to the private results directory."""
     import sys
     sys.path.insert(0, str(ROOT / "tools"))
@@ -366,7 +366,7 @@ def run_live_case(harness, case):
     stamp = time.strftime("%Y%m%d-%H%M%S")
     out = ROOT / "evals/canaries/results/private" / f"{case}-{harness}-{stamp}"
     run = {"vertical": live_runs.vertical, "flows": live_runs.flows, "routing-smoke": live_runs.routing_smoke}[case]
-    summary = run(harness, out)
+    summary = run(harness, out, login_answer=login_answer)
     print(json.dumps({key: summary.get(key) for key in ("case", "harness", "status", "clean", "inventory_gap", "parts")}
                      | {"summary": str(out / "summary.json")}), flush=True)
     return live_runs.exit_code(summary)
@@ -380,9 +380,13 @@ def main():
     parser.add_argument("--role", choices=ROLES + ("all",), default="all")
     parser.add_argument("--baseline", action="store_true")
     parser.add_argument("--timeout", type=int, default=150)
+    parser.add_argument("--login-answer", choices=("continue",),
+                        help="continue with an API-key or unknown login, which can cost extra; asked again each run")
     args = parser.parse_args()
     if args.case != "worker-boundaries":
-        return run_live_case(args.harness, args.case)
+        return run_live_case(args.harness, args.case, args.login_answer)
+    if args.login_answer:
+        parser.error("--login-answer is not used by worker-boundaries")
     if args.launcher is None:
         parser.error("--launcher is required for worker-boundaries")
     results = [run_probe(args.harness, args.launcher, role, args.baseline, args.timeout)

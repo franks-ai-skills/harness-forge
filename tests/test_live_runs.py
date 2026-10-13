@@ -27,12 +27,27 @@ LIVE = load_runner()
 FORGE_SKILLS = list(LIVE.SKILLS)
 
 
+class RecordingForge(LIVE.Forge):
+    """Keeps the arguments of every forge.py command the runner sends."""
+
+    def __init__(self):
+        super().__init__()
+        self.commands = []
+
+    def __call__(self, *arguments):
+        self.commands.append([str(argument) for argument in arguments])
+        return super().__call__(*arguments)
+
+
+WORKER_COMMANDS = {"workers", "research", "verify"}
+
+
 class VerticalRunTest(unittest.TestCase):
-    def run_vertical(self, runner):
-        forge = LIVE.Forge()
+    def run_vertical(self, runner, **options):
+        forge = self.forge = RecordingForge()
         forge.module.RUNNER, forge.module.FETCH, forge.module.ENVIRON = runner, fetch_page, PARENT
         with tempfile.TemporaryDirectory(prefix="forge-vertical-") as directory:
-            summary = LIVE.vertical("claude-code", Path(directory) / "run", forge=forge)
+            summary = LIVE.vertical("claude-code", Path(directory) / "run", forge=forge, **options)
             on_disk = json.loads((Path(directory) / "run" / "summary.json").read_text(encoding="utf-8"))
             self.streams = [json.loads(path.read_text(encoding="utf-8"))
                             for path in sorted((Path(directory) / "run" / "streams").glob("*.json"))]
@@ -96,6 +111,28 @@ class VerticalRunTest(unittest.TestCase):
         summary, _ = self.run_vertical(FakeRunner(login=CLAUDE_API_KEY))
         self.assertTrue(summary["status"].startswith("stopped"))
         self.assertEqual([stage["stage"] for stage in summary["stages"]], ["workers"])
+        self.assertIsNone(summary["login_answer"])
+
+    def test_the_contributors_login_answer_lets_an_api_key_login_continue(self):
+        from tests.test_adapters import CLAUDE_API_KEY
+        runner = ResearchRunner([finding()])
+        runner.login = CLAUDE_API_KEY
+        summary, on_disk = self.run_vertical(runner, login_answer="continue")
+        self.assertEqual(summary["status"], "completed", [s for s in summary["stages"] if s["exit"]])
+        self.assertEqual(on_disk["login_answer"], "continue")
+        launching = [command for command in self.forge.commands if command[0] in WORKER_COMMANDS]
+        self.assertEqual({command[0] for command in launching}, WORKER_COMMANDS)
+        for command in self.forge.commands:
+            answered = command[-2:] == ["--login-answer", "continue"]
+            self.assertEqual(answered, command[0] in WORKER_COMMANDS, command)
+
+    def test_the_login_answer_does_not_change_a_subscription_run(self):
+        plain, _ = self.run_vertical(ResearchRunner([finding()]))
+        answered, _ = self.run_vertical(ResearchRunner([finding()]), login_answer="continue")
+        self.assertEqual(answered["status"], plain["status"])
+        self.assertEqual([stage["stage"] for stage in answered["stages"]], [stage["stage"] for stage in plain["stages"]])
+        workers = next(stage for stage in answered["stages"] if stage["stage"] == "workers")["output"]
+        self.assertEqual(workers, next(stage for stage in plain["stages"] if stage["stage"] == "workers")["output"])
 
 
 def init(skills):
@@ -192,9 +229,21 @@ class RoutingRunner(FakeRunner):
 
 
 class RoutingSmokeTest(unittest.TestCase):
-    def run_smoke(self, runner):
+    def run_smoke(self, runner, **options):
         with tempfile.TemporaryDirectory(prefix="forge-routing-") as directory:
-            return LIVE.routing_smoke("claude-code", Path(directory), runner=runner, environ=PARENT)
+            return LIVE.routing_smoke("claude-code", Path(directory), runner=runner, environ=PARENT, **options)
+
+    def test_an_api_key_login_runs_the_smoke_only_with_the_contributors_answer(self):
+        from tests.test_adapters import CLAUDE_API_KEY
+        runner = RoutingRunner()
+        runner.login = CLAUDE_API_KEY
+        stopped = self.run_smoke(runner)
+        self.assertEqual((stopped["status"], stopped["results"], stopped["login_answer"]), ("stopped", [], None))
+        runner = RoutingRunner()
+        runner.login = CLAUDE_API_KEY
+        answered = self.run_smoke(runner, login_answer="continue")
+        self.assertEqual(len(answered["results"]), 12)
+        self.assertEqual(answered["login_answer"], "continue")
 
     def test_twelve_cases_per_harness_against_the_safe_mode_baseline(self):
         runner = RoutingRunner()
