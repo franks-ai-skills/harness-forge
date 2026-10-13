@@ -87,7 +87,10 @@ def setup(root: Path, environ, *, run=_run, create=_create, wheelhouse: Path | N
     A virtual environment cannot be moved, so it is built in place and counts only once the marker is written;
     a failed attempt removes what it built. A second setup while one runs stops instead of waiting.
     """
-    target = environment.environment_dir(root, environ)
+    # Relative paths mean the caller's directory; setup later works from Forge's data directory.
+    root = Path(root).resolve()
+    target = environment.environment_dir(root, environ).absolute()
+    wheelhouse = Path(wheelhouse).absolute() if wheelhouse is not None else None
     if environment.complete(root, target):
         return {"ok": True, "existing": True, "environment": str(target)}
     if sys.version_info < MINIMUM_PYTHON:

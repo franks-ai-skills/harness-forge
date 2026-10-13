@@ -308,6 +308,22 @@ class SetupTest(unittest.TestCase):
             self.assertEqual(call["command"][1], "-I")
         self.assertNotEqual(os.path.realpath(os.getcwd()), home, "the caller's directory is restored")
 
+    def test_relative_paths_mean_the_callers_directory(self):
+        caller = os.getcwd()
+        os.chdir(self.temporary.name)
+        try:
+            environ = {**self.environ, environment.HOME_VARIABLE: "relative-home"}
+            result = self.setup.setup(FORGE, environ, run=self.runner(), create=fake_venv, wheelhouse=Path("wheels"))
+        finally:
+            os.chdir(caller)
+        self.assertTrue(result["ok"], result)
+        home = Path(self.temporary.name).resolve() / "relative-home"
+        self.assertEqual(Path(result["environment"]).resolve().parent, home)
+        install = self.calls[0]["command"]
+        self.assertEqual(Path(install[install.index("--find-links") + 1]).resolve(),
+                         Path(self.temporary.name).resolve() / "wheels")
+        self.assertTrue((Path(result["environment"]) / environment.MARKER).exists())
+
     def test_an_install_whose_packages_cannot_be_imported_is_not_finished(self):
         result = self.setup.setup(FORGE, self.environ, run=self.runner(imports=1), create=fake_venv)
         self.assertFalse(result["ok"])
