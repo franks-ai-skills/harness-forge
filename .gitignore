@@ -4,3 +4,6 @@ __pycache__/
 evals/canaries/results/private/
 .DS_Store
 .venv/
+
+# The global ignore pattern coverage*.json would hide this schema.
+!schemas/coverage.schema.json

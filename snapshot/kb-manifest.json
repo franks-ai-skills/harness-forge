@@ -144,12 +144,13 @@
     "rules/selection.yaml": "05bd47413ae5bea9759ffd68267e6983bd9030a4766ae9bb68c917d3d377afc9",
     "rules/skills.yaml": "848814cb23ad3a7ee78bd2ccea71262b51f298873cfab9729365691362387a97",
     "schemas/catalog.schema.json": "2bf187990a4cea8e79eaf83fe31a542e1e511bd85bbb905641bf069f1473fab4",
+    "schemas/coverage.schema.json": "903a2eadaf67003d2e226d41686719160d2be9a25daf00ea901a60b71a5d1b15",
     "schemas/predicate.schema.json": "da632f31499e3c2119706051de728aac412ba37649775a7c4c9507bab5c665e5",
     "schemas/rule.schema.json": "91a1248344da6604e37102da7b8f8d328e07409108012a35340d47bcc1a95e47",
     "schemas/rules.schema.json": "78185f1b1bbc61ecaa4f833816d44de2bcf8fdd27daa3941726b4e4e65ae88df",
     "schemas/selection.schema.json": "6abf9545b2a4ae06b3cee232c20556a2395f15839fba56439a41ad4980af44c8"
   },
-  "kb_commit": "a631de5c1fb5df03954fff636d4b29d18784382e",
+  "kb_commit": "7fb4b95ffc76fa78b5077623087c5d3a523a9aff",
   "kb_version": "0.1.0",
   "migration": {
     "files": {
