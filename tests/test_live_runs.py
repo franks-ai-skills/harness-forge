@@ -287,6 +287,24 @@ class RoutingSmokeTest(unittest.TestCase):
             settings = json.loads(call["command"][call["command"].index("--settings") + 1])
             self.assertEqual(settings["skillOverrides"], {"doctor": "off"})
 
+    def test_a_read_outside_the_workspace_makes_the_run_unclean(self):
+        class Outside(RoutingRunner):
+            def __call__(self, command, *, cwd, env, stdin, timeout):
+                answer = super().__call__(command, cwd=cwd, env=env, stdin=stdin, timeout=timeout)
+                if stdin == BASELINE_PROMPT or "--settings" not in command:
+                    return answer
+                events = [json.loads(line) for line in answer.stdout.splitlines()]
+                events[1:1] = [{"type": "assistant", "message": {"content": [
+                    {"type": "tool_use", "id": "r", "name": "Read", "input": {"file_path": "/etc/hosts"}}]}},
+                    {"type": "user", "message": {"content": [{"type": "tool_result", "tool_use_id": "r",
+                                                              "content": "ok", "is_error": False}]}}]
+                return Completed(0, "\n".join(json.dumps(e) for e in events) + "\n", "", False)
+
+        summary = self.run_smoke(Outside())
+        self.assertTrue(all("outside the throwaway workspace" in r["reason"] for r in summary["results"]))
+        self.assertIs(summary["clean"], False)
+        self.assertEqual(LIVE.exit_code(summary), 1)
+
     def test_unknown_skill_origins_stop_the_smoke_run(self):
         class FailedProbe(RoutingRunner):
             def __call__(self, command, *, cwd, env, stdin, timeout):

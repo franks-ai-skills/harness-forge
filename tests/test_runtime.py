@@ -208,6 +208,47 @@ class RuntimeTest(unittest.TestCase):
                 if expected == "not-run":
                     self.assertIn("outside the throwaway workspace", result.reason)
 
+    def test_every_path_a_file_tool_uses_is_checked_through_links(self):
+        """The effective location counts: Glob's directory may come from its pattern, Grep takes file_path too,
+        and a path through the skill's .claude/skills link resolves where the link points."""
+        def stream(tool, arguments):
+            events = [json.loads(line) for line in claude_run(skill_call=None).splitlines()]
+            calls = [{"type": "tool_use", "id": "t", "name": tool, "input": arguments},
+                     {"type": "tool_use", "id": "s", "name": "Skill", "input": {"skill": NAME}}]
+            return "\n".join(json.dumps(event) for event in [
+                events[0], {"type": "assistant", "message": {"content": calls}},
+                tool_result("t"), tool_result("s"), events[-1]]) + "\n"
+
+        permitted = case(permitted_tools={"claude-code": ["Skill", "Read", "Grep", "Glob"],
+                                          "codex": ["command_execution"]})
+        for tool, arguments, expected in (
+                ("Glob", {"pattern": "/tmp/external/*.txt", "path": "."}, "not-run"),
+                ("Glob", {"pattern": "../*.md"}, "not-run"),
+                ("Glob", {"pattern": "**/*.md"}, "pass"),
+                ("Glob", {"pattern": "*.md", "path": f"{SKILL_DIR}/references"}, "pass"),
+                ("Grep", {"pattern": "x", "file_path": "/etc/hosts"}, "not-run"),
+                ("Grep", {"pattern": "x"}, "pass"),
+                ("Read", {"file_path": f".claude/skills/{NAME}/../../../../outside.txt"}, "not-run"),
+                ("Read", {"file_path": f".claude/skills/{NAME}/SKILL.md"}, "pass")):
+            with self.subTest(tool=tool, arguments=arguments):
+                result = self.run_cases("claude-code", stream(tool, arguments), cases=[permitted])[0][0]
+                self.assertEqual(result.result, expected, result.reason)
+
+    def test_a_path_through_a_link_is_judged_where_the_link_points(self):
+        """A link to a shallower folder: three steps up stay inside by spelling, but leave the workspace."""
+        import tempfile
+        from harness_forge.runtime import _inside
+
+        with tempfile.TemporaryDirectory(prefix="forge-links-") as directory:
+            workspace = Path(directory) / "workspace"
+            (workspace / "skills" / NAME).mkdir(parents=True)
+            (workspace / ".claude" / "skills").mkdir(parents=True)
+            (workspace / ".claude" / "skills" / NAME).symlink_to(f"../../skills/{NAME}")
+            self.assertFalse(_inside(f".claude/skills/{NAME}/../../../outside.txt", workspace))
+            self.assertTrue(_inside(f".claude/skills/{NAME}/SKILL.md", workspace))
+            self.assertTrue(_inside(f"{workspace}/notes.md", workspace))
+            self.assertFalse(_inside("~/notes.md", workspace))
+
     def test_each_case_turns_the_user_level_skills_off(self):
         """Skills still listed with bundled skills off (the user's, or built-ins that setting keeps) are turned
         off for the case only; the case's own listing shows whether that worked."""

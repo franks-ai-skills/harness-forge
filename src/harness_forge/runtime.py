@@ -168,17 +168,43 @@ def _invoked(text: str) -> str | None:
     return names[0] if len(names) == 1 else None
 
 
-# The file argument of each tool a Claude case may permit; Skill names a skill, not a path.
-_PATH_ARGUMENTS = {"Read": "file_path", "Grep": "path", "Glob": "path"}
+_GLOB_CHARACTERS = re.compile(r"[*?\[{]")
 
 
-def _inside(path: str, roots: set[str]) -> bool:
-    """Whether a tool's path argument stays in the throwaway workspace; relative paths start there."""
+def _tool_paths(tool: str, arguments: dict) -> list[str]:
+    """Every location a Claude file tool can reach with these arguments; Skill names a skill, not a path.
+
+    Glob searches under ``path`` unless its pattern is absolute, so the pattern's directory part counts
+    too; Grep also accepts ``file_path``.
+    """
+    def text(key):
+        value = arguments.get(key)
+        return value if isinstance(value, str) and value else None
+
+    if tool == "Read":
+        return [path for path in (text("file_path"),) if path]
+    if tool == "Grep":
+        return [path for path in (text("path"), text("file_path")) if path]
+    if tool == "Glob":
+        base = text("path") or "."
+        paths = [base]
+        if text("pattern"):
+            prefix = _GLOB_CHARACTERS.split(text("pattern"), maxsplit=1)[0]
+            paths.append(os.path.join(base, os.path.dirname(prefix) if prefix != text("pattern") else prefix))
+        return paths
+    return []
+
+
+def _inside(path: str, workspace: Path) -> bool:
+    """Whether a tool's path stays in the throwaway workspace once links resolve; relative paths start there."""
     if path.startswith("~"):
         return False
-    base = next(iter(sorted(roots)))
-    normal = posixpath.normpath(path if posixpath.isabs(path) else posixpath.join(base, path))
-    return any(normal == root or normal.startswith(root.rstrip("/") + "/") for root in roots)
+    root = os.path.realpath(workspace)
+    target = os.path.realpath(os.path.join(root, path))
+    try:
+        return os.path.commonpath([root, target]) == root
+    except ValueError:  # another drive on Windows
+        return False
 
 
 def _observe_claude(stdout: str, name: str, baseline: set[str], workspace: Path | None = None) -> dict:
@@ -215,9 +241,10 @@ def _observe_claude(stdout: str, name: str, baseline: set[str], workspace: Path 
                     continue
                 observed["calls"].append(str(block.get("name")))
                 arguments = block.get("input") if isinstance(block.get("input"), dict) else {}
-                path = arguments.get(_PATH_ARGUMENTS.get(str(block.get("name")), ""))
-                if workspace is not None and isinstance(path, str) and not _inside(path, roots):
-                    reads[str(block.get("id"))] = path
+                outside = [path for path in _tool_paths(str(block.get("name")), arguments)
+                           if workspace is not None and not _inside(path, Path(workspace))]
+                if outside:
+                    reads[str(block.get("id"))] = ", ".join(outside)
                 signal = None
                 if block.get("name") == "Skill":
                     if name in (arguments.get("skill"), arguments.get("command")):
@@ -453,10 +480,12 @@ def activation_case(
                                timeout=timeout)
         except OSError as error:
             return "not-run", f"unavailable: the harness could not start: {error}", None, "not observable"
-    # What the harness did before it stopped counts, also when it timed out or failed.
-    observed = (_observe_claude(completed.stdout, name, baseline | companions, workspace) if harness == "claude-code"
-                else _observe_codex(completed.stdout, target, _markers(files, target), workspace,
-                                    workspace.resolve()))
+        # What the harness did before it stopped counts, also when it timed out or failed. Observed while the
+        # workspace and its links exist, so paths resolve where the harness found them.
+        observed = (_observe_claude(completed.stdout, name, baseline | companions, workspace)
+                    if harness == "claude-code"
+                    else _observe_codex(completed.stdout, target, _markers(files, target), workspace,
+                                        workspace.resolve()))
     outside = sorted(set(observed["calls"]) - set(permitted))
     if outside:
         return "fail", f"tool outside the declared list: {', '.join(outside)}", None, observed["inventory"]

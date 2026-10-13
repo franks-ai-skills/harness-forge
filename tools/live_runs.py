@@ -55,7 +55,7 @@ from harness_forge.models import Decision  # noqa: E402
 from harness_forge.runtime import activation_case, claude_skill_origins, shadowing  # noqa: E402
 
 TEST_RELAY = "confirmed by the test runner it was started with, not by a user in a session"
-UNCLEAN = ("competing skill", "executable components", "user-level skill named")
+UNCLEAN = ("competing skill", "executable components", "user-level skill named", "outside the throwaway workspace")
 SKILLS = ("harness-intake", "harness-research", "build-skill", "harness-verify")
 
 
