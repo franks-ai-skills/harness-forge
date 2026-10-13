@@ -27,15 +27,6 @@ EXECUTABLE_KEYS = {"hooks", "mcpServers", "lspServers", "monitors", "channels", 
 # The owner's personal setup (profile names, home folder, email addresses, the local note) is listed only in this
 # git-ignored file, so the check itself publishes none of it.
 PERSONAL_MARKERS = FORGE / "personal-markers.txt"
-# Historical evidence that names personal profiles; the owner decides before publication whether it is reworded,
-# kept unpublished or published as it is. No other tracked file may name the owner's setup.
-AWAITING_OWNER_DECISION = {
-    "evals/canaries/results/diagnostic-2026-10-08-index.json",
-    "evals/canaries/results/diagnostic-2026-10-08-resumed-index.json",
-    "evals/canaries/results/diagnostic-2026-10-08.md",
-    "evals/canaries/results/offline-init-2026-10-08-index.json",
-    "evals/canaries/results/offline-init-2026-10-08.md",
-}
 
 
 def tracked() -> list[str]:
@@ -166,7 +157,7 @@ class InstalledCopyTest(unittest.TestCase):
             text = (FORGE / relative).read_bytes().decode("utf-8", "replace").lower()
             if any(marker in text for marker in markers):
                 naming.add(relative)
-        self.assertEqual(naming, AWAITING_OWNER_DECISION)
+        self.assertEqual(naming, set())
 
 
 class EnvironmentTest(unittest.TestCase):

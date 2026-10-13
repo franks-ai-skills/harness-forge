@@ -1,5 +1,10 @@
 # Claude host startup inventory
 
+Profile names were replaced with the neutral labels `personal-profile` and
+`team-profile` on 2026-10-13, before publication, at the owner's
+decision; private raw files were renamed the same way. Observations,
+classifications and hashes are unchanged.
+
 On 2026-10-08, the authorized subscription-only follow-up observed
 `system/init.tools: ["Read"]` in the positive control and
 `system/init.tools: []` in the restricted candidate. Both reported

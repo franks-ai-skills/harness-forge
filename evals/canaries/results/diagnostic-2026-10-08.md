@@ -1,5 +1,10 @@
 # Worker diagnostic: no-model gate
 
+Profile names were replaced with the neutral labels `personal-profile` and
+`team-profile` on 2026-10-13, before publication, at the owner's
+decision; private raw files were renamed the same way. Observations,
+classifications and hashes are unchanged.
+
 On 2026-10-08 the user approved the bounded diagnostic in playground's
 `plans/2026-10-08-harness-forge-worker-diagnostic.md`. The no-model gate
 stopped **unproven** for both harnesses, including after resumption with
