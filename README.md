@@ -230,7 +230,9 @@ rule files in `snapshot/rules/`) are also licensed under the
 [Harness Forge Generated Output Exception](LICENSE-OUTPUT-EXCEPTION),
 which their notice names: what Forge copies there does not stop you
 from licensing those generated files on terms you choose. Forge itself
-stays AGPL-3.0-only. The approval record is
+stays AGPL-3.0-only. The knowledge-base pages in `snapshot/docs/`
+quote their sources; the quoted passages remain their authors'. The
+approval record is
 [legal/generated-output-permission.md](legal/generated-output-permission.md);
 contributions: [CONTRIBUTING.md](CONTRIBUTING.md).
 

@@ -3,10 +3,13 @@
 Status: **approved by the project owner on 2026-10-14** (draft 7, after
 five reviews). The approved text is `LICENSE-OUTPUT-EXCEPTION`, sha256
 `6eebce12b5482627cfee2ecbf86319094313856e8228de316cecf15e2c82aeea`; any change to it needs a new approval. It takes effect when
-the repositories are published, once the owner has confirmed that no
-existing contribution or other copyrighted material in either
-repository needs separate permission (pending). This record is not
-legal advice; it has not been reviewed by a lawyer.
+the repositories are published. On 2026-10-14 the owner confirmed
+holding the rights to the existing material of both repositories,
+including the knowledge base's rule files, except the passages the
+knowledge base's research pages quote from their sources. Those
+quotations stay with their authors, unchanged and cited; they carry no
+notice of this exception, which grants no rights in them (section 4).
+This record is not legal advice; it has not been reviewed by a lawyer.
 
 ## Text
 
