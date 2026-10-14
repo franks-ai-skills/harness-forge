@@ -1,4 +1,4 @@
-# Generated-output permission (draft 5)
+# Generated-output permission (draft 6)
 
 Status: **draft, not in effect.** The wording needs the project owner's
 approval before either repository or the plugin is published. Until
@@ -23,7 +23,8 @@ This is an additional permission under section 7 of the GNU Affero
 General Public License, version 3 ("AGPLv3"). It covers a file only
 when the file's copyright holder has marked it with a notice saying that
 the file is licensed under AGPLv3 together with this exception. It
-exists so that what Harness Forge generates in your repository may be
+exists so that Normally Copied Material contained in what Harness Forge
+generates in your repository does not prevent that Output from being
 used and licensed on terms you choose, including proprietary terms.
 
 1. Definitions
@@ -58,11 +59,13 @@ section 13.
 3. Modified versions
 
 If you modify Harness Forge, its knowledge base or other Covered
-Material so that Ineligible Material of the versions you received
-becomes material that your modified versions copy into Output, this
-exception does not apply to your modified versions or to the modified
-material. If you convey them, you must remove this exception from them,
-as the second paragraph of section 7 of AGPLv3 allows.
+Material so that the modified combination copies Ineligible Material of
+the versions you received into Output, the permission in section 2 does
+not apply to Output that this modified combination produces. This
+exception also ceases to apply to the modified versions and material
+responsible for that change; if you convey them, you must remove this
+exception from them, as the second paragraph of section 7 of AGPLv3
+allows.
 
 4. Other material
 
@@ -117,12 +120,14 @@ requirements of AGPLv3.
   that carries or is to carry the Harness Forge Generated Output Exception
   notice, you also license it under that exception. You confirm that you
   have the right to grant these licenses, for example that your employer
-  does not hold the copyright in your contribution.
+  does not own the relevant rights or has authorized you to grant them.
   ```
 
-  Until now the owner is the only author of both repositories (every
-  commit in their history), so no earlier contribution needs separate
-  consent.
+  The history of both repositories shows the owner as the only commit
+  author. That does not prove who holds every copyright, so before the
+  exception takes effect the owner confirms that no existing
+  contribution or other copyrighted material in either repository needs
+  separate permission; the approval record notes that confirmation.
 
 - The README's License section names both files.
 
