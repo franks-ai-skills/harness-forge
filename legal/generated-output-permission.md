@@ -1,4 +1,4 @@
-# Generated-output permission (draft 4)
+# Generated-output permission (draft 5)
 
 Status: **draft, not in effect.** The wording needs the project owner's
 approval before either repository or the plugin is published. Until
@@ -29,18 +29,20 @@ used and licensed on terms you choose, including proprietary terms.
 1. Definitions
 
 "Covered Material" is copyrightable material that is licensed under
-AGPLv3 together with this exception, in a file bearing that notice,
-whether the file belongs to Harness Forge or to a knowledge base
-distributed with it.
+AGPLv3 together with this exception by its copyright holder, in a file
+bearing that notice, whether the file belongs to Harness Forge or to
+the knowledge base distributed with it.
 
 "Output" is the files and file sections that Harness Forge writes into
 a repository it operates on: the skill packages and the links it
 creates for them, the records under .harness/, and the sections it
 writes into that repository's README.md.
 
-"Normally Copied Material" of a version of Harness Forge is the Covered
-Material that this version copies into Output from its own files,
-rather than from its input or from content it fetches.
+"Normally Copied Material" of a version of Harness Forge, together with
+the version of its knowledge base distributed with it, is the Covered
+Material that these versions, used without modification, copy into
+Output, wherever its file is stored, other than material that comes
+from their input or from content they fetch.
 
 "Ineligible Material" is Covered Material that is not Normally Copied
 Material.
@@ -55,24 +57,28 @@ section 13.
 
 3. Modified versions
 
-If you modify Harness Forge so that Ineligible Material of the version
-you received becomes Normally Copied Material of your version, this
-exception does not apply to your version. If you convey your version,
-you must remove this exception from it, as the second paragraph of
-section 7 of AGPLv3 allows.
+If you modify Harness Forge, its knowledge base or other Covered
+Material so that Ineligible Material of the versions you received
+becomes material that your modified versions copy into Output, this
+exception does not apply to your modified versions or to the modified
+material. If you convey them, you must remove this exception from them,
+as the second paragraph of section 7 of AGPLv3 allows.
 
 4. Other material
 
-This exception gives no rights in material in Output that comes from
-your input, from content Harness Forge fetches, or from anyone other
-than the licensors of the Covered Material. That material keeps its own
-copyright and license terms.
+This exception grants rights only in Covered Material whose copyright
+holder has licensed it with this exception. It grants no rights in
+material from your input, in content Harness Forge fetches, or in any
+other material merely because that material appears in Output; such
+material keeps its own copyright and license terms.
 
-5. No weakening of the copyleft
+5. Scope
 
-Except for Output as described here, Harness Forge and its knowledge
-base remain licensed under AGPLv3 only. This exception does not suggest
-that other software is free of the copyleft requirements of AGPLv3.
+This exception grants additional permission only for Output as
+described above. It does not permit Harness Forge or its knowledge base
+themselves to be conveyed or licensed on terms other than AGPLv3. It
+does not suggest that other software is free of the copyleft
+requirements of AGPLv3.
 ```
 
 ## Proposed placement
@@ -106,10 +112,17 @@ that other software is free of the copyleft requirements of AGPLv3.
 - `CONTRIBUTING.md` in both repositories contains this grant:
 
   ```text
-  By submitting a contribution, you license it under AGPL-3.0-only and,
-  where it is part of a file that carries the Harness Forge Generated
-  Output Exception notice, under that exception as well.
+  By submitting a contribution, you license it under AGPL-3.0-only. Where
+  the contribution is submitted to, or designated for inclusion in, a file
+  that carries or is to carry the Harness Forge Generated Output Exception
+  notice, you also license it under that exception. You confirm that you
+  have the right to grant these licenses, for example that your employer
+  does not hold the copyright in your contribution.
   ```
+
+  Until now the owner is the only author of both repositories (every
+  commit in their history), so no earlier contribution needs separate
+  consent.
 
 - The README's License section names both files.
 
@@ -139,6 +152,11 @@ that other software is free of the copyleft requirements of AGPLv3.
   Hence the contribution grant.
 - "Covered Material" marked by the file notice lets one text serve both
   repositories; the knowledge base's files are not code of Harness Forge.
+  "Normally Copied Material" is defined by what the unmodified versions
+  copy, wherever the file is stored, and section 3 covers modified
+  knowledge bases as well as a modified Forge: a fork could otherwise
+  move material Forge never copies into a part of the knowledge base it
+  does copy, without changing Forge.
 - The FSF's notice on the Autoconf exception says "changing it is not
   allowed". Its FAQ accepts modified versions of its licenses under
   another name ([GPL FAQ](https://www.gnu.org/licenses/gpl-faq.html#ModifyGPL))
