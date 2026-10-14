@@ -1,4 +1,4 @@
-# Generated-output permission (draft 6)
+# Generated-output permission (draft 7)
 
 Status: **draft, not in effect.** The wording needs the project owner's
 approval before either repository or the plugin is published. Until
@@ -20,10 +20,10 @@ HARNESS FORGE GENERATED OUTPUT EXCEPTION
 Version 1.0
 
 This is an additional permission under section 7 of the GNU Affero
-General Public License, version 3 ("AGPLv3"). It covers a file only
-when the file's copyright holder has marked it with a notice saying that
-the file is licensed under AGPLv3 together with this exception. It
-exists so that Normally Copied Material contained in what Harness Forge
+General Public License, version 3 ("AGPLv3"). It applies only to
+Covered Material whose copyright holder has licensed that material
+under AGPLv3 together with this exception and that appears in a file
+bearing a notice stating so. It exists so that Normally Copied Material contained in what Harness Forge
 generates in your repository does not prevent that Output from being
 used and licensed on terms you choose, including proprietary terms.
 
