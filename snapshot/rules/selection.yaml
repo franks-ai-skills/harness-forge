@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+# Licensed under AGPLv3 together with the Harness Forge Generated Output
+# Exception; see LICENSE-OUTPUT-EXCEPTION.
 # Selection data: declared facts, the questions that confirm them, and
 # selection rules in five kinds. Outcome rules apply in file order, first
 # match wins. Eligibility rules (excludes) rule a mechanism out when a

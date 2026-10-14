@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+# Licensed under AGPLv3 together with the Harness Forge Generated Output
+# Exception; see LICENSE-OUTPUT-EXCEPTION.
 """Contracts, live confirmation, intake state and the README hand-off.
 
 A contract is the whole current agreement for an idea, shown to the user

@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+# Licensed under AGPLv3 together with the Harness Forge Generated Output
+# Exception; see LICENSE-OUTPUT-EXCEPTION.
 # Prerequisites that make an outside control a gate, and the README
 # hand-off of recommended controls, extracted 2026-10-09 from
 # docs/guide/outside-gates.md. Forge recommends these; it never checks

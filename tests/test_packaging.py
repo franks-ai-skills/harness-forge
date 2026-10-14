@@ -19,7 +19,7 @@ AGENT_PLUGINS_SCHEMA = "https://agent-plugins.org/schemas/1.0.0/plugin.schema.js
 # What the four skills need at run time; tests, tools, evals and packaging notes are development files.
 RUNTIME = ("scripts/forge.py", "scripts/setup.py", "src/harness_forge/__init__.py", "snapshot/kb-manifest.json",
            "schemas", "templates/skill", "workers/researcher.md", "workers/source-support.md", "workers/reviewer.md",
-           "requirements.lock", "LICENSE", "README.md")
+           "requirements.lock", "LICENSE", "LICENSE-OUTPUT-EXCEPTION", "README.md")
 # Components that run code when a harness installs or loads a plugin.
 EXECUTABLE_COMPONENTS = ("hooks", "hooks.json", ".mcp.json", "mcp.json", ".lsp.json", "bin", "monitors",
                          "settings.json")
@@ -158,6 +158,44 @@ class InstalledCopyTest(unittest.TestCase):
             if any(marker in text for marker in markers):
                 naming.add(relative)
         self.assertEqual(naming, set())
+
+
+NOTICE = "Licensed under AGPLv3 together with the Harness Forge Generated Output"
+# Files whose material Forge copies into a user's repository; the snapshot's rule files are the knowledge base's.
+NOTICE_FILES = ("templates/skill/body.md.tmpl", "templates/skill/requirements.md.tmpl",
+                "templates/skill/openai.yaml.tmpl", "src/harness_forge/build_skill.py",
+                "src/harness_forge/contracts.py", "src/harness_forge/overrides.py", "src/harness_forge/report.py",
+                "src/harness_forge/research.py", "snapshot/rules/skills.yaml", "snapshot/rules/security.yaml",
+                "snapshot/rules/outside-controls.yaml", "snapshot/rules/selection.yaml")
+
+
+class OutputExceptionTest(unittest.TestCase):
+    def test_the_approved_exception_is_its_own_file(self):
+        approved = (FORGE / "legal" / "generated-output-permission.md").read_text(encoding="utf-8")
+        start = approved.index("```text\nHARNESS FORGE GENERATED OUTPUT EXCEPTION") + len("```text\n")
+        text = approved[start:approved.index("```", start)]
+        exception = (FORGE / "LICENSE-OUTPUT-EXCEPTION").read_text(encoding="utf-8")
+        self.assertEqual(exception, text)
+        self.assertIn(hashlib.sha256(exception.encode()).hexdigest(), approved, "the record names the text's sha256")
+        self.assertTrue((FORGE / "LICENSE").read_text(encoding="utf-8").startswith(
+            "                    GNU AFFERO GENERAL PUBLIC LICENSE"), "LICENSE stays the AGPL text")
+        self.assertNotIn("GENERATED OUTPUT EXCEPTION", (FORGE / "LICENSE").read_text(encoding="utf-8"))
+
+    def test_files_copied_into_output_carry_the_notice(self):
+        for relative in NOTICE_FILES:
+            text = (FORGE / relative).read_text(encoding="utf-8")
+            self.assertIn("SPDX-License-Identifier: AGPL-3.0-only", text, relative)
+            self.assertIn(NOTICE, " ".join(text.split()), relative)
+
+    def test_a_built_skill_carries_no_notice(self):
+        from tests.test_build_skill import NAME
+        from tests.test_verify import build_files, skill_decision
+
+        files, _ = build_files(skill_decision())
+        self.assertTrue(any(path.startswith(f".agents/skills/{NAME}/") for path in files))
+        for path, data in files.items():
+            self.assertNotIn(b"SPDX-License-Identifier", data, path)
+            self.assertNotIn(b"Generated Output Exception", data, path)
 
 
 class EnvironmentTest(unittest.TestCase):

@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+# Licensed under AGPLv3 together with the Harness Forge Generated Output
+# Exception; see LICENSE-OUTPUT-EXCEPTION.
 """Plan and write a portable skill from confirmed, accepted inputs.
 
 The model writes the description and the domain procedure; this module
@@ -44,7 +47,9 @@ class _NoAliases(yaml.SafeDumper):
 
 
 def _template(name: str, **values: str) -> str:
-    text = (TEMPLATES / name).read_text(encoding="utf-8")
+    """A template with its {# ... #} comment lines, such as the license notice, dropped and its values filled."""
+    text = "".join(line for line in (TEMPLATES / name).read_text(encoding="utf-8").splitlines(keepends=True)
+                   if not (line.startswith("{#") and line.rstrip().endswith("#}")))
     for key, value in values.items():
         text = text.replace("{{" + key + "}}", value)
     return text

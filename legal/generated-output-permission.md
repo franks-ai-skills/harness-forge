@@ -1,12 +1,14 @@
-# Generated-output permission (draft 7)
+# Generated-output permission
 
-Status: **draft, not in effect.** The wording needs the project owner's
-approval before either repository or the plugin is published. Until
-then, `LICENSE` holds the unmodified AGPL-3.0 text and no exception is
-granted. This draft is not legal advice; it has not been reviewed by a
-lawyer.
+Status: **approved by the project owner on 2026-10-14** (draft 7, after
+five reviews). The approved text is `LICENSE-OUTPUT-EXCEPTION`, sha256
+`6eebce12b5482627cfee2ecbf86319094313856e8228de316cecf15e2c82aeea`; any change to it needs a new approval. It takes effect when
+the repositories are published, once the owner has confirmed that no
+existing contribution or other copyrighted material in either
+repository needs separate permission (pending). This record is not
+legal advice; it has not been reviewed by a lawyer.
 
-## Proposed text
+## Text
 
 Written in its own words. It follows the concepts of the FSF's
 [Autoconf Configure Script Exception 3.0](https://www.gnu.org/licenses/autoconf-exception-3.0.html)
@@ -84,7 +86,7 @@ does not suggest that other software is free of the copyleft
 requirements of AGPLv3.
 ```
 
-## Proposed placement
+## Placement
 
 - `LICENSE` stays the unchanged AGPL-3.0 text in both repositories; the
   exception is the separate file `LICENSE-OUTPUT-EXCEPTION`, as GCC keeps

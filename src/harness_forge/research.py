@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+# Licensed under AGPLv3 together with the Harness Forge Generated Output
+# Exception; see LICENSE-OUTPUT-EXCEPTION.
 """Idea research: approved briefs, source filtering, support and acceptance.
 
 Fetched pages are untrusted data. A finding reaches the user only when

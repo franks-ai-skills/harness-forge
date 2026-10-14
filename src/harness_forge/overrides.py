@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+# Licensed under AGPLv3 together with the Harness Forge Generated Output
+# Exception; see LICENSE-OUTPUT-EXCEPTION.
 """Repository rule overrides: adopting a drift correction for one repository.
 
 An override replaces or retires one pinned Harness KB rule in the repository

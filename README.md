@@ -223,11 +223,16 @@ observations only; they do not specify public account behavior.
 
 ## License
 
-[AGPL-3.0-only](LICENSE). A permission for the files Forge generates in
-your repository is drafted in
+[AGPL-3.0-only](LICENSE). The files whose text Forge copies into the
+files it generates in your repository (its skill templates, the code
+that writes its records and README sections, and the knowledge-base
+rule files in `snapshot/rules/`) are also licensed under the
+[Harness Forge Generated Output Exception](LICENSE-OUTPUT-EXCEPTION),
+which their notice names: what Forge copies there does not stop you
+from licensing those generated files on terms you choose. Forge itself
+stays AGPL-3.0-only. The approval record is
 [legal/generated-output-permission.md](legal/generated-output-permission.md);
-its wording needs approval before publication. Until then, this README
-and the draft grant no exception.
+contributions: [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## Development
 
