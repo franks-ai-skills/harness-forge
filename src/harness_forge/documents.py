@@ -447,18 +447,45 @@ _LINE = re.compile(r"[^\r\n]*(?:\r\n|\n|\r|$)")
 _OPENER = re.compile(r" {0,3}(`{3,}|~{3,})(.*)")
 
 
-def _scan(markdown: str) -> tuple[list[tuple[int, str, bool]], str | bool | None]:
-    lines, fence, comment, offset = [], None, False, 0
+# CommonMark 0.31.2 HTML blocks: start condition and end condition per kind.
+# Kinds 1-5 end at a line holding their end marker, 6 and 7 at a blank line;
+# kind 7 cannot interrupt a paragraph.
+_BLOCK_TAGS = ("address|article|aside|base|basefont|blockquote|body|caption|center|col|colgroup|dd|details|dialog|"
+               "dir|div|dl|dt|fieldset|figcaption|figure|footer|form|frame|frameset|h1|h2|h3|h4|h5|h6|head|header|"
+               "hr|html|iframe|legend|li|link|main|menu|menuitem|nav|noframes|ol|optgroup|option|p|param|search|"
+               "section|summary|table|tbody|td|tfoot|th|thead|title|tr|track|ul")
+_ATTRIBUTE = r"""(?:[ \t]+[A-Za-z_:][A-Za-z0-9_.:-]*(?:[ \t]*=[ \t]*(?:[^ \t"'=<>`]+|'[^']*'|"[^"]*"))?)"""
+_HTML_BLOCKS = (
+    (re.compile(r" {0,3}<(?:pre|script|style|textarea)(?:[ \t>]|$)", re.I),
+     re.compile(r"</(?:pre|script|style|textarea)>", re.I), True),
+    (re.compile(r" {0,3}<!--"), re.compile(r"-->"), True),
+    (re.compile(r" {0,3}<\?"), re.compile(r"\?>"), True),
+    (re.compile(r" {0,3}<![A-Za-z]"), re.compile(r">"), True),
+    (re.compile(r" {0,3}<!\[CDATA\["), re.compile(r"\]\]>"), True),
+    (re.compile(rf" {{0,3}}</?(?:{_BLOCK_TAGS})(?:[ \t]|/?>|$)", re.I), None, True),
+    (re.compile(rf" {{0,3}}(?:<(?!(?:pre|script|style|textarea)\b)[A-Za-z][A-Za-z0-9-]*{_ATTRIBUTE}*[ \t]*/?>"
+                r"|</[A-Za-z][A-Za-z0-9-]*[ \t]*>)[ \t]*$", re.I), None, False),
+)
+
+
+def _scan(markdown: str) -> tuple[list[tuple[int, str, bool]], bool]:
+    """Lines with their code flag, and whether the text ends inside a block that text appended to it would join."""
+    lines, fence, html, paragraph, offset = [], None, None, False, 0
     for match in _LINE.finditer(markdown):
         raw = match.group(0)
         if not raw and lines:
             break
         line = raw.rstrip("\r\n")
         opener = _OPENER.fullmatch(line)
-        if comment or (not fence and re.match(r" {0,3}<!--", line)):
-            # An HTML comment block (CommonMark HTML block type 2) runs to the line holding -->.
-            comment = "-->" not in (line.split("<!--", 1)[1] if not comment else line)
-            lines.append((offset, line, True))
+        if html is not None:
+            if html == "blank" and not line.strip(" \t"):
+                html = None
+                lines.append((offset, line, False))
+            else:
+                if html != "blank" and html.search(line):
+                    html = None
+                lines.append((offset, line, True))
+            paragraph = False
         elif fence:
             if opener and opener.group(1)[0] == fence[0] and len(opener.group(1)) >= len(fence) \
                     and not opener.group(2).strip(" \t"):
@@ -467,12 +494,21 @@ def _scan(markdown: str) -> tuple[list[tuple[int, str, bool]], str | bool | None
         elif opener and not (opener.group(1)[0] == "`" and "`" in opener.group(2)):
             fence = opener.group(1)
             lines.append((offset, line, True))
+            paragraph = False
+        elif kind := next(((start, end) for start, end, interrupts in _HTML_BLOCKS
+                           if start.match(line) and (interrupts or not paragraph)), None):
+            start, end = kind
+            rest = line[start.match(line).end():]
+            html = None if end is not None and end.search(rest) else (end or "blank")
+            lines.append((offset, line, True))
+            paragraph = False
         else:
             lines.append((offset, line, False))
+            paragraph = bool(line.strip(" \t")) and not re.match(r" {0,3}#{1,6}(?:[ \t]|$)", line)
         offset += len(raw)
         if not raw:
             break
-    return lines, fence or comment
+    return lines, bool(fence) or html not in (None, "blank")
 
 
 def markdown_lines(markdown: str) -> list[tuple[int, str, bool]]:
@@ -481,16 +517,17 @@ def markdown_lines(markdown: str) -> list[tuple[int, str, bool]]:
     A backtick fence's info string holds no backtick; a closing fence uses
     the opener's character, at least as many, and only spaces or tabs after
     them; an unclosed fence runs to the end. Fence lines count as code, and
-    so do HTML comment blocks. Other HTML blocks, indented code and setext
-    headings are not modelled: callers that must not misread them accept
-    only lines they recognize.
+    so do HTML blocks (all seven CommonMark kinds). Indented code, setext
+    headings and containers such as block quotes and lists are not
+    modelled: callers that must not misread them accept only lines they
+    recognize.
     """
     return _scan(markdown)[0]
 
 
 def markdown_open_block(markdown: str) -> bool:
     """Whether the text ends inside a code fence or an HTML comment, so that text appended to it would not show."""
-    return bool(_scan(markdown)[1])
+    return _scan(markdown)[1]
 
 
 def markdown_prose(markdown: str) -> str:

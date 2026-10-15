@@ -124,7 +124,11 @@ def render_report(run: VerificationRun, results: list[PartResult]) -> str:
     lines += ["", "## Checked files", "", "```"]
     lines += [f"{digest}  {_one_line(path)}" for path, digest in run.frozen_inputs["files"].items()]
     lines += [f"link  {_one_line(path)} -> {_one_line(target)}" for path, target in run.frozen_inputs["symlinks"].items()]
-    lines += ["```", "", "## Report data", "", "```json", json.dumps(report_data(run, results), indent=2, sort_keys=True), "```", ""]
+    lines += ["```", ""]
+    # Every rendered line holds one line: text from a worker, the repository or a run, wherever it sits,
+    # cannot start a heading, a code block or an HTML block. The report data keeps the originals.
+    lines = [line[: len(line) - len(line.lstrip("\n"))] + _one_line(line.lstrip("\n")) for line in lines]
+    lines += ["## Report data", "", "```json", json.dumps(report_data(run, results), indent=2, sort_keys=True), "```", ""]
     return "\n".join(lines)
 
 

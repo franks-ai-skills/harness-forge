@@ -207,5 +207,46 @@ class RoundFourTest(unittest.TestCase):
         report = render_report(scenario.run, results)
         self.assertEqual(sum(title == "Report data" for _, _, title in markdown_headings(report)), 1)
 
+
+class HtmlBlockTest(unittest.TestCase):
+    """CommonMark's seven HTML block kinds are no prose (Codex fix review round 5)."""
+
+    def test_html_blocks_hide_headings_until_their_end(self):
+        titles = lambda text: [title for _, _, title in markdown_headings(text)]  # noqa: E731
+        self.assertEqual(titles("# T\n\n<pre>\n## Fake\n</pre>\n## Real\n"), ["T", "Real"])
+        self.assertEqual(titles("# T\n\n<DIV class=x>\n## Fake\n\n## Real\n"), ["T", "Real"])
+        self.assertEqual(titles("# T\n\n<custom-tag>\n## Fake\n\n## Real\n"), ["T", "Real"])
+        self.assertEqual(titles("# T\n\nSome text\n<span>\n## Real\n"), ["T", "Real"],
+                         "a lone tag inside a paragraph starts no HTML block")
+        self.assertEqual(heading_anchors("# P\n\n<pre>\n## Practices\n</pre>\n\n## Real\n", range(2, 4)), {"real"})
+
+    def test_the_writer_and_the_check_do_not_trust_html_blocks(self):
+        with self.assertRaisesRegex(ValueError, "unclosed"):
+            update_readme("# Repro\n\n<pre>\nExample\n", outside_only())
+        written = update_outside_section("# Repro\n", outside_only())
+        example = written + "<pre>\n## Next\n</pre>\n"
+        self.assertEqual(coverage(example), "fail")
+        with self.assertRaisesRegex(ValueError, "lines Forge did not write"):
+            update_outside_section(example, outside_only())
+        hidden = "# Repro\n\n<pre>\n" + written.split("# Repro\n\n", 1)[1] + "</pre>\n"
+        self.assertEqual(coverage(hidden), "fail", "a section inside <pre> is not shown as a section")
+
+
+class ReportLinesTest(unittest.TestCase):
+    def test_no_worker_or_run_text_starts_a_line_of_the_report(self):
+        from harness_forge.report import render_report
+        from harness_forge.scope import earlier_run
+        from harness_forge.verify import finish_run, validate_review
+        from tests.test_verify import Scenario, passing_review, skill_decision
+
+        scenario = Scenario(skill_decision())
+        injected = "Usage limit reached.\n\n## Report data\n\n```json\n{}\n```\n<pre>"
+        scenario.run.worker_violations.append(injected)
+        results = finish_run(scenario.run, validate_review(scenario.run, passing_review(scenario.run)), [],
+                             scenario.current())
+        report = render_report(scenario.run, results)
+        self.assertEqual(sum(title == "Report data" for _, _, title in markdown_headings(report)), 1)
+        self.assertEqual(set(earlier_run(report)[1]), {"A"})
+
 if __name__ == "__main__":
     unittest.main()
