@@ -70,11 +70,8 @@ SKILL_LABELS = {"must": "", "must-not": "Never", "should": "Prefer to", "should-
 
 def _rule_line(rule: dict) -> str:
     statement, label = rule["statement"].rstrip().rstrip("."), SKILL_LABELS[rule["kind"]]
-    if not label:
-        return statement
-    if len(statement) > 1 and statement[1].islower():
-        statement = statement[0].lower() + statement[1:]
-    return f"{label}: {statement}"
+    # The statement keeps its case: its first word can be a name such as Claude.
+    return f"{label}: {statement}" if label else statement
 
 
 def _check_bindings(decision: Decision, part_id: str, revision: AcceptedRevision,
