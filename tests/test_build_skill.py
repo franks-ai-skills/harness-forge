@@ -223,6 +223,38 @@ class WriteTest(unittest.TestCase):
         with self.assertRaises(ConflictError):
             write_skill(self.root, plan())
 
+    def test_a_file_the_plan_no_longer_has_stays_until_the_user_agrees(self):
+        """A rebuild without accepted requirements, or from a command to a skill, plans fewer files."""
+        write_skill(self.root, plan(reference_decision(recommended="commands", chosen="commands")))
+        leftover = f".agents/skills/{NAME}/agents/openai.yaml"
+        with self.assertRaises(ConflictError) as raised:
+            write_skill(self.root, plan())
+        self.assertIn(f"{leftover}: exists and is not part of the planned skill", raised.exception.diff)
+        self.assertTrue((self.root / leftover).is_file())
+        write_skill(self.root, plan(), replace=[leftover, f".agents/skills/{NAME}/SKILL.md"])
+        self.assertFalse((self.root / leftover).exists())
+        self.assertNotIn("disable-model-invocation", (self.root / f".agents/skills/{NAME}/SKILL.md").read_text())
+
+
+class NoAcceptedRequirementsTest(unittest.TestCase):
+    """A part whose deep pass gave no accepted requirement gets no empty section or reference."""
+
+    def test_the_skill_has_no_requirements_section_or_reference(self):
+        revision = accept_requirements([], {}, "b" * 64, part_id="A")
+        record = decision(part("A", "Write a reproduction checklist when asked", slug=NAME))
+        record.record["accepted_revision"] = {"digest": revision.digest, "rule_ids": revision.rule_ids}
+        contract = render_contract(record, revision, [], worker_evidence=EVIDENCE)
+        relay = {"choice": "confirm", "displayed_digest": contract.digest, "part_ids": ["A"], "run_id": "run-1"}
+        planned = plan_skill(record, "A", revision, PINNED, worker_evidence=EVIDENCE,
+                             confirmation=confirm_contract(contract, relay, run_id="run-1"),
+                             description=DESCRIPTION, procedure=PROCEDURE)
+        skill_md = planned[f".agents/skills/{NAME}/SKILL.md"]
+        self.assertNotIn("## Requirements", skill_md)
+        self.assertNotIn("None accepted", skill_md)
+        self.assertNotIn("references/requirements.md", skill_md)
+        self.assertNotIn(f".agents/skills/{NAME}/references/requirements.md", planned)
+        self.assertTrue(skill_md.endswith("## Procedure\n\n" + PROCEDURE), skill_md)
+
 
 class StatusTest(unittest.TestCase):
     def test_build_sets_built_never_verified(self):

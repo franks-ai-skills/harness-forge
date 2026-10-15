@@ -25,14 +25,16 @@ root, which downloads Forge's pinned packages from PyPI once.
 - **Only accepted requirements go in.** Never add a requirement the user
   rejected or did not answer, and never copy fetched page text into the
   skill. Forge puts the accepted rules at the top of `SKILL.md` and their
-  sources in `references/requirements.md`.
+  sources in `references/requirements.md`; a part without accepted
+  requirements gets neither.
 - **Other mechanisms are not built.** For hooks, subagents, MCP,
   configuration, permissions, plugins or automation, say that the builder
   is unavailable in this release; the part stays blocked with its
   recommendation unchanged. A reused artifact is never rebuilt.
 - **Never overwrite silently.** If a different skill already exists at
   the path, show Forge's diff and replace only the files the user agrees
-  to. A matching existing skill is kept as it is.
+  to. A file the new plan no longer has is listed too; `--replace` with
+  its path removes it. A matching existing skill is kept as it is.
 - **Built is not verified.** A successful build sets the part to `built`;
   only harness-verify can set `verified`. Do not write the README's
   `Outside controls` section; harness-intake owns it.

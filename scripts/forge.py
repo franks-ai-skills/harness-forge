@@ -1363,7 +1363,7 @@ def build_parser() -> argparse.ArgumentParser:
     build.add_argument("--part", required=True)
     build.add_argument("--description", required=True, help="file with the one-line skill description")
     build.add_argument("--procedure", required=True, help="file with the procedure")
-    build.add_argument("--replace", help="comma-separated paths the user agreed to replace")
+    build.add_argument("--replace", help="comma-separated paths the user agreed to replace, or to remove when the plan no longer has them")
     build.set_defaults(handler=_build)
     verify.add_argument("--cases", help="runtime cases, such as evals/smoke/vertical.yaml")
     verify.add_argument("--confirm-not-applicable", action="append", default=[], metavar="PART:RULE:TOKEN",

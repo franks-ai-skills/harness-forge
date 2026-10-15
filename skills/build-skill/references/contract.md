@@ -13,9 +13,10 @@ Read this when Forge refuses a build or reports a conflict.
 | Description | Empty, more than one line, or over the description limit, an adopted override's included |
 | Procedure | Empty, or it uses Claude Code-only placeholders |
 | Paths | A file would land outside `.agents/skills/<name>/`, or a directory on the way is a symbolic link |
-| Existing content | A file differs from the plan, or `.claude/skills/<name>` is not the planned relative link |
+| Existing content | A file differs from the plan, the skill's directory holds a file the plan no longer has, or `.claude/skills/<name>` is not the planned relative link |
 
 A refused build writes nothing. Conflicts come with a unified diff;
-replace only the files the user names. To repair a part after a failed
+replace only the files the user names; a named file the plan no longer
+has is removed. To repair a part after a failed
 verification, rebuild it and replace only the failing files the user
 agreed to; then harness-verify asks for the re-verification scope.

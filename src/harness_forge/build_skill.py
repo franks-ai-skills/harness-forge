@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import copy
 import difflib
+import os
 import re
 from pathlib import Path
 
@@ -66,6 +67,8 @@ def _limit(rules: list[Rule], rule_id: str, key: str, default: int) -> int:
 # reviewer reads it as a rule that must hold every time, which belongs in a
 # hook (skills.goal.no-must-hold-rule-in-skill).
 SKILL_LABELS = {"must": "", "must-not": "Never", "should": "Prefer to", "should-not": "Avoid"}
+REFERENCE_LINE = ("\nRead [references/requirements.md](references/requirements.md) when you\n"
+                  "need the rule id or the source behind one of the requirements above.\n")
 
 
 def _rule_line(rule: dict) -> str:
@@ -129,18 +132,22 @@ def plan_skill(
     base = f".agents/skills/{name}"
     title = name.replace("-", " ").capitalize()
     accepted = [entry["rule"] for entry in revision.rules if entry["part_id"] == part_id]
+    # Without accepted requirements the skill has no section or reference
+    # for them: an empty one only costs context (skills.body.only-what-model-lacks).
+    rules = "\n".join(f"{number}. {_rule_line(rule)}." for number, rule in enumerate(accepted, 1))
     body = _template("body.md.tmpl", title=title, procedure=procedure.rstrip() + "\n",
-                     rules="\n".join(f"{number}. {_rule_line(rule)}." for number, rule in enumerate(accepted, 1))
-                     or "None accepted.")
-    # Statements live only in SKILL.md; the reference adds what the agent
-    # rarely needs, by number (skills.references.load-conditions).
-    items = [f"{number}. `{rule['id']}` ({KIND_LABELS[rule['kind']].lower()}): {', '.join(rule['sources'])}"
-             for number, rule in enumerate(accepted, 1)]
+                     requirements=f"## Requirements\n\n{rules}\n\n" if accepted else "",
+                     reference=REFERENCE_LINE if accepted else "")
     planned = {
         f"{base}/SKILL.md": "---\n" + yaml.dump(frontmatter, Dumper=_NoAliases, sort_keys=False, width=10_000) + "---\n" + body,
-        f"{base}/references/requirements.md": _template("requirements.md.tmpl", digest=revision.digest,
-                                                        items="\n".join(items) or "None accepted."),
     }
+    if accepted:
+        # Statements live only in SKILL.md; the reference adds what the agent
+        # rarely needs, by number (skills.references.load-conditions).
+        items = [f"{number}. `{rule['id']}` ({KIND_LABELS[rule['kind']].lower()}): {', '.join(rule['sources'])}"
+                 for number, rule in enumerate(accepted, 1)]
+        planned[f"{base}/references/requirements.md"] = _template("requirements.md.tmpl", digest=revision.digest,
+                                                                  items="\n".join(items))
     if user_only:
         planned[f"{base}/agents/openai.yaml"] = _template("openai.yaml.tmpl")
     if "claude-code" in decision.record["targets"]:
@@ -174,6 +181,19 @@ def _check_no_link_escape(root: Path, key: str) -> None:
             raise ValueError(f"{current.relative_to(root)} is a symbolic link; refusing to write through it")
 
 
+def _existing_files(root: Path, name: str) -> list[str]:
+    """Repository-relative paths of the files and links in the skill's directory, without following links."""
+    skill_dir = root / ".agents" / "skills" / name
+    if skill_dir.is_symlink() or not skill_dir.is_dir():
+        return []
+    found = []
+    for directory, subdirectories, files in os.walk(skill_dir):
+        base = Path(directory)
+        found += [(base / entry).relative_to(root).as_posix()
+                  for entry in files + [d for d in subdirectories if (base / d).is_symlink()]]
+    return sorted(found)
+
+
 def write_skill(root: Path, planned: dict[str, str], *, replace: list[str] | tuple = ()) -> list[Path]:
     """Write the planned skill; keep matching files; refuse conflicts unless replaced."""
     root = Path(root).resolve()
@@ -202,9 +222,28 @@ def write_skill(root: Path, planned: dict[str, str], *, replace: list[str] | tup
                 conflicts.append(key)
                 diffs.append("".join(difflib.unified_diff(current.splitlines(True), value.splitlines(True),
                                                           f"existing/{key}", f"planned/{key}")))
+    # A file the plan no longer has, such as the requirements reference of a
+    # part left without requirements or a command's agents/openai.yaml, would
+    # keep acting unseen: it goes only when the user agrees to replace it.
+    leftovers = []
+    for key in _existing_files(root, name):
+        if key in planned:
+            continue
+        if key in replace:
+            leftovers.append(root / key)
+        else:
+            conflicts.append(key)
+            diffs.append(f"{key}: exists and is not part of the planned skill")
     if conflicts:
         raise ConflictError(f"existing content differs: {', '.join(conflicts)}", "\n".join(diffs))
 
+    skill_dir = root / ".agents" / "skills" / name
+    for path in leftovers:
+        path.unlink()
+        parent = path.parent
+        while parent != skill_dir and not any(parent.iterdir()):
+            parent.rmdir()
+            parent = parent.parent
     written = []
     for key, value in planned.items():
         target = root / key
