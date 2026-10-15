@@ -308,6 +308,22 @@ class LiveCommandsTest(unittest.TestCase):
         self.assertEqual(code, 2)
         self.assertIn("part A needs an explicit invocation and a near miss", stderr)
 
+    def test_cases_without_tools_for_the_verified_harness_stop_before_any_worker(self):
+        import yaml
+        runner = ResearchRunner([finding()])
+        cli, arguments = self.build_ready(runner)
+        harness = arguments[arguments.index("--harness") + 1]
+        cases = yaml.safe_load((FORGE / "evals/smoke/vertical.yaml").read_text(encoding="utf-8"))["cases"]
+        for case in cases:
+            case["permitted_tools"].pop(harness)
+        other = cli.write("other-harness.yaml", yaml.safe_dump({"cases": cases}))
+        option = arguments.index("--cases") + 1
+        started = len(runner.worker_calls)
+        code, _, stderr = cli("verify", *arguments[:option], other, *arguments[option + 1:])
+        self.assertEqual(code, 2)
+        self.assertIn(f"case repro-explicit names no permitted tools for {harness}", stderr)
+        self.assertEqual(len(runner.worker_calls), started, "no review worker starts")
+
     def test_the_recorded_requirements_cannot_be_left_out(self):
         cli, arguments = self.build_ready(ResearchRunner([finding()]))
         option = arguments.index("--revision")

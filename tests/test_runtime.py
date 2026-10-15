@@ -587,6 +587,20 @@ class RuntimeTest(unittest.TestCase):
                 with self.assertRaises(ValueError):
                     load_cases(path)
 
+    def test_a_case_names_tools_only_for_the_harnesses_it_runs_in(self):
+        """A Claude-only idea writes no codex list (2026-10-15 owner test); a run in a harness the case omits stops."""
+        import tempfile
+        claude_only = case(permitted_tools={"claude-code": ["Skill", "Read"]})
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "cases.yaml"
+            path.write_text(yaml.safe_dump({"cases": [claude_only]}), encoding="utf-8")
+            self.assertEqual(load_cases(path)[0]["permitted_tools"], {"claude-code": ["Skill", "Read"]})
+        self.assertEqual(self.run_cases("claude-code", claude_run(), cases=[claude_only])[0][0].result, "pass")
+        runner = FakeRunner(worker=codex_run())
+        with self.assertRaisesRegex(ValueError, "case repro-explicit names no permitted tools for codex"):
+            self.run_cases("codex", None, cases=[claude_only], runner=runner)
+        self.assertEqual((runner.calls, runner.worker_calls), ([], []), "nothing starts before the cases are checked")
+
     def test_a_codex_resource_listing_is_not_a_tool_outside_the_list(self):
         listing = json.dumps({"type": "item.completed", "item": {"id": "l", "type": "mcp_tool_call", "server": "codex",
                                                                 "tool": "list_mcp_resources", "status": "completed"}})

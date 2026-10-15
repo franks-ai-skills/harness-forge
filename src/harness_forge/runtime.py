@@ -512,6 +512,10 @@ def run_skill_runtime(
     shared = _shared_id(cases)
     if shared:
         raise ValueError(shared)
+    # A case file names tools only for the harnesses its idea targets.
+    for test_case in cases:
+        if harness not in test_case["permitted_tools"]:
+            raise ValueError(f"case {test_case['id']} names no permitted tools for {harness}")
     frozen = run.frozen_inputs["files"]
     for test_case in cases:
         directory = run.part_dirs.get(test_case["part_id"])

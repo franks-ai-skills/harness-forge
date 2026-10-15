@@ -66,9 +66,12 @@ root, which downloads Forge's pinned packages from PyPI once.
    case that names the skill, an `implicit` case with a request a user
    would make (not for a user-invoked command), and a `negative` near
    miss, a neighboring request that must not activate it, each with the
-   fixtures its prompt needs. A Claude Code case may permit only `Skill`,
-   `Read`, `Grep` and `Glob`: it runs without a sandbox, so a case that
-   permits any other tool is unavailable. Run `scripts/forge.py verify --decision
+   fixtures its prompt needs. Each case's `permitted_tools` lists tools
+   for the decision's target harnesses only, and the file is plain YAML:
+   Forge refuses anchors and aliases, so repeat shared fixtures. A Claude
+   Code case may permit only `Skill`, `Read`, `Grep` and `Glob`: it runs
+   without a sandbox, so a case that permits any other tool is
+   unavailable. Run `scripts/forge.py verify --decision
    <record> --root <repository> --revision <rules file> --harness <this
    harness> --evidence <workers output> --relay <relay> --slug <slug>
    --write --cases <file>`. This harness must be one of the decision's

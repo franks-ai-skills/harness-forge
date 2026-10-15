@@ -61,10 +61,7 @@
               }
             },
             "additionalProperties": false,
-            "required": [
-              "claude-code",
-              "codex"
-            ]
+            "minProperties": 1
           },
           "fixtures": {
             "type": "object",

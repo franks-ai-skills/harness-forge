@@ -1146,6 +1146,9 @@ def _verify(arguments: argparse.Namespace) -> int:
         cases = load_cases(Path(arguments.cases)) if arguments.cases else []
     except (OSError, ValueError) as error:
         raise _InvalidInput(str(error)) from error
+    for case in cases:
+        if arguments.harness not in case["permitted_tools"]:
+            raise _InvalidInput(f"case {case['id']} names no permitted tools for {arguments.harness}")
     covered = {case["part_id"] for case in cases}
     for part in decision.record["parts"]:
         if part_kind(part) == "build" and arguments.harness in decision.record["targets"] and part["id"] not in covered:
