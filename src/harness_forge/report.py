@@ -122,8 +122,8 @@ def render_report(run: VerificationRun, results: list[PartResult]) -> str:
     else:
         lines.append("none run")
     lines += ["", "## Checked files", "", "```"]
-    lines += [f"{digest}  {path}" for path, digest in run.frozen_inputs["files"].items()]
-    lines += [f"link  {path} -> {target}" for path, target in run.frozen_inputs["symlinks"].items()]
+    lines += [f"{digest}  {_one_line(path)}" for path, digest in run.frozen_inputs["files"].items()]
+    lines += [f"link  {_one_line(path)} -> {_one_line(target)}" for path, target in run.frozen_inputs["symlinks"].items()]
     lines += ["```", "", "## Report data", "", "```json", json.dumps(report_data(run, results), indent=2, sort_keys=True), "```", ""]
     return "\n".join(lines)
 

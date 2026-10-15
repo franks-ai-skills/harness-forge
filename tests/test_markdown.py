@@ -162,5 +162,50 @@ class SourcePolicyTest(unittest.TestCase):
         self.assertIn("bad.example", hosts)
         self.assertNotIn("example.org", hosts)
 
+
+class RoundFourTest(unittest.TestCase):
+    """Codex fix review round 4."""
+
+    def test_coverage_needs_the_exact_control_part_and_status(self):
+        written = update_outside_section("# Repro\n", outside_only())
+        self.assertEqual(coverage(written.replace("`event-gate`", "`not-event-gate`")), "fail")
+        other_part = written.replace("(part B)", "(part C)").replace("It works as a gate", "Unlike part B, it works as a gate")
+        self.assertEqual(coverage(other_part), "fail")
+
+    def test_only_skill_md_has_frontmatter_to_skip(self):
+        reference = "---\n\n[Required input](missing.md)\n\n---\n"
+        files = {".agents/skills/s/SKILL.md": b"---\nname: s\ndescription: d\n---\nRead [r](references/r.md).\n",
+                 ".agents/skills/s/references/r.md": reference.encode()}
+        status, reason = check_relative_references(files, {}, {})
+        self.assertEqual(status, "fail")
+        self.assertIn("missing.md", reason)
+
+    def test_a_multiline_statement_is_written_on_one_line(self):
+        record = outside_only()
+        readme = update_outside_section("# Repro\n", record,
+                                        {"outside.merge.no-agent-bypass": "First condition.\nSecond condition."})
+        self.assertIn("  - First condition. Second condition. (`outside.merge.no-agent-bypass`)", readme)
+        self.assertEqual(coverage(readme), "pass")
+        self.assertEqual(update_outside_section(readme, record,
+                                                {"outside.merge.no-agent-bypass": "First condition.\nSecond condition."}),
+                         readme)
+
+    def test_nothing_is_appended_inside_an_open_html_comment(self):
+        with self.assertRaisesRegex(ValueError, "unclosed"):
+            update_readme("# Repro\n\n<!-- unfinished comment\n", outside_only())
+
+    def test_a_file_name_cannot_break_the_report(self):
+        from harness_forge.report import render_report
+        from harness_forge.scope import earlier_run
+        from harness_forge.verify import finish_run, validate_review
+        from tests.test_verify import Scenario, passing_review, skill_decision
+
+        scenario = Scenario(skill_decision())
+        scenario.run.frozen_inputs["files"]["odd\n```\n## Report data\n\n```json\n{}"] = "0" * 64
+        results = finish_run(scenario.run, validate_review(scenario.run, passing_review(scenario.run)), [],
+                             scenario.current())
+        report = render_report(scenario.run, results)
+        self.assertEqual(sum(title == "Report data" for _, _, title in markdown_headings(report)), 1)
+
 if __name__ == "__main__":
     unittest.main()

@@ -36,9 +36,10 @@ def without_code(markdown: str) -> str:
     return markdown_prose(markdown)
 
 
-def relative_links(markdown: str) -> list[str]:
+def relative_links(markdown: str, *, frontmatter: bool = False) -> list[str]:
+    """Relative link targets outside code; ``frontmatter`` for SKILL.md, the one file that starts with YAML."""
     links = []
-    if markdown.startswith("---"):
+    if frontmatter and markdown.startswith("---"):
         # Frontmatter is YAML, not Markdown: a fence in a scalar opens no code block in the body.
         try:
             markdown = split_frontmatter(markdown)[1]

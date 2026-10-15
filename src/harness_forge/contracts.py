@@ -21,7 +21,7 @@ from pathlib import Path
 
 import yaml
 
-from harness_forge.documents import canonical_digest, load_document, markdown_open_fence, markdown_section, safe_path, split_frontmatter, validate
+from harness_forge.documents import canonical_digest, load_document, markdown_open_block, markdown_section, safe_path, split_frontmatter, validate
 from harness_forge.checks.outside import foreign_lines
 from harness_forge.models import AcceptedRevision, Confirmation, Contract, Decision
 from harness_forge.selection import BUILDABLE, CONFLICT_CHOICES, goal_conflict, next_question
@@ -589,7 +589,8 @@ def _outside_section(decision: Decision, conditions: dict[str, str]) -> str:
                 f"availability {control['availability']}. It works as a gate only when:"
             )
             for rule_id in control["prerequisites"]:
-                condition = conditions.get(rule_id)
+                # A statement may span lines; the README holds it on one, as Forge reads it back.
+                condition = " ".join((conditions.get(rule_id) or "").split())
                 entries.append(f"  - {condition} (`{rule_id}`)" if condition else f"  - `{rule_id}`")
     lines += entries or ["None recommended."]
     return "\n".join(lines) + "\n"
@@ -632,15 +633,22 @@ def _reach_section(decision: Decision) -> str | None:
 def _replace_section(readme: str, heading: str, section: str | None) -> str:
     """Replace, add or, without a section, remove the README section under ``## heading``.
 
+    Forge writes only sections its own grammar accepts, so that it can read
+    and replace them again.
+
     Only real headings count: one inside a code fence is the user's text, and
     the section ends at the next heading of level two or higher.
     """
+    if section is not None and foreign_lines(section, heading):
+        raise ValueError(f"Forge's '## {heading}' section would hold a line it cannot read back: "
+                         f"{foreign_lines(section, heading)[0][:120]!r}")
     bounds = markdown_section(readme, heading)
     if bounds is None:
         if section is None:
             return readme
-        if markdown_open_fence(readme):
-            raise ValueError("README.md ends inside an unclosed code fence; close it so that Forge's section is not code")
+        if markdown_open_block(readme):
+            raise ValueError("README.md ends inside an unclosed code fence or HTML comment; close it so that "
+                             "Forge's section shows")
         return readme.rstrip("\n") + "\n\n" + section
     found, end = bounds
     # Only a section Forge wrote is replaced or removed; other text in it stays the user's.

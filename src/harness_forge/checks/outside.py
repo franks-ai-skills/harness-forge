@@ -12,8 +12,9 @@ from harness_forge.documents import markdown_lines, markdown_section
 # A section holding any other line is not read: its other text could hide or
 # fake an entry (a comment, indented code, a setext heading), so the check
 # fails and the writer refuses to replace it.
+ENTRY = re.compile(r"- `(?P<control>[^`]+)` \(part (?P<part>[A-Z][A-Z0-9]*)\): (?P<rest>.+)")
 SECTION_LINES = {
-    "Outside controls": (r"- `[^`]+` \(part [A-Z][A-Z0-9]*\): .+", r"  - .+", r"None recommended\."),
+    "Outside controls": (ENTRY.pattern, r"  - .+", r"None recommended\."),
     "Where the skills load": (r"Forge builds .+",),
 }
 
@@ -49,11 +50,11 @@ def check_readme_coverage(files, facts, params):
         return ("pass", "no outside controls") if not controls else ("fail", f"no '## {params['heading']}' section")
     if isinstance(lines, str):
         return "fail", lines
-    missing = []
-    for control in controls:
-        part = rf"\bpart {re.escape(control['part_id'])}\b"
-        if not any(control["control"] in line and re.search(part, line) and params["status"] in line for line in lines):
-            missing.append(f"{control['control']} (part {control['part_id']})")
+    # An entry names its control, part and status in fixed places; a word elsewhere in a line counts for nothing.
+    listed = {(entry["control"], entry["part"]) for line in lines if (entry := ENTRY.fullmatch(line))
+              and (entry["rest"] == params["status"] or entry["rest"].startswith(params["status"] + "."))}
+    missing = [f"{control['control']} (part {control['part_id']})" for control in controls
+               if (control["control"], control["part_id"]) not in listed]
     return ("fail", "not listed: " + ", ".join(missing)) if missing else ("pass", f"{len(controls)} control(s) listed")
 
 

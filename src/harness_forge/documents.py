@@ -447,7 +447,7 @@ _LINE = re.compile(r"[^\r\n]*(?:\r\n|\n|\r|$)")
 _OPENER = re.compile(r" {0,3}(`{3,}|~{3,})(.*)")
 
 
-def _scan(markdown: str) -> tuple[list[tuple[int, str, bool]], str | None]:
+def _scan(markdown: str) -> tuple[list[tuple[int, str, bool]], str | bool | None]:
     lines, fence, comment, offset = [], None, False, 0
     for match in _LINE.finditer(markdown):
         raw = match.group(0)
@@ -472,7 +472,7 @@ def _scan(markdown: str) -> tuple[list[tuple[int, str, bool]], str | None]:
         offset += len(raw)
         if not raw:
             break
-    return lines, fence
+    return lines, fence or comment
 
 
 def markdown_lines(markdown: str) -> list[tuple[int, str, bool]]:
@@ -488,9 +488,9 @@ def markdown_lines(markdown: str) -> list[tuple[int, str, bool]]:
     return _scan(markdown)[0]
 
 
-def markdown_open_fence(markdown: str) -> bool:
-    """Whether the text ends inside a fenced code block, so that text appended to it would be code."""
-    return _scan(markdown)[1] is not None
+def markdown_open_block(markdown: str) -> bool:
+    """Whether the text ends inside a code fence or an HTML comment, so that text appended to it would not show."""
+    return bool(_scan(markdown)[1])
 
 
 def markdown_prose(markdown: str) -> str:

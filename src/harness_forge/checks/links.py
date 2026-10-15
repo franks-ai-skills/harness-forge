@@ -13,7 +13,7 @@ def check_relative_references(files, facts, params):
         for path in sorted(files):
             if not (path.startswith(directory + "/") and path.endswith(".md")):
                 continue
-            for link in relative_links(text(files[path])):
+            for link in relative_links(text(files[path]), frontmatter=path == f"{directory}/SKILL.md"):
                 target = resolve(posixpath.dirname(path), link)
                 inside = target.startswith(directory + "/")
                 exists = target in files or any(name.startswith(target.rstrip("/") + "/") for name in files)
