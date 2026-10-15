@@ -4,12 +4,15 @@ Harness Forge is a plugin for Claude Code and Codex. It takes an idea
 for agent tooling through intake, research, mechanism selection,
 accepted requirements, a portable skill build and verification against
 a pinned harness knowledge base. It runs through the vendors' CLIs with
-your existing login.
+your existing login. It builds skills into the target repository, in
+`.agents/skills/<name>/`, linked from `.claude/skills/<name>` for Claude
+Code, and installs nothing at user level.
 
 Status: version 0.1.0, not yet published. The workflow passes its
 automated live runs in Claude Code and Codex from a local checkout. The
-installation procedures below were tested in throwaway locations; runs
-from an installed plugin follow before the first release. No harness is
+installation procedures below were tested in throwaway locations, and an
+installed copy ran the whole workflow in Claude Code; runs from an
+installed plugin in Codex follow with the reference runs. No harness is
 supported for general use yet.
 
 ## Installation

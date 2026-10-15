@@ -37,7 +37,8 @@ root, which downloads Forge's pinned packages from PyPI once.
   its path removes it. A matching existing skill is kept as it is.
 - **Built is not verified.** A successful build sets the part to `built`;
   only harness-verify can set `verified`. Do not write the README's
-  `Outside controls` section; harness-intake owns it.
+  `Outside controls` or `Where the skills load` sections; harness-intake
+  owns them.
 
 ## Procedure
 

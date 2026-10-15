@@ -180,6 +180,43 @@ class ConfirmTest(unittest.TestCase):
         self.assertEqual(shown.digest, contract.digest, "the description is shown; the record is what binds")
 
 
+class ReadmeTest(unittest.TestCase):
+    """The result README says where built skills load when the reach is wider than the repository."""
+
+    def test_user_reach_says_the_skills_load_only_here_and_how_to_use_them_everywhere(self):
+        from harness_forge.contracts import update_readme
+        record = decision(part("A", "Run the review", slug="codex-review-run"),
+                          part("B", "Only outside controls", outcome="outside-instead", recommended=None, chosen=None),
+                          targets=["claude-code"], reach="user")
+        readme = update_readme("# Codex review\n", record)
+        self.assertIn("## Outside controls", readme)
+        section = readme[readme.index("## Where the skills load"):]
+        self.assertIn("`codex-review-run`", section)
+        self.assertIn("loads only in this repository", section)
+        self.assertIn("all of your repositories", section)
+        self.assertIn("`~/.claude/skills/<name>/`", section)
+        self.assertNotIn("~/.agents/skills", section, "Codex is no target of this idea")
+        self.assertNotIn("part-b", section)
+        self.assertEqual(update_readme(readme, record), readme, "a second run replaces the section in place")
+
+    def test_both_targets_get_their_user_locations_and_public_reach_says_how_others_use_them(self):
+        from harness_forge.contracts import update_readme
+        record = decision(reach="public")
+        section = update_readme("# Repro\n", record).split("## Where the skills load", 1)[1]
+        self.assertIn("`~/.claude/skills/<name>/`", section)
+        self.assertIn("`~/.agents/skills/<name>/`", section)
+        self.assertIn("publish this repository", section)
+
+    def test_repository_reach_or_no_built_skill_needs_no_section(self):
+        from harness_forge.contracts import update_readme
+        self.assertNotIn("## Where the skills load", update_readme("# Repro\n", decision()))
+        outside_only = decision(part("A", "Gate merges", outcome="outside-instead", recommended=None, chosen=None),
+                                reach="user")
+        self.assertNotIn("## Where the skills load", update_readme("# Repro\n", outside_only))
+        stale = "# Repro\n\n## Where the skills load\n\nOld text.\n"
+        self.assertNotIn("Old text.", update_readme(stale, decision()), "a narrowed reach removes the section")
+
+
 class PrepareContractCliTest(unittest.TestCase):
     def test_prepare_contract_renders_but_never_confirms(self):
         import contextlib

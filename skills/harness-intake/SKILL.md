@@ -114,8 +114,9 @@ command prints bounded JSON.
 9. **Record.** Write `.harness/decisions/<date>-<slug>.md`, then run
    `scripts/forge.py readme --decision <record> --root <repository>`. It
    writes the result README's `Outside controls` section, also for parts
-   that build nothing, with each control's conditions spelled out. Only
-   the intake writes that section.
+   that build nothing, with each control's conditions spelled out, and,
+   when the reach is wider than this repository, where the built skills
+   load. Only the intake writes these sections.
 10. **Confirm the contract.** Render it with `prepare-contract` and ask
     for confirmation as [references/contract.md](references/contract.md)
     describes. Unconfirmed parts stay pending.

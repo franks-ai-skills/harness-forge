@@ -1179,6 +1179,17 @@ class LiveCommandsTest(unittest.TestCase):
         self.assertEqual((code, output), (2, None))
         self.assertIn("the report could not be written: report: parts/0/rule_results/0/reason", stderr)
 
+    def test_readme_says_where_skills_load_for_a_user_reach(self):
+        record = load_decision(self.decision)
+        record.record["reach"] = "user"
+        record.record["facts"].pop("reach", None)
+        write_decision(self.root, record, slug="repro", date="2026-10-10")
+        code, _, stderr = Cli(FakeRunner(), self.root)("readme", "--decision", self.decision, "--root", self.root)
+        self.assertEqual(code, 0, stderr)
+        readme = (self.root / "README.md").read_text(encoding="utf-8")
+        self.assertIn("## Outside controls", readme)
+        self.assertIn("## Where the skills load", readme)
+
     def test_a_file_that_cannot_be_written_is_a_diagnostic(self):
         cli = Cli(FakeRunner(), self.root)
         readme = self.root / "README.md"

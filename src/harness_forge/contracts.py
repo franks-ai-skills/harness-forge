@@ -34,6 +34,10 @@ WORKER_DISCLOSURE = (
 RELAY_KEYS = {"choice", "displayed_digest", "part_ids", "run_id"}
 OUTSIDE_HEADING = "Outside controls"
 OUTSIDE_STATUS = "recommended, not verified"
+REACH_HEADING = "Where the skills load"
+# User-level skill roots (KB docs/guide/skills.md, "User scope").
+USER_SKILL_ROOTS = {"claude-code": "~/.claude/skills/", "codex": "~/.agents/skills/"}
+TARGET_NAMES = {"claude-code": "Claude Code", "codex": "Codex"}
 
 
 class _NoAliases(yaml.SafeDumper):
@@ -596,11 +600,42 @@ def update_outside_section(readme: str, decision: Decision, conditions: dict[str
     `conditions` maps a prerequisite rule id to its statement, so the user
     reads what to configure instead of a rule id.
     """
-    section = _outside_section(decision, conditions or {})
-    match = re.search(rf"^## {re.escape(OUTSIDE_HEADING)}[ \t]*\n", readme, re.M)
+    return _replace_section(readme, OUTSIDE_HEADING, _outside_section(decision, conditions or {}))
+
+
+def update_readme(readme: str, decision: Decision, conditions: dict[str, str] | None = None) -> str:
+    """The result README with the sections the intake owns: Outside controls and, for a wider reach, where skills load."""
+    return _replace_section(update_outside_section(readme, decision, conditions), REACH_HEADING, _reach_section(decision))
+
+
+def _reach_section(decision: Decision) -> str | None:
+    """Built skills load only in this repository; say so when the user asked for a wider reach."""
+    record = decision.record
+    names = [part["slug"] for part in record["parts"]
+             if part["outcome"] in ("harness-only", "outside-alongside") and part["chosen"] in BUILDABLE]
+    if record["reach"] == "repository" or not names:
+        return None
+    locations = " and ".join(f"`{USER_SKILL_ROOTS[target]}<name>/` for {TARGET_NAMES[target]}"
+                             for target in record["targets"] if target in USER_SKILL_ROOTS)
+    if record["reach"] == "user":
+        wanted, use = "all of your repositories", "To use them everywhere, copy each skill's folder to your user skills location"
+    else:
+        wanted, use = ("public", "This release packages no plugin: publish this repository, and each user copies "
+                       "each skill's folder to their user skills location")
+    return (f"## {REACH_HEADING}\n\n"
+            f"Forge builds {', '.join(f'`{name}`' for name in names)} into this repository "
+            f"(`.agents/skills/<name>/`), and a skill there loads only in this repository, although the idea's "
+            f"reach is {wanted}. {use}: {locations}. Forge verifies the skills in this repository, not a copy.\n")
+
+
+def _replace_section(readme: str, heading: str, section: str | None) -> str:
+    """Replace, add or, without a section, remove the README section under ``## heading``."""
+    match = re.search(rf"^## {re.escape(heading)}[ \t]*\n", readme, re.M)
     if not match:
-        return readme.rstrip("\n") + "\n\n" + section
+        return readme if section is None else readme.rstrip("\n") + "\n\n" + section
     following = re.search(r"^## ", readme[match.end():], re.M)
     end = match.end() + following.start() if following else len(readme)
     tail = readme[end:]
+    if section is None:
+        return readme[: match.start()].rstrip("\n") + "\n" + ("\n" + tail if tail else "")
     return readme[: match.start()] + section + ("\n" + tail if tail else "")

@@ -29,7 +29,7 @@ import re  # noqa: E402
 from harness_forge.adapters.base import preflight, run_command  # noqa: E402
 from harness_forge.build_skill import BuilderUnavailable, ConflictError, mark_built, plan_skill, write_skill  # noqa: E402
 from harness_forge.contracts import (  # noqa: E402
-    RELAY_KEYS, confirm_contract, load_decision, render_contract, resolve_goal_conflict, update_outside_section,
+    RELAY_KEYS, confirm_contract, load_decision, render_contract, resolve_goal_conflict, update_readme,
     write_decision,
 )
 from harness_forge.documents import (  # noqa: E402
@@ -876,7 +876,7 @@ def _accept(arguments: argparse.Namespace) -> int:
 
 
 def _readme(arguments: argparse.Namespace) -> int:
-    """Write the result README's Outside controls section from the decision record."""
+    """Write the result README's Outside controls section, and where skills load, from the decision record."""
     root = Path(arguments.root).resolve()
     try:
         decision = load_decision(Path(arguments.decision))
@@ -885,7 +885,7 @@ def _readme(arguments: argparse.Namespace) -> int:
     except (OSError, ValueError) as error:
         raise _InvalidInput(str(error)) from error
     conditions = {rule.id: rule.statement for rule in _pinned_rules()}
-    readme.write_text(update_outside_section(current, decision, conditions), encoding="utf-8")
+    readme.write_text(update_readme(current, decision, conditions), encoding="utf-8")
     emit({"command": "readme", "written": "README.md"})
     return 0
 
@@ -1315,7 +1315,7 @@ def build_parser() -> argparse.ArgumentParser:
     prepare.add_argument("--revision", help=".harness/research/<slug>.rules.yaml")
     prepare.add_argument("--evidence", help="JSON object with worker_evidence records")
     prepare.set_defaults(handler=_prepare_contract)
-    readme = commands.add_parser("readme", help="write the result README's Outside controls section")
+    readme = commands.add_parser("readme", help="write the result README's Outside controls and where-skills-load sections")
     readme.add_argument("--decision", required=True, help=".harness/decisions/<date>-<slug>.md")
     readme.add_argument("--root", required=True, help="target repository root")
     readme.set_defaults(handler=_readme)
