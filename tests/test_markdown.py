@@ -232,6 +232,36 @@ class HtmlBlockTest(unittest.TestCase):
         self.assertEqual(coverage(hidden), "fail", "a section inside <pre> is not shown as a section")
 
 
+class HtmlBlockBoundaryTest(unittest.TestCase):
+    """Codex fix review round 6: HTML block edges by CommonMark 0.31.2."""
+
+    def links(self, reference):
+        files = {".agents/skills/s/SKILL.md": b"---\nname: s\ndescription: d\n---\nRead [r](references/r.md).\n",
+                 ".agents/skills/s/references/r.md": reference.encode()}
+        return check_relative_references(files, {}, {})[0]
+
+    def test_a_block_can_end_on_its_opening_line(self):
+        self.assertEqual(self.links("<!-->\n[Required](missing.md)\n"), "fail")
+        self.assertEqual(self.links("<?>\n[Required](missing.md)\n"), "fail")
+        self.assertEqual(update_readme("# Repro\n\n<!-->\n", outside_only()).count("## Outside controls"), 1)
+
+    def test_only_the_four_exact_names_are_kind_one(self):
+        titles = [title for _, _, title in markdown_headings("# T\n\n<pre-note>\n## Fake\n\n## Real\n")]
+        self.assertEqual(titles, ["T", "Real"])
+
+    def test_a_thematic_break_or_definition_ends_no_paragraph_into_kind_seven(self):
+        alone = [title for _, _, title in markdown_headings("# T\n\n===\n<custom-tag>\n## Real\n")]
+        self.assertEqual(alone, ["T", "Real"], "=== alone is a paragraph, which kind 7 cannot interrupt")
+        for before in ("***", "[a]: /url", "Text\n==="):
+            with self.subTest(before=before):
+                titles = [title for _, _, title in markdown_headings(f"# T\n\n{before}\n<custom-tag>\n## Fake\n\n## Real\n")]
+                self.assertEqual(titles, ["T", "Real"])
+
+    def test_tag_names_are_ascii(self):
+        self.assertEqual(self.links("<\u017fpan>\n[Required](missing.md)\n"), "fail")
+        self.assertEqual(self.links("<scr\u0131pt>\n[Required](missing.md)\n"), "fail")
+
+
 class ReportLinesTest(unittest.TestCase):
     def test_no_worker_or_run_text_starts_a_line_of_the_report(self):
         from harness_forge.report import render_report

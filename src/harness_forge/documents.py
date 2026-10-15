@@ -456,16 +456,35 @@ _BLOCK_TAGS = ("address|article|aside|base|basefont|blockquote|body|caption|cent
                "section|summary|table|tbody|td|tfoot|th|thead|title|tr|track|ul")
 _ATTRIBUTE = r"""(?:[ \t]+[A-Za-z_:][A-Za-z0-9_.:-]*(?:[ \t]*=[ \t]*(?:[^ \t"'=<>`]+|'[^']*'|"[^"]*"))?)"""
 _HTML_BLOCKS = (
-    (re.compile(r" {0,3}<(?:pre|script|style|textarea)(?:[ \t>]|$)", re.I),
-     re.compile(r"</(?:pre|script|style|textarea)>", re.I), True),
+    (re.compile(r" {0,3}<(?:pre|script|style|textarea)(?:[ \t>]|$)", re.I | re.A),
+     re.compile(r"</(?:pre|script|style|textarea)>", re.I | re.A), True),
     (re.compile(r" {0,3}<!--"), re.compile(r"-->"), True),
     (re.compile(r" {0,3}<\?"), re.compile(r"\?>"), True),
     (re.compile(r" {0,3}<![A-Za-z]"), re.compile(r">"), True),
     (re.compile(r" {0,3}<!\[CDATA\["), re.compile(r"\]\]>"), True),
-    (re.compile(rf" {{0,3}}</?(?:{_BLOCK_TAGS})(?:[ \t]|/?>|$)", re.I), None, True),
-    (re.compile(rf" {{0,3}}(?:<(?!(?:pre|script|style|textarea)\b)[A-Za-z][A-Za-z0-9-]*{_ATTRIBUTE}*[ \t]*/?>"
-                r"|</[A-Za-z][A-Za-z0-9-]*[ \t]*>)[ \t]*$", re.I), None, False),
+    (re.compile(rf" {{0,3}}</?(?:{_BLOCK_TAGS})(?:[ \t]|/?>|$)", re.I | re.A), None, True),
+    (re.compile(rf" {{0,3}}(?:<(?!(?:pre|script|style|textarea)(?![A-Za-z0-9-]))[A-Za-z][A-Za-z0-9-]*{_ATTRIBUTE}*"
+                r"[ \t]*/?>|</[A-Za-z][A-Za-z0-9-]*[ \t]*>)[ \t]*$", re.I | re.A), None, False),
 )
+
+
+def _continues_paragraph(line: str, paragraph: bool) -> bool:
+    """Whether a prose line leaves a paragraph open after it, so that HTML block kind 7 cannot start next.
+
+    Blank lines, ATX headings, thematic breaks and setext underlines end
+    one; a link reference definition starts none; indented code starts none
+    outside a paragraph. Any other text, list and quote lines included,
+    leaves one open, as a lazy continuation line would.
+    """
+    if not line.strip(" \t") or re.match(r" {0,3}#{1,6}(?:[ \t]|$)", line):
+        return False
+    if re.fullmatch(r" {0,3}(?:(?:\*[ \t]*){3,}|(?:-[ \t]*){3,}|(?:_[ \t]*){3,})", line):
+        return False
+    if re.fullmatch(r" {0,3}=+[ \t]*", line):
+        return not paragraph  # a setext underline ends its paragraph; alone, the line starts one
+    if not paragraph and (re.match(r" {0,3}\[[^\]]+\]:", line) or re.match(r"(?: {4}|\t)", line)):
+        return False
+    return True
 
 
 def _scan(markdown: str) -> tuple[list[tuple[int, str, bool]], bool]:
@@ -498,13 +517,13 @@ def _scan(markdown: str) -> tuple[list[tuple[int, str, bool]], bool]:
         elif kind := next(((start, end) for start, end, interrupts in _HTML_BLOCKS
                            if start.match(line) and (interrupts or not paragraph)), None):
             start, end = kind
-            rest = line[start.match(line).end():]
-            html = None if end is not None and end.search(rest) else (end or "blank")
+            # The end condition may hold on the opening line itself, as in <!--> or <?>.
+            html = None if end is not None and end.search(line) else (end or "blank")
             lines.append((offset, line, True))
             paragraph = False
         else:
             lines.append((offset, line, False))
-            paragraph = bool(line.strip(" \t")) and not re.match(r" {0,3}#{1,6}(?:[ \t]|$)", line)
+            paragraph = _continues_paragraph(line, paragraph)
         offset += len(raw)
         if not raw:
             break
