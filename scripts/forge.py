@@ -885,7 +885,11 @@ def _readme(arguments: argparse.Namespace) -> int:
     except (OSError, ValueError) as error:
         raise _InvalidInput(str(error)) from error
     conditions = {rule.id: rule.statement for rule in _pinned_rules()}
-    readme.write_text(update_readme(current, decision, conditions), encoding="utf-8")
+    try:
+        updated = update_readme(current, decision, conditions)
+    except ValueError as error:
+        raise _InvalidInput(str(error)) from error
+    readme.write_text(updated, encoding="utf-8")
     emit({"command": "readme", "written": "README.md"})
     return 0
 

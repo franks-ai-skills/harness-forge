@@ -1190,6 +1190,14 @@ class LiveCommandsTest(unittest.TestCase):
         self.assertIn("## Outside controls", readme)
         self.assertIn("## Where the skills load", readme)
 
+    def test_readme_refuses_to_append_inside_an_unclosed_code_fence(self):
+        readme = self.root / "README.md"
+        readme.write_text("# Repro\n\n```\nexample\n", encoding="utf-8")
+        code, output, stderr = Cli(FakeRunner(), self.root)("readme", "--decision", self.decision, "--root", self.root)
+        self.assertEqual((code, output), (2, None))
+        self.assertIn("unclosed code fence", stderr)
+        self.assertEqual(readme.read_text(encoding="utf-8"), "# Repro\n\n```\nexample\n")
+
     def test_a_file_that_cannot_be_written_is_a_diagnostic(self):
         cli = Cli(FakeRunner(), self.root)
         readme = self.root / "README.md"

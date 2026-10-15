@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 import re
 
-from harness_forge.documents import validate
+from harness_forge.documents import markdown_headings, markdown_section, validate
 from harness_forge.models import Decision, RuntimeResult, VerificationRun
 
 _GLOBAL_INPUTS = ("idea", "kb_version", "rules", "overrides", "checkers", "worker")
@@ -108,7 +108,10 @@ def earlier_run(report_text: str) -> tuple[VerificationRun, dict[str, dict]]:
     is let a Review keep the judged results of parts whose bound inputs and
     contract are unchanged; script and link checks always run again.
     """
-    blocks = re.findall(r"^## Report data\n\n```json\n(.*?)\n```", report_text, re.S | re.M)
+    # Only a real heading counts: one inside a code block, or a second one, is not the data.
+    headings = [offset for offset, level, title in markdown_headings(report_text) if level == 2 and title == "Report data"]
+    start, end = markdown_section(report_text, "Report data") if len(headings) == 1 else (0, 0)
+    blocks = re.findall(r"\A## Report data\r?\n\r?\n```json\r?\n(.*?)\r?\n```[ \t]*\s*\Z", report_text[start:end], re.S)
     if len(blocks) != 1:
         raise ValueError("the earlier report has no single report data block")
     try:

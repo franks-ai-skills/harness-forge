@@ -86,7 +86,9 @@ def render_report(run: VerificationRun, results: list[PartResult]) -> str:
         answers = next((part["answers"] for part in run.parts if part["id"] == result.part_id), {})
         lines.append(f"- Confirmed answers: `{json.dumps(answers, sort_keys=True)}`")
         if result.goal_verdict:
-            lines.append(f"- Goal verdict: {result.goal_verdict['verdict']} ({result.goal_verdict['reason']})")
+            # A reviewer's text stays on its line, so that it cannot start a heading or a code block.
+            reason = result.goal_verdict["reason"].replace("\n", " ")
+            lines.append(f"- Goal verdict: {result.goal_verdict['verdict']} ({reason})")
         lines += ["", "| Rule | Severity | Check | Result | Reason | Citation | Sources |",
                   "| --- | --- | --- | --- | --- | --- | --- |"]
         for item in sorted(result.rule_results, key=lambda r: r["rule_id"]):

@@ -5,16 +5,16 @@ from __future__ import annotations
 import re
 
 from harness_forge.checks.common import text
-from harness_forge.documents import markdown_section
+from harness_forge.documents import markdown_prose, markdown_section
 
 
 def _section(markdown: str, heading: str) -> str | None:
-    """The section's body below its heading line; a heading inside a code fence is no section."""
+    """The section's prose below its heading line; text inside a code fence is no section and no entry."""
     bounds = markdown_section(markdown, heading)
     if bounds is None:
         return None
     start, end = bounds
-    return markdown[start:end].split("\n", 1)[1] if "\n" in markdown[start:end] else ""
+    return markdown_prose(markdown[start:end]).split("\n", 1)[1] if "\n" in markdown[start:end] else ""
 
 
 def check_readme_coverage(files, facts, params):

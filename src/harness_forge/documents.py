@@ -258,12 +258,9 @@ _CAPPED_EVIDENCE = ("Advisory", "Practitioner", "Inference")
 def heading_anchors(text: str, levels: range = range(1, 7)) -> set[str]:
     """GitHub-style anchors of Markdown headings outside code fences."""
     anchors = set()
-    text = re.sub(r"^(```|~~~).*?^\1", "", text, flags=re.S | re.M)
-    for line in text.splitlines():
-        match = re.match(r"^(#{1,6})\s+(.*?)\s*#*\s*$", line)
-        if match and len(match.group(1)) in levels:
-            slug = re.sub(r"[^\w\- ]", "", match.group(2).lower()).strip().replace(" ", "-")
-            anchors.add(slug)
+    for _, level, title in markdown_headings(text):
+        if level in levels:
+            anchors.add(re.sub(r"[^\w\- ]", "", title.lower()).strip().replace(" ", "-"))
     return anchors
 
 
@@ -446,23 +443,62 @@ def validate_kb(root: Path) -> list[str]:
     return check.errors
 
 
-def markdown_headings(markdown: str) -> list[tuple[int, int, str]]:
-    """(offset, level, text) of each ATX heading outside fenced code blocks."""
-    headings, fence, offset = [], None, 0
-    for line in markdown.splitlines(keepends=True):
-        stripped = line.rstrip("\n")
-        opener = re.match(r" {0,3}(`{3,}|~{3,})", stripped)
+_LINE = re.compile(r"[^\r\n]*(?:\r\n|\n|\r|$)")
+_OPENER = re.compile(r" {0,3}(`{3,}|~{3,})(.*)")
+
+
+def _scan(markdown: str) -> tuple[list[tuple[int, str, bool]], str | None]:
+    lines, fence, offset = [], None, 0
+    for match in _LINE.finditer(markdown):
+        raw = match.group(0)
+        if not raw and lines:
+            break
+        line = raw.rstrip("\r\n")
+        opener = _OPENER.fullmatch(line)
         if fence:
             if opener and opener.group(1)[0] == fence[0] and len(opener.group(1)) >= len(fence) \
-                    and not stripped.strip().lstrip(fence[0]):
+                    and not opener.group(2).strip(" \t"):
                 fence = None
-        elif opener:
+            lines.append((offset, line, True))
+        elif opener and not (opener.group(1)[0] == "`" and "`" in opener.group(2)):
             fence = opener.group(1)
-        elif heading := re.match(r" {0,3}(#{1,6})(?:[ \t]+(.*?))?[ \t]*$", stripped):
+            lines.append((offset, line, True))
+        else:
+            lines.append((offset, line, False))
+        offset += len(raw)
+        if not raw:
+            break
+    return lines, fence
+
+
+def markdown_lines(markdown: str) -> list[tuple[int, str, bool]]:
+    """(offset, line without its ending, inside code) for each line, with CommonMark's fenced code blocks.
+
+    A backtick fence's info string holds no backtick; a closing fence uses
+    the opener's character, at least as many, and only spaces or tabs after
+    them; an unclosed fence runs to the end. Fence lines count as code.
+    """
+    return _scan(markdown)[0]
+
+
+def markdown_open_fence(markdown: str) -> bool:
+    """Whether the text ends inside a fenced code block, so that text appended to it would be code."""
+    return _scan(markdown)[1] is not None
+
+
+def markdown_prose(markdown: str) -> str:
+    """The text with every fenced code line left empty, so that line numbers stay."""
+    return "\n".join("" if code else line for _, line, code in markdown_lines(markdown))
+
+
+def markdown_headings(markdown: str) -> list[tuple[int, int, str]]:
+    """(offset, level, text) of each ATX heading outside fenced code blocks."""
+    headings = []
+    for offset, line, code in markdown_lines(markdown):
+        if not code and (heading := re.fullmatch(r" {0,3}(#{1,6})(?:[ \t]+(.*?))?[ \t]*", line)):
             # A closing run of # after a space is no part of the title, as in CommonMark.
             title = re.sub(r"(?:^|[ \t]+)#+$", "", heading.group(2) or "")
             headings.append((offset, len(heading.group(1)), title))
-        offset += len(line)
     return headings
 
 
