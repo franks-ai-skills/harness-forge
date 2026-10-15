@@ -226,6 +226,9 @@ class WriteTest(unittest.TestCase):
     def test_a_file_the_plan_no_longer_has_stays_until_the_user_agrees(self):
         """A rebuild without accepted requirements, or from a command to a skill, plans fewer files."""
         write_skill(self.root, plan(reference_decision(recommended="commands", chosen="commands")))
+        own = self.root / f".agents/skills/{NAME}/scripts/check.sh"
+        own.parent.mkdir()
+        own.write_text("echo mine\n", encoding="utf-8")
         leftover = f".agents/skills/{NAME}/agents/openai.yaml"
         with self.assertRaises(ConflictError) as raised:
             write_skill(self.root, plan())
@@ -234,6 +237,14 @@ class WriteTest(unittest.TestCase):
         write_skill(self.root, plan(), replace=[leftover, f".agents/skills/{NAME}/SKILL.md"])
         self.assertFalse((self.root / leftover).exists())
         self.assertNotIn("disable-model-invocation", (self.root / f".agents/skills/{NAME}/SKILL.md").read_text())
+        self.assertEqual(own.read_text(encoding="utf-8"), "echo mine\n", "a file Forge never writes is the user's")
+
+    def test_the_stale_file_check_knows_every_file_the_builder_writes(self):
+        from harness_forge.build_skill import BUILDER_OUTPUTS
+        written = {key.split(f".agents/skills/{NAME}/", 1)[1]
+                   for key in plan(reference_decision(recommended="commands", chosen="commands"))
+                   if key.startswith(".agents/")}
+        self.assertEqual(written, set(BUILDER_OUTPUTS))
 
 
 class NoAcceptedRequirementsTest(unittest.TestCase):

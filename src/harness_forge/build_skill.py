@@ -12,7 +12,6 @@ from __future__ import annotations
 
 import copy
 import difflib
-import os
 import re
 from pathlib import Path
 
@@ -67,6 +66,8 @@ def _limit(rules: list[Rule], rule_id: str, key: str, default: int) -> int:
 # reviewer reads it as a rule that must hold every time, which belongs in a
 # hook (skills.goal.no-must-hold-rule-in-skill).
 SKILL_LABELS = {"must": "", "must-not": "Never", "should": "Prefer to", "should-not": "Avoid"}
+# Every file plan_skill can write inside a skill's directory.
+BUILDER_OUTPUTS = ("SKILL.md", "references/requirements.md", "agents/openai.yaml")
 REFERENCE_LINE = ("\nRead [references/requirements.md](references/requirements.md) when you\n"
                   "need the rule id or the source behind one of the requirements above.\n")
 
@@ -181,17 +182,19 @@ def _check_no_link_escape(root: Path, key: str) -> None:
             raise ValueError(f"{current.relative_to(root)} is a symbolic link; refusing to write through it")
 
 
-def _existing_files(root: Path, name: str) -> list[str]:
-    """Repository-relative paths of the files and links in the skill's directory, without following links."""
-    skill_dir = root / ".agents" / "skills" / name
-    if skill_dir.is_symlink() or not skill_dir.is_dir():
-        return []
-    found = []
-    for directory, subdirectories, files in os.walk(skill_dir):
-        base = Path(directory)
-        found += [(base / entry).relative_to(root).as_posix()
-                  for entry in files + [d for d in subdirectories if (base / d).is_symlink()]]
-    return sorted(found)
+def _stale_outputs(root: Path, name: str, planned: dict[str, str]) -> list[str]:
+    """Files the builder writes for some skills that exist in this skill's directory but are not planned.
+
+    Only Forge's own outputs count: any other file there is the user's.
+    """
+    stale = []
+    for relative in BUILDER_OUTPUTS:
+        key = f".agents/skills/{name}/{relative}"
+        if key not in planned:
+            _check_no_link_escape(root, key)
+            if (root / key).is_symlink() or (root / key).exists():
+                stale.append(key)
+    return stale
 
 
 def write_skill(root: Path, planned: dict[str, str], *, replace: list[str] | tuple = ()) -> list[Path]:
@@ -222,15 +225,15 @@ def write_skill(root: Path, planned: dict[str, str], *, replace: list[str] | tup
                 conflicts.append(key)
                 diffs.append("".join(difflib.unified_diff(current.splitlines(True), value.splitlines(True),
                                                           f"existing/{key}", f"planned/{key}")))
-    # A file the plan no longer has, such as the requirements reference of a
-    # part left without requirements or a command's agents/openai.yaml, would
-    # keep acting unseen: it goes only when the user agrees to replace it.
+    # A file Forge wrote earlier that the plan no longer has, such as the
+    # requirements reference of a part left without requirements or a
+    # command's agents/openai.yaml, would keep acting unseen: it goes only
+    # when the user agrees to replace it.
     leftovers = []
-    for key in _existing_files(root, name):
-        if key in planned:
-            continue
-        if key in replace:
-            leftovers.append(root / key)
+    for key in _stale_outputs(root, name, planned):
+        target = root / key
+        if key in replace and (target.is_symlink() or target.is_file()):
+            leftovers.append(target)
         else:
             conflicts.append(key)
             diffs.append(f"{key}: exists and is not part of the planned skill")

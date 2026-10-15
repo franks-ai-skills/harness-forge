@@ -33,8 +33,8 @@ root, which downloads Forge's pinned packages from PyPI once.
   recommendation unchanged. A reused artifact is never rebuilt.
 - **Never overwrite silently.** If a different skill already exists at
   the path, show Forge's diff and replace only the files the user agrees
-  to. A file the new plan no longer has is listed too; `--replace` with
-  its path removes it. A matching existing skill is kept as it is.
+  to. A file Forge wrote earlier that the new plan no longer has is
+  listed too; `--replace` with its path removes it. A matching existing skill is kept as it is.
 - **Built is not verified.** A successful build sets the part to `built`;
   only harness-verify can set `verified`. Do not write the README's
   `Outside controls` or `Where the skills load` sections; harness-intake
