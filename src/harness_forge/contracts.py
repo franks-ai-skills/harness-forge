@@ -21,7 +21,7 @@ from pathlib import Path
 
 import yaml
 
-from harness_forge.documents import canonical_digest, load_document, safe_path, split_frontmatter, validate
+from harness_forge.documents import canonical_digest, load_document, markdown_section, safe_path, split_frontmatter, validate
 from harness_forge.models import AcceptedRevision, Confirmation, Contract, Decision
 from harness_forge.selection import BUILDABLE, CONFLICT_CHOICES, goal_conflict, next_question
 
@@ -629,13 +629,16 @@ def _reach_section(decision: Decision) -> str | None:
 
 
 def _replace_section(readme: str, heading: str, section: str | None) -> str:
-    """Replace, add or, without a section, remove the README section under ``## heading``."""
-    match = re.search(rf"^## {re.escape(heading)}[ \t]*\n", readme, re.M)
-    if not match:
+    """Replace, add or, without a section, remove the README section under ``## heading``.
+
+    Only real headings count: one inside a code fence is the user's text, and
+    the section ends at the next heading of level two or higher.
+    """
+    bounds = markdown_section(readme, heading)
+    if bounds is None:
         return readme if section is None else readme.rstrip("\n") + "\n\n" + section
-    following = re.search(r"^## ", readme[match.end():], re.M)
-    end = match.end() + following.start() if following else len(readme)
+    found, end = bounds
     tail = readme[end:]
     if section is None:
-        return readme[: match.start()].rstrip("\n") + "\n" + ("\n" + tail if tail else "")
-    return readme[: match.start()] + section + ("\n" + tail if tail else "")
+        return readme[:found].rstrip("\n") + "\n" + ("\n" + tail if tail else "")
+    return readme[:found] + section + ("\n" + tail if tail else "")

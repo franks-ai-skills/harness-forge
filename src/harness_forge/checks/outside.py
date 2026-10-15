@@ -5,14 +5,16 @@ from __future__ import annotations
 import re
 
 from harness_forge.checks.common import text
+from harness_forge.documents import markdown_section
 
 
 def _section(markdown: str, heading: str) -> str | None:
-    match = re.search(rf"^##\s+{re.escape(heading)}\s*$", markdown, re.M)
-    if not match:
+    """The section's body below its heading line; a heading inside a code fence is no section."""
+    bounds = markdown_section(markdown, heading)
+    if bounds is None:
         return None
-    following = re.search(r"^##\s", markdown[match.end():], re.M)
-    return markdown[match.end(): match.end() + following.start()] if following else markdown[match.end():]
+    start, end = bounds
+    return markdown[start:end].split("\n", 1)[1] if "\n" in markdown[start:end] else ""
 
 
 def check_readme_coverage(files, facts, params):

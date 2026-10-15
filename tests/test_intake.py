@@ -157,6 +157,20 @@ class ReadmeTest(unittest.TestCase):
                                           {"heading": "Outside controls", "status": "recommended, not verified"})
         self.assertEqual(status, "fail")
 
+    def test_checker_reads_the_real_section_not_a_fenced_example(self):
+        from harness_forge.checks.outside import check_readme_coverage
+
+        record = self.outside_only()
+        controls = [{"part_id": p["id"], "control": c["control"]} for p in record.record["parts"] for c in p["outside_controls"]]
+        params = {"heading": "Outside controls", "status": "recommended, not verified"}
+        written = update_outside_section("# Repro\n", record).split("# Repro\n", 1)[1]
+        example = f"# Repro\n\nExample:\n\n```markdown\n{written}```\n"
+        status, _ = check_readme_coverage({"README.md": example.encode()}, {"outside_controls": controls}, params)
+        self.assertEqual(status, "fail", "an example in a code fence covers no control")
+        status, reason = check_readme_coverage({"README.md": update_outside_section(example, record).encode()},
+                                               {"outside_controls": controls}, params)
+        self.assertEqual(status, "pass", reason)
+
 
 if __name__ == "__main__":
     unittest.main()

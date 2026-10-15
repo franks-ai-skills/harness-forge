@@ -444,3 +444,32 @@ def validate_kb(root: Path) -> list[str]:
         if relative != "rules/selection.yaml" and rule_id not in covered_rules:
             check.error(f"{relative}: rule {rule_id} is not in rules/coverage.yaml")
     return check.errors
+
+
+def markdown_headings(markdown: str) -> list[tuple[int, int, str]]:
+    """(offset, level, text) of each ATX heading outside fenced code blocks."""
+    headings, fence, offset = [], None, 0
+    for line in markdown.splitlines(keepends=True):
+        stripped = line.rstrip("\n")
+        opener = re.match(r" {0,3}(`{3,}|~{3,})", stripped)
+        if fence:
+            if opener and opener.group(1)[0] == fence[0] and len(opener.group(1)) >= len(fence) \
+                    and not stripped.strip().lstrip(fence[0]):
+                fence = None
+        elif opener:
+            fence = opener.group(1)
+        elif heading := re.match(r" {0,3}(#{1,6})(?:[ \t]+(.*?))?[ \t]*$", stripped):
+            # A closing run of # after a space is no part of the title, as in CommonMark.
+            title = re.sub(r"(?:^|[ \t]+)#+$", "", heading.group(2) or "")
+            headings.append((offset, len(heading.group(1)), title))
+        offset += len(line)
+    return headings
+
+
+def markdown_section(markdown: str, heading: str) -> tuple[int, int] | None:
+    """Start and end offsets of the ``## heading`` section: from its heading to the next heading of level two or higher."""
+    headings = markdown_headings(markdown)
+    start = next((offset for offset, level, text in headings if level == 2 and text == heading), None)
+    if start is None:
+        return None
+    return start, next((offset for offset, level, _ in headings if offset > start and level <= 2), len(markdown))

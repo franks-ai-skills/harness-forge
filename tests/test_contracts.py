@@ -217,6 +217,39 @@ class ReadmeTest(unittest.TestCase):
         self.assertNotIn("Old text.", update_readme(stale, decision()), "a narrowed reach removes the section")
 
 
+class ReadmeSectionBoundsTest(unittest.TestCase):
+    """Managed sections are found and ended only by real headings (Codex fix review round 1)."""
+
+    def test_a_heading_inside_a_code_fence_is_the_users_text(self):
+        from harness_forge.contracts import update_readme
+        example = ("# Repro\n\nHow a section looks:\n\n```markdown\n## Where the skills load\n\nText.\n```\n\n"
+                   "More prose.\n\n## Usage\n\nRun it.\n")
+        updated = update_readme(example, decision())
+        self.assertIn("```markdown\n## Where the skills load\n\nText.\n```\n\nMore prose.", updated)
+        self.assertIn("## Usage\n\nRun it.\n", updated)
+
+    def test_closing_hashes_and_empty_headings_follow_commonmark(self):
+        from harness_forge.documents import markdown_headings, markdown_section
+        text = "# T\n\n## Outside controls ##\n\nOld.\n\n##\n\nNext.\n"
+        self.assertEqual([(level, title) for _, level, title in markdown_headings(text)],
+                         [(1, "T"), (2, "Outside controls"), (2, "")])
+        start, end = markdown_section(text, "Outside controls")
+        self.assertEqual(text[start:end], "## Outside controls ##\n\nOld.\n\n")
+        self.assertEqual(markdown_headings("```\n## a\n``` x\n## b\n```\n## c\n"), [(len("```\n## a\n``` x\n## b\n```\n"), 2, "c")],
+                         "a closing fence holds nothing after its characters")
+
+    def test_a_section_ends_at_a_heading_of_the_same_or_a_higher_level(self):
+        from harness_forge.contracts import update_readme
+        stale = "# Repro\n\n## Where the skills load\n\nOld text.\n\n# License\n\nMIT.\n"
+        updated = update_readme(stale, decision())
+        self.assertNotIn("Old text.", updated)
+        self.assertIn("# License\n\nMIT.\n", updated)
+        nested = "# Repro\n\n## Outside controls\n\nOld.\n\n### Notes\n\nOld notes.\n\n# License\n\nMIT.\n"
+        replaced = update_readme(nested, decision())
+        self.assertNotIn("Old notes.", replaced, "a subsection belongs to the managed section")
+        self.assertIn("# License\n\nMIT.\n", replaced)
+
+
 class PrepareContractCliTest(unittest.TestCase):
     def test_prepare_contract_renders_but_never_confirms(self):
         import contextlib
