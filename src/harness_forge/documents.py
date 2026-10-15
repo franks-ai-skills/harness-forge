@@ -299,6 +299,9 @@ class _KbCheck:
                 self._anchors[page] = (
                     heading_anchors(_read_bounded(path, self.root)) if inside and path.is_file() else None
                 )
+            except UnreadableMarkdown as error:
+                self.error(f"{page}: {error}")
+                self._anchors[page] = None
             except ValueError:
                 self._anchors[page] = None
         return self._anchors[page]
@@ -468,28 +471,14 @@ _HTML_BLOCKS = (
 )
 
 
-def _continues_paragraph(line: str, paragraph: bool) -> bool:
-    """Whether a prose line leaves a paragraph open after it, so that HTML block kind 7 cannot start next.
-
-    Blank lines, ATX headings, thematic breaks and setext underlines end
-    one; a link reference definition starts none; indented code starts none
-    outside a paragraph. Any other text, list and quote lines included,
-    leaves one open, as a lazy continuation line would.
-    """
-    if not line.strip(" \t") or re.match(r" {0,3}#{1,6}(?:[ \t]|$)", line):
-        return False
-    if re.fullmatch(r" {0,3}(?:(?:\*[ \t]*){3,}|(?:-[ \t]*){3,}|(?:_[ \t]*){3,})", line):
-        return False
-    if re.fullmatch(r" {0,3}=+[ \t]*", line):
-        return not paragraph  # a setext underline ends its paragraph; alone, the line starts one
-    if not paragraph and (re.match(r" {0,3}\[[^\]]+\]:", line) or re.match(r"(?: {4}|\t)", line)):
-        return False
-    return True
+class UnreadableMarkdown(ValueError):
+    """Text whose block structure depends on what Forge does not track; checks fail and writers refuse on it."""
 
 
 def _scan(markdown: str) -> tuple[list[tuple[int, str, bool]], bool]:
     """Lines with their code flag, and whether the text ends inside a block that text appended to it would join."""
-    lines, fence, html, paragraph, offset = [], None, None, False, 0
+    # settled: no paragraph can be open, because the line before was blank, a heading or the end of a block.
+    lines, fence, html, settled, offset = [], None, None, True, 0
     for match in _LINE.finditer(markdown):
         raw = match.group(0)
         if not raw and lines:
@@ -504,26 +493,31 @@ def _scan(markdown: str) -> tuple[list[tuple[int, str, bool]], bool]:
                 if html != "blank" and html.search(line):
                     html = None
                 lines.append((offset, line, True))
-            paragraph = False
+            settled = html is None
         elif fence:
             if opener and opener.group(1)[0] == fence[0] and len(opener.group(1)) >= len(fence) \
                     and not opener.group(2).strip(" \t"):
                 fence = None
             lines.append((offset, line, True))
+            settled = fence is None
         elif opener and not (opener.group(1)[0] == "`" and "`" in opener.group(2)):
             fence = opener.group(1)
             lines.append((offset, line, True))
-            paragraph = False
-        elif kind := next(((start, end) for start, end, interrupts in _HTML_BLOCKS
-                           if start.match(line) and (interrupts or not paragraph)), None):
-            start, end = kind
+        elif kind := next(((start, end, interrupts) for start, end, interrupts in _HTML_BLOCKS if start.match(line)),
+                          None):
+            start, end, interrupts = kind
+            if not interrupts and not settled:
+                # Kind 7 starts only where no paragraph is open; after other text that depends on
+                # lists, quotes, definitions and indentation, which Forge does not model.
+                raise UnreadableMarkdown(f"line {len(lines) + 1}: an HTML tag alone on its line directly below "
+                                         "other text; put a blank line before it")
             # The end condition may hold on the opening line itself, as in <!--> or <?>.
             html = None if end is not None and end.search(line) else (end or "blank")
             lines.append((offset, line, True))
-            paragraph = False
+            settled = html is None
         else:
             lines.append((offset, line, False))
-            paragraph = _continues_paragraph(line, paragraph)
+            settled = not line.strip(" \t") or bool(re.match(r" {0,3}#{1,6}(?:[ \t]|$)", line))
         offset += len(raw)
         if not raw:
             break
@@ -539,7 +533,9 @@ def markdown_lines(markdown: str) -> list[tuple[int, str, bool]]:
     so do HTML blocks (all seven CommonMark kinds). Indented code, setext
     headings and containers such as block quotes and lists are not
     modelled: callers that must not misread them accept only lines they
-    recognize.
+    recognize. A lone tag line directly below other text raises
+    UnreadableMarkdown, because only paragraph state decides whether it
+    starts an HTML block.
     """
     return _scan(markdown)[0]
 

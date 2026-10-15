@@ -216,8 +216,6 @@ class HtmlBlockTest(unittest.TestCase):
         self.assertEqual(titles("# T\n\n<pre>\n## Fake\n</pre>\n## Real\n"), ["T", "Real"])
         self.assertEqual(titles("# T\n\n<DIV class=x>\n## Fake\n\n## Real\n"), ["T", "Real"])
         self.assertEqual(titles("# T\n\n<custom-tag>\n## Fake\n\n## Real\n"), ["T", "Real"])
-        self.assertEqual(titles("# T\n\nSome text\n<span>\n## Real\n"), ["T", "Real"],
-                         "a lone tag inside a paragraph starts no HTML block")
         self.assertEqual(heading_anchors("# P\n\n<pre>\n## Practices\n</pre>\n\n## Real\n", range(2, 4)), {"real"})
 
     def test_the_writer_and_the_check_do_not_trust_html_blocks(self):
@@ -249,13 +247,27 @@ class HtmlBlockBoundaryTest(unittest.TestCase):
         titles = [title for _, _, title in markdown_headings("# T\n\n<pre-note>\n## Fake\n\n## Real\n")]
         self.assertEqual(titles, ["T", "Real"])
 
-    def test_a_thematic_break_or_definition_ends_no_paragraph_into_kind_seven(self):
-        alone = [title for _, _, title in markdown_headings("# T\n\n===\n<custom-tag>\n## Real\n")]
-        self.assertEqual(alone, ["T", "Real"], "=== alone is a paragraph, which kind 7 cannot interrupt")
-        for before in ("***", "[a]: /url", "Text\n==="):
+    def test_a_lone_tag_below_other_text_makes_the_document_unreadable(self):
+        """Whether it starts HTML block kind 7 depends on paragraph state Forge does not track (round 7)."""
+        from harness_forge.documents import UnreadableMarkdown
+        for before in ("Some text", "***", "===", "[a]:", " \tcode", ">", "- item", "Text\n==="):
             with self.subTest(before=before):
-                titles = [title for _, _, title in markdown_headings(f"# T\n\n{before}\n<custom-tag>\n## Fake\n\n## Real\n")]
-                self.assertEqual(titles, ["T", "Real"])
+                text = f"# T\n\n{before}\n<custom-tag>\n## Outside controls\n\n## Real\n"
+                with self.assertRaisesRegex(UnreadableMarkdown, "line [0-9]+: .*blank line"):
+                    markdown_headings(text)
+                self.assertEqual(coverage(text), "fail")
+                self.assertEqual(self.links(f"{before}\n<guide>\n[Required](missing.md)\n"), "fail")
+                with self.assertRaises(UnreadableMarkdown):
+                    update_readme(text, outside_only())
+
+    def test_a_lone_tag_after_a_blank_line_heading_or_closed_block_starts_kind_seven(self):
+        for before in ("", "# Title", "```\ncode\n```", "<!-- note -->"):
+            with self.subTest(before=before):
+                titles = [title for _, _, title in markdown_headings(f"{before}\n\n<custom-tag>\n## Fake\n\n## Real\n"
+                                                                     if not before else
+                                                                     f"{before}\n<custom-tag>\n## Fake\n\n## Real\n")]
+                self.assertNotIn("Fake", titles)
+                self.assertIn("Real", titles)
 
     def test_tag_names_are_ascii(self):
         self.assertEqual(self.links("<\u017fpan>\n[Required](missing.md)\n"), "fail")

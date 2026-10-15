@@ -5,7 +5,7 @@ from __future__ import annotations
 import posixpath
 import re
 
-from harness_forge.documents import markdown_prose, parse_yaml, split_frontmatter
+from harness_forge.documents import UnreadableMarkdown, markdown_prose, parse_yaml, split_frontmatter
 
 _DESTINATION = r"(?:<([^<>\n]*)>|((?:[^\s<>()]|\([^\s<>()]*\))+))"
 _TITLE = r"""(?:\s+(?:"[^"]*"|'[^']*'|\([^()]*\)))?"""
@@ -67,7 +67,10 @@ def each_skill(files: dict[str, bytes], check) -> tuple[str, str]:
         return "fail", "no SKILL.md in the checked files"
     problems = []
     for directory in directories:
-        problem = check(directory, files)
+        try:
+            problem = check(directory, files)
+        except UnreadableMarkdown as error:
+            problem = f"Markdown Forge cannot read reliably: {error}"
         if problem:
             problems.append(f"{directory}: {problem}")
     return ("fail", "; ".join(problems)) if problems else ("pass", f"{len(directories)} skill(s) checked")

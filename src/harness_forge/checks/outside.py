@@ -5,7 +5,7 @@ from __future__ import annotations
 import re
 
 from harness_forge.checks.common import text
-from harness_forge.documents import markdown_lines, markdown_section
+from harness_forge.documents import UnreadableMarkdown, markdown_lines, markdown_section
 
 
 # Every line Forge writes below the heading of one of its README sections.
@@ -45,7 +45,10 @@ def check_readme_coverage(files, facts, params):
     readme_path = facts.get("readme_path", "README.md")
     if readme_path not in files:
         return ("pass", "no outside controls") if not controls else ("fail", f"{readme_path} is missing")
-    lines = _section(text(files[readme_path]), params["heading"])
+    try:
+        lines = _section(text(files[readme_path]), params["heading"])
+    except UnreadableMarkdown as error:
+        return "fail", f"{readme_path} holds Markdown Forge cannot read reliably: {error}"
     if lines is None:
         return ("pass", "no outside controls") if not controls else ("fail", f"no '## {params['heading']}' section")
     if isinstance(lines, str):
