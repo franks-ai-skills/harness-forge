@@ -5,16 +5,36 @@ from __future__ import annotations
 import re
 
 from harness_forge.checks.common import text
-from harness_forge.documents import markdown_prose, markdown_section
+from harness_forge.documents import markdown_lines, markdown_section
 
 
-def _section(markdown: str, heading: str) -> str | None:
-    """The section's prose below its heading line; text inside a code fence is no section and no entry."""
+# Every line Forge writes below the heading of one of its README sections.
+# A section holding any other line is not read: its other text could hide or
+# fake an entry (a comment, indented code, a setext heading), so the check
+# fails and the writer refuses to replace it.
+SECTION_LINES = {
+    "Outside controls": (r"- `[^`]+` \(part [A-Z][A-Z0-9]*\): .+", r"  - .+", r"None recommended\."),
+    "Where the skills load": (r"Forge builds .+",),
+}
+
+
+def foreign_lines(section: str, heading: str) -> list[str]:
+    """Lines below the section's heading that Forge does not write there."""
+    patterns = SECTION_LINES[heading]
+    lines = [line for _, line, _ in markdown_lines(section)][1:]
+    return [line for line in lines if line.strip() and not any(re.fullmatch(p, line) for p in patterns)]
+
+
+def _section(markdown: str, heading: str) -> list[str] | str | None:
+    """The section's lines below its heading, or why they are not read, or None without the section."""
     bounds = markdown_section(markdown, heading)
     if bounds is None:
         return None
-    start, end = bounds
-    return markdown_prose(markdown[start:end]).split("\n", 1)[1] if "\n" in markdown[start:end] else ""
+    section = markdown[slice(*bounds)]
+    foreign = foreign_lines(section, heading)
+    if foreign:
+        return f"the '## {heading}' section holds lines Forge did not write: {foreign[0][:120]!r}"
+    return [line for _, line, _ in markdown_lines(section)][1:]
 
 
 def check_readme_coverage(files, facts, params):
@@ -24,10 +44,11 @@ def check_readme_coverage(files, facts, params):
     readme_path = facts.get("readme_path", "README.md")
     if readme_path not in files:
         return ("pass", "no outside controls") if not controls else ("fail", f"{readme_path} is missing")
-    section = _section(text(files[readme_path]), params["heading"])
-    if section is None:
+    lines = _section(text(files[readme_path]), params["heading"])
+    if lines is None:
         return ("pass", "no outside controls") if not controls else ("fail", f"no '## {params['heading']}' section")
-    lines = section.splitlines()
+    if isinstance(lines, str):
+        return "fail", lines
     missing = []
     for control in controls:
         part = rf"\bpart {re.escape(control['part_id'])}\b"
@@ -36,4 +57,4 @@ def check_readme_coverage(files, facts, params):
     return ("fail", "not listed: " + ", ".join(missing)) if missing else ("pass", f"{len(controls)} control(s) listed")
 
 
-REGISTRY = {"outside.readme-coverage": ("1.0.0", check_readme_coverage)}
+REGISTRY = {"outside.readme-coverage": ("1.1.0", check_readme_coverage)}

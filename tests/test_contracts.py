@@ -213,8 +213,8 @@ class ReadmeTest(unittest.TestCase):
         outside_only = decision(part("A", "Gate merges", outcome="outside-instead", recommended=None, chosen=None),
                                 reach="user")
         self.assertNotIn("## Where the skills load", update_readme("# Repro\n", outside_only))
-        stale = "# Repro\n\n## Where the skills load\n\nOld text.\n"
-        self.assertNotIn("Old text.", update_readme(stale, decision()), "a narrowed reach removes the section")
+        stale = "# Repro\n\n## Where the skills load\n\nForge builds `old-skill` into this repository.\n"
+        self.assertNotIn("old-skill", update_readme(stale, decision()), "a narrowed reach removes the section")
 
 
 class ReadmeSectionBoundsTest(unittest.TestCase):
@@ -240,13 +240,15 @@ class ReadmeSectionBoundsTest(unittest.TestCase):
 
     def test_a_section_ends_at_a_heading_of_the_same_or_a_higher_level(self):
         from harness_forge.contracts import update_readme
-        stale = "# Repro\n\n## Where the skills load\n\nOld text.\n\n# License\n\nMIT.\n"
+        stale = "# Repro\n\n## Where the skills load\n\nForge builds `old-skill` into this repository.\n\n# License\n\nMIT.\n"
         updated = update_readme(stale, decision())
-        self.assertNotIn("Old text.", updated)
+        self.assertNotIn("old-skill", updated)
         self.assertIn("# License\n\nMIT.\n", updated)
-        nested = "# Repro\n\n## Outside controls\n\nOld.\n\n### Notes\n\nOld notes.\n\n# License\n\nMIT.\n"
-        replaced = update_readme(nested, decision())
-        self.assertNotIn("Old notes.", replaced, "a subsection belongs to the managed section")
+        nested = "# Repro\n\n## Outside controls\n\n- `old-control` (part A): recommended, not verified. Precaution; availability available.\n\n### Notes\n\nMine.\n\n# License\n\nMIT.\n"
+        with self.assertRaisesRegex(ValueError, "Notes"):
+            update_readme(nested, decision())  # a subsection is inside the section, and Forge did not write it
+        replaced = update_readme(nested.replace("### Notes\n\nMine.\n\n", ""), decision())
+        self.assertNotIn("old-control", replaced)
         self.assertIn("# License\n\nMIT.\n", replaced)
 
 

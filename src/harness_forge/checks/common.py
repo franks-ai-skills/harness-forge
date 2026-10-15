@@ -38,6 +38,12 @@ def without_code(markdown: str) -> str:
 
 def relative_links(markdown: str) -> list[str]:
     links = []
+    if markdown.startswith("---"):
+        # Frontmatter is YAML, not Markdown: a fence in a scalar opens no code block in the body.
+        try:
+            markdown = split_frontmatter(markdown)[1]
+        except ValueError:
+            pass
     markdown = without_code(markdown)
     for angled, bare in LINK.findall(markdown) + DEFINITION.findall(markdown):
         target = angled or bare

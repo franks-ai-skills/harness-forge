@@ -22,7 +22,8 @@ from urllib.parse import urlsplit
 import yaml
 
 from harness_forge.checks import REGISTRY
-from harness_forge.documents import canonical_digest, load_document, safe_path, schema_errors, validate
+from harness_forge.documents import (canonical_digest, load_document, markdown_prose, markdown_section, safe_path,
+                                     schema_errors, validate)
 from harness_forge.models import AcceptedRevision, Decision, Finding, ResearchBrief, Rule
 
 SNAPSHOT = Path(__file__).resolve().parents[2] / "snapshot"
@@ -103,9 +104,11 @@ def research_matches_brief(record: dict, brief: ResearchBrief) -> bool:
 def rejected_domains(snapshot: Path = SNAPSHOT) -> dict[str, frozenset[str]]:
     """Hosts and GitHub repositories the pinned source policy rejects."""
     text = (snapshot / "docs" / "sources.md").read_text(encoding="utf-8")
-    section = text.split("## Rejected domains", 1)[1]
+    bounds = markdown_section(text, "Rejected domains")
+    if bounds is None:
+        raise ValueError("the source policy has no '## Rejected domains' section")
     hosts, github = set(X_HOSTS), set()
-    for line in section.splitlines():
+    for line in markdown_prose(text[slice(*bounds)]).splitlines():
         if not line.startswith("| `") and not line.startswith("| GitHub"):
             continue
         first_cell = line.split("|")[1]

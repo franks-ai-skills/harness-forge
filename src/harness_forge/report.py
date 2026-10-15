@@ -15,6 +15,11 @@ from harness_forge.documents import safe_path, validate
 from harness_forge.models import PartResult, VerificationRun
 
 
+
+def _one_line(value: str) -> str:
+    """Text from a worker or a run kept on one line, so that it cannot start a heading or a code block."""
+    return re.sub(r"\r\n|\r|\n", " ", value)
+
 def report_data(run: VerificationRun, results: list[PartResult]) -> dict:
     """The report's complete, schema-validated record of results and bound inputs."""
     frozen = run.frozen_inputs
@@ -87,14 +92,14 @@ def render_report(run: VerificationRun, results: list[PartResult]) -> str:
         lines.append(f"- Confirmed answers: `{json.dumps(answers, sort_keys=True)}`")
         if result.goal_verdict:
             # A reviewer's text stays on its line, so that it cannot start a heading or a code block.
-            reason = result.goal_verdict["reason"].replace("\n", " ")
+            reason = _one_line(result.goal_verdict["reason"])
             lines.append(f"- Goal verdict: {result.goal_verdict['verdict']} ({reason})")
         lines += ["", "| Rule | Severity | Check | Result | Reason | Citation | Sources |",
                   "| --- | --- | --- | --- | --- | --- | --- |"]
         for item in sorted(result.rule_results, key=lambda r: r["rule_id"]):
             info = run.rule_index.get(item["rule_id"], {})
-            reason = item.get("reason", "").replace("|", "\\|").replace("\n", " ")
-            citation = item.get("citation", "-").replace("|", "\\|")
+            reason = _one_line(item.get("reason", "")).replace("|", "\\|")
+            citation = _one_line(item.get("citation", "-")).replace("|", "\\|")
             lines.append(f"| `{item['rule_id']}` | {info.get('severity', '-')} | {item['check']} | {item['result']} | "
                          f"{reason} | {citation} | {', '.join(info.get('sources', [])) or '-'} |")
         contested = [rule_id for rule_id in sorted({r['rule_id'] for r in result.rule_results})
@@ -110,7 +115,7 @@ def render_report(run: VerificationRun, results: list[PartResult]) -> str:
         lines += ["| Part | Case | Harness | Result | Observed | Reason |", "| --- | --- | --- | --- | --- | --- |"]
         for item in run.runtime_results:
             lines.append(f"| {item.part_id} | {item.case_id} | {item.harness} {item.harness_version} | {item.result} | "
-                         f"{item.observed_activation or '-'} | {item.reason} |")
+                         f"{_one_line(item.observed_activation or '-')} | {_one_line(item.reason)} |")
         for harness in sorted({item.harness for item in run.runtime_results if item.inventory != "observed"}):
             lines += ["", f"Inventory gap: {harness} does not report the skills, plugins and MCP servers it loaded, "
                           "so a user-level one that stayed loaded cannot be ruled out; its results are best-effort."]

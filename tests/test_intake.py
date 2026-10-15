@@ -137,9 +137,9 @@ class ReadmeTest(unittest.TestCase):
         self.assertIn("  - `outside.codeowners.agent-config`", readme)
 
     def test_unrelated_content_is_preserved_and_section_replaced(self):
-        original = "# Repro\n\nIntro.\n\n## Outside controls\n\n- stale entry\n\n## Usage\n\nRun it.\n"
+        original = "# Repro\n\nIntro.\n\n## Outside controls\n\n- `old-control` (part A): recommended, not verified. Precaution; availability available.\n\n## Usage\n\nRun it.\n"
         updated = update_outside_section(original, self.outside_only())
-        self.assertNotIn("stale entry", updated)
+        self.assertNotIn("old-control", updated)
         self.assertIn("## Usage\n\nRun it.\n", updated)
         self.assertTrue(updated.startswith("# Repro\n\nIntro.\n"))
         self.assertEqual(update_outside_section(updated, self.outside_only()), updated)

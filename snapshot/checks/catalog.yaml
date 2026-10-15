@@ -32,7 +32,7 @@ checkers:
       required: [max_lines]
       additionalProperties: false
   - id: skills.reference-depth
-    version: 1.1.0
+    version: 1.2.0
     summary: Markdown files other than SKILL.md link to no other Markdown file of the skill.
     params: {type: object, properties: {}, additionalProperties: false}
   - id: skills.no-auxiliary-docs
@@ -52,7 +52,7 @@ checkers:
       required: [allowed_keys]
       additionalProperties: false
   - id: skills.portable-body
-    version: 1.0.0
+    version: 1.1.0
     summary: The SKILL.md body contains no $ARGUMENTS, $0-$9 or ${CLAUDE_*} placeholders and no !`cmd` injection outside code blocks.
     params: {type: object, properties: {}, additionalProperties: false}
   - id: skills.invocation-flags
@@ -60,7 +60,7 @@ checkers:
     summary: disable-model-invocation true in SKILL.md and policy.allow_implicit_invocation false in agents/openai.yaml are both set or both absent.
     params: {type: object, properties: {}, additionalProperties: false}
   - id: links.relative-references
-    version: 1.1.0
+    version: 1.2.0
     summary: Every relative Markdown link in the skill's Markdown files resolves to a file inside the skill directory.
     params: {type: object, properties: {}, additionalProperties: false}
   - id: links.portable-symlink
@@ -68,8 +68,8 @@ checkers:
     summary: Each skill under .agents/skills/<name>/ has .claude/skills/<name> as a symbolic link with target ../../.agents/skills/<name>.
     params: {type: object, properties: {}, additionalProperties: false}
   - id: outside.readme-coverage
-    version: 1.0.0
-    summary: The README section under heading lists every outside control from the decision record with its part letter and status.
+    version: 1.1.0
+    summary: The README section under heading holds only lines Forge writes there and lists every outside control from the decision record with its part letter and status.
     params:
       type: object
       properties:

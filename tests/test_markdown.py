@@ -30,7 +30,7 @@ class FenceTest(unittest.TestCase):
     def test_a_backtick_opener_with_a_backtick_in_its_info_string_is_no_fence(self):
         text = "# T\n\n```bad`info\n\n# License\n\nMIT.\n"
         self.assertIn((1, "License"), [(level, title) for _, level, title in markdown_headings(text)])
-        stale = "# T\n\n```bad`info\n\n## Where the skills load\n\nOld.\n\n# License\n\nMIT.\n"
+        stale = "# T\n\n```bad`info\n\n## Where the skills load\n\nForge builds `old-skill` into this repository.\n\n# License\n\nMIT.\n"
         self.assertIn("# License\n\nMIT.\n", update_readme(stale, decision()))
 
     def test_only_spaces_or_tabs_may_follow_a_closing_fence(self):
@@ -93,6 +93,74 @@ class ReportDataTest(unittest.TestCase):
         run, parts = earlier_run(report)
         self.assertEqual(set(parts), {"A"})
 
+
+
+class ForgeSectionTest(unittest.TestCase):
+    """Forge's README sections hold only lines Forge writes; anything else is refused, not parsed (round 3)."""
+
+    def test_the_writer_refuses_a_section_holding_lines_it_did_not_write(self):
+        written = update_readme("# Repro\n", decision(reach="user"))
+        setext = written + "License\n=======\n\nMIT.\n"
+        with self.assertRaisesRegex(ValueError, "Where the skills load.*lines Forge did not write"):
+            update_readme(setext, decision())
+        note = written.replace("## Where the skills load\n\n", "## Where the skills load\n\nMy note.\n\n")
+        with self.assertRaisesRegex(ValueError, "My note"):
+            update_readme(note, decision(reach="user"))
+        self.assertEqual(update_readme(written, decision(reach="user")), written)
+
+    def test_coverage_counts_only_forge_lines_outside_comments(self):
+        written = update_outside_section("# Repro\n", outside_only())
+        self.assertEqual(coverage(written), "pass")
+        commented = written.replace("## Outside controls", "<!--\n## Outside controls") + "-->\n\n## Other\n"
+        self.assertEqual(coverage(commented), "fail", "a section inside an HTML comment is not shown")
+        entry = written.split("## Outside controls\n\n", 1)[1]
+        indented = "# Repro\n\n## Outside controls\n\nNone recommended.\n\n" + "".join(
+            "    " + line + "\n" for line in entry.splitlines())
+        self.assertEqual(coverage(indented), "fail", "an entry in indented code is no recommendation")
+        self.assertEqual(coverage(written.replace("\n- `event-gate`", "\nMy note.\n\n- `event-gate`")), "fail")
+
+    def test_bare_cr_line_endings_keep_coverage(self):
+        self.assertEqual(coverage(update_outside_section("# Repro\n", outside_only()).replace("\n", "\r")), "pass")
+
+
+class FrontmatterTest(unittest.TestCase):
+    def test_a_fence_inside_frontmatter_hides_no_link(self):
+        body = ("---\nname: s\ndescription: d\ncompatibility: |\n  ```\n  any\n---\n"
+                "[Required input](missing.md)\n")
+        status, reason = check_relative_references({".agents/skills/s/SKILL.md": body.encode()}, {}, {})
+        self.assertEqual(status, "fail")
+        self.assertIn("missing.md", reason)
+
+
+class ReviewerTextTest(unittest.TestCase):
+    def test_carriage_returns_and_citations_stay_on_their_line(self):
+        from harness_forge.report import render_report
+        from harness_forge.scope import earlier_run
+        from harness_forge.verify import finish_run, validate_review
+        from tests.test_verify import Scenario, passing_review, skill_decision
+
+        scenario = Scenario(skill_decision())
+        review = passing_review(scenario.run)
+        review["goal_verdicts"][0]["reason"] = "Met.\r## Report data\r\r```json\r{}\r```"
+        review["verdicts"][0]["citation"] = "SKILL.md\n## Report data\n\n```json\n{}\n```"
+        results = finish_run(scenario.run, validate_review(scenario.run, review), [], scenario.current())
+        report = render_report(scenario.run, results)
+        self.assertEqual(sum(title == "Report data" for _, _, title in markdown_headings(report)), 1)
+        self.assertEqual(set(earlier_run(report)[1]), {"A"})
+
+
+class SourcePolicyTest(unittest.TestCase):
+    def test_a_fenced_example_of_rejected_domains_rejects_nothing(self):
+        from harness_forge.research import rejected_domains
+        with tempfile.TemporaryDirectory() as directory:
+            docs = Path(directory) / "docs"
+            docs.mkdir()
+            (docs / "sources.md").write_text(
+                "# Sources\n\n```markdown\n## Rejected domains\n\n| `example.org` | x |\n```\n\n"
+                "## Rejected domains\n\n| Domain | Why |\n| --- | --- |\n| `bad.example` | spam |\n", encoding="utf-8")
+            hosts = rejected_domains(Path(directory))["hosts"]
+        self.assertIn("bad.example", hosts)
+        self.assertNotIn("example.org", hosts)
 
 if __name__ == "__main__":
     unittest.main()

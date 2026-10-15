@@ -22,6 +22,7 @@ from pathlib import Path
 import yaml
 
 from harness_forge.documents import canonical_digest, load_document, markdown_open_fence, markdown_section, safe_path, split_frontmatter, validate
+from harness_forge.checks.outside import foreign_lines
 from harness_forge.models import AcceptedRevision, Confirmation, Contract, Decision
 from harness_forge.selection import BUILDABLE, CONFLICT_CHOICES, goal_conflict, next_question
 
@@ -642,6 +643,11 @@ def _replace_section(readme: str, heading: str, section: str | None) -> str:
             raise ValueError("README.md ends inside an unclosed code fence; close it so that Forge's section is not code")
         return readme.rstrip("\n") + "\n\n" + section
     found, end = bounds
+    # Only a section Forge wrote is replaced or removed; other text in it stays the user's.
+    foreign = foreign_lines(readme[found:end], heading)
+    if foreign:
+        raise ValueError(f"README.md's '## {heading}' section holds lines Forge did not write; move them out of "
+                         f"the section: {foreign[0][:120]!r}")
     tail = readme[end:]
     if section is None:
         return readme[:found].rstrip("\n") + "\n" + ("\n" + tail if tail else "")

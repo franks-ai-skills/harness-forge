@@ -448,14 +448,18 @@ _OPENER = re.compile(r" {0,3}(`{3,}|~{3,})(.*)")
 
 
 def _scan(markdown: str) -> tuple[list[tuple[int, str, bool]], str | None]:
-    lines, fence, offset = [], None, 0
+    lines, fence, comment, offset = [], None, False, 0
     for match in _LINE.finditer(markdown):
         raw = match.group(0)
         if not raw and lines:
             break
         line = raw.rstrip("\r\n")
         opener = _OPENER.fullmatch(line)
-        if fence:
+        if comment or (not fence and re.match(r" {0,3}<!--", line)):
+            # An HTML comment block (CommonMark HTML block type 2) runs to the line holding -->.
+            comment = "-->" not in (line.split("<!--", 1)[1] if not comment else line)
+            lines.append((offset, line, True))
+        elif fence:
             if opener and opener.group(1)[0] == fence[0] and len(opener.group(1)) >= len(fence) \
                     and not opener.group(2).strip(" \t"):
                 fence = None
@@ -476,7 +480,10 @@ def markdown_lines(markdown: str) -> list[tuple[int, str, bool]]:
 
     A backtick fence's info string holds no backtick; a closing fence uses
     the opener's character, at least as many, and only spaces or tabs after
-    them; an unclosed fence runs to the end. Fence lines count as code.
+    them; an unclosed fence runs to the end. Fence lines count as code, and
+    so do HTML comment blocks. Other HTML blocks, indented code and setext
+    headings are not modelled: callers that must not misread them accept
+    only lines they recognize.
     """
     return _scan(markdown)[0]
 

@@ -116,7 +116,9 @@ command prints bounded JSON.
    writes the result README's `Outside controls` section, also for parts
    that build nothing, with each control's conditions spelled out, and,
    when the reach is wider than this repository, where the built skills
-   load. Only the intake writes these sections.
+   load. Only the intake writes these sections: Forge refuses to replace
+   one that holds other text, and verification fails on it, so keep
+   notes outside them.
 10. **Confirm the contract.** Render it with `prepare-contract` and ask
     for confirmation as [references/contract.md](references/contract.md)
     describes. Unconfirmed parts stay pending.
