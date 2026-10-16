@@ -665,7 +665,12 @@ def _scope(arguments: argparse.Namespace) -> int:
                         "digest": plan["digest"]})
     options.append({"label": "Extensive review (rarely needed)", "parts": every,
                     "judged_rules": sum(counts.get(p, 0) for p in every), "link_checks": True, "kept": []})
-    emit({"command": "scope", "fixed": sorted(fixed), "changed": plan["changed"] if earlier else every,
+    built = [f"`{part['slug']}`" for part in decision.record["parts"] if part["chosen"] in ("skills", "commands")]
+    question = (f"Verification checks the skills Forge built in this repository ({', '.join(built) or 'none'}) "
+                "against their confirmed contract, not the current conversation's other work. Which parts should "
+                "it judge again?")
+    emit({"command": "scope", "question": question, "fixed": sorted(fixed),
+          "changed": plan["changed"] if earlier else every,
           "earlier_run": earlier[0].run_id if earlier else None, "options": options})
     return 0
 

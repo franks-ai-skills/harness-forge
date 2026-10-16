@@ -910,7 +910,11 @@ class LiveCommandsTest(unittest.TestCase):
         code, _, stderr = cli("scope", "--harness", "claude-code", "--decision", self.decision, "--root", self.root, *revision,
                               "--evidence", workers, "--slug", "repro", "--fixed", "A")
         self.assertEqual(code, 2, "the scope is computed for the confirmed contract")
-        review, extensive = scope()["options"]
+        shown = scope()
+        review, extensive = shown["options"]
+        # The owner asked whether this meant "our current work or the skill we are creating" (owner test).
+        self.assertIn(f"`{NAME}`", shown["question"])
+        self.assertIn("built in this repository", shown["question"])
         self.assertEqual((review["label"], review["parts"]), ("Review (recommended)", ["A"]))
         [kept] = review["kept"]
         self.assertEqual((kept["part_id"], kept["run_id"], kept["harness_result"]), ("B", "verify-1", "not applicable"))
