@@ -134,7 +134,22 @@ class ReadmeTest(unittest.TestCase):
         readme = update_outside_section("# Repro\n", self.outside_only(),
                                         conditions={"outside.merge.no-agent-bypass": condition})
         self.assertIn(f"  - {condition} (`outside.merge.no-agent-bypass`)", readme)
-        self.assertIn("  - `outside.codeowners.agent-config`", readme)
+        self.assertIn("  - `outside.ci.workflow-protected`", readme)
+
+    def test_every_entry_meets_the_rules_the_reviewer_judges_it_by(self):
+        """The reviewer judged identical entries differently across parts (owner test): each entry now says it."""
+        record = self.outside_only()
+        record.record["parts"][1]["outside_controls"][0]["prerequisites"].append("outside.gate.periodic-verification")
+        readme = update_outside_section("# Repro\n", record)
+        entries = readme.split("\n- ")[1:]
+        self.assertEqual(len(entries), 2)
+        for entry in entries:
+            self.assertEqual(entry.count("(`outside.gate.periodic-verification`)"), 1, entry)
+            self.assertEqual(entry.count("(`outside.gate.real-refs`)"), 1, entry)
+        codeowners = next(entry for entry in entries if entry.startswith("`codeowners-agent-config`"))
+        line = next(line for line in codeowners.splitlines() if "(`outside.codeowners.agent-config`)" in line)
+        for named in ("`.agents/`", "`.claude/`", "`AGENTS.md`", "code-owner review"):
+            self.assertIn(named, line)
 
     def test_unrelated_content_is_preserved_and_section_replaced(self):
         original = "# Repro\n\nIntro.\n\n## Outside controls\n\n- `old-control` (part A): recommended, not verified. Precaution; availability available.\n\n## Usage\n\nRun it.\n"

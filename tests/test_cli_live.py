@@ -1547,7 +1547,9 @@ class LiveCommandsTest(unittest.TestCase):
         readme = (self.root / "README.md").read_text(encoding="utf-8")
         self.assertTrue(readme.startswith("# Repro\n"))
         self.assertIn("`codeowners-agent-config` (part A): recommended, not verified", readme)
-        self.assertIn("together with the setting that requires code-owner review (`outside.codeowners.agent-config`)", readme)
+        self.assertIn("and CODEOWNERS owns itself (`outside.ci.workflow-protected`)", readme, "a KB rule's statement")
+        self.assertIn("the branch rule requires code-owner review (`outside.codeowners.agent-config`)", readme,
+                      "Forge's own wording of the CODEOWNERS condition")
         self.assertEqual(output["written"], "README.md")
 
     def test_build_refuses_without_a_matching_confirmation(self):
