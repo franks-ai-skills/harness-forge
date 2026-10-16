@@ -92,16 +92,19 @@ only dependency is `mdurl` (MIT); both ship one universal wheel, so the
 platform table below is unchanged. Forge uses its `commonmark` preset,
 keeps link destinations as written (`normalizeLink` is the identity,
 `validateLink` accepts every destination, since Forge classifies schemes
-itself) and compensates where the parser reads other than CommonMark,
-as a Codex review found: its regular expressions treat Unicode spaces
-as whitespace and match İ, ı, ſ and the Kelvin sign as ASCII letters,
-so Forge parses a copy with those characters replaced by `^`, which
-CommonMark reads alike; it refuses nesting that reaches the parser's
-limit (a guard rule at the head of both rule chains notices it, also
-during lookahead), a code or HTML block directly below a reference
-definition (markdown-it ends the paragraph there, CommonMark does not)
-and definition labels over 999 characters. Token trees are cached only
-for documents up to 64 KiB.
+itself) and replaces the rules where it reads other than CommonMark
+0.31.2, as two Codex review rounds found: HTML blocks and inline HTML
+(markdown-it-py's patterns use Python's Unicode `\s` and
+`re.IGNORECASE`, so `</scrıpt>` closed a `<script>` block and a form
+feed counted as whitespace; declarations needed an uppercase letter),
+reference definitions (no 999-character label limit; the next line
+started a block where CommonMark continues the paragraph) and indented
+code below a definition. Wrappers at the entry of its block and inline
+tokenizers notice nesting that reaches the parser's limit, where it
+skips content, and Forge refuses such files. Token trees are cached only
+for documents up to 64 KiB. A substitution of the affected characters
+before parsing was tried and dropped: it changed link destinations,
+headings and reference labels.
 
 `cmarkgfm`, the bindings to GitHub's cmark-gfm, would read exactly as
 GitHub renders, but it publishes no wheel for macOS x86_64 (and its
