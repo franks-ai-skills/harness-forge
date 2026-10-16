@@ -1,8 +1,9 @@
 """Forge's own source fetch: public HTTPS only, checked on every hop, no network in tests."""
 
 import unittest
+from unittest import mock
 
-from harness_forge.fetch import FetchError, Response, fetch_text, page_text
+from harness_forge.fetch import FetchError, Response, fetch_text, get, page_text
 from harness_forge.research import source_rejection
 
 
@@ -100,6 +101,34 @@ class FetchTest(unittest.TestCase):
                           {("docs.example.com", "/a"): page(status=302, location=location)})
             with self.subTest(location=location), self.assertRaises(FetchError):
                 self.fetch("https://docs.example.com/a", web)
+
+    def test_unicode_paths_and_queries_are_requested_percent_encoded(self):
+        web = FakeWeb({"docs.example.com": ["93.184.215.14"]},
+                      {("docs.example.com", "/%C3%BCberblick?q=%C3%A4%20b&x=1%2F2"): page(status=302, location="/sp%C3%A4t/\u00fcbrig"),
+                       ("docs.example.com", "/sp%C3%A4t/%C3%BCbrig"): page()})
+        self.assertIn("only on Linux", self.fetch("https://docs.example.com/\u00fcberblick?q=\u00e4 b&x=1%2F2", web))
+        self.assertEqual([path for _, _, path in web.requests],
+                         ["/%C3%BCberblick?q=%C3%A4%20b&x=1%2F2", "/sp%C3%A4t/%C3%BCbrig"])
+
+    def test_a_host_with_characters_no_hostname_has_is_a_fetch_error(self):
+        resolved = []
+        for url in ("https://docs\x01example.com/", "https://docs example.com/", "https://docs%0aexample.com/"):
+            with self.subTest(url=url), self.assertRaises(FetchError):
+                fetch_text(url, resolve=lambda host: resolved.append(host) or ["93.184.215.14"], get=FakeWeb({}, {}).get)
+        self.assertEqual(resolved, [])
+
+    def test_the_real_request_turns_every_local_error_into_a_fetch_error(self):
+        """No connection is opened: building the connection and encoding the request fail first or are refused."""
+        with mock.patch("harness_forge.fetch.socket.create_connection", side_effect=OSError("blocked")) as connect:
+            for host, path in (("docs.example.com", "/\u00fcberblick"), ("docs\nexample.com", "/"),
+                               ("docs.example.com", "/a\nHost: evil")):
+                with self.subTest(host=host, path=path), self.assertRaises(FetchError):
+                    get(host, "93.184.215.14", path, 1, 100)
+            web = FakeWeb({"docs.example.com": ["93.184.215.14"]}, {})
+            for url in ("https://docs.example.com/\u00fcberblick", "https://docs.example.com/a?\u00e4=1"):
+                with self.subTest(url=url), self.assertRaises(FetchError):
+                    fetch_text(url, resolve=web.resolve)
+        self.assertTrue(all(call.args[0][0] == "93.184.215.14" for call in connect.call_args_list))
 
     def test_redirects_are_followed_a_few_times_only(self):
         pages = {("docs.example.com", f"/{n}"): page(status=301, location=f"/{n + 1}") for n in range(10)}

@@ -22,7 +22,7 @@ import ssl
 from dataclasses import dataclass
 from html.parser import HTMLParser
 from typing import Callable
-from urllib.parse import urljoin, urlsplit
+from urllib.parse import quote, urljoin, urlsplit
 
 MAX_BYTES = 2 * 1024 * 1024
 TIMEOUT = 20
@@ -31,6 +31,9 @@ TEXT_TYPES = ("text/html", "text/plain", "application/xhtml+xml")
 _INLINE = {"a", "abbr", "b", "cite", "code", "em", "i", "kbd", "mark", "q", "s", "small", "span", "strong",
            "sub", "sup", "time", "u"}
 _SKIPPED = {"script", "style", "noscript", "template", "svg"}
+_HOSTNAME = re.compile(r"[a-z0-9_-]+(\.[a-z0-9_-]+)*")
+# Characters a request target keeps as written: the URL's own delimiters and escapes.
+_TARGET_SAFE = "/?&=;:@!$'()*+,%~-._"
 
 
 class FetchError(Exception):
@@ -53,13 +56,17 @@ def _public(address: str) -> bool:
 
 def canonical_host(host: str) -> str:
     """The name the network stack connects to: IDNA-encoded as socket and ssl encode it, lower case, without the
-    terminal dot; an address literal stays as it is. ValueError when the name cannot be encoded."""
+    terminal dot; an address literal stays as it is. ValueError when the name cannot be encoded or holds
+    characters no host name has, such as controls or spaces."""
     try:
         return str(ipaddress.ip_address(host))
     except ValueError:
         pass
     name = host.encode("idna").decode("ascii").lower()
-    return name[:-1] if name.endswith(".") else name
+    name = name[:-1] if name.endswith(".") else name
+    if name and not _HOSTNAME.fullmatch(name):
+        raise ValueError(f"{host!r} is not a host name")
+    return name
 
 
 def url_parts(url: str):
@@ -88,18 +95,21 @@ class _Pinned(http.client.HTTPSConnection):
 
 
 def get(host: str, address: str, path: str, timeout: int, limit: int) -> Response:
-    connection = _Pinned(host, address, timeout)
+    connection = None
     try:
+        # Building the connection checks the host and sending the request encodes the path: either can refuse.
+        connection = _Pinned(host, address, timeout)
         connection.request("GET", path or "/", headers={"User-Agent": "harness-forge-source-check",
                                                         "Accept": "text/html, text/plain"})
         answer = connection.getresponse()
         body = answer.read(limit + 1)
         headers = {key.lower(): value for key, value in answer.getheaders()}
         return Response(status=answer.status, headers=headers, body=body)
-    except (OSError, http.client.HTTPException) as error:
-        raise FetchError(f"cannot fetch https://{host}{path}: {error}") from error
+    except (OSError, ValueError, http.client.HTTPException) as error:
+        raise FetchError(f"cannot fetch https://{host}{path!r}: {error}") from error
     finally:
-        connection.close()
+        if connection is not None:
+            connection.close()
 
 
 class _Text(HTMLParser):
@@ -156,9 +166,10 @@ def fetch_text(url: str, *, resolve: Callable[[str], list[str]] = resolve, get: 
         addresses = resolve(host)
         if not addresses or not all(_public(address) for address in addresses):
             raise FetchError(f"{host} resolves to a non-public address")
-        path = parts.path or "/"
+        # As a browser sends it: characters outside ASCII and spaces percent-encoded, existing escapes kept.
+        path = quote(parts.path or "/", safe=_TARGET_SAFE)
         if parts.query:
-            path += "?" + parts.query
+            path += "?" + quote(parts.query, safe=_TARGET_SAFE)
         response = get(host, addresses[0], path, timeout, limit)
         if response.status in (301, 302, 303, 307, 308) and response.headers.get("location"):
             try:

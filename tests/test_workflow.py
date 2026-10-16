@@ -191,6 +191,20 @@ class ResearchPassTest(unittest.TestCase):
         self.assertEqual([d["id"] for d in result["dropped"]], ["F2"])
         self.assertIn("malformed", result["dropped"][0]["reason"])
 
+    def test_a_source_forge_cannot_request_drops_only_its_finding(self):
+        """Forge's real fetch, with name resolution faked and every connection refused."""
+        from unittest import mock
+        from harness_forge.fetch import fetch_text
+
+        def fetch(url):
+            return fetch_page(url) if url == SOURCE else fetch_text(url, resolve=lambda host: ["93.184.215.14"])
+
+        with mock.patch("harness_forge.fetch.socket.create_connection", side_effect=OSError("blocked")):
+            result, _ = self.run_pass([finding(), finding(source="https://docs.example-vendor.com/\u00fcberblick"),
+                                       finding(source="https://docs\x01example-vendor.com/x")], fetch=fetch)
+        self.assertEqual([f["id"] for f in result["kept"]], ["F1"])
+        self.assertEqual([d["id"] for d in result["dropped"]], ["F2", "F3"])
+
     def test_forge_adds_the_pass_part_and_brief_digest(self):
         result, _ = self.run_pass([finding()])
         kept = result["kept"][0]
