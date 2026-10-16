@@ -24,6 +24,8 @@ fetched on 2026-10-09.
 | `jsonschema-specifications` | 2025.9.1 | >=3.9 | no |
 | `pyyaml` | 6.0.3 | >=3.8 | optional libyaml extension; the wheels are per platform |
 | `typing-extensions` | 4.16.0 (Python < 3.13 only) | >=3.9 | no |
+| `markdown-it-py` | 4.2.0 | >=3.10 | no |
+| `mdurl` | 0.1.2 | >=3.7 | no |
 
 `jsonschema` 4.26.0 requires `attrs`, `jsonschema-specifications`,
 `referencing` and `rpds-py`; `referencing` 0.37.0 adds `typing-extensions`
@@ -78,6 +80,19 @@ python3 -m venv <forge-env>
 - T13 decides where `<forge-env>` lives for each harness and how the skills
   find it. Claude Code provides `${CLAUDE_PLUGIN_DATA}` for persistent
   plugin data; Codex documents `PLUGIN_DATA` for plugin hooks.
+
+## Markdown parser
+
+Added on 2026-10-17 (owner decision of 2026-10-16). Forge's own scanner
+modelled fenced code, HTML blocks and ATX headings but no list items,
+block quotes, indented code or setext headings, so a fence inside a list
+item could hide a broken link or a heading. `markdown-it-py` (MIT, the
+Executable Books project) is a CommonMark parser in pure Python whose
+only dependency is `mdurl` (MIT); both ship one universal wheel, so the
+platform table below is unchanged. Forge uses its `commonmark` preset,
+keeps link destinations as written (`normalizeLink` is the identity) and
+refuses what the parser reads differently from CommonMark: nesting at
+its limit and HTML tag names with non-ASCII letters.
 
 ## Library behavior Forge must configure
 

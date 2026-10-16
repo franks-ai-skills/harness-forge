@@ -6,4 +6,6 @@ rpds-py==2026.6.3
 attrs==26.1.0
 jsonschema-specifications==2025.9.1
 pyyaml==6.0.3
+markdown-it-py==4.2.0
+mdurl==0.1.2
 typing-extensions==4.16.0 ; python_version < "3.13"

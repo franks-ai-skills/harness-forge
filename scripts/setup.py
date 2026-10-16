@@ -41,7 +41,7 @@ def install_command(python: Path, lock: Path, *, wheelhouse: Path | None = None)
     return command + ["-r", str(lock)]
 
 
-IMPORT_CHECK = "import jsonschema, referencing, yaml"
+IMPORT_CHECK = "import jsonschema, markdown_it, referencing, yaml"
 
 
 def lock_path(target: Path) -> Path:
