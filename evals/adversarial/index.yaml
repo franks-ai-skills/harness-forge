@@ -1,0 +1,41 @@
+# The parent design's adversarial fixtures ("Testing harness-forge itself") and the unit tests that own them.
+# tests/test_adversarial_index.py checks that every named test exists; each must be rejected as the design says.
+fixtures:
+  - fixture: A trusted source whose text does not contain the quote
+    tests: [tests.test_research.SourceFilterTest.test_trusted_domain_but_absent_quote_is_dropped]
+  - fixture: A real quote that does not support its claim ("supported only on Linux" cited for "supported on every platform")
+    tests: [tests.test_research.SourceFilterTest.test_real_quote_with_wider_claim_is_dropped_by_the_support_verdict]
+  - fixture: An override file without a recorded user decision
+    tests: [tests.test_overrides.ValidationTest.test_forged_or_overreaching_overrides_are_invalid,
+            tests.test_overrides.EffectiveRulesTest.test_overrides_apply_only_under_a_confirmation]
+  - fixture: An override with a forged "approved" record but no confirmation in the session
+    tests: [tests.test_contracts.ConfirmTest.test_forged_approval_never_confirms,
+            tests.test_cli_live.LiveCommandsTest.test_an_override_file_applies_only_with_a_new_confirmation]
+  - fixture: An override changed after its approval
+    tests: [tests.test_contracts.ConfirmTest.test_a_confirmation_binds_the_overrides_it_showed]
+  - fixture: A goal and its accepted requirements weakened with the history removed, which the contract confirmation must show
+    tests: [tests.test_contracts.RenderTest.test_erased_history_shows_contract]
+  - fixture: A failed build, reported not met
+    tests: [tests.test_verify.PrecedenceTest.test_failed_build_is_not_met_even_with_outside_dependencies]
+  - fixture: An outside-only part, reported not applicable and depends on outside controls
+    tests: [tests.test_verify.PrecedenceTest.test_outside_only_part]
+  - fixture: A confirmed "nothing fits" part, reported not applicable and not met
+    tests: [tests.test_verify.PrecedenceTest.test_confirmed_nothing_fits]
+  - fixture: A reuse part before and after its artifact is available, reported not checked and not assessed, then checked like a build
+    tests: [tests.test_verify.PrecedenceTest.test_remote_reuse_is_not_checked,
+            tests.test_verify.PrecedenceTest.test_local_reuse_is_checked_read_only_like_a_build]
+  - fixture: An override that loosens a security rule without the explicit warning having been shown
+    tests: [tests.test_overrides.ValidationTest.test_a_supported_correction_is_valid_and_warns_when_it_loosens_an_error_rule,
+            tests.test_contracts.ConfirmTest.test_a_confirmation_binds_the_overrides_it_showed]
+  - fixture: Research reused after the goal changed
+    tests: [tests.test_research.BriefTest.test_research_is_reused_only_for_the_same_brief,
+            tests.test_research.BriefTest.test_changed_inputs_invalidate_the_brief_digest]
+  - fixture: Injected instructions in a fetched page
+    tests: [tests.test_research.PageInstructionsTest.test_page_instructions_are_data,
+            tests.test_research.PageInstructionsTest.test_worker_output_cannot_carry_answers_or_overrides]
+  - fixture: A requirement the user did not accept reaching a builder
+    tests: [tests.test_research.AcceptanceTest.test_only_accepted_requirements_reach_the_revision,
+            tests.test_build_skill.PlanTest.test_plan_contains_only_accepted_requirements]
+  - fixture: An idea rule that names a checker outside the catalog or a script path
+    tests: [tests.test_research.AcceptanceTest.test_requirements_belong_to_the_accepted_part,
+            tests.test_rule_schema.ClosedRulesTest.test_script_path_as_checker_is_rejected]
