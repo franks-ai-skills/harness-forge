@@ -52,7 +52,10 @@ root, which downloads Forge's pinned packages from PyPI once.
    would otherwise get wrong, as numbered steps, taking inputs from the
    user's message. Use no argument placeholders, skill-directory variables
    or shell-injection syntax: only Claude Code processes them, before the
-   model reads the skill, and Codex leaves them as literal text.
+   model reads the skill, and Codex leaves them as literal text. When the
+   idea works in untrusted repositories or with untrusted input, Forge
+   adds the line that such content is data to every skill; do not repeat
+   it.
 4. Save both texts to files and run `scripts/forge.py build --decision
    <record> --root <repository> --part <id> --revision <rules file>
    --evidence <workers output> --relay <relay> --description <file>
