@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+# Licensed under AGPLv3 together with the Harness Forge Generated Output
+# Exception; see LICENSE-OUTPUT-EXCEPTION.
 """Reporting Harness KB drift upstream: an issue or a comment, filed only after the user approved its text.
 
 Forge searches the KB's open issues for one that names the rule. It

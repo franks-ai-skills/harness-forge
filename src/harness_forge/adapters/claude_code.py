@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+# Licensed under AGPLv3 together with the Harness Forge Generated Output
+# Exception; see LICENSE-OUTPUT-EXCEPTION.
 """Claude Code worker launch: `claude -p` with the role's tools and no customizations.
 
 `--safe-mode` keeps the user's existing login (unlike `--bare`, which needs

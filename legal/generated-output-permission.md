@@ -105,8 +105,10 @@ requirements of AGPLv3.
   Exception; see LICENSE-OUTPUT-EXCEPTION.
   ```
 
-  In Forge: the skill templates and the code that writes text into
-  Output (the requirements, report and README-section writers). In the
+  In Forge: the skill templates and every module whose text reaches
+  Output (the requirements, report and README-section writers, and the
+  checks, runtime, adapters, verification and command line whose reasons
+  and labels the report copies). In the
   knowledge base: the rule files whose statements and sources Forge
   copies. `tools/pin_snapshot.py` copies those files byte for byte, so
   the snapshot's copies carry the same notice; a test checks it.

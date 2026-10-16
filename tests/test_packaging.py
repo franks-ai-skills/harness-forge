@@ -162,11 +162,13 @@ class InstalledCopyTest(unittest.TestCase):
 
 NOTICE = "Licensed under AGPLv3 together with the Harness Forge Generated Output"
 # Files whose material Forge copies into a user's repository; the snapshot's rule files are the knowledge base's.
+# Every module whose text can reach Output carries the notice: the templates, the rule files and all of
+# Forge's code with content, whose reasons and labels the report copies.
 NOTICE_FILES = ("templates/skill/body.md.tmpl", "templates/skill/requirements.md.tmpl",
-                "templates/skill/openai.yaml.tmpl", "src/harness_forge/build_skill.py",
-                "src/harness_forge/contracts.py", "src/harness_forge/overrides.py", "src/harness_forge/report.py",
-                "src/harness_forge/research.py", "snapshot/rules/skills.yaml", "snapshot/rules/security.yaml",
-                "snapshot/rules/outside-controls.yaml", "snapshot/rules/selection.yaml")
+                "templates/skill/openai.yaml.tmpl", "snapshot/rules/skills.yaml", "snapshot/rules/security.yaml",
+                "snapshot/rules/outside-controls.yaml", "snapshot/rules/selection.yaml", "scripts/forge.py",
+                *sorted(path.relative_to(FORGE).as_posix() for path in (FORGE / "src/harness_forge").rglob("*.py")
+                        if path.read_text(encoding="utf-8").strip()))
 
 
 class OutputExceptionTest(unittest.TestCase):

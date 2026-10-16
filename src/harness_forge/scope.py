@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+# Licensed under AGPLv3 together with the Harness Forge Generated Output
+# Exception; see LICENSE-OUTPUT-EXCEPTION.
 """Re-verification scope and which parts changed bound inputs affect."""
 
 from __future__ import annotations

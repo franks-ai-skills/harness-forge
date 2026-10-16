@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+# Licensed under AGPLv3 together with the Harness Forge Generated Output
+# Exception; see LICENSE-OUTPUT-EXCEPTION.
 """Compute a part's recommendation from confirmed, normalized answers.
 
 Selection has five kinds of rules from the pinned KB (policy/selection.md):

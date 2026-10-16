@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+# Licensed under AGPLv3 together with the Harness Forge Generated Output
+# Exception; see LICENSE-OUTPUT-EXCEPTION.
 """The worker-backed stages the CLI runs: a research pass and a live verification.
 
 Both run only under a contract the user confirmed in this session (the

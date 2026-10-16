@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+# Licensed under AGPLv3 together with the Harness Forge Generated Output
+# Exception; see LICENSE-OUTPUT-EXCEPTION.
 """Codex worker launch: `codex exec` without user config, rules, apps, plugins or MCP.
 
 Feature names are checked against `codex features list` of the installed

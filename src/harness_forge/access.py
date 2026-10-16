@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+# Licensed under AGPLv3 together with the Harness Forge Generated Output
+# Exception; see LICENSE-OUTPUT-EXCEPTION.
 """Where a harness's file tools and commands reached, judged against the workspace Forge staged.
 
 Workers and runtime cases run in a throwaway workspace. Isolation is

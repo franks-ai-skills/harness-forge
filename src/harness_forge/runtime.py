@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+# Licensed under AGPLv3 together with the Harness Forge Generated Output
+# Exception; see LICENSE-OUTPUT-EXCEPTION.
 """Runtime tests of a built skill in throwaway workspaces.
 
 Each case runs the target harness once in a fresh workspace that holds

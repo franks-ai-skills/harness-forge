@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+# Licensed under AGPLv3 together with the Harness Forge Generated Output
+# Exception; see LICENSE-OUTPUT-EXCEPTION.
 """Where Forge's Python environment lives and when forge.py switches to it.
 
 Standard library only: forge.py consults this before it imports the

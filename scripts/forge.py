@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+# Licensed under AGPLv3 together with the Harness Forge Generated Output
+# Exception; see LICENSE-OUTPUT-EXCEPTION.
 """Harness Forge command line: bounded JSON on stdout, diagnostics on stderr.
 
 Exit codes: 0 success, 1 failed checks, 2 invalid input.

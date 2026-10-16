@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+# Licensed under AGPLv3 together with the Harness Forge Generated Output
+# Exception; see LICENSE-OUTPUT-EXCEPTION.
 """The output shape each worker CLI enforces: `claude --json-schema`, `codex exec --output-schema`.
 
 Derived from Forge's own schemas but structural only (types, enums, required

@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+# Licensed under AGPLv3 together with the Harness Forge Generated Output
+# Exception; see LICENSE-OUTPUT-EXCEPTION.
 """Pinned deterministic checkers, by catalog id.
 
 Each checker is ``fn(files, facts, params) -> (status, reason)`` with
