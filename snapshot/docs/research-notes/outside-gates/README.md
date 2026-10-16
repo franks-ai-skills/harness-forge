@@ -6,7 +6,7 @@ a rule when the agent errs, is prompt-injected, or has its
 configuration changed by a pull request. They back the condensed
 [outside-gates guide](../../guide/outside-gates.md) and the outside
 control recommendations in the
-[harness-forge design](../../../../playground/specs/2026-10-06-harness-forge-design.md).
+[harness-forge design](https://github.com/franks-ai-skills/playground/blob/ai-stuff/specs/2026-10-06-harness-forge-design.md).
 
 Scope: general concepts that work on any platform. Products and
 platform features appear only as examples. Each note records, per

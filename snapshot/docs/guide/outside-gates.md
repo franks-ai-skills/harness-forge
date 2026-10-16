@@ -8,7 +8,7 @@ DNS boundaries, isolation, policy engines and limits. Like
 an eleventh extension mechanism. It gives harness-forge the knowledge
 to recommend an outside gate alongside a harness mechanism, instead of
 any harness build, or not at all
-([design](../../../playground/specs/2026-10-06-harness-forge-design.md)).
+([design](https://github.com/franks-ai-skills/playground/blob/ai-stuff/specs/2026-10-06-harness-forge-design.md)).
 
 The [research notes](../research-notes/outside-gates/README.md) were
 fetched on 2026-10-07. Plan-tier availability and vendor defaults
@@ -739,7 +739,7 @@ it. It labels the result advisory: it gives earlier feedback, but the
 agent or a PR can edit it, and it has a bypass history ([Claude Code
 advisories](https://github.com/anthropics/claude-code/security/advisories)).
 The [harness-forge
-design](../../../playground/specs/2026-10-06-harness-forge-design.md) adds one firm
+design](https://github.com/franks-ai-skills/playground/blob/ai-stuff/specs/2026-10-06-harness-forge-design.md) adds one firm
 limit: a chosen mechanism that cannot meet a *stated* goal, such as
 "must hold under prompt injection", stays an error rather than a silent
 downgrade. [Inference] The override therefore changes what gets built,
