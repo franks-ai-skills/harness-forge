@@ -169,36 +169,27 @@ limits what those tests can prove:
 | Claude Code | The cases run without a sandbox, so only the `Skill`, `Read`, `Grep` and `Glob` tools can be permitted. Skills that stay listed with bundled skills turned off (your own, or built-ins that this setting keeps, such as `design`, `doctor` and `plugin-authoring` in 2.1.296) are turned off for each case with `skillOverrides`; a skill that still loads makes the case `not-run`. An explicit `/skill` invocation in print mode leaves no observable signal, so such a case reports `not-run`, not a pass. |
 | Codex | Codex does not report which skills, plugins and MCP servers it loaded, so its runs are best-effort: `clean` is null and the summary states the gap. Activation counts only when Codex prints the skill's whole `SKILL.md` with one reading command that names no other file; a read chained with other commands reports `not-run`. A near-miss case has no signal that proves non-activation and reports `not-run`. Codex 0.162 starts a `codex-code-mode-host` helper by default; on macOS, when the Homebrew cask installed it, Gatekeeper can stop its first launch at a prompt. |
 
-## Markdown reading limitations
+## Markdown reading
 
 Forge reads Markdown to find headings and sections, to skip code when it
 checks a skill's links and placeholders, to anchor KB citations, to write
-and check its own README sections and to read its earlier reports. Its
-own scanner follows CommonMark 0.31.2 for fenced code blocks, the seven
-kinds of HTML blocks and ATX headings. A lone HTML tag line directly
-below other text makes the file unreadable to Forge: checks fail and the
-README writer refuses until a blank line separates them. Inside Forge's
-README sections it accepts only the lines it writes there.
+and check its own README sections and to read its earlier reports. It
+parses CommonMark with
+[markdown-it-py](https://github.com/executablebooks/markdown-it-py),
+including fenced and indented code, HTML blocks, setext headings, list
+items and block quotes.
 
-The scanner does not model containers (list items and block quotes),
-indented code blocks or setext headings. A fenced code block or HTML
-block that opens inside a list item or block quote is therefore misread,
-with three known consequences:
-
-- A relative link in a skill file can escape the link checks, so a
-  broken link passes.
-- A heading that exists only inside such a block can count as a KB
-  anchor, or a real heading can be missed.
-- The README writer can take text inside such a block for its own
-  section and replace it, when that text consists only of lines in the
-  form Forge writes.
-
-Until this is fixed, keep fences, HTML and examples of Forge's README
-sections out of list items and block quotes in the files Forge reads.
-The fix is decided: Forge will use the CommonMark parser
-[markdown-it-py](https://github.com/executablebooks/markdown-it-py)
-instead of its own scanner, as the first change after the first
-release.
+- A heading inside a list item or block quote is no section and no KB
+  anchor. GitHub anchors such headings, so a link to one fails the check
+  instead of passing.
+- Forge refuses two kinds of files, where markdown-it-py would read less
+  or other than CommonMark: blocks or inline elements nested 19 or more
+  levels deep, and an HTML block whose tag name has non-ASCII letters
+  (such as `<scrıpt>`). Checks of such a file fail and the README writer
+  refuses it.
+- Inside its own README sections Forge accepts only the lines it writes
+  there, and it appends a section only where it shows as a heading of
+  its own.
 
 ## Outside controls
 

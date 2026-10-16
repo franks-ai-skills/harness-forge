@@ -168,9 +168,9 @@ REGISTRY = {
     "skills.name-format": ("1.0.0", check_name_format),
     "skills.description-length": ("1.0.0", check_description_length),
     "skills.body-lines": ("1.0.0", check_body_lines),
-    "skills.reference-depth": ("1.3.0", check_reference_depth),
+    "skills.reference-depth": ("1.4.0", check_reference_depth),
     "skills.no-auxiliary-docs": ("1.0.0", check_no_auxiliary_docs),
     "skills.portable-frontmatter": ("1.0.0", check_portable_frontmatter),
-    "skills.portable-body": ("1.1.0", check_portable_body),
+    "skills.portable-body": ("1.2.0", check_portable_body),
     "skills.invocation-flags": ("1.0.0", check_invocation_flags),
 }

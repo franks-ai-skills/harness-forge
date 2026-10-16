@@ -21,6 +21,7 @@ from typing import Any
 
 import yaml
 from jsonschema import Draft202012Validator
+from markdown_it import MarkdownIt
 from jsonschema.exceptions import SchemaError
 from referencing import Registry, Resource
 
@@ -454,28 +455,21 @@ def validate_kb(root: Path) -> list[str]:
 
 
 _LINE = re.compile(r"[^\r\n]*(?:\r\n|\n|\r|$)")
-_OPENER = re.compile(r" {0,3}(`{3,}|~{3,})(.*)")
+# Block and inline nesting beyond this is not parsed: markdown-it skips the rest of that container.
+_MAX_NESTING = 20
+_CODE_BLOCKS = ("fence", "code_block", "html_block")
+# markdown-it-py matches HTML tag names case-insensitively in Unicode (<scrıpt> as <script>), CommonMark in ASCII.
+_TAG_NAME = re.compile(r" {0,3}<[/!?]?([^\s/>\[]*)")
 
 
-# CommonMark 0.31.2 HTML blocks: start condition and end condition per kind.
-# Kinds 1-5 end at a line holding their end marker, 6 and 7 at a blank line;
-# kind 7 cannot interrupt a paragraph.
-_BLOCK_TAGS = ("address|article|aside|base|basefont|blockquote|body|caption|center|col|colgroup|dd|details|dialog|"
-               "dir|div|dl|dt|fieldset|figcaption|figure|footer|form|frame|frameset|h1|h2|h3|h4|h5|h6|head|header|"
-               "hr|html|iframe|legend|li|link|main|menu|menuitem|nav|noframes|ol|optgroup|option|p|param|search|"
-               "section|summary|table|tbody|td|tfoot|th|thead|title|tr|track|ul")
-_ATTRIBUTE = r"""(?:[ \t]+[A-Za-z_:][A-Za-z0-9_.:-]*(?:[ \t]*=[ \t]*(?:[^ \t"'=<>`]+|'[^']*'|"[^"]*"))?)"""
-_HTML_BLOCKS = (
-    (re.compile(r" {0,3}<(?:pre|script|style|textarea)(?:[ \t>]|$)", re.I | re.A),
-     re.compile(r"</(?:pre|script|style|textarea)>", re.I | re.A), True),
-    (re.compile(r" {0,3}<!--"), re.compile(r"-->"), True),
-    (re.compile(r" {0,3}<\?"), re.compile(r"\?>"), True),
-    (re.compile(r" {0,3}<![A-Za-z]"), re.compile(r">"), True),
-    (re.compile(r" {0,3}<!\[CDATA\["), re.compile(r"\]\]>"), True),
-    (re.compile(rf" {{0,3}}</?(?:{_BLOCK_TAGS})(?:[ \t]|/?>|$)", re.I | re.A), None, True),
-    (re.compile(rf" {{0,3}}(?:<(?!(?:pre|script|style|textarea)(?![A-Za-z0-9-]))[A-Za-z][A-Za-z0-9-]*{_ATTRIBUTE}*"
-                r"[ \t]*/?>|</[A-Za-z][A-Za-z0-9-]*[ \t]*>)[ \t]*$", re.I | re.A), None, False),
-)
+def _markdown_parser() -> MarkdownIt:
+    parser = MarkdownIt("commonmark", {"maxNesting": _MAX_NESTING})
+    # Link destinations as written, escapes resolved: a relative link is a file path, not a URL to encode.
+    parser.normalizeLink = lambda url: url
+    return parser
+
+
+_PARSER = _markdown_parser()
 
 
 def fold_name(name: str) -> str:
@@ -485,93 +479,72 @@ def fold_name(name: str) -> str:
 
 
 class UnreadableMarkdown(ValueError):
-    """Text whose block structure depends on what Forge does not track; checks fail and writers refuse on it."""
+    """Text markdown-it-py would read differently from CommonMark or not at all; checks fail and writers refuse on it."""
 
 
-def _scan(markdown: str) -> tuple[list[tuple[int, str, bool]], bool]:
-    """Lines with their code flag, and whether the text ends inside a block that text appended to it would join."""
-    # settled: no paragraph can be open, because the line before was blank, a heading or the end of a block.
-    lines, fence, html, settled, offset = [], None, None, True, 0
+@lru_cache(maxsize=32)
+def _parse(markdown: str) -> tuple[tuple, dict]:
+    """CommonMark tokens and reference definitions; UnreadableMarkdown where the parser would misread the text."""
+    env: dict = {}
+    tokens = _PARSER.parse(markdown, env)
+    deepest = max((token.level for block in tokens for token in (block, *(block.children or ()))), default=0)
+    if deepest >= _MAX_NESTING - 1:
+        raise UnreadableMarkdown(f"blocks or inline elements nested {_MAX_NESTING - 1} or more levels deep")
+    for token in tokens:
+        name = _TAG_NAME.match(token.content) if token.type == "html_block" else None
+        if name and not name.group(1).isascii():
+            raise UnreadableMarkdown(f"line {token.map[0] + 1}: an HTML tag name with non-ASCII letters, which "
+                                     "CommonMark does not read as a tag")
+    return tuple(tokens), env.get("references", {})
+
+
+def _line_offsets(markdown: str) -> list[tuple[int, str]]:
+    """(offset, line without its ending) per line, split as CommonMark splits: at \\r\\n, \\n or \\r."""
+    lines, offset = [], 0
     for match in _LINE.finditer(markdown):
         raw = match.group(0)
         if not raw and lines:
             break
-        line = raw.rstrip("\r\n")
-        opener = _OPENER.fullmatch(line)
-        if html is not None:
-            if html == "blank" and not line.strip(" \t"):
-                html = None
-                lines.append((offset, line, False))
-            else:
-                if html != "blank" and html.search(line):
-                    html = None
-                lines.append((offset, line, True))
-            settled = html is None
-        elif fence:
-            if opener and opener.group(1)[0] == fence[0] and len(opener.group(1)) >= len(fence) \
-                    and not opener.group(2).strip(" \t"):
-                fence = None
-            lines.append((offset, line, True))
-            settled = fence is None
-        elif opener and not (opener.group(1)[0] == "`" and "`" in opener.group(2)):
-            fence = opener.group(1)
-            lines.append((offset, line, True))
-        elif kind := next(((start, end, interrupts) for start, end, interrupts in _HTML_BLOCKS if start.match(line)),
-                          None):
-            start, end, interrupts = kind
-            if not interrupts and not settled:
-                # Kind 7 starts only where no paragraph is open; after other text that depends on
-                # lists, quotes, definitions and indentation, which Forge does not model.
-                raise UnreadableMarkdown(f"line {len(lines) + 1}: an HTML tag alone on its line directly below "
-                                         "other text; put a blank line before it")
-            # The end condition may hold on the opening line itself, as in <!--> or <?>.
-            html = None if end is not None and end.search(line) else (end or "blank")
-            lines.append((offset, line, True))
-            settled = html is None
-        else:
-            lines.append((offset, line, False))
-            settled = not line.strip(" \t") or bool(re.match(r" {0,3}#{1,6}(?:[ \t]|$)", line))
+        lines.append((offset, raw.rstrip("\r\n")))
         offset += len(raw)
         if not raw:
             break
-    return lines, bool(fence) or html not in (None, "blank")
+    return lines
 
 
 def markdown_lines(markdown: str) -> list[tuple[int, str, bool]]:
-    """(offset, line without its ending, inside code) for each line, with CommonMark's fenced code blocks.
+    """(offset, line without its ending, inside code) for each line, as CommonMark (markdown-it-py) reads it.
 
-    A backtick fence's info string holds no backtick; a closing fence uses
-    the opener's character, at least as many, and only spaces or tabs after
-    them; an unclosed fence runs to the end. Fence lines count as code, and
-    so do HTML blocks (all seven CommonMark kinds). Indented code, setext
-    headings and containers such as block quotes and lists are not
-    modelled: callers that must not misread them accept only lines they
-    recognize. A lone tag line directly below other text raises
-    UnreadableMarkdown, because only paragraph state decides whether it
-    starts an HTML block.
+    Code is every line of a fenced or indented code block or an HTML block,
+    also inside list items and block quotes.
     """
-    return _scan(markdown)[0]
-
-
-def markdown_open_block(markdown: str) -> bool:
-    """Whether the text ends inside a code fence or an HTML comment, so that text appended to it would not show."""
-    return _scan(markdown)[1]
+    tokens, _ = _parse(markdown)
+    code = {line for token in tokens if token.type in _CODE_BLOCKS and token.map for line in range(*token.map)}
+    return [(offset, line, number in code) for number, (offset, line) in enumerate(_line_offsets(markdown))]
 
 
 def markdown_prose(markdown: str) -> str:
-    """The text with every fenced code line left empty, so that line numbers stay."""
+    """The text with every code line left empty, so that line numbers stay."""
     return "\n".join("" if code else line for _, line, code in markdown_lines(markdown))
 
 
 def markdown_headings(markdown: str) -> list[tuple[int, int, str]]:
-    """(offset, level, text) of each ATX heading outside fenced code blocks."""
-    headings = []
-    for offset, line, code in markdown_lines(markdown):
-        if not code and (heading := re.fullmatch(r" {0,3}(#{1,6})(?:[ \t]+(.*?))?[ \t]*", line)):
-            # A closing run of # after a space is no part of the title, as in CommonMark.
-            title = re.sub(r"(?:^|[ \t]+)#+$", "", heading.group(2) or "")
-            headings.append((offset, len(heading.group(1)), title))
-    return headings
+    """(offset, level, text) of each ATX or setext heading outside list items, block quotes and code.
+
+    A heading inside a container is part of that container, not a section of the document.
+    """
+    tokens, _ = _parse(markdown)
+    offsets = [offset for offset, _ in _line_offsets(markdown)]
+    return [(offsets[token.map[0]], int(token.tag[1]), tokens[index + 1].content)
+            for index, token in enumerate(tokens) if token.type == "heading_open" and token.level == 0]
+
+
+def markdown_links(markdown: str) -> list[str]:
+    """Destinations of every link, image and reference definition, as written with escapes resolved."""
+    tokens, references = _parse(markdown)
+    links = [child.attrs.get("href") or child.attrs.get("src") for token in tokens for child in token.children or ()
+             if child.type in ("link_open", "image")]
+    return [link for link in links if link] + [reference["href"] for reference in references.values()]
 
 
 def markdown_section(markdown: str, heading: str) -> tuple[int, int] | None:

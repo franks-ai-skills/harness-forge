@@ -64,4 +64,4 @@ def check_readme_coverage(files, facts, params):
     return ("fail", "not listed: " + ", ".join(missing)) if missing else ("pass", f"{len(controls)} control(s) listed")
 
 
-REGISTRY = {"outside.readme-coverage": ("1.1.0", check_readme_coverage)}
+REGISTRY = {"outside.readme-coverage": ("1.2.0", check_readme_coverage)}

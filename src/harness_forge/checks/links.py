@@ -48,6 +48,6 @@ def check_portable_symlink(files, facts, params):
 
 
 REGISTRY = {
-    "links.relative-references": ("1.3.0", check_relative_references),
+    "links.relative-references": ("1.4.0", check_relative_references),
     "links.portable-symlink": ("1.0.0", check_portable_symlink),
 }

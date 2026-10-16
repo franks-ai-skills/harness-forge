@@ -1,4 +1,4 @@
-"""One Markdown reading for every section, heading and code check (Codex fix review round 2)."""
+"""One Markdown reading, CommonMark by markdown-it-py, for every section, heading, code and link check."""
 
 import tempfile
 import unittest
@@ -115,8 +115,9 @@ class ForgeSectionTest(unittest.TestCase):
     def test_the_writer_refuses_a_section_holding_lines_it_did_not_write(self):
         written = update_readme("# Repro\n", decision(reach="user"))
         setext = written + "License\n=======\n\nMIT.\n"
-        with self.assertRaisesRegex(ValueError, "Where the skills load.*lines Forge did not write"):
-            update_readme(setext, decision())
+        rewritten = update_readme(setext, decision())
+        self.assertNotIn("## Where the skills load", rewritten)
+        self.assertIn("License\n=======\n\nMIT.\n", rewritten, "a setext heading ends Forge's section and stays")
         note = written.replace("## Where the skills load\n\n", "## Where the skills load\n\nMy note.\n\n")
         with self.assertRaisesRegex(ValueError, "My note"):
             update_readme(note, decision(reach="user"))
@@ -261,18 +262,15 @@ class HtmlBlockBoundaryTest(unittest.TestCase):
         titles = [title for _, _, title in markdown_headings("# T\n\n<pre-note>\n## Fake\n\n## Real\n")]
         self.assertEqual(titles, ["T", "Real"])
 
-    def test_a_lone_tag_below_other_text_makes_the_document_unreadable(self):
-        """Whether it starts HTML block kind 7 depends on paragraph state Forge does not track (round 7)."""
-        from harness_forge.documents import UnreadableMarkdown
-        for before in ("Some text", "***", "===", "[a]:", " \tcode", ">", "- item", "Text\n==="):
+    def test_a_lone_tag_below_other_text_is_read_as_commonmark_reads_it(self):
+        """Paragraph, list, quote and definition state decide whether a tag line starts an HTML block."""
+        for before, real_heading in (("Some text", True), ("***", False), ("===", True), ("[a]:", True),
+                                     (" \tcode", False), (">", False), ("- item", True), ("Text\n===", False)):
             with self.subTest(before=before):
                 text = f"# T\n\n{before}\n<custom-tag>\n## Outside controls\n\n## Real\n"
-                with self.assertRaisesRegex(UnreadableMarkdown, "line [0-9]+: .*blank line"):
-                    markdown_headings(text)
-                self.assertEqual(coverage(text), "fail")
-                self.assertEqual(self.links(f"{before}\n<guide>\n[Required](missing.md)\n"), "fail")
-                with self.assertRaises(UnreadableMarkdown):
-                    update_readme(text, outside_only())
+                titles = [title for _, _, title in markdown_headings(text)]
+                self.assertEqual("Outside controls" in titles, real_heading, titles)
+                self.assertIn("Real", titles)
 
     def test_a_lone_tag_after_a_blank_line_heading_or_closed_block_starts_kind_seven(self):
         for before in ("", "# Title", "```\ncode\n```", "<!-- note -->"):
@@ -286,6 +284,58 @@ class HtmlBlockBoundaryTest(unittest.TestCase):
     def test_tag_names_are_ascii(self):
         self.assertEqual(self.links("<\u017fpan>\n[Required](missing.md)\n"), "fail")
         self.assertEqual(self.links("<scr\u0131pt>\n[Required](missing.md)\n"), "fail")
+
+
+class ContainerTest(unittest.TestCase):
+    """Fences, HTML blocks and indented code inside list items and block quotes (Codex fix review round 8)."""
+
+    def links(self, reference):
+        files = {".agents/skills/s/SKILL.md": b"---\nname: s\ndescription: d\n---\nRead [r](references/r.md).\n",
+                 ".agents/skills/s/references/r.md": reference.encode()}
+        return check_relative_references(files, {}, {})
+
+    def test_a_block_left_open_in_a_list_item_ends_with_the_item(self):
+        for opener in ("```", "<pre>", "<!--"):
+            with self.subTest(opener=opener):
+                text = f"- a\n\n  {opener}\n- b\n\n[Required](missing.md)\n\n## Real\n"
+                status, reason = self.links(text)
+                self.assertEqual(status, "fail")
+                self.assertIn("missing.md", reason)
+                self.assertIn("real", heading_anchors(text))
+                self.assertIsNotNone(markdown_section(text, "Real"))
+
+    def test_code_inside_a_quote_or_list_item_holds_no_link_or_heading(self):
+        for block in ("> ```\n> [Example](missing.md)\n> ## Fake\n> ```\n",
+                      "- item\n\n      [Example](missing.md)\n      ## Fake\n",
+                      "> <pre>\n> [Example](missing.md)\n> ## Fake\n> </pre>\n"):
+            with self.subTest(block=block):
+                self.assertEqual(self.links(block + "\nText.\n")[0], "pass")
+                self.assertNotIn("fake", heading_anchors(block))
+
+    def test_the_writer_finds_a_section_after_a_list_item_with_a_fence(self):
+        written = update_readme("# Repro\n", decision(reach="user"))
+        before = "# Repro\n\n- example\n  ```\n  code\n"
+        readme = before + written.split("# Repro\n", 1)[1]
+        self.assertEqual(readme.count("## Where the skills load"), 1)
+        self.assertEqual(update_readme(readme, decision(reach="user")).count("## Where the skills load"), 1)
+        self.assertEqual(update_readme(before, decision(reach="user")).count("## Where the skills load"), 1,
+                         "the item's fence ends with the list, so the appended section shows")
+
+    def test_setext_headings_are_headings(self):
+        text = "Page\n====\n\nPractices\n---------\n\nText.\n"
+        self.assertEqual([(level, title) for _, level, title in markdown_headings(text)], [(1, "Page"), (2, "Practices")])
+        self.assertEqual(heading_anchors(text, range(2, 4)), {"practices"})
+
+    def test_a_quoted_heading_is_no_section(self):
+        self.assertIsNone(markdown_section("# T\n\n> ## Outside controls\n", "Outside controls"))
+
+    def test_nesting_beyond_the_parser_limit_is_unreadable(self):
+        from harness_forge.documents import UnreadableMarkdown
+        deep = ">" * 25 + " [Required](missing.md)\n"
+        with self.assertRaises(UnreadableMarkdown):
+            markdown_headings(deep)
+        self.assertEqual(self.links(deep)[0], "fail")
+        self.assertEqual(coverage("# Repro\n\n" + deep), "fail")
 
 
 class ReportLinesTest(unittest.TestCase):
