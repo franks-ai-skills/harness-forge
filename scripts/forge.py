@@ -55,8 +55,8 @@ from harness_forge.runtime import load_cases  # noqa: E402
 from harness_forge.workflow import research_pass, verify_live  # noqa: E402
 from harness_forge.scope import affected_parts, earlier_run, preserved_parts, review_scope, settled  # noqa: E402
 from harness_forge.verify import (  # noqa: E402
-    NEEDS_CONFIRMATION, affecting_rules, bound_inputs, exclusion_token, finish_run, open_blocking_drift, part_kind,
-    prepare_run, selection_citations, selection_failures,
+    NEEDS_CONFIRMATION, affecting_rules, bound_inputs, case_alias, exclusion_token, finish_run, open_blocking_drift,
+    part_kind, prepare_run, selection_citations, selection_failures,
 )
 from harness_forge.models import ReviewResponse, RuntimeResult  # noqa: E402
 from harness_forge.selection import (  # noqa: E402
@@ -475,6 +475,9 @@ def collect_target(root: Path, decision) -> tuple[dict[str, bytes], dict[str, st
                 if path.stat().st_size > 1024 * 1024 or len(files) >= MAX_COLLECTED_FILES:
                     raise _InvalidInput(f"{relative}: too large, or too many files")
                 files[relative] = path.read_bytes()
+        alias = case_alias(directory, files)
+        if alias:
+            raise _InvalidInput(alias)
     return files, symlinks
 
 

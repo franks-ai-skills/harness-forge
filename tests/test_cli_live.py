@@ -338,6 +338,20 @@ class LiveCommandsTest(unittest.TestCase):
         self.assertIn(".agents/skills/reproduction-checklist/agents/openai.yaml is a symbolic link", stderr)
         self.assertEqual(len(runner.worker_calls), started)
 
+    def test_a_resource_spelled_in_another_case_stops_verification(self):
+        """On a case-insensitive file system Agents/openai.yaml is the policy file (whole-branch review round 2)."""
+        runner = ResearchRunner([finding()])
+        cli, arguments = self.build_ready(runner)
+        skill = self.root / ".agents/skills/reproduction-checklist"
+        (skill / "Agents").mkdir()
+        (skill / "Agents/openai.yaml").write_text("policy: {allow_implicit_invocation: false}\n", encoding="utf-8")
+        started = len(runner.worker_calls)
+        code, output, stderr = cli("verify", *arguments)
+        self.assertEqual((code, output), (2, None))
+        self.assertIn("Agents/openai.yaml", stderr)
+        self.assertIn("agents/openai.yaml", stderr)
+        self.assertEqual(len(runner.worker_calls), started)
+
     def test_the_recorded_requirements_cannot_be_left_out(self):
         cli, arguments = self.build_ready(ResearchRunner([finding()]))
         option = arguments.index("--revision")

@@ -40,6 +40,21 @@ _OBSERVATIONS = ("observed_tools", "observed_behavior", "unknowns", "evidence_re
 # Appended to the reviewer's reason when an error rule's "not applicable" awaits the user.
 NEEDS_CONFIRMATION = " (needs the user's confirmation)"
 
+# The skill resources harnesses and checks look up by exact name.
+RESOURCES = ("SKILL.md", "agents/openai.yaml")
+
+
+def case_alias(directory: str, paths) -> str | None:
+    """A path in the skill's directory that names a resource in another case, which a case-insensitive file
+    system opens as that resource while checks keyed by its exact name miss it."""
+    for path in sorted(paths):
+        relative = path[len(directory) + 1:] if path.startswith(directory + "/") else None
+        for resource in RESOURCES:
+            if relative is not None and relative.lower() == resource.lower() and relative != resource:
+                return f"{path} is spelled differently from the resource {directory}/{resource}; rename it"
+    return None
+
+
 def part_kind(part: dict) -> str:
     """build, local-reuse, remote-reuse, outside-only, nothing-fits or unavailable."""
     if part["outcome"] == "reuse":
@@ -265,6 +280,9 @@ def prepare_run(
     symlinks = dict(symlinks or {})
     for part in decision.record["parts"]:
         directory = _skill_dir(part)
+        alias = case_alias(directory, files) if directory else None
+        if alias:
+            raise ValueError(alias)
         inside = sorted(link for link in symlinks if directory and link.startswith(directory + "/"))
         if inside:
             # Its target would escape the checks, the review and the runtime cases, which read regular files only.
