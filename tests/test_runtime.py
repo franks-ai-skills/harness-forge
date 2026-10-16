@@ -436,7 +436,10 @@ class RuntimeTest(unittest.TestCase):
                                                                  "exit_code": 0, "status": "completed",
                                                                  "aggregated_output": BUILT}})
 
-        for label, text in (("empty head, then a copy", f"head -n 0 {SKILL_DIR}/SKILL.md; cat fixtures/copied-skill.md"),
+        for label, text in (("sed reading another file", f"sed -n '1r fixtures/copied-skill.md' {SKILL_DIR}/SKILL.md"),
+                            ("a fixture named like a number", f"sed -n '1,20p' 123 {SKILL_DIR}/SKILL.md"),
+                            ("awk", f"awk '1' {SKILL_DIR}/SKILL.md"),
+                            ("empty head, then a copy", f"head -n 0 {SKILL_DIR}/SKILL.md; cat fixtures/copied-skill.md"),
                             ("piped away", f"cat {SKILL_DIR}/SKILL.md | head -n 0; cat fixtures/copied-skill.md"),
                             ("second operand", f"awk 'NR>3' {SKILL_DIR}/SKILL.md fixtures/copied-skill.md"),
                             ("copy first", f"cat fixtures/copied-skill.md {SKILL_DIR}/SKILL.md")):
@@ -445,7 +448,9 @@ class RuntimeTest(unittest.TestCase):
                 self.assertEqual(result.result, "not-run", result.reason)
         for label, text in (("cat", f"cat {SKILL_DIR}/SKILL.md"), ("numbered", f"nl -ba {SKILL_DIR}/SKILL.md"),
                             ("sed range", f"sed -n '1,200p' {SKILL_DIR}/SKILL.md"),
-                            ("head with a count", f"head -n 400 {SKILL_DIR}/SKILL.md")):
+                            ("head with a count", f"head -n 400 {SKILL_DIR}/SKILL.md"),
+                            ("attached count", f"head -n400 {SKILL_DIR}/SKILL.md"),
+                            ("sed with -e", f"sed -n -e '1,$p' {SKILL_DIR}/SKILL.md")):
             with self.subTest(label):
                 result = self.run_cases("codex", command(text) + "\n" + codex_run(read_skill=False))[0][0]
                 self.assertEqual(result.result, "pass", result.reason)

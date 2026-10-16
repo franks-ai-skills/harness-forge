@@ -334,28 +334,55 @@ def _skills_read(item: dict) -> list[tuple[str, str]]:
     return read
 
 
+# The reading commands whose arguments Forge can attribute exactly: each option form a reader accepts
+# without naming another input. Anything else, awk and sed scripts other than printing included,
+# makes the read unattributable.
+_PRINT_SCRIPT = r"(?:\d+|\$)?(?:,(?:\d+|\$))?p"
+_READ_OPTIONS = {
+    "cat": (r"-[nbsuvetA]+",),
+    "nl": (r"-b[atn]", r"-n(?:ln|rn|rz)", r"-[wvi]\d+", r"-s[ \t:|]?"),
+    "head": (r"-[nc]\d+", r"-\d+"),
+    "tail": (r"-[nc][+-]?\d+", r"-[+-]?\d+"),
+    "sed": (r"-n",),
+}
+_OPTION_WITH_NUMBER = {"head": ("-n", "-c"), "tail": ("-n", "-c"), "nl": ("-w", "-v", "-i")}
+
+
 def _reads_only(item: dict, candidate: set[str]) -> bool:
     """Whether the command is one reading command whose only file is the candidate's SKILL.md.
 
-    Then its output is that file's: with another command or another file,
-    their output could complete the skill's text instead. Option words,
-    numbers after them and the one script of sed or awk are no files.
+    Then its output is that file's: with another command, another file, or
+    a script that reads one (sed's r command), their output could complete
+    the skill's text instead. Every word must be an option form the reader
+    is known to accept, a number right after an option that takes one, the
+    one print-only sed script, or the candidate.
     """
     segments = _segments(str(item.get("command", "")))
     if len(segments) != 1:
         return False
     reader, *words = segments[0]
-    operands, script = [], posixpath.basename(reader) in ("sed", "awk")
+    reader = posixpath.basename(reader)
+    if reader not in _READ_OPTIONS:
+        return False
+    operands, needs_number, script = [], False, reader != "sed"
     for word in words:
-        if word.startswith("-") and word != "-":
-            script = script and word not in ("-e", "-f") and not word.startswith(("-e", "-f", "--expression", "--file"))
-        elif re.fullmatch(r"[+-]?\d+", word):
+        if needs_number:
+            if not re.fullmatch(r"[+-]?\d+", word):
+                return False
+            needs_number = False
+        elif word in _OPTION_WITH_NUMBER.get(reader, ()):
+            needs_number = True
+        elif reader == "sed" and word == "-e" and not script:
             continue
-        elif script:
-            script = False
+        elif any(re.fullmatch(pattern, word) for pattern in _READ_OPTIONS[reader]):
+            continue
+        elif not script:
+            if not re.fullmatch(_PRINT_SCRIPT, word):
+                return False
+            script = True
         else:
             operands.append(posixpath.normpath(word))
-    return len(operands) == 1 and operands[0] in candidate
+    return not needs_number and script and len(operands) == 1 and operands[0] in candidate
 
 
 def _whole(output: str, markers: list[str]) -> bool:
