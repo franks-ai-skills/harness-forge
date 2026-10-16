@@ -6,3 +6,18 @@ cases:
   - {id: goal-met, prompt: "Does the built skill meet the goal we agreed on?", expect: trigger, mode: implicit}
   - {id: near-miss-platform, prompt: "Check whether branch protection is enabled on GitHub.", expect: no-trigger, mode: implicit}
   - {id: near-miss-build, prompt: "Build the skill we decided on.", expect: no-trigger, mode: implicit}
+  - {id: reverify-fixed, prompt: "I fixed part A; re-verify it.", expect: trigger, mode: implicit}
+  - {id: check-requirements, prompt: "Check the built skill against its accepted requirements and the pinned rules.", expect: trigger, mode: implicit}
+  - {id: runtime-cases, prompt: "Run the runtime cases for the skill we built.", expect: trigger, mode: implicit}
+  - {id: report, prompt: "Write the verification report for the reproduction-checklist build.", expect: trigger, mode: implicit}
+  - {id: extensive, prompt: "Do a full re-verification of every part.", expect: trigger, mode: implicit}
+  - {id: is-it-verified, prompt: "Is the skill we built verified now?", expect: trigger, mode: implicit}
+  - {id: forge-own-skills, prompt: "Verify Forge's own skills against their contract.", expect: trigger, mode: implicit}
+  - {id: after-rebuild, prompt: "The rebuild finished; check it.", expect: trigger, mode: implicit}
+  - {id: goal-review, prompt: "Have the reviewer judge whether part B meets its goal.", expect: trigger, mode: implicit}
+  - {id: near-miss-tests, prompt: "Run the unit tests.", expect: no-trigger, mode: implicit}
+  - {id: near-miss-lint, prompt: "Check this file for lint errors.", expect: no-trigger, mode: implicit}
+  - {id: near-miss-pr-review, prompt: "Review my pull request.", expect: no-trigger, mode: implicit}
+  - {id: near-miss-intake, prompt: "I want a hook that blocks force pushes.", expect: no-trigger, mode: implicit}
+  - {id: near-miss-validate-json, prompt: "Validate this JSON against its schema.", expect: no-trigger, mode: implicit}
+  - {id: near-miss-plugin-validate, prompt: "Run claude plugin validate on this repo.", expect: no-trigger, mode: implicit}
