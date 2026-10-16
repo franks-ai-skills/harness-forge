@@ -115,6 +115,11 @@ class CoverageCompletenessTest(unittest.TestCase):
     def test_minimal_kb_is_fully_covered(self):
         self.assertEqual(self.validate_kb(self.kb), [])
 
+    def test_a_missing_schema_copy_fails(self):
+        (self.kb / "schemas" / "coverage.schema.json").unlink()
+        errors = self.validate_kb(self.kb)
+        self.assertTrue(any("schemas/coverage.schema.json: missing" in error for error in errors), errors)
+
     def test_uncovered_section_fails(self):
         page = self.kb / "docs" / "guide" / "skills.md"
         page.write_text(page.read_text(encoding="utf-8") + "\n## Portability\n\nNew section.\n", encoding="utf-8")

@@ -339,7 +339,10 @@ def validate_kb(root: Path) -> list[str]:
 
     for name in KB_SCHEMAS:
         copy = root / "schemas" / f"{name}.schema.json"
-        if copy.exists() and copy.read_bytes() != (SCHEMA_DIR / copy.name).read_bytes():
+        if copy.is_symlink() or not copy.is_file():
+            # Every schema copy is required: a missing one would also be missing from a pinned snapshot.
+            check.error(f"schemas/{copy.name}: missing, or not a regular file")
+        elif copy.read_bytes() != (SCHEMA_DIR / copy.name).read_bytes():
             check.error(f"schemas/{copy.name}: differs from Forge's schema")
 
     catalog = check.load("checks/catalog.yaml", "catalog") or {"checkers": []}
