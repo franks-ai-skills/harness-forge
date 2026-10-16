@@ -100,7 +100,7 @@ class SourceFilterTest(unittest.TestCase):
     def test_a_malformed_source_url_is_rejected_not_raised(self):
         for url in ("https://[not-an-ip]/", "https://docs.example-vendor.com:99999/x",
                     "https://docs.example-vendor.com:abc/x", "https://docs..example-vendor.com/x",
-                    "https://" + "a" * 64 + ".example-vendor.com/x"):
+                    "https://" + "a" * 64 + ".example-vendor.com/x", "https://docs.example-vendor.com/\ud800"):
             with self.subTest(url=url):
                 self.assertIn("malformed", source_rejection(url) or "")
                 self.assertIsNone(validate_finding(finding(source=url), PAGE, verdict()))

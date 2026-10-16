@@ -205,6 +205,14 @@ class ResearchPassTest(unittest.TestCase):
         self.assertEqual([f["id"] for f in result["kept"]], ["F1"])
         self.assertEqual([d["id"] for d in result["dropped"]], ["F2", "F3"])
 
+    def test_a_finding_with_text_that_is_not_unicode_drops_only_itself(self):
+        """A lone surrogate from the worker's JSON can be neither requested nor written to the record."""
+        result, runner = self.run_pass([finding(), finding(source="https://docs.example-vendor.com/\ud800"),
+                                        finding(claim="The reproducer tool is supported only on Linux \udfff")])
+        self.assertEqual([f["id"] for f in result["kept"]], ["F1"])
+        self.assertEqual([d["id"] for d in result["dropped"]], ["F2", "F3"])
+        self.assertEqual(runner.support_ids, ["F1"])
+
     def test_forge_adds_the_pass_part_and_brief_digest(self):
         result, _ = self.run_pass([finding()])
         kept = result["kept"][0]

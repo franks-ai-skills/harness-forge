@@ -15,7 +15,7 @@ import re
 from typing import Callable, Mapping
 
 from harness_forge.adapters.base import Runner, run_command, run_worker
-from harness_forge.documents import canonical_digest, validate
+from harness_forge.documents import canonical_digest, canonical_json, validate
 from harness_forge.fetch import FetchError, fetch_text
 from harness_forge.models import AcceptedRevision, Confirmation, Contract, Decision, ReviewResponse, Rule
 from harness_forge.research import (
@@ -78,6 +78,11 @@ def research_pass(
     raw = response["output"]["findings"]
     for item, new_id in zip(raw, _next_ids(list(existing_ids), len(raw))):
         finding = worker_finding(item, brief, new_id)
+        try:
+            canonical_json(finding.to_dict())
+        except ValueError:  # a lone surrogate from the worker's JSON can be neither sent, hashed nor written
+            result["dropped"].append({"id": new_id, "reason": "the finding holds text that is not valid Unicode"})
+            continue
         rejection = source_rejection(finding.source)
         if rejection:
             result["dropped"].append({"id": new_id, "reason": rejection})

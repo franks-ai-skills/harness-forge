@@ -130,6 +130,29 @@ class FetchTest(unittest.TestCase):
                     fetch_text(url, resolve=web.resolve)
         self.assertTrue(all(call.args[0][0] == "93.184.215.14" for call in connect.call_args_list))
 
+    def test_text_forge_cannot_encode_or_decode_is_a_fetch_error_or_read_as_utf8(self):
+        web = FakeWeb({"docs.example.com": ["93.184.215.14"]}, {})
+        for url in ("https://docs.example.com/\ud800", "https://docs.example.com/a?q=\udfff"):
+            with self.subTest(url=url), self.assertRaises(FetchError):
+                self.fetch(url, web)
+        self.assertEqual(web.requests, [])
+        for charset in ("idna", "rot13", "no-such-charset"):
+            web = FakeWeb({"docs.example.com": ["93.184.215.14"]},
+                          {("docs.example.com", "/"): page(content_type=f"text/html; charset={charset}")})
+            with self.subTest(charset=charset):
+                self.assertIn("supported only on Linux", self.fetch("https://docs.example.com/", web))
+
+    def test_content_type_is_parsed_as_a_header(self):
+        html = "<p>The reproducer is <b>supported</b> only on Linux. Gr\u00f6\u00dfe</p>"
+        for content_type in ("TEXT/HTML", "application/XHTML+xml", "text/html; Charset=iso-8859-1",
+                             'text/html; charset="iso-8859-1"', "Text/Html ; CHARSET = ISO-8859-1"):
+            body = html.encode("iso-8859-1" if "8859" in content_type.lower() else "utf-8")
+            response = Response(status=200, headers={"content-type": content_type}, body=body)
+            web = FakeWeb({"docs.example.com": ["93.184.215.14"]}, {("docs.example.com", "/"): response})
+            with self.subTest(content_type=content_type):
+                self.assertIn("The reproducer is supported only on Linux. Gr\u00f6\u00dfe",
+                              self.fetch("https://docs.example.com/", web))
+
     def test_redirects_are_followed_a_few_times_only(self):
         pages = {("docs.example.com", f"/{n}"): page(status=301, location=f"/{n + 1}") for n in range(10)}
         web = FakeWeb({"docs.example.com": ["93.184.215.14"]}, pages)

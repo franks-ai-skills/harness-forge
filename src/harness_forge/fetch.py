@@ -20,6 +20,7 @@ import re
 import socket
 import ssl
 from dataclasses import dataclass
+from email.message import Message
 from html.parser import HTMLParser
 from typing import Callable
 from urllib.parse import quote, urljoin, urlsplit
@@ -70,7 +71,9 @@ def canonical_host(host: str) -> str:
 
 
 def url_parts(url: str):
-    """The URL's parts, canonical host and port; ValueError for a malformed URL, host or port."""
+    """The URL's parts, canonical host and port; ValueError for a malformed URL, host or port, or for text
+    that is not Unicode (a lone surrogate from a worker's JSON)."""
+    url.encode("utf-8")
     parts = urlsplit(url)
     return parts, canonical_host(parts.hostname or ""), parts.port
 
@@ -143,14 +146,31 @@ def page_text(html: str) -> str:
     return re.sub(r"\s+", " ", "".join(parser.parts)).strip()
 
 
+def _content_type(value: str) -> tuple[str, str | None]:
+    """The media type and charset of a Content-Type header, names and the type case-insensitive, values unquoted."""
+    header = Message()
+    header["content-type"] = value
+    return value.split(";")[0].strip().lower(), header.get_content_charset()
+
+
 def fetch_text(url: str, *, resolve: Callable[[str], list[str]] = resolve, get: Callable[..., Response] = get,
                timeout: int = TIMEOUT, limit: int = MAX_BYTES,
                reject: Callable[[str], str | None] | None = None) -> str:
     """The text of a public HTTPS page, or FetchError.
 
     ``reject`` gives the source policy's reason to refuse a URL; it is asked
-    for every hop, so a redirect cannot reach a rejected source.
+    for every hop, so a redirect cannot reach a rejected source. Any local
+    failure to parse, encode or decode is this source's FetchError, so it
+    never ends the research pass.
     """
+    try:
+        return _fetch_text(url, resolve, get, timeout, limit, reject)
+    except (ValueError, LookupError) as error:
+        raise FetchError(f"cannot read {url!r}: {error}") from error
+
+
+def _fetch_text(url: str, resolve: Callable[[str], list[str]], get: Callable[..., Response], timeout: int, limit: int,
+                reject: Callable[[str], str | None] | None) -> str:
     for _ in range(MAX_REDIRECTS + 1):
         refused = reject(url) if reject else None
         if refused:
@@ -180,14 +200,14 @@ def fetch_text(url: str, *, resolve: Callable[[str], list[str]] = resolve, get: 
         if response.status != 200:
             raise FetchError(f"{url} answered {response.status}")
         content_type = response.headers.get("content-type", "")
-        if not content_type.split(";")[0].strip().lower() in TEXT_TYPES:
+        media, charset = _content_type(content_type)
+        if media not in TEXT_TYPES:
             raise FetchError(f"{url} is not a text page ({content_type or 'no content type'})")
         if len(response.body) > limit:
             raise FetchError(f"{url} is larger than {limit} bytes")
-        charset = re.search(r"charset=([\w-]+)", content_type)
         try:
-            text = response.body.decode(charset.group(1) if charset else "utf-8", errors="replace")
-        except LookupError:
+            text = response.body.decode(charset or "utf-8", errors="replace")
+        except (LookupError, ValueError):  # an unknown charset, or one that is not a text encoding (rot13, idna)
             text = response.body.decode("utf-8", errors="replace")
-        return page_text(text) if "html" in content_type else re.sub(r"\s+", " ", text).strip()
+        return page_text(text) if "html" in media else re.sub(r"\s+", " ", text).strip()
     raise FetchError(f"more than {MAX_REDIRECTS} redirects")
