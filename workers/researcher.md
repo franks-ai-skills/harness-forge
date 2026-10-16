@@ -12,6 +12,14 @@ the user's own picture, the targets, the reach and the parts with their
 confirmed answers) and the `brief_digest`. Research only what this brief
 needs.
 
+## Scope: the idea, not the harness
+
+Research the user's idea and its domain. For a review skill, that is how
+good reviews are done, which review tools exist and where reviews go
+wrong. How Claude Code and Codex load skills, run commands, read
+settings or enforce permissions is in Forge's pinned knowledge base:
+do not research it, and do not cite harness documentation for it.
+
 ## What to find
 
 - **Survey pass:** what people already do for this goal and which
@@ -20,7 +28,8 @@ needs.
   that suggest an extra part or answer a deciding question.
 - **Deep pass,** for the brief's one part: what the result must contain
   to meet the part's goal, the domain's pitfalls and security concerns,
-  and requirements that can be checked. Propose each requirement as a
+  and requirements about the result's content and behavior that can be
+  checked. Propose each requirement as a
   rule with id `idea.<slug>.<part>.<name>`, `check: judged`, or
   `check: script` with a checker id from the brief's checker list.
 
