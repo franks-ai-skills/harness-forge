@@ -1,0 +1,156 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+# Licensed under AGPLv3 together with the Harness Forge Generated Output
+# Exception; see LICENSE-OUTPUT-EXCEPTION.
+# Prerequisites that make an outside control a gate, and the README
+# hand-off of recommended controls, extracted 2026-10-09 from
+# docs/guide/outside-gates.md. Forge recommends these; it never checks
+# whether they are configured on the platform.
+
+- id: outside.readme.lists-controls
+  concept: outside
+  kind: must
+  severity: error
+  check: script
+  checker: outside.readme-coverage
+  params: {heading: Outside controls, status: "recommended, not verified"}
+  statement: The result README's Outside controls section lists every recommended outside control with its part and the status recommended, not verified
+  applies_to: {harnesses: [claude-code, codex, opencode]}
+  evidence: Inference
+  severity_rationale: A control missing from the hand-off is one the user never learns to configure, while the goal still depends on it.
+  sources:
+    - docs/guide/outside-gates.md#seven-conditions-turn-a-control-into-a-gate
+    - docs/guide/outside-gates.md#four-outcomes-from-six-intake-questions
+  contested: false
+
+- id: outside.gate.real-refs
+  concept: outside
+  kind: must
+  severity: warning
+  check: judged
+  statement: The recommended control targets the real refs and resources, such as default and release branches and tags or the production accounts
+  applies_to: {harnesses: [claude-code, codex, opencode]}
+  evidence: Inference
+  sources: [docs/guide/outside-gates.md#seven-conditions-turn-a-control-into-a-gate]
+  contested: false
+
+- id: outside.merge.no-agent-bypass
+  concept: outside
+  kind: must
+  severity: warning
+  check: judged
+  statement: The agent's identity, including the bot, app, token and the human whose token it uses, is on no bypass or override list of the control
+  applies_to: {harnesses: [claude-code, codex, opencode]}
+  evidence: Inference
+  sources:
+    - docs/guide/outside-gates.md#seven-conditions-turn-a-control-into-a-gate
+    - https://learn.microsoft.com/en-us/azure/devops/repos/git/branch-policies
+  contested: false
+
+- id: outside.merge.requester-cannot-approve
+  concept: outside
+  kind: must
+  severity: warning
+  check: judged
+  statement: Approval comes from an identity other than the author, the last pusher and the launching user, and resets on new pushes
+  applies_to: {harnesses: [claude-code, codex, opencode]}
+  evidence: Inference
+  sources:
+    - docs/guide/outside-gates.md#seven-conditions-turn-a-control-into-a-gate
+    - docs/guide/outside-gates.md#branch-protection-and-merge-rules-the-gate-is-separation-of-identities
+    - https://docs.github.com/en/repositories/configuring-branches-and-merges-in-your-repository/managing-rulesets/available-rules-for-rulesets
+  contested: false
+
+- id: outside.ci.required-on-ref
+  concept: outside
+  kind: must
+  severity: warning
+  check: judged
+  statement: A CI check counts as a gate only when the repository requires it to pass on the protected ref
+  applies_to: {harnesses: [claude-code, codex, opencode]}
+  evidence: Inference
+  sources:
+    - docs/guide/outside-gates.md#ci-pipelines-a-check-is-a-gate-only-if-the-change-cannot-rewrite-it
+    - docs/guide/outside-gates.md#seven-conditions-turn-a-control-into-a-gate
+  contested: false
+
+- id: outside.ci.source-pinned
+  concept: outside
+  kind: must
+  severity: warning
+  check: judged
+  statement: The sources a gate's checks run are pinned
+  applies_to: {harnesses: [claude-code, codex, opencode]}
+  evidence: Inference
+  sources: [docs/guide/outside-gates.md#seven-conditions-turn-a-control-into-a-gate]
+  contested: false
+
+- id: outside.ci.workflow-protected
+  concept: outside
+  kind: must
+  severity: warning
+  check: judged
+  statement: Workflow, scanner and policy files that define a gate are under code owners or come from outside the repository at a pinned ref, and CODEOWNERS owns itself
+  applies_to: {harnesses: [claude-code, codex, opencode]}
+  evidence: Inference
+  sources: [docs/guide/outside-gates.md#seven-conditions-turn-a-control-into-a-gate]
+  contested: false
+
+- id: outside.gate.no-broader-bypass
+  concept: outside
+  kind: must
+  severity: warning
+  check: judged
+  statement: No broader credential or channel the agent can reach, such as a personal token or a metadata endpoint, bypasses the control
+  applies_to: {harnesses: [claude-code, codex, opencode]}
+  evidence: Inference
+  sources: [docs/guide/outside-gates.md#seven-conditions-turn-a-control-into-a-gate]
+  contested: false
+
+- id: outside.gate.plan-enforced
+  concept: outside
+  kind: must
+  severity: warning
+  check: judged
+  statement: The control is enforced on the user's plan and repository visibility, or the recommendation says it is not
+  applies_to: {harnesses: [claude-code, codex, opencode]}
+  evidence: Inference
+  sources:
+    - docs/guide/outside-gates.md#seven-conditions-turn-a-control-into-a-gate
+    - https://docs.github.com/en/repositories/configuring-branches-and-merges-in-your-repository/managing-rulesets/about-rulesets
+  contested: false
+
+- id: outside.gate.periodic-verification
+  concept: outside
+  kind: should
+  severity: warning
+  check: judged
+  statement: The recommendation says to verify the control's configuration periodically, because gate configuration drifts silently
+  applies_to: {harnesses: [claude-code, codex, opencode]}
+  evidence: Inference
+  sources: [docs/guide/outside-gates.md#seven-conditions-turn-a-control-into-a-gate]
+  contested: false
+
+- id: outside.codeowners.agent-config
+  concept: outside
+  kind: must
+  severity: warning
+  check: judged
+  statement: Every built harness setup recommends a CODEOWNERS entry for the agent's own configuration files together with the setting that requires code-owner review
+  applies_to: {harnesses: [claude-code, codex, opencode]}
+  evidence: Inference
+  sources:
+    - docs/guide/outside-gates.md#branch-protection-and-merge-rules-the-gate-is-separation-of-identities
+    - https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/customizing-your-repository/about-code-owners
+  contested: false
+
+- id: outside.merge.rule-for-agent-prs
+  concept: outside
+  kind: must
+  severity: warning
+  check: judged
+  applicability: judged
+  statement: A recommendation in which an agent opens pull requests includes a merge rule
+  applies_to: {harnesses: [claude-code, codex, opencode]}
+  evidence: Inference
+  sources: [docs/guide/outside-gates.md#four-outcomes-from-six-intake-questions]
+  contested: false

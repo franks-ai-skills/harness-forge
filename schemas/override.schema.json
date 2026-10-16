@@ -1,0 +1,84 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:harness-forge:schema:override",
+  "title": "Repository rule override (.harness/overrides/<rule-id>.yaml)",
+  "type": "object",
+  "properties": {
+    "rule_id": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9-]*(\\.[a-z0-9-]+)+$",
+      "maxLength": 200
+    },
+    "pinned_kb_version": {
+      "type": "string",
+      "minLength": 1
+    },
+    "rule": {
+      "$ref": "urn:harness-forge:schema:rule"
+    },
+    "retired": {
+      "const": true
+    },
+    "drift": {
+      "type": "object",
+      "properties": {
+        "finding": {
+          "$ref": "urn:harness-forge:schema:research#/$defs/finding"
+        },
+        "support_verdict": {
+          "const": "supported"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "finding",
+        "support_verdict"
+      ]
+    },
+    "reason": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 20000
+    },
+    "date": {
+      "type": "string",
+      "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$"
+    },
+    "link": {
+      "anyOf": [
+        {
+          "type": "string",
+          "pattern": "^https://[^\\s]+$",
+          "maxLength": 2000
+        },
+        {
+          "enum": [
+            "pending",
+            "not published"
+          ]
+        }
+      ]
+    }
+  },
+  "additionalProperties": false,
+  "required": [
+    "rule_id",
+    "pinned_kb_version",
+    "drift",
+    "reason",
+    "date",
+    "link"
+  ],
+  "oneOf": [
+    {
+      "required": [
+        "rule"
+      ]
+    },
+    {
+      "required": [
+        "retired"
+      ]
+    }
+  ]
+}

@@ -1,0 +1,91 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:harness-forge:schema:runtime-cases",
+  "title": "Runtime activation cases for built skills (evals/smoke/*.yaml)",
+  "type": "object",
+  "properties": {
+    "cases": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 100,
+      "items": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^[a-z0-9][a-z0-9-]*$",
+            "maxLength": 100
+          },
+          "part_id": {
+            "type": "string",
+            "pattern": "^[A-Z][0-9]*$"
+          },
+          "mode": {
+            "enum": [
+              "explicit",
+              "implicit",
+              "negative"
+            ]
+          },
+          "prompt": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 20000
+          },
+          "expected": {
+            "enum": [
+              "activates",
+              "does-not-activate"
+            ]
+          },
+          "permitted_tools": {
+            "type": "object",
+            "properties": {
+              "claude-code": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 100
+                },
+                "uniqueItems": true
+              },
+              "codex": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 100
+                },
+                "uniqueItems": true
+              }
+            },
+            "additionalProperties": false,
+            "minProperties": 1
+          },
+          "fixtures": {
+            "type": "object",
+            "maxProperties": 50,
+            "additionalProperties": {
+              "type": "string",
+              "maxLength": 200000
+            }
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "part_id",
+          "mode",
+          "prompt",
+          "expected",
+          "permitted_tools"
+        ]
+      }
+    }
+  },
+  "additionalProperties": false,
+  "required": [
+    "cases"
+  ]
+}

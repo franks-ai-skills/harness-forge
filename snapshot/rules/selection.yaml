@@ -1,0 +1,2592 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+# Licensed under AGPLv3 together with the Harness Forge Generated Output
+# Exception; see LICENSE-OUTPUT-EXCEPTION.
+# Selection data: declared facts, the questions that confirm them, and
+# selection rules in five kinds. Outcome rules apply in file order, first
+# match wins. Eligibility rules (excludes) rule a mechanism out when a
+# confirmed answer conflicts with a sourced "When not" condition.
+# Preference rules (concept) apply in file order among eligible
+# mechanisms; that order is Forge policy, see policy/selection.md.
+# Variant rules (variant) name the selected mechanism's form, such as a
+# hook's handler; the first that holds applies, whether the mechanism is
+# built, reused or offered as an alternative. Every matching control
+# rule applies. reuse_confirmed is derived from
+# researched candidates, never asked. Encodes docs/overview.md and the
+# outside-gates intake questions (2026-10-09).
+facts:
+- id: target_set
+  scope: idea
+  values:
+  - claude-code
+  - codex
+  - both
+- id: reach
+  scope: idea
+  values:
+  - repository
+  - user
+  - public
+- id: plan_controls
+  scope: idea
+  values:
+  - available
+  - unavailable
+  - unknown
+- id: opens_prs
+  scope: idea
+  values:
+  - true
+  - false
+- id: bypass_mode
+  scope: idea
+  values:
+  - true
+  - false
+- id: untrusted_repo
+  scope: idea
+  values:
+  - true
+  - false
+- id: lethal_trifecta
+  scope: idea
+  values:
+  - true
+  - false
+- id: job
+  scope: part
+  values:
+  - guidance
+  - procedure
+  - setting
+  - access-control
+  - integration
+  - check
+  - delegate
+  - bundle
+  - run-unattended
+  - one-step
+- id: event_without_agent
+  scope: part
+  values:
+  - true
+  - false
+- id: must_survive_compromise
+  scope: part
+  values:
+  - required
+  - not-required
+- id: who_disables
+  scope: part
+  values:
+  - agent
+  - contributor
+  - admin
+- id: every_time
+  scope: part
+  values:
+  - always
+  - usually
+- id: irreversible
+  scope: part
+  values:
+  - true
+  - false
+- id: early_feedback
+  scope: part
+  values:
+  - true
+  - false
+- id: trigger
+  scope: part
+  values:
+  - user
+  - model
+  - event
+- id: own_context
+  scope: part
+  values:
+  - true
+  - false
+- id: external_system
+  scope: part
+  values:
+  - none
+  - cli
+  - no-cli
+- id: own_model
+  scope: part
+  values:
+  - true
+  - false
+- id: script_checkable
+  scope: part
+  values:
+  - true
+  - false
+- id: hook_event
+  scope: part
+  values:
+  - PreToolUse
+  - PostToolUse
+  - PostToolUseFailure
+  - PostToolBatch
+  - PermissionRequest
+  - PermissionDenied
+  - UserPromptSubmit
+  - UserPromptExpansion
+  - Stop
+  - SubagentStop
+  - SubagentStart
+  - SessionStart
+  - SessionEnd
+  - Setup
+  - PreCompact
+  - PostCompact
+  - TaskCreated
+  - TaskCompleted
+  - TeammateIdle
+  - Notification
+  - StopFailure
+  - ConfigChange
+  - InstructionsLoaded
+  - MessageDisplay
+  - CwdChanged
+  - FileChanged
+  - DirectoryAdded
+  - WorktreeCreate
+  - WorktreeRemove
+  - Elicitation
+  - ElicitationResult
+  - PreModelSwitch
+  - PostModelSwitch
+  - Interrupt
+- id: hook_effect
+  scope: part
+  values:
+  - prevent
+  - stop
+  - feedback
+  - report
+- id: session_start_source
+  scope: part
+  values:
+  - after-compaction
+  - any
+- id: config_change_source
+  scope: part
+  values:
+  - without-policy
+  - with-policy
+- id: task_completed_trigger
+  scope: part
+  values:
+  - teammate
+  - any
+- id: directory_added_source
+  scope: part
+  values:
+  - add-dir
+  - any
+- id: reuse_confirmed
+  scope: part
+  values:
+  - true
+  - false
+- id: outcome
+  scope: part
+  values:
+  - harness-only
+  - outside-alongside
+  - outside-instead
+  - reuse
+  - nothing-fits
+questions:
+- id: target_set
+  text: 'Which harnesses should run the result: Claude Code, Codex or both?'
+  choices:
+  - claude-code
+  - codex
+  - both
+- id: reach
+  text: 'Who uses it: this repository, all of your repositories, or the public?'
+  choices:
+  - repository
+  - user
+  - public
+- id: plan_controls
+  text: Are merge rules and required checks available on your hosting plan for this repository's visibility?
+  choices:
+  - available
+  - unavailable
+  - unknown
+- id: opens_prs
+  text: Will an agent open pull requests as part of this idea?
+  choices:
+  - true
+  - false
+- id: bypass_mode
+  text: 'Will the agent run without permission prompts: unattended (Claude Code dontAsk, Codex approval policy never) or without limits (bypassPermissions, --yolo)? This asks about the agent''s permission prompts, not whether a skill asks the user questions.'
+  choices:
+  - true
+  - false
+- id: untrusted_repo
+  text: Will the agent work in repositories you do not trust?
+  choices:
+  - true
+  - false
+- id: lethal_trifecta
+  text: Does the agent combine untrusted input with access to secrets and outbound network access?
+  choices:
+  - true
+  - false
+- id: job
+  text: 'What is this part''s one job: standing guidance, a procedure, a harness setting, allowing or refusing actions, access to an external system, a check at an event, delegating a task, bundling a setup
+    for others, running without a person, or a one-step task?'
+  choices:
+  - guidance
+  - procedure
+  - setting
+  - access-control
+  - integration
+  - check
+  - delegate
+  - bundle
+  - run-unattended
+  - one-step
+- id: event_without_agent
+  text: Does the event happen without an agent, such as a merge, deploy, publish or credential scope?
+  choices:
+  - true
+  - false
+- id: must_survive_compromise
+  text: Must it still hold if the agent is prompt-injected or its configuration is changed by a pull request?
+  choices:
+  - required
+  - not-required
+- id: who_disables
+  text: 'Who may turn it off: the agent, any contributor, or only an admin?'
+  choices:
+  - agent
+  - contributor
+  - admin
+- id: every_time
+  text: Must it hold every time, or may the agent occasionally skip it?
+  choices:
+  - always
+  - usually
+- id: irreversible
+  text: Is the action irreversible, about money, or does it publish or disclose data?
+  choices:
+  - true
+  - false
+- id: early_feedback
+  text: Do you want earlier feedback than an outside gate gives?
+  choices:
+  - true
+  - false
+- id: trigger
+  text: 'Who starts it: the user, the model, or an event?'
+  choices:
+  - user
+  - model
+  - event
+- id: own_context
+  text: Does it need its own context, other tools or another model?
+  choices:
+  - true
+  - false
+- id: external_system
+  text: Does it reach an external system, and does a CLI exist for it?
+  choices:
+  - none
+  - cli
+  - no-cli
+- id: own_model
+  text: Does it need a model of its own, such as its own context window or another model, rather than only other tools?
+  choices:
+  - true
+  - false
+- id: script_checkable
+  text: Can a script decide it without judgment?
+  choices:
+  - true
+  - false
+- id: hook_event
+  text: 'At which hook event must it run, for example PreToolUse before a tool call, PostToolUse after one, UserPromptSubmit when a prompt is submitted, Stop when a turn ends, PermissionRequest at an approval prompt, or Interrupt when you interrupt a Codex turn?'
+  choices:
+  - PreToolUse
+  - PostToolUse
+  - PostToolUseFailure
+  - PostToolBatch
+  - PermissionRequest
+  - PermissionDenied
+  - UserPromptSubmit
+  - UserPromptExpansion
+  - Stop
+  - SubagentStop
+  - SubagentStart
+  - SessionStart
+  - SessionEnd
+  - Setup
+  - PreCompact
+  - PostCompact
+  - TaskCreated
+  - TaskCompleted
+  - TeammateIdle
+  - Notification
+  - StopFailure
+  - ConfigChange
+  - InstructionsLoaded
+  - MessageDisplay
+  - CwdChanged
+  - FileChanged
+  - DirectoryAdded
+  - WorktreeCreate
+  - WorktreeRemove
+  - Elicitation
+  - ElicitationResult
+  - PreModelSwitch
+  - PostModelSwitch
+  - Interrupt
+- id: hook_effect
+  text: 'When the hook runs, what must its result do: prevent the action the event is about, stop the agent''s further work, reach the agent as feedback before its next step, or only report, for example by logging, writing a file or notifying you?'
+  choices:
+  - prevent
+  - stop
+  - feedback
+  - report
+- id: session_start_source
+  text: Must it act at every session start, or only when a session continues after compaction?
+  choices:
+  - after-compaction
+  - any
+- id: config_change_source
+  text: Must it cover changes to managed policy settings too, or only changes to user, project or local settings and skills?
+  choices:
+  - without-policy
+  - with-policy
+- id: task_completed_trigger
+  text: Must it act whenever a task is marked completed, or only when a teammate finishing its turn completes one?
+  choices:
+  - teammate
+  - any
+- id: directory_added_source
+  text: Must it act for every added directory, or only for directories added with /add-dir?
+  choices:
+  - add-dir
+  - any
+rules:
+- id: selection.outcome.reuse
+  concept: selection
+  kind: should
+  severity: warning
+  check: script
+  checker: selection.match
+  params:
+    when:
+      eq:
+      - reuse_confirmed
+      - true
+    implies:
+      outcome: reuse
+  statement: A researched existing solution with confirmed fit, license and maintenance is reused instead of built
+  applies_to:
+    harnesses:
+    - claude-code
+    - codex
+  evidence: Inference
+  sources:
+  - docs/guide/skills.md#security
+  - docs/best-practices/skills.md#security
+  contested: false
+- id: selection.outcome.one-step
+  concept: selection
+  kind: should
+  severity: warning
+  check: script
+  checker: selection.match
+  params:
+    when:
+      eq:
+      - job
+      - one-step
+    implies:
+      outcome: nothing-fits
+  statement: A one-step task the model handles alone needs no mechanism
+  applies_to:
+    harnesses:
+    - claude-code
+    - codex
+  evidence: Vendor
+  sources:
+  - docs/overview.md#skills
+  - docs/guide/skills.md#when-to-use-it-and-when-not
+  contested: false
+- id: selection.outcome.guarantee-unavailable
+  concept: selection
+  kind: should
+  severity: warning
+  check: script
+  checker: selection.match
+  params:
+    when:
+      all:
+      - any:
+        - eq:
+          - must_survive_compromise
+          - required
+        - eq:
+          - who_disables
+          - admin
+        - eq:
+          - event_without_agent
+          - true
+      - eq:
+        - plan_controls
+        - unavailable
+    implies:
+      outcome: nothing-fits
+  statement: A guarantee that needs an outside control unavailable on the user's plan is reported as nothing fits
+  applies_to:
+    harnesses:
+    - claude-code
+    - codex
+  evidence: Inference
+  sources:
+  - docs/guide/outside-gates.md#four-outcomes-from-six-intake-questions
+  - docs/guide/outside-gates.md#seven-conditions-turn-a-control-into-a-gate
+  contested: false
+- id: selection.outcome.event-with-feedback
+  concept: selection
+  kind: should
+  severity: warning
+  check: script
+  checker: selection.match
+  params:
+    when:
+      all:
+      - eq:
+        - event_without_agent
+        - true
+      - eq:
+        - early_feedback
+        - true
+    implies:
+      outcome: outside-alongside
+  statement: An event that happens without an agent needs an outside gate; wanted earlier feedback adds an advisory harness mirror
+  applies_to:
+    harnesses:
+    - claude-code
+    - codex
+  evidence: Inference
+  sources:
+  - docs/guide/outside-gates.md#four-outcomes-from-six-intake-questions
+  contested: false
+- id: selection.outcome.event-without-agent
+  concept: selection
+  kind: should
+  severity: warning
+  check: script
+  checker: selection.match
+  params:
+    when:
+      eq:
+      - event_without_agent
+      - true
+    implies:
+      outcome: outside-instead
+  statement: An event that happens without an agent is enforced by an outside gate; a harness build adds no enforcement
+  applies_to:
+    harnesses:
+    - claude-code
+    - codex
+  evidence: Inference
+  sources:
+  - docs/guide/outside-gates.md#four-outcomes-from-six-intake-questions
+  contested: false
+- id: selection.outcome.guarantee
+  concept: selection
+  kind: should
+  severity: warning
+  check: script
+  checker: selection.match
+  params:
+    when:
+      any:
+      - eq:
+        - must_survive_compromise
+        - required
+      - eq:
+        - who_disables
+        - admin
+      - eq:
+        - irreversible
+        - true
+    implies:
+      outcome: outside-alongside
+  statement: A rule that must survive a compromised agent, that only an admin may turn off, or that guards an irreversible action needs an outside control alongside the harness mechanism
+  applies_to:
+    harnesses:
+    - claude-code
+    - codex
+  evidence: Inference
+  sources:
+  - docs/guide/outside-gates.md#four-outcomes-from-six-intake-questions
+  contested: false
+- id: selection.outcome.harness-only
+  concept: selection
+  kind: should
+  severity: warning
+  check: script
+  checker: selection.match
+  params:
+    when:
+      in:
+      - job
+      - - guidance
+        - procedure
+        - setting
+        - access-control
+        - integration
+        - check
+        - delegate
+        - bundle
+        - run-unattended
+    implies:
+      outcome: harness-only
+  statement: Otherwise a harness mechanism alone fits
+  applies_to:
+    harnesses:
+    - claude-code
+    - codex
+  evidence: Inference
+  sources:
+  - docs/guide/outside-gates.md#four-outcomes-from-six-intake-questions
+  contested: false
+- id: selection.eligibility.must-hold-instructions
+  concept: selection
+  kind: should
+  severity: warning
+  check: script
+  checker: selection.match
+  params:
+    when:
+      eq:
+      - every_time
+      - always
+    implies:
+      excludes: instructions
+  statement: Instructions cannot guarantee a rule that must hold every time; they are context, not enforcement
+  applies_to:
+    harnesses:
+    - claude-code
+    - codex
+  evidence: Vendor
+  sources:
+  - docs/overview.md#instructions
+  contested: false
+- id: selection.eligibility.must-hold-skills
+  concept: selection
+  kind: should
+  severity: warning
+  check: script
+  checker: selection.match
+  params:
+    when:
+      eq:
+      - every_time
+      - always
+    implies:
+      excludes: skills
+  statement: A skill cannot guarantee a rule that must hold every time
+  applies_to:
+    harnesses:
+    - claude-code
+    - codex
+  evidence: Vendor
+  sources:
+  - docs/overview.md#skills
+  - docs/guide/skills.md#when-to-use-it-and-when-not
+  contested: false
+- id: selection.eligibility.must-hold-commands
+  concept: selection
+  kind: should
+  severity: warning
+  check: script
+  checker: selection.match
+  params:
+    when:
+      eq:
+      - every_time
+      - always
+    implies:
+      excludes: commands
+  statement: A user-invoked skill cannot guarantee a rule that must hold every time
+  applies_to:
+    harnesses:
+    - claude-code
+    - codex
+  evidence: Vendor
+  sources:
+  - docs/overview.md#commands
+  contested: false
+- id: selection.eligibility.must-hold-subagents
+  concept: selection
+  kind: should
+  severity: warning
+  check: script
+  checker: selection.match
+  params:
+    when:
+      eq:
+      - every_time
+      - always
+    implies:
+      excludes: subagents
+  statement: Delegation is a model decision, so a subagent cannot guarantee a check that must always run
+  applies_to:
+    harnesses:
+    - claude-code
+    - codex
+  evidence: Vendor
+  sources:
+  - docs/overview.md#subagents
+  contested: false
+- id: selection.eligibility.must-hold-automation
+  concept: selection
+  kind: should
+  severity: warning
+  check: script
+  checker: selection.match
+  params:
+    when:
+      eq:
+      - every_time
+      - always
+    implies:
+      excludes: automation
+  statement: Running the agent unattended does not make a rule hold on every tool call
+  applies_to:
+    harnesses:
+    - claude-code
+    - codex
+  evidence: Vendor
+  sources:
+  - docs/overview.md#automation
+  contested: false
+- id: selection.eligibility.judgment-hooks
+  concept: selection
+  kind: should
+  severity: warning
+  check: script
+  checker: selection.match
+  params:
+    when:
+      all:
+      - eq:
+        - script_checkable
+        - false
+      - in:
+        - target_set
+        - - codex
+          - both
+    implies:
+      excludes: hooks
+  statement: 'Portable hook handlers are commands and MCP tool calls, which cannot judge; judgment hooks (prompt, agent) are Claude Code only'
+  applies_to:
+    harnesses:
+    - claude-code
+    - codex
+  evidence: Vendor
+  sources:
+  - docs/overview.md#hooks
+  - docs/guide/hooks.md#when-to-use-it-and-when-not
+  contested: false
+- id: selection.eligibility.hard-limit-hooks
+  concept: selection
+  kind: should
+  severity: warning
+  check: script
+  checker: selection.match
+  params:
+    when:
+      all:
+      - eq:
+        - job
+        - access-control
+      - eq:
+        - every_time
+        - always
+    implies:
+      excludes: hooks
+  statement: A hard limit on reading, writing or network access needs permissions and the sandbox; tool switching and unhooked paths bypass hooks
+  applies_to:
+    harnesses:
+    - claude-code
+    - codex
+  evidence: Vendor
+  sources:
+  - docs/overview.md#hooks
+  contested: false
+- id: selection.eligibility.model-started-commands
+  concept: selection
+  kind: should
+  severity: warning
+  check: script
+  checker: selection.match
+  params:
+    when:
+      all:
+      - eq:
+        - job
+        - procedure
+      - eq:
+        - trigger
+        - model
+    implies:
+      excludes: commands
+  statement: A procedure the model should start on its own cannot be a user-invoked skill
+  applies_to:
+    harnesses:
+    - claude-code
+    - codex
+  evidence: Vendor
+  sources:
+  - docs/overview.md#commands
+  contested: false
+- id: selection.eligibility.side-effects-skills
+  concept: selection
+  kind: should
+  severity: warning
+  check: script
+  checker: selection.match
+  params:
+    when:
+      eq:
+      - irreversible
+      - true
+    implies:
+      excludes: skills
+  statement: The model must not decide on its own to run an irreversible or publishing procedure, so a model-invoked skill does not fit
+  applies_to:
+    harnesses:
+    - claude-code
+    - codex
+  evidence: Vendor
+  sources:
+  - docs/overview.md#commands
+  - docs/guide/skills.md#user-invoked-skill
+  contested: false
+- id: selection.eligibility.must-hold-mcp
+  concept: selection
+  kind: should
+  severity: warning
+  check: script
+  checker: selection.match
+  params:
+    when:
+      eq:
+      - every_time
+      - always
+    implies:
+      excludes: mcp
+  statement: The model may not call an MCP tool, so an MCP server cannot make a step hold every time
+  applies_to:
+    harnesses:
+    - claude-code
+    - codex
+  evidence: Vendor
+  sources:
+  - docs/overview.md#mcp
+  contested: false
+- id: selection.eligibility.own-model-hooks
+  concept: selection
+  kind: should
+  severity: warning
+  check: script
+  checker: selection.match
+  params:
+    when:
+      all:
+      - eq:
+        - own_context
+        - true
+      - eq:
+        - own_model
+        - true
+      - in:
+        - target_set
+        - - codex
+          - both
+    implies:
+      excludes: hooks
+  statement: Portable hook handlers are commands and MCP tool calls; a separate process gives no model of its own, and prompt and agent hooks are Claude Code only
+  applies_to:
+    harnesses:
+    - claude-code
+    - codex
+  evidence: Vendor
+  sources:
+  - docs/guide/hooks.md#comparison
+  - docs/guide/hooks.md#when-to-use-it-and-when-not
+  contested: false
+- id: selection.eligibility.model-handler-event-hooks
+  concept: selection
+  kind: should
+  severity: warning
+  check: script
+  checker: selection.match
+  params:
+    when:
+      all:
+      - any:
+        - eq:
+          - script_checkable
+          - false
+        - all:
+          - eq:
+            - own_context
+            - true
+          - eq:
+            - own_model
+            - true
+      - not:
+          in:
+          - hook_event
+          - - PreToolUse
+            - PostToolUse
+            - PostToolBatch
+            - PostToolUseFailure
+            - UserPromptSubmit
+            - UserPromptExpansion
+            - Stop
+            - SubagentStop
+            - TaskCreated
+            - TaskCompleted
+            - TeammateIdle
+    implies:
+      excludes: hooks
+  statement: A prompt or agent hook's verdict takes effect only at events whose ok false blocks or feeds back; elsewhere the handler does not run or its verdict has no effect
+  applies_to:
+    harnesses:
+    - claude-code
+    - codex
+  evidence: Vendor
+  sources:
+  - docs/vendors/claude-code/hooks.md#prompt-and-agent-hooks
+  - docs/vendors/claude-code/hooks.md#handler-types-and-support-by-event
+  contested: false
+- id: selection.eligibility.claude-code-event-hooks
+  concept: selection
+  kind: should
+  severity: warning
+  check: script
+  checker: selection.match
+  params:
+    when:
+      all:
+      - in:
+        - target_set
+        - - claude-code
+          - both
+      - not:
+          in:
+          - hook_event
+          - - PreToolUse
+            - PostToolUse
+            - PostToolUseFailure
+            - PostToolBatch
+            - PermissionRequest
+            - PermissionDenied
+            - UserPromptSubmit
+            - UserPromptExpansion
+            - Stop
+            - SubagentStop
+            - SubagentStart
+            - SessionStart
+            - SessionEnd
+            - Setup
+            - PreCompact
+            - PostCompact
+            - TaskCreated
+            - TaskCompleted
+            - TeammateIdle
+            - Notification
+            - StopFailure
+            - ConfigChange
+            - InstructionsLoaded
+            - MessageDisplay
+            - CwdChanged
+            - FileChanged
+            - DirectoryAdded
+            - WorktreeCreate
+            - WorktreeRemove
+            - Elicitation
+            - ElicitationResult
+            - PreModelSwitch
+            - PostModelSwitch
+    implies:
+      excludes: hooks
+  statement: A hook runs in Claude Code only at one of its documented events
+  applies_to:
+    harnesses:
+    - claude-code
+    - codex
+  evidence: Vendor
+  sources:
+  - docs/vendors/claude-code/hooks.md#decision-control-by-event
+  - docs/guide/hooks.md#portability
+  contested: false
+- id: selection.eligibility.codex-event-hooks
+  concept: selection
+  kind: should
+  severity: warning
+  check: script
+  checker: selection.match
+  params:
+    when:
+      all:
+      - in:
+        - target_set
+        - - codex
+          - both
+      - not:
+          in:
+          - hook_event
+          - - SessionStart
+            - SubagentStart
+            - UserPromptSubmit
+            - PreToolUse
+            - PermissionRequest
+            - PostToolUse
+            - PreCompact
+            - PostCompact
+            - SubagentStop
+            - Stop
+            - Interrupt
+            - SessionEnd
+    implies:
+      excludes: hooks
+  statement: A hook runs in Codex only at one of its twelve documented events
+  applies_to:
+    harnesses:
+    - claude-code
+    - codex
+  evidence: Vendor
+  sources:
+  - docs/vendors/codex/hooks.md#decision-control-by-event
+  - docs/guide/hooks.md#portability
+  contested: false
+- id: selection.eligibility.claude-code-prevent-hooks
+  concept: selection
+  kind: should
+  severity: warning
+  check: script
+  checker: selection.match
+  params:
+    when:
+      all:
+      - in:
+        - target_set
+        - - claude-code
+          - both
+      - eq:
+        - hook_effect
+        - prevent
+      - not:
+          in:
+          - hook_event
+          - - PreToolUse
+            - PermissionRequest
+            - UserPromptSubmit
+            - UserPromptExpansion
+            - Stop
+            - SubagentStop
+            - PreCompact
+            - TaskCreated
+            - TaskCompleted
+            - TeammateIdle
+            - WorktreeCreate
+            - WorktreeRemove
+            - Elicitation
+            - ElicitationResult
+            - PreModelSwitch
+      - not:
+          all:
+          - eq:
+            - hook_event
+            - ConfigChange
+          - eq:
+            - config_change_source
+            - without-policy
+    implies:
+      excludes: hooks
+  statement: A Claude Code hook prevents the event's action only where a decision, exit code 2 or a failure takes effect; after a tool call the call has already run, and policy_settings changes cannot be blocked
+  applies_to:
+    harnesses:
+    - claude-code
+    - codex
+  evidence: Vendor
+  sources:
+  - docs/vendors/claude-code/hooks.md#decision-control-by-event
+  contested: false
+- id: selection.eligibility.claude-code-stop-hooks
+  concept: selection
+  kind: should
+  severity: warning
+  check: script
+  checker: selection.match
+  params:
+    when:
+      all:
+      - in:
+        - target_set
+        - - claude-code
+          - both
+      - eq:
+        - hook_effect
+        - stop
+      - not:
+          in:
+          - hook_event
+          - - PreToolUse
+            - PostToolUse
+            - PostToolUseFailure
+            - PostToolBatch
+            - PermissionRequest
+            - PermissionDenied
+            - UserPromptSubmit
+            - UserPromptExpansion
+            - Stop
+            - SubagentStop
+            - SubagentStart
+            - SessionStart
+            - TeammateIdle
+            - PreModelSwitch
+            - PostModelSwitch
+      - not:
+          all:
+          - eq:
+            - hook_event
+            - TaskCompleted
+          - eq:
+            - task_completed_trigger
+            - teammate
+    implies:
+      excludes: hooks
+  statement: A Claude Code hook stops Claude with continue false only at events whose section does not discard it; at TaskCompleted only when a teammate finishing its turn triggered the event
+  applies_to:
+    harnesses:
+    - claude-code
+    - codex
+  evidence: Vendor
+  sources:
+  - docs/vendors/claude-code/hooks.md#decision-control-by-event
+  contested: false
+- id: selection.eligibility.claude-code-feedback-hooks
+  concept: selection
+  kind: should
+  severity: warning
+  check: script
+  checker: selection.match
+  params:
+    when:
+      all:
+      - in:
+        - target_set
+        - - claude-code
+          - both
+      - eq:
+        - hook_effect
+        - feedback
+      - not:
+          in:
+          - hook_event
+          - - PreToolUse
+            - PostToolUse
+            - PostToolUseFailure
+            - PostToolBatch
+            - PermissionRequest
+            - UserPromptSubmit
+            - UserPromptExpansion
+            - Stop
+            - SubagentStop
+            - SubagentStart
+            - SessionStart
+            - TaskCreated
+            - TaskCompleted
+            - TeammateIdle
+            - PostModelSwitch
+      - not:
+          all:
+          - eq:
+            - hook_event
+            - DirectoryAdded
+          - eq:
+            - directory_added_source
+            - add-dir
+    implies:
+      excludes: hooks
+  statement: A Claude Code hook's result reaches Claude only at events that deliver its context, reason or feedback; at DirectoryAdded only for /add-dir
+  applies_to:
+    harnesses:
+    - claude-code
+    - codex
+  evidence: Vendor
+  sources:
+  - docs/vendors/claude-code/hooks.md#decision-control-by-event
+  contested: false
+- id: selection.eligibility.codex-prevent-hooks
+  concept: selection
+  kind: should
+  severity: warning
+  check: script
+  checker: selection.match
+  params:
+    when:
+      all:
+      - in:
+        - target_set
+        - - codex
+          - both
+      - eq:
+        - hook_effect
+        - prevent
+      - not:
+          in:
+          - hook_event
+          - - PreToolUse
+            - PermissionRequest
+            - UserPromptSubmit
+            - Stop
+            - SubagentStop
+            - PreCompact
+    implies:
+      excludes: hooks
+  statement: A Codex hook prevents the event's action only where a deny, a block or continue false is documented to take effect
+  applies_to:
+    harnesses:
+    - claude-code
+    - codex
+  evidence: Vendor
+  sources:
+  - docs/vendors/codex/hooks.md#decision-control-by-event
+  contested: false
+- id: selection.eligibility.codex-stop-hooks
+  concept: selection
+  kind: should
+  severity: warning
+  check: script
+  checker: selection.match
+  params:
+    when:
+      all:
+      - in:
+        - target_set
+        - - codex
+          - both
+      - eq:
+        - hook_effect
+        - stop
+      - not:
+          in:
+          - hook_event
+          - - Stop
+            - SubagentStop
+            - PreCompact
+            - PostCompact
+      - not:
+          all:
+          - eq:
+            - hook_event
+            - SessionStart
+          - eq:
+            - session_start_source
+            - after-compaction
+    implies:
+      excludes: hooks
+  statement: A Codex hook is documented to stop Codex only before or after compaction, at Stop and SubagentStop, and at SessionStart after compaction
+  applies_to:
+    harnesses:
+    - claude-code
+    - codex
+  evidence: Vendor
+  sources:
+  - docs/vendors/codex/hooks.md#decision-control-by-event
+  contested: false
+- id: selection.eligibility.codex-feedback-hooks
+  concept: selection
+  kind: should
+  severity: warning
+  check: script
+  checker: selection.match
+  params:
+    when:
+      all:
+      - in:
+        - target_set
+        - - codex
+          - both
+      - eq:
+        - hook_effect
+        - feedback
+      - not:
+          in:
+          - hook_event
+          - - PreToolUse
+            - PostToolUse
+            - UserPromptSubmit
+            - Stop
+            - SubagentStop
+            - SubagentStart
+            - SessionStart
+    implies:
+      excludes: hooks
+  statement: A Codex hook's result reaches the model only at events documented to add its context or continue from its reason
+  applies_to:
+    harnesses:
+    - claude-code
+    - codex
+  evidence: Vendor
+  sources:
+  - docs/vendors/codex/hooks.md#decision-control-by-event
+  contested: false
+- id: selection.eligibility.model-handler-prevent-hooks
+  concept: selection
+  kind: should
+  severity: warning
+  check: script
+  checker: selection.match
+  params:
+    when:
+      all:
+      - any:
+        - eq:
+          - script_checkable
+          - false
+        - all:
+          - eq:
+            - own_context
+            - true
+          - eq:
+            - own_model
+            - true
+      - eq:
+        - hook_effect
+        - prevent
+      - not:
+          in:
+          - hook_event
+          - - PreToolUse
+            - UserPromptSubmit
+            - UserPromptExpansion
+            - Stop
+            - SubagentStop
+            - TeammateIdle
+    implies:
+      excludes: hooks
+  statement: A prompt or agent hook's ok false prevents the event's action only where it denies the call, blocks the prompt, keeps the turn going or keeps a teammate working; at TaskCreated and TaskCompleted it only returns the reason as a tool error
+  applies_to:
+    harnesses:
+    - claude-code
+    - codex
+  evidence: Vendor
+  sources:
+  - docs/vendors/claude-code/hooks.md#prompt-and-agent-hooks
+  contested: false
+- id: selection.eligibility.model-handler-stop-hooks
+  concept: selection
+  kind: should
+  severity: warning
+  check: script
+  checker: selection.match
+  params:
+    when:
+      all:
+      - any:
+        - eq:
+          - script_checkable
+          - false
+        - all:
+          - eq:
+            - own_context
+            - true
+          - eq:
+            - own_model
+            - true
+      - eq:
+        - hook_effect
+        - stop
+      - not:
+          in:
+          - hook_event
+          - - PreToolUse
+            - PostToolUse
+            - PostToolBatch
+            - UserPromptSubmit
+            - UserPromptExpansion
+            - TeammateIdle
+      - not:
+          all:
+          - eq:
+            - hook_event
+            - TaskCompleted
+          - eq:
+            - task_completed_trigger
+            - teammate
+    implies:
+      excludes: hooks
+  statement: A prompt or agent hook's ok false ends the turn or halts a teammate only at some events; elsewhere it only feeds back or has no effect
+  applies_to:
+    harnesses:
+    - claude-code
+    - codex
+  evidence: Vendor
+  sources:
+  - docs/vendors/claude-code/hooks.md#prompt-and-agent-hooks
+  contested: false
+- id: selection.eligibility.model-handler-feedback-hooks
+  concept: selection
+  kind: should
+  severity: warning
+  check: script
+  checker: selection.match
+  params:
+    when:
+      all:
+      - any:
+        - eq:
+          - script_checkable
+          - false
+        - all:
+          - eq:
+            - own_context
+            - true
+          - eq:
+            - own_model
+            - true
+      - eq:
+        - hook_effect
+        - feedback
+      - not:
+          in:
+          - hook_event
+          - - PreToolUse
+            - PostToolUse
+            - PostToolUseFailure
+            - Stop
+            - SubagentStop
+            - TaskCreated
+            - TaskCompleted
+            - TeammateIdle
+    implies:
+      excludes: hooks
+  statement: A prompt or agent hook's reason reaches Claude only at some events; elsewhere ok false ends the turn or has no effect
+  applies_to:
+    harnesses:
+    - claude-code
+    - codex
+  evidence: Vendor
+  sources:
+  - docs/vendors/claude-code/hooks.md#prompt-and-agent-hooks
+  contested: false
+- id: selection.eligibility.side-effects-instructions
+  concept: selection
+  kind: should
+  severity: warning
+  check: script
+  checker: selection.match
+  params:
+    when:
+      eq:
+      - irreversible
+      - true
+    implies:
+      excludes: instructions
+  statement: Instructions are context the model acts on by its own decision, so they cannot keep it from starting an irreversible or publishing procedure on its own
+  applies_to:
+    harnesses:
+    - claude-code
+    - codex
+  evidence: Inference
+  sources:
+  - docs/overview.md#commands
+  - docs/overview.md#instructions
+  contested: false
+- id: selection.eligibility.side-effects-subagents
+  concept: selection
+  kind: should
+  severity: warning
+  check: script
+  checker: selection.match
+  params:
+    when:
+      eq:
+      - irreversible
+      - true
+    implies:
+      excludes: subagents
+  statement: Delegation starts on the model's decision, or on instructions or a skill it follows, so a subagent cannot keep an irreversible or publishing procedure from starting without the user
+  applies_to:
+    harnesses:
+    - claude-code
+    - codex
+  evidence: Inference
+  sources:
+  - docs/overview.md#subagents
+  - docs/overview.md#commands
+  contested: false
+- id: selection.eligibility.own-context-skills
+  concept: selection
+  kind: should
+  severity: warning
+  check: script
+  checker: selection.match
+  params:
+    when:
+      eq:
+      - own_context
+      - true
+    implies:
+      excludes: skills
+  statement: A skill runs in the session's context; work that needs its own context belongs in a subagent, which can use skills
+  applies_to:
+    harnesses:
+    - claude-code
+    - codex
+  evidence: Vendor
+  sources:
+  - docs/overview.md#skills
+  contested: false
+- id: selection.eligibility.own-context-commands
+  concept: selection
+  kind: should
+  severity: warning
+  check: script
+  checker: selection.match
+  params:
+    when:
+      eq:
+      - own_context
+      - true
+    implies:
+      excludes: commands
+  statement: A command is a user-invoked skill and runs in the session's context; work that needs its own context belongs in a subagent
+  applies_to:
+    harnesses:
+    - claude-code
+    - codex
+  evidence: Vendor
+  sources:
+  - docs/overview.md#commands
+  - docs/overview.md#skills
+  contested: false
+- id: selection.eligibility.own-context-instructions
+  concept: selection
+  kind: should
+  severity: warning
+  check: script
+  checker: selection.match
+  params:
+    when:
+      eq:
+      - own_context
+      - true
+    implies:
+      excludes: instructions
+  statement: Instructions load into the session's own context, so they cannot give work a context, tools or model of its own
+  applies_to:
+    harnesses:
+    - claude-code
+    - codex
+  evidence: Inference
+  sources:
+  - docs/overview.md#instructions
+  - docs/overview.md#subagents
+  contested: false
+- id: selection.eligibility.event-started-skills
+  concept: selection
+  kind: should
+  severity: warning
+  check: script
+  checker: selection.match
+  params:
+    when:
+      all:
+      - eq:
+        - job
+        - procedure
+      - eq:
+        - trigger
+        - event
+    implies:
+      excludes: skills
+  statement: A skill starts only when the user invokes it or the model matches its description, never on an event
+  applies_to:
+    harnesses:
+    - claude-code
+    - codex
+  evidence: Vendor
+  sources:
+  - docs/overview.md#skills
+  contested: false
+- id: selection.eligibility.event-started-commands
+  concept: selection
+  kind: should
+  severity: warning
+  check: script
+  checker: selection.match
+  params:
+    when:
+      all:
+      - eq:
+        - job
+        - procedure
+      - eq:
+        - trigger
+        - event
+    implies:
+      excludes: commands
+  statement: A command starts only when the user invokes it, never on an event
+  applies_to:
+    harnesses:
+    - claude-code
+    - codex
+  evidence: Vendor
+  sources:
+  - docs/overview.md#commands
+  contested: false
+- id: selection.eligibility.event-started-instructions
+  concept: selection
+  kind: should
+  severity: warning
+  check: script
+  checker: selection.match
+  params:
+    when:
+      all:
+      - eq:
+        - job
+        - procedure
+      - eq:
+        - trigger
+        - event
+    implies:
+      excludes: instructions
+  statement: Instructions are context the model applies by its own decision; nothing starts them on an event
+  applies_to:
+    harnesses:
+    - claude-code
+    - codex
+  evidence: Inference
+  sources:
+  - docs/overview.md#instructions
+  - docs/overview.md#hooks
+  contested: false
+- id: selection.eligibility.event-started-subagents
+  concept: selection
+  kind: should
+  severity: warning
+  check: script
+  checker: selection.match
+  params:
+    when:
+      all:
+      - eq:
+        - job
+        - procedure
+      - eq:
+        - trigger
+        - event
+    implies:
+      excludes: subagents
+  statement: A subagent starts when the user, an instruction or the model delegates to it, never on an event
+  applies_to:
+    harnesses:
+    - claude-code
+    - codex
+  evidence: Vendor
+  sources:
+  - docs/overview.md#subagents
+  contested: false
+- id: selection.mechanism.early-feedback-mirror
+  concept: selection
+  kind: should
+  severity: warning
+  check: script
+  checker: selection.match
+  params:
+    when:
+      all:
+      - eq:
+        - event_without_agent
+        - true
+      - eq:
+        - early_feedback
+        - true
+    implies:
+      concept: hooks
+    pros:
+    - Runs every time, whatever the model decides
+    - Gives feedback before the gate
+    cons:
+    - 'Advisory: the agent or a pull request can change it'
+  statement: An advisory hook mirrors the outside gate's check for earlier feedback
+  applies_to:
+    harnesses:
+    - claude-code
+    - codex
+  evidence: Vendor
+  sources:
+  - docs/overview.md#hooks
+  - docs/guide/hooks.md#when-to-use-it-and-when-not
+  contested: false
+- id: selection.mechanism.must-hold-access
+  concept: selection
+  kind: should
+  severity: warning
+  check: script
+  checker: selection.match
+  params:
+    when:
+      all:
+      - eq:
+        - every_time
+        - always
+      - eq:
+        - job
+        - access-control
+    implies:
+      concept: permissions-and-sandbox
+    pros:
+    - A deny in any scope wins in both leads
+    - The sandbox limits executed commands
+    cons:
+    - Confines shell commands only, not MCP servers or hooks
+  statement: A capability that must never be used, or must be approved first, is a permission rule
+  applies_to:
+    harnesses:
+    - claude-code
+    - codex
+  evidence: Vendor
+  sources:
+  - docs/overview.md#permissions-and-sandbox
+  - docs/guide/permissions-and-sandbox.md#when-to-use-it-and-when-not
+  contested: false
+- id: selection.mechanism.judgment-hook
+  concept: selection
+  kind: should
+  severity: warning
+  check: script
+  checker: selection.match
+  params:
+    when:
+      all:
+      - eq:
+        - target_set
+        - claude-code
+      - any:
+        - eq:
+          - script_checkable
+          - false
+        - all:
+          - eq:
+            - own_context
+            - true
+          - eq:
+            - own_model
+            - true
+      - any:
+        - eq:
+          - every_time
+          - always
+        - eq:
+          - job
+          - check
+    implies:
+      concept: hooks
+    pros:
+    - Runs at the event, whatever the main model decides
+    - A model judges what a script cannot
+    cons:
+    - 'Claude Code only: Codex parses prompt and agent handlers but skips them'
+    - Prompt and agent handlers run only on the events that support them
+    - A model verdict, not a deterministic check
+  statement: On Claude Code alone, a check that needs judgment or a model of its own and must run at an event is a prompt or agent hook
+  applies_to:
+    harnesses:
+    - claude-code
+  evidence: Vendor
+  sources:
+  - docs/guide/hooks.md#when-to-use-it-and-when-not
+  - docs/best-practices/hooks.md#judgement-hooks-claude-code-only
+  - docs/vendors/claude-code/hooks.md#handler-types-and-support-by-event
+  contested: false
+- id: selection.mechanism.must-hold-check
+  concept: selection
+  kind: should
+  severity: warning
+  check: script
+  checker: selection.match
+  params:
+    when:
+      all:
+      - eq:
+        - every_time
+        - always
+      - eq:
+        - script_checkable
+        - true
+    implies:
+      concept: hooks
+    pros:
+    - Runs every time, whatever the model decides
+    cons:
+    - Not a hard security limit
+    - A slow hook delays every turn
+  statement: A rule that must hold every time and that a script can check is a hook
+  applies_to:
+    harnesses:
+    - claude-code
+    - codex
+  evidence: Vendor
+  sources:
+  - docs/overview.md#hooks
+  - docs/guide/hooks.md#when-to-use-it-and-when-not
+  contested: false
+- id: selection.mechanism.fresh-context
+  concept: selection
+  kind: should
+  severity: warning
+  check: script
+  checker: selection.match
+  params:
+    when:
+      eq:
+      - own_context
+      - true
+    implies:
+      concept: subagents
+    pros:
+    - Own context window; returns one result
+    - Narrower tools or another model
+    - Can use a skill for the procedure
+    cons:
+    - Costs more tokens
+    - Each hand-off loses detail
+  statement: Work that needs its own context, other tools or another model, such as a fresh-context review, is a subagent
+  applies_to:
+    harnesses:
+    - claude-code
+    - codex
+  evidence: Vendor
+  sources:
+  - docs/overview.md#subagents
+  - docs/guide/subagents.md#when-to-use-it-and-when-not
+  - docs/overview.md#skills
+  contested: false
+- id: selection.mechanism.event-procedure
+  concept: selection
+  kind: should
+  severity: warning
+  check: script
+  checker: selection.match
+  params:
+    when:
+      all:
+      - eq:
+        - job
+        - procedure
+      - eq:
+        - trigger
+        - event
+    implies:
+      concept: hooks
+    pros:
+    - Runs at the event, whatever the model decides
+    cons:
+    - A slow hook delays every turn
+    - Portable handlers cannot judge
+  statement: A procedure that a lifecycle event starts is a hook at that event
+  applies_to:
+    harnesses:
+    - claude-code
+    - codex
+  evidence: Vendor
+  sources:
+  - docs/overview.md#hooks
+  - docs/guide/hooks.md#when-to-use-it-and-when-not
+  contested: false
+- id: selection.mechanism.event-procedure-unattended
+  concept: selection
+  kind: should
+  severity: warning
+  check: script
+  checker: selection.match
+  params:
+    when:
+      all:
+      - eq:
+        - job
+        - procedure
+      - eq:
+        - trigger
+        - event
+    implies:
+      concept: automation
+    pros:
+    - Schedules and CI events start it without a person
+    cons:
+    - Every unattended run needs explicit permissions and limits
+  statement: A procedure that a schedule or a CI event starts is an unattended run
+  applies_to:
+    harnesses:
+    - claude-code
+    - codex
+  evidence: Vendor
+  sources:
+  - docs/overview.md#automation
+  - docs/guide/automation.md#when-to-use-it-and-when-not
+  contested: false
+- id: selection.mechanism.guidance
+  concept: selection
+  kind: should
+  severity: warning
+  check: script
+  checker: selection.match
+  params:
+    when:
+      eq:
+      - job
+      - guidance
+    implies:
+      concept: instructions
+    pros:
+    - Loaded into every session
+    cons:
+    - Costs context every session
+    - Advisory, not enforcement
+  statement: Short, stable guidance every session needs is an instruction file
+  applies_to:
+    harnesses:
+    - claude-code
+    - codex
+  evidence: Vendor
+  sources:
+  - docs/overview.md#instructions
+  - docs/guide/instructions.md#when-to-use-it-and-when-not
+  contested: false
+- id: selection.mechanism.user-procedure
+  concept: selection
+  kind: should
+  severity: warning
+  check: script
+  checker: selection.match
+  params:
+    when:
+      all:
+      - eq:
+        - job
+        - procedure
+      - any:
+        - eq:
+          - trigger
+          - user
+        - eq:
+          - irreversible
+          - true
+    implies:
+      concept: commands
+    pros:
+    - Only the user starts it
+    - No catalog cost
+    cons:
+    - Not applied on the model's own initiative
+  statement: A procedure with side effects or timing the model must not decide is a user-invoked skill
+  applies_to:
+    harnesses:
+    - claude-code
+    - codex
+  evidence: Vendor
+  sources:
+  - docs/overview.md#commands
+  - docs/guide/commands.md#when-to-use-it-and-when-not
+  contested: false
+- id: selection.mechanism.procedure
+  concept: selection
+  kind: should
+  severity: warning
+  check: script
+  checker: selection.match
+  params:
+    when:
+      eq:
+      - job
+      - procedure
+    implies:
+      concept: skills
+    pros:
+    - Loaded only when needed
+    - Can bundle tested scripts
+    cons:
+    - Occasional missed activation
+    - Advisory, not enforcement
+  statement: A recurring procedure or knowledge needed only sometimes is a skill
+  applies_to:
+    harnesses:
+    - claude-code
+    - codex
+  evidence: Vendor
+  sources:
+  - docs/overview.md#skills
+  - docs/guide/skills.md#when-to-use-it-and-when-not
+  contested: false
+- id: selection.mechanism.procedure-as-instructions
+  concept: selection
+  kind: should
+  severity: warning
+  check: script
+  checker: selection.match
+  params:
+    when:
+      eq:
+      - job
+      - procedure
+    implies:
+      concept: instructions
+    pros:
+    - Always in context; cannot be missed
+    cons:
+    - Costs context in every session
+  statement: A procedure can also live in the instruction file, as a pointer or a compressed index, when its omission would silently break output
+  applies_to:
+    harnesses:
+    - claude-code
+    - codex
+  evidence: Vendor
+  sources:
+  - docs/overview.md#instructions
+  - docs/guide/instructions.md#when-to-use-it-and-when-not
+  - docs/guide/skills.md#pointer-in-the-instruction-file-plus-skill
+  contested: false
+- id: selection.mechanism.setting
+  concept: selection
+  kind: should
+  severity: warning
+  check: script
+  checker: selection.match
+  params:
+    when:
+      eq:
+      - job
+      - setting
+    implies:
+      concept: configuration
+    pros:
+    - Fixed precedence; stricter safety values win
+    cons:
+    - Settings files are not shared between harnesses
+    - A pull request can change committed config
+  statement: A harness setting goes into the configuration layer that owns it
+  applies_to:
+    harnesses:
+    - claude-code
+    - codex
+  evidence: Vendor
+  sources:
+  - docs/overview.md#configuration
+  - docs/guide/configuration.md#when-to-use-it-and-when-not
+  contested: false
+- id: selection.mechanism.access-control
+  concept: selection
+  kind: should
+  severity: warning
+  check: script
+  checker: selection.match
+  params:
+    when:
+      eq:
+      - job
+      - access-control
+    implies:
+      concept: permissions-and-sandbox
+    pros:
+    - A deny in any scope wins in both leads
+    cons:
+    - Command patterns alone do not stop exfiltration
+  statement: Allowing, asking or refusing actions is a permission rule
+  applies_to:
+    harnesses:
+    - claude-code
+    - codex
+  evidence: Vendor
+  sources:
+  - docs/overview.md#permissions-and-sandbox
+  - docs/guide/permissions-and-sandbox.md#when-to-use-it-and-when-not
+  contested: false
+- id: selection.mechanism.integration-cli
+  concept: selection
+  kind: should
+  severity: warning
+  check: script
+  checker: selection.match
+  params:
+    when:
+      all:
+      - eq:
+        - job
+        - integration
+      - eq:
+        - external_system
+        - cli
+    implies:
+      concept: skills
+    pros:
+    - The CLI stays inside the sandbox
+    - Output can be filtered
+    cons:
+    - Needs a sandboxed shell
+  statement: Access to a system with a known CLI is the CLI plus a skill
+  applies_to:
+    harnesses:
+    - claude-code
+    - codex
+  evidence: Vendor
+  sources:
+  - docs/overview.md#skills
+  - docs/guide/skills.md#when-to-use-it-and-when-not
+  - docs/overview.md#mcp
+  contested: false
+- id: selection.mechanism.integration
+  concept: selection
+  kind: should
+  severity: warning
+  check: script
+  checker: selection.match
+  params:
+    when:
+      eq:
+      - job
+      - integration
+    implies:
+      concept: mcp
+    pros:
+    - Per-user OAuth and stateful integrations
+    cons:
+    - Runs outside the command sandbox
+    - Every result passes through the context
+  statement: Access to an external system without a usable CLI is an MCP server
+  applies_to:
+    harnesses:
+    - claude-code
+    - codex
+  evidence: Vendor
+  sources:
+  - docs/overview.md#mcp
+  - docs/guide/mcp.md#when-to-use-it-and-when-not
+  contested: false
+- id: selection.mechanism.check
+  concept: selection
+  kind: should
+  severity: warning
+  check: script
+  checker: selection.match
+  params:
+    when:
+      eq:
+      - job
+      - check
+    implies:
+      concept: hooks
+    pros:
+    - Runs every time at the event
+    cons:
+    - Not a hard security limit
+  statement: A check at a lifecycle event is a hook
+  applies_to:
+    harnesses:
+    - claude-code
+    - codex
+  evidence: Vendor
+  sources:
+  - docs/overview.md#hooks
+  - docs/guide/hooks.md#when-to-use-it-and-when-not
+  contested: false
+- id: selection.mechanism.delegate
+  concept: selection
+  kind: should
+  severity: warning
+  check: script
+  checker: selection.match
+  params:
+    when:
+      eq:
+      - job
+      - delegate
+    implies:
+      concept: subagents
+    pros:
+    - Own context window
+    cons:
+    - Costs more tokens
+  statement: Delegating a task to a separate context is a subagent
+  applies_to:
+    harnesses:
+    - claude-code
+    - codex
+  evidence: Vendor
+  sources:
+  - docs/overview.md#subagents
+  - docs/guide/subagents.md#when-to-use-it-and-when-not
+  contested: false
+- id: selection.mechanism.bundle
+  concept: selection
+  kind: should
+  severity: warning
+  check: script
+  checker: selection.match
+  params:
+    when:
+      eq:
+      - job
+      - bundle
+    implies:
+      concept: plugins
+    pros:
+    - Versioned and installable in many places
+    cons:
+    - Release overhead
+    - Decouples the setup from the code
+  statement: A setup that a second repository or team needs is a plugin
+  applies_to:
+    harnesses:
+    - claude-code
+    - codex
+  evidence: Vendor
+  sources:
+  - docs/overview.md#plugins
+  - docs/guide/plugins.md#when-to-use-it-and-when-not
+  contested: false
+- id: selection.mechanism.unattended
+  concept: selection
+  kind: should
+  severity: warning
+  check: script
+  checker: selection.match
+  params:
+    when:
+      eq:
+      - job
+      - run-unattended
+    implies:
+      concept: automation
+    pros:
+    - Headless, CI, schedules and parallel worktrees
+    cons:
+    - Every unattended run needs explicit permissions and limits
+  statement: Running the agent without a person in the session is automation
+  applies_to:
+    harnesses:
+    - claude-code
+    - codex
+  evidence: Vendor
+  sources:
+  - docs/overview.md#automation
+  - docs/guide/automation.md#when-to-use-it-and-when-not
+  contested: false
+- id: selection.variant.prompt-hook-handler-to-stop
+  concept: selection
+  kind: should
+  severity: warning
+  check: script
+  checker: selection.match
+  params:
+    when:
+      all:
+      - any:
+        - eq:
+          - script_checkable
+          - false
+        - all:
+          - eq:
+            - own_context
+            - true
+          - eq:
+            - own_model
+            - true
+      - eq:
+        - hook_effect
+        - stop
+      - in:
+        - hook_event
+        - - PreToolUse
+          - PostToolUse
+          - TeammateIdle
+          - TaskCompleted
+    implies:
+      variant:
+        concept: hooks
+        value: prompt handler without continueOnBlock
+        accepts:
+        - prompt handler without continueOnBlock
+  statement: Where a judgment must stop the agent at a tool call or a teammate, only a prompt hook without continueOnBlock ends the turn or halts the teammate; with continueOnBlock, and for agent hooks, the reason is fed back and work continues
+  applies_to:
+    harnesses:
+    - claude-code
+  evidence: Vendor
+  sources:
+  - docs/vendors/claude-code/hooks.md#prompt-and-agent-hooks
+  contested: false
+- id: selection.variant.continue-on-block-hook-handler
+  concept: selection
+  kind: should
+  severity: warning
+  check: script
+  checker: selection.match
+  params:
+    when:
+      all:
+      - any:
+        - eq:
+          - script_checkable
+          - false
+        - all:
+          - eq:
+            - own_context
+            - true
+          - eq:
+            - own_model
+            - true
+      - any:
+        - all:
+          - eq:
+            - hook_effect
+            - feedback
+          - in:
+            - hook_event
+            - - PreToolUse
+              - PostToolUse
+              - TeammateIdle
+              - TaskCompleted
+        - all:
+          - eq:
+            - hook_effect
+            - prevent
+          - eq:
+            - hook_event
+            - TeammateIdle
+    implies:
+      variant:
+        concept: hooks
+        value: prompt handler with continueOnBlock, or agent handler
+        accepts:
+        - prompt handler with continueOnBlock
+        - agent handler
+  statement: Where a judgment must reach the agent at a tool call or a teammate, or keep a teammate working, a prompt hook needs continueOnBlock; an agent hook acts that way by default
+  applies_to:
+    harnesses:
+    - claude-code
+  evidence: Vendor
+  sources:
+  - docs/vendors/claude-code/hooks.md#prompt-and-agent-hooks
+  contested: false
+- id: selection.variant.model-hook-handler
+  concept: selection
+  kind: should
+  severity: warning
+  check: script
+  checker: selection.match
+  params:
+    when:
+      any:
+      - eq:
+        - script_checkable
+        - false
+      - all:
+        - eq:
+          - own_context
+          - true
+        - eq:
+          - own_model
+          - true
+    implies:
+      variant:
+        concept: hooks
+        value: prompt or agent handler
+        accepts:
+        - prompt handler without continueOnBlock
+        - prompt handler with continueOnBlock
+        - agent handler
+  statement: A hook that needs judgment or a model of its own is a prompt or agent hook; a command handler is a process without a model
+  applies_to:
+    harnesses:
+    - claude-code
+  evidence: Vendor
+  sources:
+  - docs/guide/hooks.md#comparison
+  - docs/vendors/claude-code/hooks.md#prompt-and-agent-hooks
+  contested: false
+- id: selection.variant.synchronous-command-hook-handler
+  concept: selection
+  kind: should
+  severity: warning
+  check: script
+  checker: selection.match
+  params:
+    when:
+      all:
+      - all:
+        - eq:
+          - script_checkable
+          - true
+        - any:
+          - eq:
+            - own_context
+            - false
+          - eq:
+            - own_model
+            - false
+      - in:
+        - hook_effect
+        - - prevent
+          - stop
+          - feedback
+    implies:
+      variant:
+        concept: hooks
+        value: synchronous command handler
+        accepts:
+        - synchronous command handler
+  statement: A scripted hook that must prevent, stop or feed back is a synchronous command hook; an async hook cannot block, and its output arrives on the next turn or model request
+  applies_to:
+    harnesses:
+    - claude-code
+    - codex
+  evidence: Vendor
+  sources:
+  - docs/guide/hooks.md#comparison
+  - docs/vendors/claude-code/hooks.md#loading-and-invocation
+  - docs/vendors/codex/hooks.md#loading-and-invocation
+  contested: false
+- id: selection.variant.command-hook-handler
+  concept: selection
+  kind: should
+  severity: warning
+  check: script
+  checker: selection.match
+  params:
+    when:
+      all:
+      - eq:
+        - script_checkable
+        - true
+      - any:
+        - eq:
+          - own_context
+          - false
+        - eq:
+          - own_model
+          - false
+    implies:
+      variant:
+        concept: hooks
+        value: command handler
+        accepts:
+        - synchronous command handler
+        - async command handler
+  statement: A scripted hook that only reports is a command hook, synchronous or async, the handler both harnesses run
+  applies_to:
+    harnesses:
+    - claude-code
+    - codex
+  evidence: Vendor
+  sources:
+  - docs/guide/hooks.md#comparison
+  - docs/guide/hooks.md#portability
+  contested: false
+- id: selection.control.configuration-protection
+  concept: selection
+  kind: should
+  severity: warning
+  check: script
+  checker: selection.match
+  params:
+    when:
+      all:
+      - not:
+          eq:
+          - job
+          - one-step
+      - not:
+          all:
+          - eq:
+            - event_without_agent
+            - true
+          - eq:
+            - early_feedback
+            - false
+    implies:
+      control:
+        id: codeowners-agent-config
+        family: merge rules
+        prerequisites:
+        - outside.codeowners.agent-config
+        - outside.ci.workflow-protected
+        required_for_goal: false
+  statement: Every built harness setup recommends code owners for the agent's own configuration files with required code-owner review
+  applies_to:
+    harnesses:
+    - claude-code
+    - codex
+  evidence: Inference
+  sources:
+  - docs/guide/outside-gates.md#branch-protection-and-merge-rules-the-gate-is-separation-of-identities
+  contested: false
+- id: selection.control.merge-rule-for-agent-prs
+  concept: selection
+  kind: should
+  severity: warning
+  check: script
+  checker: selection.match
+  params:
+    when:
+      eq:
+      - opens_prs
+      - true
+    implies:
+      control:
+        id: merge-rules
+        family: merge rules
+        prerequisites:
+        - outside.merge.no-agent-bypass
+        - outside.merge.requester-cannot-approve
+        - outside.gate.real-refs
+        - outside.gate.plan-enforced
+        - outside.gate.periodic-verification
+        required_for_goal: false
+  statement: A recommendation in which an agent opens pull requests includes a merge rule
+  applies_to:
+    harnesses:
+    - claude-code
+    - codex
+  evidence: Inference
+  sources:
+  - docs/guide/outside-gates.md#four-outcomes-from-six-intake-questions
+  contested: false
+- id: selection.control.event-gate
+  concept: selection
+  kind: should
+  severity: warning
+  check: script
+  checker: selection.match
+  params:
+    when:
+      all:
+      - not:
+          eq:
+          - job
+          - one-step
+      - eq:
+        - event_without_agent
+        - true
+    implies:
+      control:
+        id: event-gate
+        family: merge rules or required checks
+        prerequisites:
+        - outside.gate.real-refs
+        - outside.merge.no-agent-bypass
+        - outside.merge.requester-cannot-approve
+        - outside.ci.required-on-ref
+        - outside.gate.plan-enforced
+        - outside.gate.periodic-verification
+        required_for_goal: true
+  statement: An event that happens without an agent is gated outside the harness
+  applies_to:
+    harnesses:
+    - claude-code
+    - codex
+  evidence: Inference
+  sources:
+  - docs/guide/outside-gates.md#four-outcomes-from-six-intake-questions
+  - docs/guide/outside-gates.md#seven-conditions-turn-a-control-into-a-gate
+  contested: false
+- id: selection.control.guarantee-gate
+  concept: selection
+  kind: should
+  severity: warning
+  check: script
+  checker: selection.match
+  params:
+    when:
+      all:
+      - not:
+          eq:
+          - job
+          - one-step
+      - any:
+        - eq:
+          - must_survive_compromise
+          - required
+        - eq:
+          - who_disables
+          - admin
+        - eq:
+          - irreversible
+          - true
+    implies:
+      control:
+        id: compromise-resistant-gate
+        family: outside gate
+        prerequisites:
+        - outside.gate.real-refs
+        - outside.merge.no-agent-bypass
+        - outside.gate.no-broader-bypass
+        - outside.ci.workflow-protected
+        - outside.gate.plan-enforced
+        - outside.gate.periodic-verification
+        required_for_goal: true
+  statement: A guarantee that must survive a compromised agent is enforced by a control the agent's identity cannot reach
+  applies_to:
+    harnesses:
+    - claude-code
+    - codex
+  evidence: Inference
+  sources:
+  - docs/guide/outside-gates.md#four-outcomes-from-six-intake-questions
+  - docs/guide/outside-gates.md#seven-conditions-turn-a-control-into-a-gate
+  contested: false
+- id: selection.control.isolation
+  concept: selection
+  kind: should
+  severity: warning
+  check: script
+  checker: selection.match
+  params:
+    when:
+      any:
+      - eq:
+        - bypass_mode
+        - true
+      - eq:
+        - untrusted_repo
+        - true
+      - eq:
+        - lethal_trifecta
+        - true
+    implies:
+      control:
+        id: outer-isolation
+        family: isolation
+        prerequisites:
+        - outside.gate.no-broader-bypass
+        required_for_goal: false
+  statement: Bypass modes, untrusted repositories, or untrusted input with secrets and egress add an isolation recommendation
+  applies_to:
+    harnesses:
+    - claude-code
+    - codex
+  evidence: Inference
+  sources:
+  - docs/guide/outside-gates.md#four-outcomes-from-six-intake-questions
+  contested: false

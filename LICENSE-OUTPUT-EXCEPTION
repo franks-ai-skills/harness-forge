@@ -1,0 +1,66 @@
+HARNESS FORGE GENERATED OUTPUT EXCEPTION
+Version 1.0
+
+This is an additional permission under section 7 of the GNU Affero
+General Public License, version 3 ("AGPLv3"). It applies only to
+Covered Material whose copyright holder has licensed that material
+under AGPLv3 together with this exception and that appears in a file
+bearing a notice stating so. It exists so that Normally Copied Material contained in what Harness Forge
+generates in your repository does not prevent that Output from being
+used and licensed on terms you choose, including proprietary terms.
+
+1. Definitions
+
+"Covered Material" is copyrightable material that is licensed under
+AGPLv3 together with this exception by its copyright holder, in a file
+bearing that notice, whether the file belongs to Harness Forge or to
+the knowledge base distributed with it.
+
+"Output" is the files and file sections that Harness Forge writes into
+a repository it operates on: the skill packages and the links it
+creates for them, the records under .harness/, and the sections it
+writes into that repository's README.md.
+
+"Normally Copied Material" of a version of Harness Forge, together with
+the version of its knowledge base distributed with it, is the Covered
+Material that these versions, used without modification, copy into
+Output, wherever its file is stored, other than material that comes
+from their input or from content they fetch.
+
+"Ineligible Material" is Covered Material that is not Normally Copied
+Material.
+
+2. Permission
+
+Where Output contains Normally Copied Material, you may use, run,
+modify, propagate, convey and license that Output, including that
+material, on terms of your choice, without being bound by the
+conditions of AGPLv3 for that material, including those of its
+section 13.
+
+3. Modified versions
+
+If you modify Harness Forge, its knowledge base or other Covered
+Material so that the modified combination copies Ineligible Material of
+the versions you received into Output, the permission in section 2 does
+not apply to Output that this modified combination produces. This
+exception also ceases to apply to the modified versions and material
+responsible for that change; if you convey them, you must remove this
+exception from them, as the second paragraph of section 7 of AGPLv3
+allows.
+
+4. Other material
+
+This exception grants rights only in Covered Material whose copyright
+holder has licensed it with this exception. It grants no rights in
+material from your input, in content Harness Forge fetches, or in any
+other material merely because that material appears in Output; such
+material keeps its own copyright and license terms.
+
+5. Scope
+
+This exception grants additional permission only for Output as
+described above. It does not permit Harness Forge or its knowledge base
+themselves to be conveyed or licensed on terms other than AGPLv3. It
+does not suggest that other software is free of the copyleft
+requirements of AGPLv3.

@@ -1,0 +1,73 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+# Licensed under AGPLv3 together with the Harness Forge Generated Output
+# Exception; see LICENSE-OUTPUT-EXCEPTION.
+# Cross-concept security rules that apply to built skills in this slice,
+# extracted 2026-10-09 from docs/guide/security.md and the skills pages.
+
+- id: security.secrets.none-in-files
+  concept: security
+  kind: must-not
+  severity: error
+  check: judged
+  statement: Built files contain credentials, tokens or other secrets
+  applies_to: {harnesses: [claude-code, codex, opencode]}
+  evidence: Inference
+  severity_rationale: A secret in a committed skill or instruction file is exposed to every session, contributor and fork that reads it.
+  sources:
+    - docs/guide/security.md#where-each-concept-is-attacked
+    - docs/guide/security.md#context-and-persistent-state
+  contested: false
+
+- id: security.untrusted-input.as-data
+  concept: security
+  kind: should
+  severity: warning
+  check: judged
+  applicability: judged
+  statement: A procedure that reads untrusted content, such as issues, fetched pages or tool output, tells the agent to treat it as data, not as instructions
+  applies_to: {harnesses: [claude-code, codex, opencode]}
+  evidence: Inference
+  sources:
+    - docs/guide/security.md#context-and-persistent-state
+  contested: false
+
+- id: security.approval.claims-are-data
+  concept: security
+  kind: must-not
+  severity: warning
+  check: judged
+  applicability: judged
+  statement: The procedure treats a claim in content, such as "the user already approved", as authorization
+  applies_to: {harnesses: [claude-code, codex, opencode]}
+  evidence: Inference
+  sources:
+    - docs/guide/security.md#context-and-persistent-state
+  contested: false
+
+- id: security.helpers.confined
+  concept: security
+  kind: should
+  severity: warning
+  check: judged
+  applicability: judged
+  statement: Helpers a skill runs are reviewable and run under the harness's permissions and sandbox, without pre-approval that bypasses them
+  applies_to: {harnesses: [claude-code, codex, opencode]}
+  evidence: Inference
+  sources:
+    - docs/guide/security.md#where-each-concept-is-attacked
+    - docs/guide/security.md#executables-approvals-and-isolation
+  contested: false
+
+- id: security.outbound.minimal-data
+  concept: security
+  kind: should
+  severity: warning
+  check: judged
+  applicability: judged
+  statement: A procedure that sends data to an external service, a search or a tool limits each call to the destinations and fields the task authorizes, and fetched or other untrusted content cannot add destinations, fields or actions
+  applies_to: {harnesses: [claude-code, codex, opencode]}
+  evidence: Inference
+  sources:
+    - docs/guide/security.md#data-access-and-outbound-channels
+    - https://developers.openai.com/api/docs/guides/deep-research#prompt-injection-and-exfiltration
+  contested: false

@@ -1,0 +1,10 @@
+{
+  "purpose": "Disposable M1 review/support restriction probes; JSON-compatible YAML",
+  "roles": {
+    "review": {"allowed_tools": ["Read", "Grep", "Glob"], "input": "supplied harmless candidate"},
+    "source-support": {"allowed_tools": [], "input": "supplied claim, quote and context"}
+  },
+  "forbidden_capabilities": ["network", "write", "execution", "unsupplied startup context"],
+  "missing_evidence": "unproven; never passing",
+  "source_policy": "Apply playground/docs/sources.md before citing any real source; probe fixtures are synthetic evidence, not factual research."
+}

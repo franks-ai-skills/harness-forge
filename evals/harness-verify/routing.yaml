@@ -1,0 +1,8 @@
+# Routing cases for harness-verify.
+skill: harness-verify
+cases:
+  - {id: explicit, prompt: "Verify the reproduction-checklist skill.", expect: trigger, mode: explicit}
+  - {id: after-build, prompt: "I fixed the description; check the skill again against its requirements.", expect: trigger, mode: implicit}
+  - {id: goal-met, prompt: "Does the built skill meet the goal we agreed on?", expect: trigger, mode: implicit}
+  - {id: near-miss-platform, prompt: "Check whether branch protection is enabled on GitHub.", expect: no-trigger, mode: implicit}
+  - {id: near-miss-build, prompt: "Build the skill we decided on.", expect: no-trigger, mode: implicit}

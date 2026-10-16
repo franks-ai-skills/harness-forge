@@ -1,0 +1,112 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:harness-forge:schema:predicate",
+  "title": "Closed fact predicate: all/any/not/eq/in over declared facts",
+  "oneOf": [
+    {
+      "type": "object",
+      "properties": {
+        "all": {
+          "type": "array",
+          "items": {
+            "$ref": "#"
+          },
+          "minItems": 1
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "all"
+      ]
+    },
+    {
+      "type": "object",
+      "properties": {
+        "any": {
+          "type": "array",
+          "items": {
+            "$ref": "#"
+          },
+          "minItems": 1
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "any"
+      ]
+    },
+    {
+      "type": "object",
+      "properties": {
+        "not": {
+          "$ref": "#"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "not"
+      ]
+    },
+    {
+      "type": "object",
+      "properties": {
+        "eq": {
+          "type": "array",
+          "prefixItems": [
+            {
+              "type": "string",
+              "pattern": "^[a-z][a-z0-9_]*$",
+              "maxLength": 100
+            },
+            {
+              "type": [
+                "string",
+                "boolean",
+                "integer"
+              ]
+            }
+          ],
+          "items": false,
+          "minItems": 2
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "eq"
+      ]
+    },
+    {
+      "type": "object",
+      "properties": {
+        "in": {
+          "type": "array",
+          "prefixItems": [
+            {
+              "type": "string",
+              "pattern": "^[a-z][a-z0-9_]*$",
+              "maxLength": 100
+            },
+            {
+              "type": "array",
+              "items": {
+                "type": [
+                  "string",
+                  "boolean",
+                  "integer"
+                ]
+              },
+              "minItems": 1,
+              "uniqueItems": true
+            }
+          ],
+          "items": false,
+          "minItems": 2
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "in"
+      ]
+    }
+  ]
+}

@@ -3,3 +3,10 @@ __pycache__/
 .superpowers/
 evals/canaries/results/private/
 .DS_Store
+.venv/
+
+# The global ignore pattern coverage*.json would hide this schema.
+!**/schemas/coverage.schema.json
+
+# The owner's publication check reads its markers from this local file only.
+/personal-markers.txt

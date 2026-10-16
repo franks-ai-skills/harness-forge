@@ -1,0 +1,30 @@
+# Selection case outcome-outside-alongside (synthetic answers).
+whole_idea:
+  target_set: both
+  reach: repository
+  plan_controls: available
+  opens_prs: false
+  bypass_mode: false
+  untrusted_repo: false
+  lethal_trifecta: false
+answers:
+  event_without_agent: false
+  must_survive_compromise: required
+  who_disables: contributor
+  every_time: always
+  irreversible: false
+  early_feedback: false
+  trigger: model
+  own_context: false
+  external_system: none
+  script_checkable: true
+  hook_event: PreToolUse
+  hook_effect: prevent
+  job: check
+candidates: []
+expected:
+  outcome: outside-alongside
+  mechanism: hooks
+  controls:
+  - codeowners-agent-config
+  - compromise-resistant-gate

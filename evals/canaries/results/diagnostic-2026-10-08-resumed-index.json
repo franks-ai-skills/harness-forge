@@ -1,0 +1,151 @@
+{
+  "diagnostic": "2026-10-08-worker-boundaries-resumed",
+  "previous_index": "diagnostic-2026-10-08-index.json",
+  "status": "unproven",
+  "support_declared": false,
+  "stop_reason": "missing effective tool-removal evidence, before resumed deadline",
+  "gate_previous_minutes_charged": 20,
+  "gate_previous_time_is_conservative_estimate": true,
+  "gate_resumed_allowance_minutes": 10,
+  "gate_resumed_started_utc": "2026-10-08T14:40:14Z",
+  "gate_resumed_stopped_utc": "2026-10-08T14:45:31Z",
+  "gate_resumed_seconds": 317,
+  "live_invocations_total": 0,
+  "configuration_corrections_total": 1,
+  "correction_scope": "temporary Claude account selection and completed Codex parser/model controls before any live phase",
+  "container_setup_started": false,
+  "grader_sha256": null,
+  "grader_status": "not reached: no-model gate remains unproven",
+  "codex": {
+    "build": "0.160.1 Darwin arm64; binary hash unchanged",
+    "requested_model": "gpt-6-sol (offline app-server configuration only)",
+    "strict_validation": "known setting accepted; invented setting rejected",
+    "effective_tool_removal": "unproven",
+    "guest_qualified": false
+  },
+  "claude": {
+    "build": "2.1.292 Darwin arm64; binary hash unchanged",
+    "requested_model": "claude-opus-5-5",
+    "launcher": "team-profile once, copied zsh function with guard against account login/logout and OS network denial",
+    "default_launcher_after_diagnostic": "personal-profile",
+    "startup_tool_inventory_observed": false,
+    "authentication_isolation": "not tested; selected profile available to this host-side startup check"
+  },
+  "artifacts": [
+    {
+      "path": "evals/canaries/results/private/diagnostic-2026-10-08-resumed/team-profile-debug.txt",
+      "bytes": 34565,
+      "sha256": "ca8ac52de83efa7d200f42729e4629adcce0800d52b429cdb6ee90152b35ef2c"
+    },
+    {
+      "path": "evals/canaries/results/private/diagnostic-2026-10-08-resumed/team-profile-gate.zsh",
+      "bytes": 1241,
+      "sha256": "7f401f9a441834326f43a789c5d3f21a29df624a15ff168fa9cc345403c84af1"
+    },
+    {
+      "path": "evals/canaries/results/private/diagnostic-2026-10-08-resumed/team-profile-help-stderr.txt",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "evals/canaries/results/private/diagnostic-2026-10-08-resumed/team-profile-help.txt",
+      "bytes": 22116,
+      "sha256": "550db4f88ae1d97bf7244ca96dc89554aabd3978241ceb69f79001e816c35f09"
+    },
+    {
+      "path": "evals/canaries/results/private/diagnostic-2026-10-08-resumed/codex-bundled-models-stderr.txt",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "evals/canaries/results/private/diagnostic-2026-10-08-resumed/codex-bundled-models.json",
+      "bytes": 658937,
+      "sha256": "262dc36e0e7beb290aef8196bd59f42acf51647b8f7b68dafa533ae7742019e6"
+    },
+    {
+      "path": "evals/canaries/results/private/diagnostic-2026-10-08-resumed/codex-known-command.json",
+      "bytes": 467,
+      "sha256": "1f536579c5a9519c628c1d4c5327530d073025eb51cc11705f1d107e545286af"
+    },
+    {
+      "path": "evals/canaries/results/private/diagnostic-2026-10-08-resumed/codex-known-result.json",
+      "bytes": 309,
+      "sha256": "a70d9d0bcfa381de380c3de490a9f4643a7b6a6a7475bbfff0b34e9dcaa797fb"
+    },
+    {
+      "path": "evals/canaries/results/private/diagnostic-2026-10-08-resumed/codex-known-stderr.txt",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "evals/canaries/results/private/diagnostic-2026-10-08-resumed/codex-known-stdout.jsonl",
+      "bytes": 421,
+      "sha256": "7a95bf473b1f9c6c8c1f0417db12819124c35371276a5e622bd0b7c21fd1bcb9"
+    },
+    {
+      "path": "evals/canaries/results/private/diagnostic-2026-10-08-resumed/codex-unknown-command.json",
+      "bytes": 491,
+      "sha256": "d92e90046dd04094370dd44c9f77f085ef76178bb9c11756bcedace6097b289c"
+    },
+    {
+      "path": "evals/canaries/results/private/diagnostic-2026-10-08-resumed/codex-unknown-result.json",
+      "bytes": 309,
+      "sha256": "efbb6589ab69dcdd5a007bd5af5750607fe62edaf551554d41baaa9b91bf635f"
+    },
+    {
+      "path": "evals/canaries/results/private/diagnostic-2026-10-08-resumed/codex-unknown-stderr.txt",
+      "bytes": 105,
+      "sha256": "fa661d8ffd1282ae3dd78582bbbe658115d71cb4a755a9485b66b10c18ff4d08"
+    },
+    {
+      "path": "evals/canaries/results/private/diagnostic-2026-10-08-resumed/codex-unknown-stdout.jsonl",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "evals/canaries/results/private/diagnostic-2026-10-08-resumed/help-command.json",
+      "bytes": 286,
+      "sha256": "fd759297ab9308b57986c7f1ea6c25ce44bd8b13da172f7feb13ef3d0b68ed90"
+    },
+    {
+      "path": "evals/canaries/results/private/diagnostic-2026-10-08-resumed/help-result.json",
+      "bytes": 109,
+      "sha256": "4c072e549a06c1d191c7a789e62a601702abcba3aba45c49aca0d4523b350553"
+    },
+    {
+      "path": "evals/canaries/results/private/diagnostic-2026-10-08-resumed/latest",
+      "bytes": 34565,
+      "sha256": "ca8ac52de83efa7d200f42729e4629adcce0800d52b429cdb6ee90152b35ef2c"
+    },
+    {
+      "path": "evals/canaries/results/private/diagnostic-2026-10-08-resumed/startup-command.json",
+      "bytes": 947,
+      "sha256": "37092f636c874637260b35bcd1624cb85a5d2aef72ff954f78726ec1ae1bd512"
+    },
+    {
+      "path": "evals/canaries/results/private/diagnostic-2026-10-08-resumed/startup-events.jsonl",
+      "bytes": 19876,
+      "sha256": "e36b71e7a0dac86ea68ee2a19d8b91829c371effb0ca826690a0252f9bbad3b9"
+    },
+    {
+      "path": "evals/canaries/results/private/diagnostic-2026-10-08-resumed/startup-request.json",
+      "bytes": 110,
+      "sha256": "9fcfef918641d491b4114783ed85f766abae8aa3b302632b17a995b059428ab3"
+    },
+    {
+      "path": "evals/canaries/results/private/diagnostic-2026-10-08-resumed/startup-result.json",
+      "bytes": 929,
+      "sha256": "ea854be79e4d706f5b99b50a4e022fb60b5844479845ab43eead3bce6efb847c"
+    },
+    {
+      "path": "evals/canaries/results/private/diagnostic-2026-10-08-resumed/startup-stderr.txt",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "evals/canaries/results/private/diagnostic-2026-10-08-resumed/worker-location.txt",
+      "bytes": 75,
+      "sha256": "4b70c1f08584950f623ac87c44d22d208ce386f1da5debf64fa84c2bb5ad53a8"
+    }
+  ]
+}

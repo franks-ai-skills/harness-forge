@@ -1,0 +1,27 @@
+# Selection case concept-mcp (synthetic answers).
+whole_idea:
+  target_set: both
+  reach: repository
+  plan_controls: available
+  opens_prs: false
+  bypass_mode: false
+  untrusted_repo: false
+  lethal_trifecta: false
+answers:
+  event_without_agent: false
+  must_survive_compromise: not-required
+  who_disables: contributor
+  every_time: usually
+  irreversible: false
+  early_feedback: false
+  trigger: model
+  own_context: false
+  external_system: no-cli
+  script_checkable: false
+  job: integration
+candidates: []
+expected:
+  outcome: harness-only
+  mechanism: mcp
+  controls:
+  - codeowners-agent-config

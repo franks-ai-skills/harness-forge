@@ -1,0 +1,33 @@
+# Synthetic bad case for skills.references.one-level.
+facts:
+  targets:
+  - claude-code
+  - codex
+  target_set: both
+  part_id: A
+  symlinks:
+    .claude/skills/repro-checklist: ../../.agents/skills/repro-checklist
+files:
+  .agents/skills/repro-checklist/SKILL.md: '---
+
+    name: repro-checklist
+
+    description: Turns an approved bug report into a reproduction checklist with environment, steps, expected and observed behavior. Use when asked for reproduction steps. Not for running the reproducer.
+
+    ---
+
+    # Reproduction checklist
+
+
+    Read [the template](references/template.md) when writing the checklist.
+
+    '
+  .agents/skills/repro-checklist/references/template.md: '# Template
+
+
+    See [details](details.md).
+
+    '
+  .agents/skills/repro-checklist/references/details.md: '# Details
+
+    '

@@ -1,0 +1,7 @@
+# Routing cases for build-skill.
+skill: build-skill
+cases:
+  - {id: explicit, prompt: "Build part A from the decision record.", expect: trigger, mode: explicit}
+  - {id: build-decided, prompt: "The reproduction-checklist skill is decided and confirmed; build it.", expect: trigger, mode: implicit}
+  - {id: near-miss-undecided, prompt: "I need something that writes reproduction checklists.", expect: no-trigger, mode: implicit}
+  - {id: near-miss-verify, prompt: "Check whether my built skill meets its requirements.", expect: no-trigger, mode: implicit}

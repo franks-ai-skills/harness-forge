@@ -1,0 +1,31 @@
+# Synthetic bad case for skills.portable.layout.
+facts:
+  targets:
+  - claude-code
+  - codex
+  target_set: both
+  part_id: A
+  symlinks: {}
+files:
+  .agents/skills/repro-checklist/SKILL.md: '---
+
+    name: repro-checklist
+
+    description: Turns an approved bug report into a reproduction checklist with environment, steps, expected and observed behavior. Use when asked for reproduction steps. Not for running the reproducer.
+
+    ---
+
+    # Reproduction checklist
+
+
+    Read [the template](references/template.md) when writing the checklist.
+
+    '
+  .agents/skills/repro-checklist/references/template.md: '# Template
+
+
+    1. Environment
+
+    2. Steps
+
+    '

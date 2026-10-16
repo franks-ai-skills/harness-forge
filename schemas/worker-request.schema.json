@@ -1,0 +1,373 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:harness-forge:schema:worker-request",
+  "title": "Role input staged for one worker process",
+  "type": "object",
+  "properties": {
+    "role": {
+      "enum": [
+        "research",
+        "source-support",
+        "review"
+      ]
+    },
+    "run_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "request_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "input_digest": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "inputs": {
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "required": [
+    "role",
+    "run_id",
+    "request_id",
+    "input_digest",
+    "inputs"
+  ],
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "role": {
+            "const": "research"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "inputs": {
+            "type": "object",
+            "properties": {
+              "pass": {
+                "enum": [
+                  "survey",
+                  "deep"
+                ]
+              },
+              "part_id": {
+                "oneOf": [
+                  {
+                    "type": "string",
+                    "pattern": "^[A-Z][0-9]*$"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "brief": {
+                "type": "object"
+              },
+              "brief_digest": {
+                "type": "string",
+                "pattern": "^[0-9a-f]{64}$"
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "pass",
+              "part_id",
+              "brief",
+              "brief_digest"
+            ]
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "role": {
+            "const": "source-support"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "inputs": {
+            "type": "object",
+            "properties": {
+              "finding_id": {
+                "type": "string",
+                "pattern": "^F[0-9]+$"
+              },
+              "claim": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 20000
+              },
+              "quote": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 20000
+              },
+              "context": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 20000
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "finding_id",
+              "claim",
+              "quote",
+              "context"
+            ]
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "role": {
+            "const": "review"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "inputs": {
+            "type": "object",
+            "properties": {
+              "files": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "path": {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "sha256": {
+                      "type": "string",
+                      "pattern": "^[0-9a-f]{64}$"
+                    }
+                  },
+                  "additionalProperties": false,
+                  "required": [
+                    "path",
+                    "sha256"
+                  ]
+                },
+                "minItems": 1
+              },
+              "rules": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "part_id": {
+                      "type": "string",
+                      "pattern": "^[A-Z][0-9]*$"
+                    },
+                    "rule_id": {
+                      "type": "string",
+                      "pattern": "^[a-z][a-z0-9-]*(\\.[a-z0-9-]+)+$",
+                      "maxLength": 200
+                    },
+                    "statement": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 20000
+                    },
+                    "rule_kind": {
+                      "enum": [
+                        "must",
+                        "must-not",
+                        "should",
+                        "should-not"
+                      ]
+                    },
+                    "applicability": {
+                      "enum": [
+                        "script",
+                        "judged"
+                      ]
+                    }
+                  },
+                  "additionalProperties": false,
+                  "required": [
+                    "part_id",
+                    "rule_id",
+                    "statement",
+                    "rule_kind",
+                    "applicability"
+                  ]
+                },
+                "minItems": 0
+              },
+              "goals": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "part_id": {
+                      "type": "string",
+                      "pattern": "^[A-Z][0-9]*$"
+                    },
+                    "goal": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 20000
+                    },
+                    "requirement_ids": {
+                      "type": "array",
+                      "items": {
+                        "type": "string",
+                        "pattern": "^[a-z][a-z0-9-]*(\\.[a-z0-9-]+)+$",
+                        "maxLength": 200
+                      },
+                      "uniqueItems": true
+                    }
+                  },
+                  "additionalProperties": false,
+                  "required": [
+                    "part_id",
+                    "goal",
+                    "requirement_ids"
+                  ]
+                }
+              },
+              "decision_digest": {
+                "type": "string",
+                "pattern": "^[0-9a-f]{64}$"
+              },
+              "context": {
+                "type": "object",
+                "properties": {
+                  "targets": {
+                    "type": "array",
+                    "items": {
+                      "enum": [
+                        "claude-code",
+                        "codex"
+                      ]
+                    }
+                  },
+                  "reach": {
+                    "enum": [
+                      "repository",
+                      "user",
+                      "public"
+                    ]
+                  },
+                  "facts": {
+                    "type": "object",
+                    "additionalProperties": {
+                      "type": [
+                        "string",
+                        "boolean",
+                        "integer"
+                      ]
+                    }
+                  },
+                  "parts": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "part_id": {
+                          "type": "string",
+                          "pattern": "^[A-Z][0-9]*$"
+                        },
+                        "goal": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 20000
+                        },
+                        "answers": {
+                          "type": "object",
+                          "additionalProperties": {
+                            "type": [
+                              "string",
+                              "boolean",
+                              "integer"
+                            ]
+                          }
+                        },
+                        "outcome": {
+                          "type": "string"
+                        },
+                        "mechanism": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        },
+                        "reuse": {
+                          "type": [
+                            "object",
+                            "null"
+                          ]
+                        }
+                      },
+                      "additionalProperties": false,
+                      "required": [
+                        "part_id",
+                        "goal",
+                        "answers",
+                        "outcome",
+                        "mechanism",
+                        "reuse"
+                      ]
+                    }
+                  }
+                },
+                "additionalProperties": false,
+                "required": [
+                  "targets",
+                  "reach",
+                  "facts",
+                  "parts"
+                ]
+              },
+              "links": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "path": {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "target": {
+                      "type": "string",
+                      "minLength": 1
+                    }
+                  },
+                  "additionalProperties": false,
+                  "required": [
+                    "path",
+                    "target"
+                  ]
+                }
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "files",
+              "rules",
+              "goals",
+              "decision_digest",
+              "context",
+              "links"
+            ]
+          }
+        }
+      }
+    }
+  ]
+}

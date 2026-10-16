@@ -1,0 +1,29 @@
+# Synthetic bad case for skills.references.resolve.
+facts:
+  targets:
+  - claude-code
+  - codex
+  target_set: both
+  part_id: A
+  symlinks:
+    .claude/skills/repro-checklist: ../../.agents/skills/repro-checklist
+files:
+  .agents/skills/repro-checklist/SKILL.md: '---
+
+    name: repro-checklist
+
+    description: Turns an approved bug report into a reproduction checklist with environment, steps, expected and observed behavior. Use when asked for reproduction steps. Not for running the reproducer.
+
+    ---
+
+    Read [the template](references/missing.md) when writing.
+
+    '
+  .agents/skills/repro-checklist/references/template.md: '# Template
+
+
+    1. Environment
+
+    2. Steps
+
+    '

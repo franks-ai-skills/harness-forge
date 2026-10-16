@@ -1,9 +1,12 @@
 [project]
 name = "harness-forge"
-version = "0.0.0"
+version = "0.1.0"
 description = "Portable, contract-bound agent harness builds and verification"
 requires-python = ">=3.11"
 license = "AGPL-3.0-only"
-dependencies = []
-
-# T3 chooses distribution before a build backend or dependencies are pinned.
+# Exact versions and hashes: requirements.lock (packaging/assessment.md).
+dependencies = [
+    "jsonschema>=4.26,<5",
+    "pyyaml>=6.0.3,<7",
+    "referencing>=0.37,<1",
+]

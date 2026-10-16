@@ -1,0 +1,26 @@
+checkers:
+  - id: skills.description-length
+    version: 1.0.0
+    summary: The description is present and at most max_chars characters long.
+    params:
+      type: object
+      properties:
+        max_chars: {type: integer, minimum: 1}
+      required: [max_chars]
+      additionalProperties: false
+  - id: selection.match
+    version: 1.0.0
+    summary: Selection rule; its predicate over confirmed answers implies an outcome or concept.
+    params:
+      type: object
+      properties:
+        when: {$ref: "urn:harness-forge:schema:predicate"}
+        implies:
+          type: object
+          properties:
+            outcome: {enum: [harness-only, outside-alongside, outside-instead, reuse, nothing-fits]}
+            concept: {type: string, pattern: "^[a-z][a-z0-9-]*$"}
+          minProperties: 1
+          additionalProperties: false
+      required: [when, implies]
+      additionalProperties: false

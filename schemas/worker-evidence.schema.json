@@ -1,0 +1,128 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:harness-forge:schema:worker-evidence",
+  "title": "Worker evidence under best-effort-v1; never certifies containment",
+  "type": "object",
+  "properties": {
+    "worker_policy": {
+      "const": "best-effort-v1"
+    },
+    "isolation_status": {
+      "const": "not-certified"
+    },
+    "role": {
+      "enum": [
+        "research",
+        "source-support",
+        "review"
+      ]
+    },
+    "harness": {
+      "enum": [
+        "claude-code",
+        "codex"
+      ]
+    },
+    "harness_version": {
+      "type": "string",
+      "minLength": 1
+    },
+    "model": {
+      "type": "string",
+      "minLength": 1
+    },
+    "launcher": {
+      "enum": [
+        "independent-process",
+        "stub"
+      ]
+    },
+    "configuration_digest": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "configured_controls": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      }
+    },
+    "observed_tools": {
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "status": {
+              "const": "unknown"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "status"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "status": {
+              "const": "observed"
+            },
+            "tools": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "minLength": 1
+              },
+              "uniqueItems": true
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "status",
+            "tools"
+          ]
+        }
+      ]
+    },
+    "observed_behavior": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 20000
+      }
+    },
+    "unknowns": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 20000
+      }
+    },
+    "evidence_refs": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      }
+    }
+  },
+  "additionalProperties": false,
+  "required": [
+    "worker_policy",
+    "isolation_status",
+    "role",
+    "harness",
+    "harness_version",
+    "model",
+    "launcher",
+    "configuration_digest",
+    "configured_controls",
+    "observed_tools",
+    "observed_behavior",
+    "unknowns",
+    "evidence_refs"
+  ]
+}

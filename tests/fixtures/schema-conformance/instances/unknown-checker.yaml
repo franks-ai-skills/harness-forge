@@ -1,0 +1,5 @@
+id: skills.description-length
+applicability: script
+severity: error
+check:
+  checker: skills.run-anything

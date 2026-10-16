@@ -1,0 +1,116 @@
+# Executable checkers by id. Rules name a checker id, never a path; the
+# implementation with this version ships in harness-forge
+# (src/harness_forge/checks/). Checkers read file bytes given to them;
+# they never execute or import the files they check.
+checkers:
+  - id: skills.frontmatter
+    version: 1.0.0
+    summary: SKILL.md starts with YAML frontmatter; name and description are non-empty strings; license and compatibility are strings, compatibility at most 500 characters; metadata maps strings to strings.
+    params: {type: object, properties: {}, additionalProperties: false}
+  - id: skills.name-format
+    version: 1.0.0
+    summary: name has at most max_chars lowercase letters, digits and single hyphens and equals the skill directory name.
+    params:
+      type: object
+      properties: {max_chars: {type: integer, minimum: 1}}
+      required: [max_chars]
+      additionalProperties: false
+  - id: skills.description-length
+    version: 1.0.0
+    summary: description is non-empty and at most max_chars characters.
+    params:
+      type: object
+      properties: {max_chars: {type: integer, minimum: 1}}
+      required: [max_chars]
+      additionalProperties: false
+  - id: skills.body-lines
+    version: 1.0.0
+    summary: SKILL.md has at most max_lines lines.
+    params:
+      type: object
+      properties: {max_lines: {type: integer, minimum: 1}}
+      required: [max_lines]
+      additionalProperties: false
+  - id: skills.reference-depth
+    version: 1.3.0
+    summary: Markdown files other than SKILL.md link to no other Markdown file of the skill.
+    params: {type: object, properties: {}, additionalProperties: false}
+  - id: skills.no-auxiliary-docs
+    version: 1.0.0
+    summary: The skill directory contains none of the named files at any depth.
+    params:
+      type: object
+      properties: {names: {type: array, items: {type: string, minLength: 1}, minItems: 1}}
+      required: [names]
+      additionalProperties: false
+  - id: skills.portable-frontmatter
+    version: 1.0.0
+    summary: SKILL.md frontmatter uses only allowed_keys.
+    params:
+      type: object
+      properties: {allowed_keys: {type: array, items: {type: string, minLength: 1}, minItems: 1}}
+      required: [allowed_keys]
+      additionalProperties: false
+  - id: skills.portable-body
+    version: 1.1.0
+    summary: The SKILL.md body contains no $ARGUMENTS, $0-$9 or ${CLAUDE_*} placeholders and no !`cmd` injection outside code blocks.
+    params: {type: object, properties: {}, additionalProperties: false}
+  - id: skills.invocation-flags
+    version: 1.0.0
+    summary: disable-model-invocation true in SKILL.md and policy.allow_implicit_invocation false in agents/openai.yaml are both set or both absent.
+    params: {type: object, properties: {}, additionalProperties: false}
+  - id: links.relative-references
+    version: 1.3.0
+    summary: Every relative Markdown link in the skill's Markdown files resolves to a file inside the skill directory.
+    params: {type: object, properties: {}, additionalProperties: false}
+  - id: links.portable-symlink
+    version: 1.0.0
+    summary: Each skill under .agents/skills/<name>/ has .claude/skills/<name> as a symbolic link with target ../../.agents/skills/<name>.
+    params: {type: object, properties: {}, additionalProperties: false}
+  - id: outside.readme-coverage
+    version: 1.1.0
+    summary: The README section under heading holds only lines Forge writes there and lists every outside control from the decision record with its part letter and status.
+    params:
+      type: object
+      properties:
+        heading: {type: string, minLength: 1}
+        status: {type: string, minLength: 1}
+      required: [heading, status]
+      additionalProperties: false
+  - id: selection.match
+    version: 1.5.0
+    summary: Selection rule. Its predicate over confirmed answers implies an outcome, a preferred mechanism (concept), an exclusion of a mechanism (excludes), the form of a mechanism (variant, such as a hook's handler, with the forms a reused candidate may have) or an outside control; pros and cons explain the choice. Outcome, preference and variant rules apply in file order; policy/selection.md documents the order.
+    params:
+      type: object
+      properties:
+        when: {$ref: "urn:harness-forge:schema:predicate"}
+        implies:
+          type: object
+          properties:
+            outcome: {enum: [harness-only, outside-alongside, outside-instead, reuse, nothing-fits]}
+            concept: {enum: [instructions, configuration, permissions-and-sandbox, mcp, skills, commands, subagents, hooks, plugins, automation]}
+            excludes: {enum: [instructions, configuration, permissions-and-sandbox, mcp, skills, commands, subagents, hooks, plugins, automation]}
+            variant:
+              type: object
+              properties:
+                concept: {enum: [instructions, configuration, permissions-and-sandbox, mcp, skills, commands, subagents, hooks, plugins, automation]}
+                value: {type: string, minLength: 1}
+                accepts: {type: array, items: {type: string, minLength: 1}, minItems: 1}
+              required: [concept, value, accepts]
+              additionalProperties: false
+            control:
+              type: object
+              properties:
+                id: {type: string, pattern: "^[a-z0-9][a-z0-9-]*$"}
+                family: {type: string, minLength: 1}
+                prerequisites: {type: array, items: {type: string, pattern: "^outside\\.[a-z0-9-]+(\\.[a-z0-9-]+)+$"}, minItems: 1}
+                required_for_goal: {type: boolean}
+              required: [id, family, prerequisites, required_for_goal]
+              additionalProperties: false
+          minProperties: 1
+          maxProperties: 1
+          additionalProperties: false
+        pros: {type: array, items: {type: string, minLength: 1}}
+        cons: {type: array, items: {type: string, minLength: 1}}
+      required: [when, implies]
+      additionalProperties: false

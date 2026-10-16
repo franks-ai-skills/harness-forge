@@ -1,0 +1,9 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:harness-forge:schema:rules",
+  "title": "A rules file",
+  "type": "array",
+  "items": {
+    "$ref": "urn:harness-forge:schema:rule"
+  }
+}

@@ -1,0 +1,688 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:harness-forge:schema:decision",
+  "title": "Decision record frontmatter (.harness/decisions/<date>-<slug>.md)",
+  "type": "object",
+  "properties": {
+    "idea": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 20000
+    },
+    "picture": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 20000
+    },
+    "goals": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 20000
+      },
+      "minItems": 1
+    },
+    "targets": {
+      "type": "array",
+      "items": {
+        "enum": [
+          "claude-code",
+          "codex"
+        ]
+      },
+      "minItems": 1,
+      "uniqueItems": true
+    },
+    "reach": {
+      "enum": [
+        "repository",
+        "user",
+        "public"
+      ]
+    },
+    "hosting": {
+      "type": "object",
+      "properties": {
+        "platform": {
+          "type": "string",
+          "minLength": 1
+        },
+        "plan": {
+          "type": "string",
+          "minLength": 1
+        },
+        "visibility": {
+          "enum": [
+            "public",
+            "private",
+            "unknown"
+          ]
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "platform",
+        "plan",
+        "visibility"
+      ]
+    },
+    "kb_version": {
+      "type": "string",
+      "minLength": 1
+    },
+    "facts": {
+      "type": "object",
+      "propertyNames": {
+        "type": "string",
+        "pattern": "^[a-z][a-z0-9_]*$",
+        "maxLength": 100
+      },
+      "additionalProperties": {
+        "type": [
+          "string",
+          "boolean",
+          "integer"
+        ]
+      }
+    },
+    "parts": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^[A-Z][0-9]*$"
+          },
+          "slug": {
+            "type": "string",
+            "pattern": "^[a-z0-9][a-z0-9-]*$"
+          },
+          "goal": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 20000
+          },
+          "status": {
+            "enum": [
+              "decided",
+              "built",
+              "verified",
+              "blocked"
+            ]
+          },
+          "answers": {
+            "type": "object",
+            "propertyNames": {
+              "type": "string",
+              "pattern": "^[a-z][a-z0-9_]*$",
+              "maxLength": 100
+            },
+            "additionalProperties": {
+              "type": [
+                "string",
+                "boolean",
+                "integer"
+              ]
+            }
+          },
+          "outcome": {
+            "enum": [
+              "harness-only",
+              "outside-alongside",
+              "outside-instead",
+              "reuse",
+              "nothing-fits"
+            ]
+          },
+          "recommended": {
+            "oneOf": [
+              {
+                "type": "string",
+                "pattern": "^[a-z][a-z0-9-]*$",
+                "maxLength": 50
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "chosen": {
+            "oneOf": [
+              {
+                "type": "string",
+                "pattern": "^[a-z][a-z0-9-]*$",
+                "maxLength": 50
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "override_reason": {
+            "oneOf": [
+              {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 20000
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "alternatives": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "concept": {
+                  "type": "string",
+                  "pattern": "^[a-z][a-z0-9-]*$",
+                  "maxLength": 50
+                },
+                "pros": {
+                  "type": "array",
+                  "items": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 20000
+                  }
+                },
+                "cons": {
+                  "type": "array",
+                  "items": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 20000
+                  }
+                },
+                "rules": {
+                  "type": "array",
+                  "items": {
+                    "type": "string",
+                    "pattern": "^[a-z][a-z0-9-]*(\\.[a-z0-9-]+)+$",
+                    "maxLength": 200
+                  }
+                },
+                "why_not_chosen": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 20000
+                }
+              },
+              "additionalProperties": false,
+              "required": [
+                "concept",
+                "pros",
+                "cons",
+                "rules"
+              ]
+            }
+          },
+          "assessment": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "concept": {
+                  "type": "string",
+                  "pattern": "^[a-z][a-z0-9-]*$",
+                  "maxLength": 50
+                },
+                "state": {
+                  "enum": [
+                    "recommended",
+                    "viable alternative",
+                    "not preferred",
+                    "ruled out",
+                    "unresolved"
+                  ]
+                },
+                "rules": {
+                  "type": "array",
+                  "items": {
+                    "type": "string",
+                    "pattern": "^[a-z][a-z0-9-]*(\\.[a-z0-9-]+)+$",
+                    "maxLength": 200
+                  }
+                },
+                "reasons": {
+                  "type": "array",
+                  "items": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 20000
+                  }
+                },
+                "missing_facts": {
+                  "type": "array",
+                  "items": {
+                    "type": "string",
+                    "pattern": "^[a-z][a-z0-9_]*$",
+                    "maxLength": 100
+                  }
+                }
+              },
+              "additionalProperties": false,
+              "required": [
+                "concept",
+                "state",
+                "rules",
+                "reasons",
+                "missing_facts"
+              ]
+            }
+          },
+          "connects_to": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "to": {
+                  "type": "string",
+                  "pattern": "^[A-Z][0-9]*$"
+                },
+                "how": {
+                  "enum": [
+                    "starts",
+                    "enforces",
+                    "uses",
+                    "configures"
+                  ]
+                }
+              },
+              "additionalProperties": false,
+              "required": [
+                "to",
+                "how"
+              ]
+            }
+          },
+          "outside_controls": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "control": {
+                  "type": "string",
+                  "pattern": "^[a-z0-9][a-z0-9-]*$"
+                },
+                "prerequisites": {
+                  "type": "array",
+                  "items": {
+                    "type": "string",
+                    "pattern": "^[a-z][a-z0-9-]*(\\.[a-z0-9-]+)+$",
+                    "maxLength": 200
+                  }
+                },
+                "availability": {
+                  "enum": [
+                    "available",
+                    "unavailable",
+                    "unknown"
+                  ]
+                },
+                "required_for_goal": {
+                  "type": "boolean"
+                }
+              },
+              "additionalProperties": false,
+              "required": [
+                "control",
+                "prerequisites",
+                "availability",
+                "required_for_goal"
+              ]
+            }
+          },
+          "reuse": {
+            "type": "object",
+            "properties": {
+              "name": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 20000
+              },
+              "source": {
+                "type": "string",
+                "pattern": "^https://[^\\s]+$",
+                "maxLength": 2000
+              },
+              "license": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 20000
+              },
+              "maintenance": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 20000
+              },
+              "variant": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 200
+              },
+              "path": {
+                "type": "string",
+                "pattern": "^(?!.*\\.\\.)(?!/)[A-Za-z0-9._/-]+$"
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "name",
+              "source",
+              "license",
+              "maintenance"
+            ]
+          },
+          "goal_history": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "goal": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 20000
+                },
+                "replaced": {
+                  "type": "string",
+                  "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$"
+                },
+                "reason": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 20000
+                }
+              },
+              "additionalProperties": false,
+              "required": [
+                "goal",
+                "replaced",
+                "reason"
+              ]
+            }
+          },
+          "goal_conflict": {
+            "type": "object",
+            "properties": {
+              "choice": {
+                "enum": [
+                  "recommended",
+                  "adjust-goal",
+                  "keep"
+                ]
+              },
+              "reason": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 20000
+              },
+              "date": {
+                "type": "string",
+                "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$"
+              },
+              "chosen": {
+                "type": "string",
+                "pattern": "^[a-z][a-z0-9-]*$",
+                "maxLength": 50
+              },
+              "rule_ids": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "pattern": "^[a-z][a-z0-9-]*(\\.[a-z0-9-]+)+$",
+                  "maxLength": 200
+                },
+                "minItems": 1
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "choice",
+              "reason",
+              "date",
+              "chosen",
+              "rule_ids"
+            ]
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "slug",
+          "goal",
+          "status",
+          "answers",
+          "outcome",
+          "recommended",
+          "chosen",
+          "override_reason",
+          "alternatives",
+          "connects_to",
+          "outside_controls"
+        ]
+      },
+      "minItems": 0,
+      "description": "Empty only before the split: the survey runs on the whole idea."
+    },
+    "retired_ids": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "pattern": "^[A-Z][0-9]*$"
+      },
+      "uniqueItems": true
+    },
+    "research": {
+      "type": "object",
+      "properties": {
+        "survey_digest": {
+          "oneOf": [
+            {
+              "type": "string",
+              "pattern": "^[0-9a-f]{64}$"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "deep_digests": {
+          "type": "object",
+          "propertyNames": {
+            "type": "string",
+            "pattern": "^[A-Z][0-9]*$"
+          },
+          "additionalProperties": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$"
+          }
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "survey_digest",
+        "deep_digests"
+      ]
+    },
+    "accepted_revision": {
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "digest": {
+              "type": "string",
+              "pattern": "^[0-9a-f]{64}$"
+            },
+            "rule_ids": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "pattern": "^[a-z][a-z0-9-]*(\\.[a-z0-9-]+)+$",
+                "maxLength": 200
+              }
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "digest",
+            "rule_ids"
+          ]
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "survey_findings_used": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "pattern": "^F[0-9]+$"
+      },
+      "uniqueItems": true
+    },
+    "split_confirmed": {
+      "type": "boolean"
+    },
+    "confirmations_history": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "run_id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "contract_digest": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$"
+          },
+          "part_ids": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "pattern": "^[A-Z][0-9]*$"
+            },
+            "minItems": 1
+          },
+          "date": {
+            "type": "string",
+            "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$"
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "run_id",
+          "contract_digest",
+          "part_ids",
+          "date"
+        ]
+      }
+    },
+    "drift_decisions": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "rule_id": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9-]*(\\.[a-z0-9-]+)+$",
+            "maxLength": 200
+          },
+          "finding_id": {
+            "type": "string",
+            "pattern": "^F[0-9]+$"
+          },
+          "choice": {
+            "enum": [
+              "keep",
+              "adopt"
+            ]
+          },
+          "reason": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 20000
+          },
+          "date": {
+            "type": "string",
+            "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$"
+          },
+          "slug": {
+            "type": "string",
+            "pattern": "^[a-z0-9][a-z0-9-]*$"
+          },
+          "summary": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 20000
+          },
+          "source": {
+            "type": "string",
+            "pattern": "^https://[^\\s]+$",
+            "maxLength": 2000
+          },
+          "quote": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 20000
+          },
+          "drift_digest": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$"
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "rule_id",
+          "finding_id",
+          "choice",
+          "reason",
+          "date",
+          "slug",
+          "summary",
+          "source",
+          "quote",
+          "drift_digest"
+        ]
+      }
+    }
+  },
+  "additionalProperties": false,
+  "required": [
+    "idea",
+    "picture",
+    "goals",
+    "targets",
+    "reach",
+    "hosting",
+    "kb_version",
+    "facts",
+    "parts",
+    "retired_ids",
+    "research",
+    "accepted_revision"
+  ],
+  "if": {
+    "required": [
+      "split_confirmed"
+    ],
+    "properties": {
+      "split_confirmed": {
+        "const": true
+      }
+    }
+  },
+  "then": {
+    "properties": {
+      "parts": {
+        "minItems": 1
+      }
+    }
+  }
+}

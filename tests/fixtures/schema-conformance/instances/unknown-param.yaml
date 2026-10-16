@@ -1,0 +1,7 @@
+id: skills.description-length
+applicability: script
+severity: error
+check:
+  checker: skills.body-size
+  params:
+    path: ../../etc/passwd

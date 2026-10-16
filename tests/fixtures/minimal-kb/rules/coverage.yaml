@@ -1,0 +1,14 @@
+pages:
+  - page: docs/guide/skills.md
+    sections:
+      - section: practices
+        items:
+          - text: Do not list workflow steps in the description.
+            rules: [skills.description.no-workflow-steps]
+          - text: Keep the description within the harness limit.
+            rules: [skills.description.length]
+      - section: security
+        items:
+          - text: Synthetic security section.
+            status: not-a-rule
+            reason: Synthetic fixture section without rules.

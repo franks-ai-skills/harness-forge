@@ -1,0 +1,98 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:harness-forge:schema:runtime-result",
+  "title": "One runtime test of a built artifact",
+  "type": "object",
+  "properties": {
+    "run_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "part_id": {
+      "type": "string",
+      "pattern": "^[A-Z][0-9]*$"
+    },
+    "case_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "prompt": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 20000
+    },
+    "expected": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 20000
+    },
+    "observed_activation": {
+      "oneOf": [
+        {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 20000
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "result": {
+      "enum": [
+        "pass",
+        "fail",
+        "error",
+        "not-run"
+      ]
+    },
+    "reason": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 20000
+    },
+    "file_hashes": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "string",
+        "pattern": "^[0-9a-f]{64}$"
+      }
+    },
+    "harness": {
+      "enum": [
+        "claude-code",
+        "codex"
+      ]
+    },
+    "harness_version": {
+      "type": "string",
+      "minLength": 1
+    },
+    "environment": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 20000
+    },
+    "inventory": {
+      "enum": [
+        "observed",
+        "not observable"
+      ]
+    }
+  },
+  "additionalProperties": false,
+  "required": [
+    "run_id",
+    "part_id",
+    "case_id",
+    "prompt",
+    "expected",
+    "observed_activation",
+    "result",
+    "reason",
+    "file_hashes",
+    "harness",
+    "harness_version",
+    "environment"
+  ]
+}

@@ -1,0 +1,213 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+# Licensed under AGPLv3 together with the Harness Forge Generated Output
+# Exception; see LICENSE-OUTPUT-EXCEPTION.
+"""Forge's own fetch of a finding's source, for the verbatim quote check.
+
+Fetched pages are untrusted data. Only public HTTPS destinations are
+fetched: every hop's name is resolved, every address must be public
+(no private, loopback, link-local, shared, reserved or multicast range,
+which covers cloud metadata addresses), and the connection goes to the
+address that was checked, so a second lookup cannot change it. Size,
+time and redirects are capped. This narrows what Forge itself reaches;
+it is not an exfiltration guarantee for the research worker.
+"""
+
+from __future__ import annotations
+
+import http.client
+import ipaddress
+import re
+import socket
+import ssl
+from dataclasses import dataclass
+from email.message import Message
+from html.parser import HTMLParser
+from typing import Callable
+from urllib.parse import quote, urljoin, urlsplit
+
+MAX_BYTES = 2 * 1024 * 1024
+TIMEOUT = 20
+MAX_REDIRECTS = 3
+TEXT_TYPES = ("text/html", "text/plain", "application/xhtml+xml")
+_INLINE = {"a", "abbr", "b", "cite", "code", "em", "i", "kbd", "mark", "q", "s", "small", "span", "strong",
+           "sub", "sup", "time", "u"}
+_SKIPPED = {"script", "style", "noscript", "template", "svg"}
+_HOSTNAME = re.compile(r"[a-z0-9_-]+(\.[a-z0-9_-]+)*")
+# Characters a request target keeps as written: the URL's own delimiters and escapes.
+_TARGET_SAFE = "/?&=;:@!$'()*+,%~-._"
+
+
+class FetchError(Exception):
+    """The source cannot be fetched under Forge's limits."""
+
+
+@dataclass(frozen=True)
+class Response:
+    status: int
+    headers: dict
+    body: bytes
+
+
+def _public(address: str) -> bool:
+    value = ipaddress.ip_address(address)
+    if isinstance(value, ipaddress.IPv6Address) and value.ipv4_mapped is not None:
+        value = value.ipv4_mapped
+    return value.is_global and not value.is_multicast
+
+
+def canonical_host(host: str) -> str:
+    """The name the network stack connects to: IDNA-encoded as socket and ssl encode it, lower case, without the
+    terminal dot; an address literal stays as it is. ValueError when the name cannot be encoded or holds
+    characters no host name has, such as controls or spaces."""
+    try:
+        return str(ipaddress.ip_address(host))
+    except ValueError:
+        pass
+    name = host.encode("idna").decode("ascii").lower()
+    name = name[:-1] if name.endswith(".") else name
+    if name and not _HOSTNAME.fullmatch(name):
+        raise ValueError(f"{host!r} is not a host name")
+    return name
+
+
+def url_parts(url: str):
+    """The URL's parts, canonical host and port; ValueError for a malformed URL, host or port, or for text
+    that is not Unicode (a lone surrogate from a worker's JSON)."""
+    url.encode("utf-8")
+    parts = urlsplit(url)
+    return parts, canonical_host(parts.hostname or ""), parts.port
+
+
+def resolve(host: str) -> list[str]:
+    try:
+        return sorted({info[4][0] for info in socket.getaddrinfo(host, 443, type=socket.SOCK_STREAM)})
+    except OSError as error:
+        raise FetchError(f"cannot resolve {host}: {error}") from error
+
+
+class _Pinned(http.client.HTTPSConnection):
+    """An HTTPS connection to a checked address that still verifies the host's certificate."""
+
+    def __init__(self, host: str, address: str, timeout: int):
+        super().__init__(host, 443, timeout=timeout, context=ssl.create_default_context())
+        self._address = address
+
+    def connect(self):
+        sock = socket.create_connection((self._address, self.port), self.timeout)
+        self.sock = self._context.wrap_socket(sock, server_hostname=self.host)
+
+
+def get(host: str, address: str, path: str, timeout: int, limit: int) -> Response:
+    connection = None
+    try:
+        # Building the connection checks the host and sending the request encodes the path: either can refuse.
+        connection = _Pinned(host, address, timeout)
+        connection.request("GET", path or "/", headers={"User-Agent": "harness-forge-source-check",
+                                                        "Accept": "text/html, text/plain"})
+        answer = connection.getresponse()
+        body = answer.read(limit + 1)
+        headers = {key.lower(): value for key, value in answer.getheaders()}
+        return Response(status=answer.status, headers=headers, body=body)
+    except (OSError, ValueError, http.client.HTTPException) as error:
+        raise FetchError(f"cannot fetch https://{host}{path!r}: {error}") from error
+    finally:
+        if connection is not None:
+            connection.close()
+
+
+class _Text(HTMLParser):
+    def __init__(self):
+        super().__init__(convert_charrefs=True)
+        self.parts: list[str] = []
+        self.skipping = 0
+
+    def handle_starttag(self, tag, attrs):
+        if tag in _SKIPPED:
+            self.skipping += 1
+        elif tag not in _INLINE:
+            self.parts.append(" ")
+
+    def handle_endtag(self, tag):
+        if tag in _SKIPPED:
+            self.skipping = max(0, self.skipping - 1)
+        elif tag not in _INLINE:
+            self.parts.append(" ")
+
+    def handle_data(self, data):
+        if not self.skipping:
+            self.parts.append(data)
+
+
+def page_text(html: str) -> str:
+    """The page's readable text with whitespace collapsed, for verbatim quote matching."""
+    parser = _Text()
+    parser.feed(html)
+    parser.close()
+    return re.sub(r"\s+", " ", "".join(parser.parts)).strip()
+
+
+def _content_type(value: str) -> tuple[str, str | None]:
+    """The media type and charset of a Content-Type header, names and the type case-insensitive, values unquoted."""
+    header = Message()
+    header["content-type"] = value
+    return value.split(";")[0].strip().lower(), header.get_content_charset()
+
+
+def fetch_text(url: str, *, resolve: Callable[[str], list[str]] = resolve, get: Callable[..., Response] = get,
+               timeout: int = TIMEOUT, limit: int = MAX_BYTES,
+               reject: Callable[[str], str | None] | None = None) -> str:
+    """The text of a public HTTPS page, or FetchError.
+
+    ``reject`` gives the source policy's reason to refuse a URL; it is asked
+    for every hop, so a redirect cannot reach a rejected source. Any local
+    failure to parse, encode or decode is this source's FetchError, so it
+    never ends the research pass.
+    """
+    try:
+        return _fetch_text(url, resolve, get, timeout, limit, reject)
+    except (ValueError, LookupError) as error:
+        raise FetchError(f"cannot read {url!r}: {error}") from error
+
+
+def _fetch_text(url: str, resolve: Callable[[str], list[str]], get: Callable[..., Response], timeout: int, limit: int,
+                reject: Callable[[str], str | None] | None) -> str:
+    for _ in range(MAX_REDIRECTS + 1):
+        refused = reject(url) if reject else None
+        if refused:
+            raise FetchError(f"{url}: {refused}")
+        try:
+            parts, host, port = url_parts(url)
+        except ValueError as error:
+            raise FetchError(f"malformed URL {url}: {error}") from error
+        if parts.scheme != "https" or not host or parts.username or parts.password:
+            raise FetchError(f"only public https URLs without credentials are fetched: {url}")
+        if port not in (None, 443):
+            raise FetchError(f"only the standard https port is fetched: {url}")
+        addresses = resolve(host)
+        if not addresses or not all(_public(address) for address in addresses):
+            raise FetchError(f"{host} resolves to a non-public address")
+        # As a browser sends it: characters outside ASCII and spaces percent-encoded, existing escapes kept.
+        path = quote(parts.path or "/", safe=_TARGET_SAFE)
+        if parts.query:
+            path += "?" + quote(parts.query, safe=_TARGET_SAFE)
+        response = get(host, addresses[0], path, timeout, limit)
+        if response.status in (301, 302, 303, 307, 308) and response.headers.get("location"):
+            try:
+                url = urljoin(url, response.headers["location"])
+            except ValueError as error:
+                raise FetchError(f"{url} redirects to a malformed URL: {error}") from error
+            continue
+        if response.status != 200:
+            raise FetchError(f"{url} answered {response.status}")
+        content_type = response.headers.get("content-type", "")
+        media, charset = _content_type(content_type)
+        if media not in TEXT_TYPES:
+            raise FetchError(f"{url} is not a text page ({content_type or 'no content type'})")
+        if len(response.body) > limit:
+            raise FetchError(f"{url} is larger than {limit} bytes")
+        try:
+            text = response.body.decode(charset or "utf-8", errors="replace")
+        except (LookupError, ValueError):  # an unknown charset, or one that is not a text encoding (rot13, idna)
+            text = response.body.decode("utf-8", errors="replace")
+        return page_text(text) if "html" in media else re.sub(r"\s+", " ", text).strip()
+    raise FetchError(f"more than {MAX_REDIRECTS} redirects")
