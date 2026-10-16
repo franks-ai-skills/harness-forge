@@ -15,7 +15,8 @@ FORGE = Path(__file__).resolve().parents[1]
 WORKSPACE = FORGE.parent
 PLAYGROUND = WORKSPACE / "playground"
 KB = WORKSPACE / "agent-harness-kb"
-SIBLINGS = (PLAYGROUND / "docs").is_dir() and (KB / "kb-manifest.json").is_file()
+# Playground removed its copy after publication; the copied research is read from its history.
+SIBLINGS = (PLAYGROUND / ".git").exists() and (KB / "kb-manifest.json").is_file()
 
 
 def load_tool():
@@ -150,7 +151,8 @@ class KbCopyTest(unittest.TestCase):
         migrated = git(KB, "log", "--diff-filter=A", "--format=%H", "--", "kb-manifest.json").split()[-1]
         for relative, digest in migration["files"].items():
             with self.subTest(file=relative):
-                source = (PLAYGROUND / relative).read_bytes()
+                source = subprocess.run(["git", "-C", str(PLAYGROUND), "show", f"{migration['source_commit']}:{relative}"],
+                                        check=True, capture_output=True).stdout
                 self.assertEqual(self.tool.sha256(source), digest)
                 copy = subprocess.run(["git", "-C", str(KB), "show", f"{migrated}:{relative}"], check=True,
                                       capture_output=True).stdout
@@ -171,16 +173,14 @@ class KbCopyTest(unittest.TestCase):
         skill = (PLAYGROUND / ".agents" / "skills" / "agent-harness" / "SKILL.md").read_text(encoding="utf-8")
         for text in (instructions, skill):
             self.assertIn("../agent-harness-kb", text)
-            self.assertRegex(text, r"(?i)frozen")
+            self.assertIn("https://github.com/franks-ai-skills/agent-harness-kb", text)
+            self.assertNotRegex(text, r"(?i)frozen copy")
 
     def test_real_kb_validates(self):
         sys.path.insert(0, str(FORGE / "src"))
         from harness_forge.documents import validate_kb
 
         self.assertEqual(validate_kb(KB.resolve()), [])
-
-    def test_retained_research_is_unchanged(self):
-        self.assertEqual(self.tool.check_migration_source(PLAYGROUND, self.manifest), [])
 
 
 if __name__ == "__main__":
