@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import argparse
 import hashlib
+import re
 import json
 import os
 import shutil
@@ -30,13 +31,18 @@ DESIGN = "2026-10-06-harness-forge-design.md"
 
 # The only byte changes allowed when copying research into the KB: links
 # from docs/ to playground's specs/ become links to the sibling checkout.
-REPAIRS: dict[str, list[tuple[str, str, int]]] = {
+# The owner's plugin id, quoted from a local Codex configuration, was replaced in the KB's whole history
+# on 2026-10-16; playground's frozen copy keeps it. A pattern stands for it so that it is not repeated here.
+_OWNER_PLUGIN = (re.compile(r'\[plugins\."[A-Za-z0-9_-]+@franks-ai-skills"\]'), '[plugins."<plugin>@<marketplace>"]', 1)
+REPAIRS: dict[str, list[tuple[str | re.Pattern, str, int]]] = {
     "docs/guide/outside-gates.md": [
         (f"](../../specs/{DESIGN})", f"](../../../playground/specs/{DESIGN})", 2),
     ],
     "docs/research-notes/outside-gates/README.md": [
         (f"](../../../specs/{DESIGN})", f"](../../../../playground/specs/{DESIGN})", 1),
     ],
+    "docs/research-notes/agent-harness-configuration/codex-foundation.md": [_OWNER_PLUGIN],
+    "docs/vendors/codex/plugins.md": [_OWNER_PLUGIN],
 }
 
 
@@ -64,9 +70,12 @@ def research_inventory(playground: Path) -> dict[str, str]:
 def apply_repairs(relative: str, data: bytes) -> bytes:
     text = data.decode("utf-8") if relative in REPAIRS else None
     for old, new, count in REPAIRS.get(relative, []):
-        if text.count(old) != count:
-            raise ValueError(f"{relative}: expected {count} occurrence(s) of {old!r}")
-        text = text.replace(old, new)
+        if isinstance(old, re.Pattern):
+            text, found = old.subn(lambda _: new, text)
+        else:
+            found, text = text.count(old), text.replace(old, new)
+        if found != count:
+            raise ValueError(f"{relative}: expected {count} occurrence(s) of {getattr(old, 'pattern', old)!r}")
     return data if text is None else text.encode("utf-8")
 
 
@@ -100,7 +109,8 @@ def migrate(playground: Path, kb: Path) -> dict:
         "source_repository": "playground",
         "source_commit": git(playground, "rev-parse", "HEAD").strip(),
         "files": inventory,
-        "repairs": {path: [[old, new] for old, new, _ in repairs] for path, repairs in REPAIRS.items()},
+        "repairs": {path: [[getattr(old, "pattern", old), new] for old, new, _ in repairs]
+                    for path, repairs in REPAIRS.items()},
     }
 
 
