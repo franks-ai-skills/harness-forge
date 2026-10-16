@@ -17,13 +17,13 @@ import copy
 import re
 from functools import lru_cache
 from pathlib import Path
-from urllib.parse import urlsplit
 
 import yaml
 
 from harness_forge.checks import REGISTRY
 from harness_forge.documents import (canonical_digest, load_document, markdown_prose, markdown_section, safe_path,
                                      schema_errors, validate)
+from harness_forge.fetch import url_parts
 from harness_forge.models import AcceptedRevision, Decision, Finding, ResearchBrief, Rule
 
 SNAPSHOT = Path(__file__).resolve().parents[2] / "snapshot"
@@ -118,11 +118,17 @@ def rejected_domains(snapshot: Path = SNAPSHOT) -> dict[str, frozenset[str]]:
 
 
 def source_rejection(url: str) -> str | None:
-    """Why the source policy rejects this URL, or None."""
-    parts = urlsplit(url)
-    if parts.scheme != "https" or not parts.hostname:
+    """Why the source policy rejects this URL, or None.
+
+    The policy judges the host the network stack would connect to, so a
+    fullwidth or trailing-dot spelling of a rejected domain is rejected too.
+    """
+    try:
+        parts, host, _ = url_parts(url)
+    except ValueError:
+        return "the source URL is malformed"
+    if parts.scheme != "https" or not host:
         return "sources must be fetched over https"
-    host = parts.hostname.lower()
     policy = rejected_domains()
 
     def matches(domain: str) -> bool:

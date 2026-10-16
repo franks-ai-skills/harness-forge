@@ -174,6 +174,23 @@ class ResearchPassTest(unittest.TestCase):
         self.assertEqual(runner.support_ids, [])
         self.assertIn("X platform", result["dropped"][0]["reason"])
 
+    def test_another_spelling_of_a_rejected_host_is_never_fetched(self):
+        fetched = []
+
+        def fetch(url):
+            fetched.append(url)
+            return PAGE
+
+        result, runner = self.run_pass([finding(source="https://\uff58.com./someone/status/1")], fetch=fetch)
+        self.assertEqual((fetched, runner.support_ids, result["kept"]), ([], [], []))
+        self.assertIn("X platform", result["dropped"][0]["reason"])
+
+    def test_a_malformed_source_drops_only_its_finding(self):
+        result, _ = self.run_pass([finding(), finding(source="https://[not-an-ip]/")])
+        self.assertEqual([f["id"] for f in result["kept"]], ["F1"])
+        self.assertEqual([d["id"] for d in result["dropped"]], ["F2"])
+        self.assertIn("malformed", result["dropped"][0]["reason"])
+
     def test_forge_adds_the_pass_part_and_brief_digest(self):
         result, _ = self.run_pass([finding()])
         kept = result["kept"][0]

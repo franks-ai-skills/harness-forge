@@ -51,6 +51,23 @@ def _public(address: str) -> bool:
     return value.is_global and not value.is_multicast
 
 
+def canonical_host(host: str) -> str:
+    """The name the network stack connects to: IDNA-encoded as socket and ssl encode it, lower case, without the
+    terminal dot; an address literal stays as it is. ValueError when the name cannot be encoded."""
+    try:
+        return str(ipaddress.ip_address(host))
+    except ValueError:
+        pass
+    name = host.encode("idna").decode("ascii").lower()
+    return name[:-1] if name.endswith(".") else name
+
+
+def url_parts(url: str):
+    """The URL's parts, canonical host and port; ValueError for a malformed URL, host or port."""
+    parts = urlsplit(url)
+    return parts, canonical_host(parts.hostname or ""), parts.port
+
+
 def resolve(host: str) -> list[str]:
     try:
         return sorted({info[4][0] for info in socket.getaddrinfo(host, 443, type=socket.SOCK_STREAM)})
@@ -128,12 +145,14 @@ def fetch_text(url: str, *, resolve: Callable[[str], list[str]] = resolve, get: 
         refused = reject(url) if reject else None
         if refused:
             raise FetchError(f"{url}: {refused}")
-        parts = urlsplit(url)
-        if parts.scheme != "https" or not parts.hostname or parts.username or parts.password:
+        try:
+            parts, host, port = url_parts(url)
+        except ValueError as error:
+            raise FetchError(f"malformed URL {url}: {error}") from error
+        if parts.scheme != "https" or not host or parts.username or parts.password:
             raise FetchError(f"only public https URLs without credentials are fetched: {url}")
-        if parts.port not in (None, 443):
+        if port not in (None, 443):
             raise FetchError(f"only the standard https port is fetched: {url}")
-        host = parts.hostname
         addresses = resolve(host)
         if not addresses or not all(_public(address) for address in addresses):
             raise FetchError(f"{host} resolves to a non-public address")
@@ -142,7 +161,10 @@ def fetch_text(url: str, *, resolve: Callable[[str], list[str]] = resolve, get: 
             path += "?" + parts.query
         response = get(host, addresses[0], path, timeout, limit)
         if response.status in (301, 302, 303, 307, 308) and response.headers.get("location"):
-            url = urljoin(url, response.headers["location"])
+            try:
+                url = urljoin(url, response.headers["location"])
+            except ValueError as error:
+                raise FetchError(f"{url} redirects to a malformed URL: {error}") from error
             continue
         if response.status != 200:
             raise FetchError(f"{url} answered {response.status}")

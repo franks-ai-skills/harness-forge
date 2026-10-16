@@ -86,6 +86,25 @@ class SourceFilterTest(unittest.TestCase):
                 self.assertIn("deusyu/harness-engineering", source_rejection(url) or "")
         self.assertIsNone(source_rejection("https://raw.githubusercontent.com/openai/codex/main/README.md"))
 
+    def test_other_spellings_of_a_rejected_host_are_rejected(self):
+        """The network stack connects to the IDNA form without the terminal dot, so the policy judges that form."""
+        for url in ("https://\uff58.com/someone/status/1", "https://x.com./someone/status/1",
+                    "https://X.COM/someone/status/1", "https://x\u3002com/someone/status/1",
+                    "https://\uff4d\uff4f\uff42\uff49\uff4c\uff45.twitter.com/someone/status/1",
+                    "https://www.alphaxiv.org./abs/2602.12670",
+                    "https://\uff47\uff49\uff54\uff48\uff55\uff42.com/deusyu/harness-engineering"):
+            with self.subTest(url=url):
+                self.assertIsNotNone(source_rejection(url))
+                self.assertIsNone(validate_finding(finding(source=url), PAGE, verdict()))
+
+    def test_a_malformed_source_url_is_rejected_not_raised(self):
+        for url in ("https://[not-an-ip]/", "https://docs.example-vendor.com:99999/x",
+                    "https://docs.example-vendor.com:abc/x", "https://docs..example-vendor.com/x",
+                    "https://" + "a" * 64 + ".example-vendor.com/x"):
+            with self.subTest(url=url):
+                self.assertIn("malformed", source_rejection(url) or "")
+                self.assertIsNone(validate_finding(finding(source=url), PAGE, verdict()))
+
     def test_rejected_domains_come_from_the_pinned_source_policy(self):
         domains = rejected_domains()
         self.assertIn("x.com", domains["hosts"])

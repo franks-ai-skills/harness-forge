@@ -3,6 +3,7 @@
 import unittest
 
 from harness_forge.fetch import FetchError, Response, fetch_text, page_text
+from harness_forge.research import source_rejection
 
 
 class FakeWeb:
@@ -75,6 +76,30 @@ class FetchTest(unittest.TestCase):
             fetch_text("https://docs.example.com/a", resolve=web.resolve, get=web.get,
                        reject=lambda url: "the X platform and its mirrors are not sources" if "x.com" in url else None)
         self.assertEqual(len(web.requests), 1)
+
+    def test_a_host_is_resolved_and_requested_by_its_ascii_name(self):
+        web = FakeWeb({"docs.example.com": ["93.184.215.14"]}, {("docs.example.com", "/repro"): page()})
+        self.assertIn("only on Linux", self.fetch("https://\uff44\uff4f\uff43\uff53.Example.com./repro", web))
+        self.assertEqual(web.requests, [("docs.example.com", "93.184.215.14", "/repro")])
+
+    def test_a_redirect_to_another_spelling_of_a_rejected_host_is_refused(self):
+        web = FakeWeb({"docs.example.com": ["93.184.215.14"], "x.com": ["93.184.215.15"]},
+                      {("docs.example.com", "/a"): page(status=302, location="https://\uff58.com./someone/status/1")})
+        with self.assertRaisesRegex(FetchError, "the X platform"):
+            fetch_text("https://docs.example.com/a", resolve=web.resolve, get=web.get, reject=source_rejection)
+        self.assertEqual(len(web.requests), 1)
+
+    def test_a_malformed_url_is_a_fetch_error(self):
+        for url in ("https://[not-an-ip]/", "https://docs.example.com:99999/", "https://docs.example.com:abc/",
+                    "https://docs..example.com/"):
+            for reject in (None, source_rejection):
+                with self.subTest(url=url, reject=reject), self.assertRaises(FetchError):
+                    fetch_text(url, resolve=FakeWeb({}, {}).resolve, get=FakeWeb({}, {}).get, reject=reject)
+        for location in ("https://[not-an-ip]/", "https://docs.example.com:99999/"):
+            web = FakeWeb({"docs.example.com": ["93.184.215.14"]},
+                          {("docs.example.com", "/a"): page(status=302, location=location)})
+            with self.subTest(location=location), self.assertRaises(FetchError):
+                self.fetch("https://docs.example.com/a", web)
 
     def test_redirects_are_followed_a_few_times_only(self):
         pages = {("docs.example.com", f"/{n}"): page(status=301, location=f"/{n + 1}") for n in range(10)}
