@@ -29,7 +29,7 @@ from typing import Iterable, Mapping
 from harness_forge.access import inside, tool_paths
 from harness_forge.adapters import codex
 from harness_forge.adapters.base import Runner, preflight, run_command, worker_environment
-from harness_forge.documents import load_document, safe_path
+from harness_forge.documents import fold_name, load_document, safe_path
 from harness_forge.models import RuntimeResult, VerificationRun
 
 MODES = ("explicit", "implicit", "negative")
@@ -48,14 +48,15 @@ _INSTRUCTION_FILES = {"agents.md", "agents.override.md", "claude.md", "claude.lo
 def fixture_problem(path: str, candidate: Mapping[str, bytes] | None = None) -> str | None:
     """A fixture may not replace a candidate file or add skills, settings or instructions the harness reads.
 
-    Paths must be plain relative paths, compared without case: a "./" prefix
-    or a case variant reaches the same file on a case-insensitive file system.
+    Paths must be plain relative paths, compared folded: a "./" prefix, a case
+    variant or a Unicode variant reaches the same file on a case-insensitive
+    file system.
     """
     parts = path.split("/")
     if "\\" in path or any(part in ("", ".", "..") for part in parts):
         return f"fixture {path} is not a plain relative path"
-    taken = {name.lower() for name in candidate or {}}
-    if path.lower() in taken or parts[0].lower() in _HARNESS_DIRS or parts[-1].lower() in _INSTRUCTION_FILES:
+    taken = {fold_name(name) for name in candidate or {}}
+    if fold_name(path) in taken or fold_name(parts[0]) in _HARNESS_DIRS or fold_name(parts[-1]) in _INSTRUCTION_FILES:
         return f"fixture {path} would replace the candidate or change what the harness loads"
     return None
 
@@ -508,6 +509,10 @@ def activation_case(
             destination = safe_path(workspace, path)
             destination.parent.mkdir(parents=True, exist_ok=True)
             destination.write_text(text, encoding="utf-8")
+        # Whatever names a file system folds together, the candidate must still hold its frozen bytes.
+        changed = [path for path, data in files.items() if safe_path(workspace, path).read_bytes() != data]
+        if changed:
+            return "error", f"a fixture replaced the candidate file {changed[0]}", None, "not observable"
         if harness == "claude-code":
             wanted = links if links is not None else {f".claude/skills/{d.rsplit('/', 1)[-1]}": f"../../{d}"
                                                       for d in skill_dirs}

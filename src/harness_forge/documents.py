@@ -14,6 +14,7 @@ from __future__ import annotations
 import hashlib
 import json
 import re
+import unicodedata
 from functools import lru_cache
 from pathlib import Path
 from typing import Any
@@ -475,6 +476,12 @@ _HTML_BLOCKS = (
     (re.compile(rf" {{0,3}}(?:<(?!(?:pre|script|style|textarea)(?![A-Za-z0-9-]))[A-Za-z][A-Za-z0-9-]*{_ATTRIBUTE}*"
                 r"[ \t]*/?>|</[A-Za-z][A-Za-z0-9-]*[ \t]*>)[ \t]*$", re.I | re.A), None, False),
 )
+
+
+def fold_name(name: str) -> str:
+    """A file name folded at least as widely as a case- and normalization-insensitive file system folds it
+    (ſ is s, fullwidth Ａ is a): names equal after folding can open the same file."""
+    return unicodedata.normalize("NFKC", name).casefold()
 
 
 class UnreadableMarkdown(ValueError):

@@ -605,6 +605,27 @@ class RuntimeTest(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "AGENTS.md"):
                 load_cases(path)
 
+    def test_a_fixture_cannot_reach_the_candidate_or_harness_files_through_unicode(self):
+        """A case-insensitive file system folds ſ to s and fullwidth letters (whole-branch review round 4)."""
+        from harness_forge.runtime import fixture_problem
+        candidate = {f"{SKILL_DIR}/SKILL.md": b"x"}
+        for path in (SKILL_DIR.replace("skills", "\u017fkills") + "/SKILL.md", ".agent\u017f/x.md",
+                     "AGENT\u017f.md", "\uff21GENTS.md", f"{SKILL_DIR}/\uff33KILL.md"):
+            with self.subTest(path=path):
+                self.assertIsNotNone(fixture_problem(path, candidate))
+        self.assertIsNone(fixture_problem("bug-report.md", candidate))
+
+    def test_a_case_whose_fixture_changed_the_staged_candidate_does_not_run(self):
+        """Whatever a file system folds, the staged candidate must keep its frozen bytes."""
+        from unittest import mock
+        from harness_forge import runtime
+        with mock.patch.object(runtime, "fixture_problem", return_value=None):
+            results, runner = self.run_cases("claude-code", claude_run(),
+                                             cases=[case(fixtures={f"{SKILL_DIR}/SKILL.md": "Replaced."})])
+        self.assertEqual(results[0].result, "error")
+        self.assertIn("replaced the candidate file", results[0].reason)
+        self.assertEqual(runner.worker_calls, [])
+
     def test_malformed_case_files_are_invalid_input(self):
         import tempfile
         good = case()

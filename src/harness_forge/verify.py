@@ -16,13 +16,12 @@ from __future__ import annotations
 import copy
 import hashlib
 import re
-import unicodedata
 from dataclasses import asdict
 
 from harness_forge.checks import REGISTRY
 from harness_forge.checks.runner import evaluate_applicability, run_check
 from harness_forge.contracts import confirmation_problem, part_ids_problem
-from harness_forge.documents import canonical_digest, validate
+from harness_forge.documents import canonical_digest, fold_name, validate
 from harness_forge.models import (
     AcceptedRevision, CheckResult, Confirmation, Decision, PartResult, ReviewResponse, Rule, RuntimeResult,
     VerificationRun,
@@ -51,9 +50,7 @@ def case_alias(directory: str, paths) -> str | None:
     for path in sorted(paths):
         relative = path[len(directory) + 1:] if path.startswith(directory + "/") else None
         for resource in RESOURCES:
-            # Folded as a case- and normalization-insensitive file system would, or wider: ſ is s, ａ is a.
-            if (relative is not None and relative != resource
-                    and unicodedata.normalize("NFKC", relative).casefold() == resource.casefold()):
+            if relative is not None and relative != resource and fold_name(relative) == fold_name(resource):
                 return f"{path} is spelled differently from the resource {directory}/{resource}; rename it"
     return None
 
