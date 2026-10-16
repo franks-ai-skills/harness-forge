@@ -330,6 +330,16 @@ class VerdictTest(unittest.TestCase):
         assert_result(self, scenario.finish(review)["A"], "not verified", "not met")
 
 
+class CandidateLinkTest(unittest.TestCase):
+    def test_a_link_inside_a_part_directory_is_refused(self):
+        scenario = Scenario(skill_decision())
+        link = f".agents/skills/{NAME}/agents/openai.yaml"
+        with self.assertRaisesRegex(ValueError, f"{link} is a symbolic link"):
+            prepare_run(scenario.record, scenario.files, RULES, scenario.confirmation,
+                        symlinks={**scenario.symlinks, link: "../policy.yaml"}, revision=REVISION, kb_version="0.1.0",
+                        worker_evidence=EVIDENCE)
+
+
 class RuntimeAndInputsTest(unittest.TestCase):
     def setUp(self):
         self.scenario = Scenario(skill_decision())

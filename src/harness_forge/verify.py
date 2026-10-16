@@ -263,6 +263,13 @@ def prepare_run(
     for evidence in worker_evidence:
         validate(evidence, "worker-evidence")
     symlinks = dict(symlinks or {})
+    for part in decision.record["parts"]:
+        directory = _skill_dir(part)
+        inside = sorted(link for link in symlinks if directory and link.startswith(directory + "/"))
+        if inside:
+            # Its target would escape the checks, the review and the runtime cases, which read regular files only.
+            raise ValueError(f"{inside[0]} is a symbolic link inside a skill's directory; Forge checks only regular "
+                             "files there")
     worker_evidence = copy.deepcopy(list(worker_evidence))  # later changes by the caller must not reach the run
     record = copy.deepcopy(decision.record)
     inputs = bound_inputs(decision, files, rules, symlinks=symlinks, revision=revision, overrides=overrides,

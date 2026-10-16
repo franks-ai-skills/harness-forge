@@ -324,6 +324,20 @@ class LiveCommandsTest(unittest.TestCase):
         self.assertIn(f"case repro-explicit names no permitted tools for {harness}", stderr)
         self.assertEqual(len(runner.worker_calls), started, "no review worker starts")
 
+    def test_a_link_inside_a_skill_directory_stops_verification(self):
+        """A linked sidecar escaped checks, review and runtime staging (whole-branch review, 2026-10-16)."""
+        runner = ResearchRunner([finding()])
+        cli, arguments = self.build_ready(runner)
+        skill = self.root / ".agents/skills/reproduction-checklist"
+        (skill / "policy.yaml").write_text("policy: {allow_implicit_invocation: false}\n", encoding="utf-8")
+        (skill / "agents").mkdir(exist_ok=True)
+        (skill / "agents/openai.yaml").symlink_to("../policy.yaml")
+        started = len(runner.worker_calls)
+        code, output, stderr = cli("verify", *arguments)
+        self.assertEqual((code, output), (2, None))
+        self.assertIn(".agents/skills/reproduction-checklist/agents/openai.yaml is a symbolic link", stderr)
+        self.assertEqual(len(runner.worker_calls), started)
+
     def test_the_recorded_requirements_cannot_be_left_out(self):
         cli, arguments = self.build_ready(ResearchRunner([finding()]))
         option = arguments.index("--revision")

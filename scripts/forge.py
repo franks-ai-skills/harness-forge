@@ -468,7 +468,9 @@ def collect_target(root: Path, decision) -> tuple[dict[str, bytes], dict[str, st
         for path in sorted(base.rglob("*")):
             relative = path.relative_to(root).as_posix()
             if path.is_symlink():
-                symlinks[relative] = str(path.readlink())
+                # A link inside the skill would bring in content that checks, review and runtime cases do not see.
+                raise _InvalidInput(f"{relative} is a symbolic link inside a skill's directory; Forge checks only "
+                                    "regular files there, so replace it with the file itself")
             elif path.is_file():
                 if path.stat().st_size > 1024 * 1024 or len(files) >= MAX_COLLECTED_FILES:
                     raise _InvalidInput(f"{relative}: too large, or too many files")
