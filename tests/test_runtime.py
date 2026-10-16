@@ -429,6 +429,27 @@ class RuntimeTest(unittest.TestCase):
                 self.assertEqual(result.result, "not-run", result.reason)
                 self.assertIsNone(result.observed_activation)
 
+    def test_a_codex_read_counts_only_when_one_command_reads_the_candidate_alone(self):
+        """Another file's output can complete the skill's text (whole-branch review, 2026-10-16)."""
+        def command(text):
+            return json.dumps({"type": "item.completed", "item": {"id": "c", "type": "command_execution", "command": text,
+                                                                 "exit_code": 0, "status": "completed",
+                                                                 "aggregated_output": BUILT}})
+
+        for label, text in (("empty head, then a copy", f"head -n 0 {SKILL_DIR}/SKILL.md; cat fixtures/copied-skill.md"),
+                            ("piped away", f"cat {SKILL_DIR}/SKILL.md | head -n 0; cat fixtures/copied-skill.md"),
+                            ("second operand", f"awk 'NR>3' {SKILL_DIR}/SKILL.md fixtures/copied-skill.md"),
+                            ("copy first", f"cat fixtures/copied-skill.md {SKILL_DIR}/SKILL.md")):
+            with self.subTest(label):
+                result = self.run_cases("codex", command(text) + "\n" + codex_run(read_skill=False))[0][0]
+                self.assertEqual(result.result, "not-run", result.reason)
+        for label, text in (("cat", f"cat {SKILL_DIR}/SKILL.md"), ("numbered", f"nl -ba {SKILL_DIR}/SKILL.md"),
+                            ("sed range", f"sed -n '1,200p' {SKILL_DIR}/SKILL.md"),
+                            ("head with a count", f"head -n 400 {SKILL_DIR}/SKILL.md")):
+            with self.subTest(label):
+                result = self.run_cases("codex", command(text) + "\n" + codex_run(read_skill=False))[0][0]
+                self.assertEqual(result.result, "pass", result.reason)
+
     def test_only_the_prompt_not_tool_output_can_show_a_slash_invocation(self):
         marker = f"<command-name>/{NAME}</command-name>"
         def run_with(user_event):
@@ -505,11 +526,16 @@ class RuntimeTest(unittest.TestCase):
     def test_a_codex_read_through_its_shell_counts(self):
         output = self.files[f"{SKILL_DIR}/SKILL.md"].decode()
         numbered = "".join(f"{n:6}\t{line}\n" for n, line in enumerate(output.splitlines(), 1))
-        line = json.dumps({"type": "item.completed", "item": {
-            "id": "r", "type": "command_execution", "exit_code": 0, "status": "completed",
-            "command": f"/bin/zsh -lc 'cat request.json; nl -ba {SKILL_DIR}/SKILL.md'", "aggregated_output": numbered}})
-        result = self.run_cases("codex", line + "\n" + codex_run(read_skill=False))[0][0]
+        def read(command):
+            line = json.dumps({"type": "item.completed", "item": {
+                "id": "r", "type": "command_execution", "exit_code": 0, "status": "completed",
+                "command": command, "aggregated_output": numbered}})
+            return self.run_cases("codex", line + "\n" + codex_run(read_skill=False))[0][0]
+
+        result = read(f"/bin/zsh -lc 'nl -ba {SKILL_DIR}/SKILL.md'")
         self.assertEqual(result.result, "pass", result.reason)
+        # Another command's output could complete the text, so a chained read is not attributable.
+        self.assertEqual(read(f"/bin/zsh -lc 'cat request.json; nl -ba {SKILL_DIR}/SKILL.md'").result, "not-run")
 
     def test_a_codex_read_by_the_workspaces_absolute_path_counts(self):
         from harness_forge.runtime import _observe_codex

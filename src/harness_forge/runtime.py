@@ -334,6 +334,30 @@ def _skills_read(item: dict) -> list[tuple[str, str]]:
     return read
 
 
+def _reads_only(item: dict, candidate: set[str]) -> bool:
+    """Whether the command is one reading command whose only file is the candidate's SKILL.md.
+
+    Then its output is that file's: with another command or another file,
+    their output could complete the skill's text instead. Option words,
+    numbers after them and the one script of sed or awk are no files.
+    """
+    segments = _segments(str(item.get("command", "")))
+    if len(segments) != 1:
+        return False
+    reader, *words = segments[0]
+    operands, script = [], posixpath.basename(reader) in ("sed", "awk")
+    for word in words:
+        if word.startswith("-") and word != "-":
+            script = script and word not in ("-e", "-f") and not word.startswith(("-e", "-f", "--expression", "--file"))
+        elif re.fullmatch(r"[+-]?\d+", word):
+            continue
+        elif script:
+            script = False
+        else:
+            operands.append(posixpath.normpath(word))
+    return len(operands) == 1 and operands[0] in candidate
+
+
 def _whole(output: str, markers: list[str]) -> bool:
     """Whether output holds the candidate's SKILL.md (_markers) whole: its non-empty lines in order, repeated
     lines included, as one run of the output's non-empty lines (line numbers removed)."""
@@ -371,7 +395,7 @@ def _observe_codex(stdout: str, directory: str, markers: list[str] | None = None
                 read = _skills_read(item)
                 first_skill = first_skill or (read[0][0] if read else None)
                 if (first_skill == name and any(path in candidate for _, path in read)
-                        and _printed(item, markers or [])):
+                        and _reads_only(item, candidate) and _printed(item, markers or [])):
                     observed["activation"] = f"read {directory}/SKILL.md"
         observed["completed"] = observed["completed"] or event.get("type") == "turn.completed"
         observed["errored"] = observed["errored"] or event.get("type") in ("turn.failed", "error")
