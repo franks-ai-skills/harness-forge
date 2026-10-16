@@ -182,11 +182,15 @@ items and block quotes.
 - A heading inside a list item or block quote is no section and no KB
   anchor. GitHub anchors such headings, so a link to one fails the check
   instead of passing.
-- Forge refuses two kinds of files, where markdown-it-py would read less
-  or other than CommonMark: blocks or inline elements nested 19 or more
-  levels deep, and an HTML block whose tag name has non-ASCII letters
-  (such as `<scrıpt>`). Checks of such a file fail and the README writer
-  refuses it.
+- markdown-it-py matches with Python's Unicode rules where CommonMark
+  means ASCII. Forge reads Unicode spaces other than space and tab, and
+  the letters İ, ı, ſ and K (Kelvin), as ordinary characters, as
+  CommonMark does, so `<scrıpt>` opens no `<script>` block.
+- Forge refuses three constructs that markdown-it-py reads other than
+  CommonMark: blocks or inline elements nested 19 or more levels deep,
+  a code or HTML block directly below a link reference definition, and a
+  definition whose label is longer than 999 characters. Checks of such a
+  file fail and the README writer refuses it.
 - Inside its own README sections Forge accepts only the lines it writes
   there, and it appends a section only where it shows as a heading of
   its own.

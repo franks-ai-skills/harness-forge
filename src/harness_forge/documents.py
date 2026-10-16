@@ -458,14 +458,35 @@ _LINE = re.compile(r"[^\r\n]*(?:\r\n|\n|\r|$)")
 # Block and inline nesting beyond this is not parsed: markdown-it skips the rest of that container.
 _MAX_NESTING = 20
 _CODE_BLOCKS = ("fence", "code_block", "html_block")
-# markdown-it-py matches HTML tag names case-insensitively in Unicode (<scrıpt> as <script>), CommonMark in ASCII.
-_TAG_NAME = re.compile(r" {0,3}<[/!?]?([^\s/>\[]*)")
+_LEAF_BLOCKS = ("paragraph_open", "heading_open", "hr", *_CODE_BLOCKS)
+# markdown-it-py matches with Python's Unicode regexes where CommonMark means ASCII: \s takes these
+# characters for whitespace and re.IGNORECASE takes İ, ı, ſ and the Kelvin sign for ASCII letters, so
+# <scrıpt> would open a <script> block. CommonMark reads them as ordinary characters, as "^" is read; Forge
+# parses with each replaced by "^", which keeps every offset.
+_UNICODE_SPACES = "\x1c\x1d\x1e\x1f\x85\xa0\u1680\u2000\u2001\u2002\u2003\u2004\u2005\u2006\u2007\u2008\u2009\u200a\u2028\u2029\u202f\u205f\u3000"
+_ASCII_FOLDING = "\u0130\u0131\u017f\u212a"
+_REGEX_SPECIAL = str.maketrans(dict.fromkeys(_UNICODE_SPACES + _ASCII_FOLDING, "^"))
+# CommonMark limits a link label to 999 characters; markdown-it-py takes a longer one as a reference
+# definition and swallows the rest of its line. A longer label is no link without a definition.
+_LONG_LABEL = re.compile(r"\[(?:[^\[\]\\]|\\.){1000,}\]:", re.S)
+_CACHED_BYTES = 64 * 1024
+
+
+def _nesting_guard(state, *arguments) -> bool:
+    """First rule of every chain: notes when parsing reaches the level where markdown-it stops parsing."""
+    if state.level >= _MAX_NESTING - 1:
+        state.env["too_deep"] = True
+    return False
 
 
 def _markdown_parser() -> MarkdownIt:
     parser = MarkdownIt("commonmark", {"maxNesting": _MAX_NESTING})
-    # Link destinations as written, escapes resolved: a relative link is a file path, not a URL to encode.
+    # Destinations as written, escapes resolved: a relative link is a file path, and Forge classifies schemes.
     parser.normalizeLink = lambda url: url
+    parser.validateLink = lambda url: True
+    parser.block.ruler.before("table" if "table" in parser.block.ruler.get_all_rules() else "code", "nesting_guard",
+                              _nesting_guard)
+    parser.inline.ruler.before("text", "nesting_guard", _nesting_guard)
     return parser
 
 
@@ -482,20 +503,36 @@ class UnreadableMarkdown(ValueError):
     """Text markdown-it-py would read differently from CommonMark or not at all; checks fail and writers refuse on it."""
 
 
-@lru_cache(maxsize=32)
 def _parse(markdown: str) -> tuple[tuple, dict]:
-    """CommonMark tokens and reference definitions; UnreadableMarkdown where the parser would misread the text."""
+    """CommonMark tokens and reference definitions; UnreadableMarkdown where markdown-it-py would misread."""
+    if len(markdown) <= _CACHED_BYTES:
+        return _parse_cached(markdown)
+    return _parse_text(markdown)
+
+
+def _parse_text(markdown: str) -> tuple[tuple, dict]:
+    if _LONG_LABEL.search(markdown):
+        raise UnreadableMarkdown("a bracketed text longer than CommonMark's 999-character link label")
     env: dict = {}
-    tokens = _PARSER.parse(markdown, env)
-    deepest = max((token.level for block in tokens for token in (block, *(block.children or ()))), default=0)
-    if deepest >= _MAX_NESTING - 1:
+    tokens = tuple(_PARSER.parse(markdown.translate(_REGEX_SPECIAL), env))
+    if env.get("too_deep"):
         raise UnreadableMarkdown(f"blocks or inline elements nested {_MAX_NESTING - 1} or more levels deep")
+    # markdown-it ends a paragraph after a reference definition; CommonMark continues it, so a line that
+    # cannot interrupt a paragraph (indented code, a lone tag line) is text there, not a block.
+    leaf = {line for token in tokens if token.type in _LEAF_BLOCKS and token.map for line in range(*token.map)}
+    lines = [line for _, line in _line_offsets(markdown)]
     for token in tokens:
-        name = _TAG_NAME.match(token.content) if token.type == "html_block" else None
-        if name and not name.group(1).isascii():
-            raise UnreadableMarkdown(f"line {token.map[0] + 1}: an HTML tag name with non-ASCII letters, which "
-                                     "CommonMark does not read as a tag")
-    return tuple(tokens), env.get("references", {})
+        if token.type in ("code_block", "html_block") and token.map and token.map[0] > 0:
+            above = token.map[0] - 1
+            if above not in leaf and lines[above].strip(" \t>"):
+                raise UnreadableMarkdown(f"line {token.map[0] + 1}: a code or HTML block directly below a link "
+                                         "reference definition; put a blank line between them")
+    return tokens, env.get("references", {})
+
+
+_parse_cached = lru_cache(maxsize=32)(_parse_text)
+_parse.cache_clear = _parse_cached.cache_clear
+_parse.cache_info = _parse_cached.cache_info
 
 
 def _line_offsets(markdown: str) -> list[tuple[int, str]]:

@@ -338,6 +338,78 @@ class ContainerTest(unittest.TestCase):
         self.assertEqual(coverage("# Repro\n\n" + deep), "fail")
 
 
+class ParserDeviationTest(unittest.TestCase):
+    """Where markdown-it-py reads other than CommonMark, Forge reads as CommonMark or refuses (Codex review round 1)."""
+
+    def links(self, body, extra=None):
+        files = {".agents/skills/s/SKILL.md": ("---\nname: s\ndescription: d\n---\n" + body).encode(),
+                 ".agents/skills/s/ok.md": b"Fine.\n", **(extra or {})}
+        return check_relative_references(files, {}, {})
+
+    def test_unicode_letters_and_spaces_are_no_tag_names_or_whitespace(self):
+        hidden = "<script>\n</scr\u0131pt>\n## Outside controls\n\n- `event-gate` (part B): recommended, not verified.\n"
+        self.assertIsNone(markdown_section("# T\n\n" + hidden, "Outside controls"), "the block is still open")
+        self.assertEqual(coverage("# T\n\n" + hidden), "fail")
+        for body in ("<script\u00a0>\n[broken](missing.md)\n\n## Real\n", "<custom>\u00a0\n[broken](missing.md)\n",
+                     "<\u017fcript>\n[broken](missing.md)\n", "<scr\u0131pt>\n[broken](missing.md)\n"):
+            with self.subTest(body=body):
+                self.assertEqual(self.links(body)[0], "fail")
+        self.assertIn("Real", [title for _, _, title in markdown_headings("<script\u00a0>\n\n## Real\n")])
+
+    def test_the_replaced_characters_are_every_one_python_reads_unlike_commonmark(self):
+        import re
+        from harness_forge.documents import _ASCII_FOLDING, _UNICODE_SPACES
+        characters = [chr(code) for code in range(0x110000)]
+        self.assertEqual(set(_UNICODE_SPACES), {c for c in characters if c.isspace() and c not in " \t\n\r\x0b\x0c"})
+        folding = {c for c in characters if not c.isascii() and re.fullmatch("[a-z]", c, re.I)}
+        self.assertEqual(set(_ASCII_FOLDING), folding)
+
+    def test_comments_and_processing_instructions_may_hold_any_text(self):
+        for text in ("<!--\u00e9-->\n\n# Title\n", "<?\u03c0?>\n\n# Title\n"):
+            with self.subTest(text=text):
+                self.assertEqual([title for _, _, title in markdown_headings(text)], ["Title"])
+
+    def test_a_block_right_after_a_reference_definition_is_refused(self):
+        from harness_forge.documents import UnreadableMarkdown
+        for body in ("[a]: ok.md\n    [broken](missing.md) $ARGUMENTS\n", "[a]: ok.md\n<custom>\n[broken](missing.md)\n",
+                     "> [a]: ok.md\n>     [broken](missing.md)\n"):
+            with self.subTest(body=body):
+                with self.assertRaises(UnreadableMarkdown):
+                    markdown_headings(body)
+                self.assertEqual(self.links(body)[0], "fail")
+        self.assertEqual(self.links("[a]: ok.md\n\n    [example](missing.md)\n")[0], "pass",
+                         "after a blank line, indented code is code in CommonMark too")
+
+    def test_inline_lookahead_at_the_nesting_limit_is_refused(self):
+        from harness_forge.documents import UnreadableMarkdown
+        body = "[" * 21 + "Required](missing.md)\n"
+        with self.assertRaises(UnreadableMarkdown):
+            markdown_headings(body)
+        self.assertEqual(self.links(body)[0], "fail")
+
+    def test_an_overlong_reference_label_is_refused(self):
+        from harness_forge.documents import UnreadableMarkdown
+        body = "[" + "a" * 1000 + ']: ok.md "[broken](missing.md)"\n'
+        with self.assertRaises(UnreadableMarkdown):
+            markdown_headings(body)
+        self.assertEqual(self.links(body)[0], "fail")
+
+    def test_file_destinations_are_kept(self):
+        status, reason = self.links("[required](< file:missing.md>)\n")
+        self.assertEqual(status, "fail", "with its leading space the destination has no scheme: a relative path")
+        self.assertIn("file:missing.md", reason)
+        from harness_forge.documents import markdown_links
+        self.assertEqual(markdown_links("[a](file:missing.md) [b](javascript:x)\n"), ["file:missing.md", "javascript:x"])
+
+    def test_large_documents_are_not_kept_in_memory(self):
+        from harness_forge.documents import _parse
+        _parse.cache_clear()
+        markdown_headings("# Big\n" * 20000)
+        self.assertEqual(_parse.cache_info().currsize, 0)
+        markdown_headings("# Small\n")
+        self.assertEqual(_parse.cache_info().currsize, 1)
+
+
 class ReportLinesTest(unittest.TestCase):
     def test_no_worker_or_run_text_starts_a_line_of_the_report(self):
         from harness_forge.report import render_report
