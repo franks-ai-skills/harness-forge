@@ -364,9 +364,14 @@ def _reads_only(item: dict, candidate: set[str]) -> bool:
     reader = posixpath.basename(reader)
     if reader not in _READ_OPTIONS:
         return False
-    operands, needs_number, script = [], False, reader != "sed"
+    # BSD getopt, as on macOS, ends the options at "--" or at the first other word; later words are files.
+    operands, needs_number, script, options = [], False, reader != "sed", True
     for word in words:
-        if needs_number:
+        if not options:
+            operands.append(posixpath.normpath(word))
+        elif word == "--" and not needs_number:
+            options = False
+        elif needs_number:
             if not re.fullmatch(r"[+-]?\d+", word):
                 return False
             needs_number = False
@@ -379,9 +384,10 @@ def _reads_only(item: dict, candidate: set[str]) -> bool:
         elif not script:
             if not re.fullmatch(_PRINT_SCRIPT, word):
                 return False
-            script = True
+            script, options = True, False
         else:
             operands.append(posixpath.normpath(word))
+            options = False
     return not needs_number and script and len(operands) == 1 and operands[0] in candidate
 
 

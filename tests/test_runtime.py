@@ -439,6 +439,8 @@ class RuntimeTest(unittest.TestCase):
         for label, text in (("sed reading another file", f"sed -n '1r fixtures/copied-skill.md' {SKILL_DIR}/SKILL.md"),
                             ("a fixture named like a number", f"sed -n '1,20p' 123 {SKILL_DIR}/SKILL.md"),
                             ("awk", f"awk '1' {SKILL_DIR}/SKILL.md"),
+                            ("an option after the script is a file", f"sed -n '1,20p' -n {SKILL_DIR}/SKILL.md"),
+                            ("an option after the file is a file", f"cat {SKILL_DIR}/SKILL.md -n"),
                             ("empty head, then a copy", f"head -n 0 {SKILL_DIR}/SKILL.md; cat fixtures/copied-skill.md"),
                             ("piped away", f"cat {SKILL_DIR}/SKILL.md | head -n 0; cat fixtures/copied-skill.md"),
                             ("second operand", f"awk 'NR>3' {SKILL_DIR}/SKILL.md fixtures/copied-skill.md"),
@@ -450,7 +452,8 @@ class RuntimeTest(unittest.TestCase):
                             ("sed range", f"sed -n '1,200p' {SKILL_DIR}/SKILL.md"),
                             ("head with a count", f"head -n 400 {SKILL_DIR}/SKILL.md"),
                             ("attached count", f"head -n400 {SKILL_DIR}/SKILL.md"),
-                            ("sed with -e", f"sed -n -e '1,$p' {SKILL_DIR}/SKILL.md")):
+                            ("sed with -e", f"sed -n -e '1,$p' {SKILL_DIR}/SKILL.md"),
+                            ("end of options", f"cat -- {SKILL_DIR}/SKILL.md")):
             with self.subTest(label):
                 result = self.run_cases("codex", command(text) + "\n" + codex_run(read_skill=False))[0][0]
                 self.assertEqual(result.result, "pass", result.reason)
