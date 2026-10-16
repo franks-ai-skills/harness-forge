@@ -70,6 +70,20 @@ class SkillLinkTest(unittest.TestCase):
         self.assertNotIn("Example", without_code(body))
 
 
+class MarkdownExtensionTest(unittest.TestCase):
+    def test_an_uppercase_extension_is_markdown_too(self):
+        """references/EXTRA.MD escaped both link checks (whole-branch review round 2)."""
+        from harness_forge.checks.skills import check_reference_depth
+        files = {".agents/skills/s/SKILL.md": b"---\nname: s\ndescription: d\n---\nRead [x](references/EXTRA.MD).\n",
+                 ".agents/skills/s/references/EXTRA.MD": b"[missing](missing.md) and [other](other.MARKDOWN)\n",
+                 ".agents/skills/s/references/other.MARKDOWN": b"Text.\n"}
+        status, reason = check_relative_references(files, {}, {})
+        self.assertEqual(status, "fail")
+        self.assertIn("missing.md", reason)
+        status, reason = check_reference_depth(files, {}, {})
+        self.assertEqual(status, "fail")
+        self.assertIn("other.MARKDOWN", reason)
+
 class KbAnchorTest(unittest.TestCase):
     def test_a_heading_in_an_indented_fence_has_no_anchor(self):
         text = "# Page\n\n   ```\n## Practices\n   ```\n\n## Real\n"

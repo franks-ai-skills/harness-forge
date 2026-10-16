@@ -7,14 +7,14 @@ from __future__ import annotations
 
 import posixpath
 
-from harness_forge.checks.common import each_skill, relative_links, resolve, skill_dirs, text
+from harness_forge.checks.common import each_skill, is_markdown, relative_links, resolve, skill_dirs, text
 
 
 def check_relative_references(files, facts, params):
     def problem(directory, files):
         found = []
         for path in sorted(files):
-            if not (path.startswith(directory + "/") and path.endswith(".md")):
+            if not (path.startswith(directory + "/") and is_markdown(path)):
                 continue
             for link in relative_links(text(files[path]), frontmatter=path == f"{directory}/SKILL.md"):
                 target = resolve(posixpath.dirname(path), link)

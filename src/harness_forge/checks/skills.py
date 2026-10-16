@@ -8,7 +8,7 @@ from __future__ import annotations
 import posixpath
 import re
 
-from harness_forge.checks.common import each_skill, frontmatter, relative_links, resolve, text, without_code
+from harness_forge.checks.common import each_skill, frontmatter, is_markdown, relative_links, resolve, text, without_code
 from harness_forge.documents import parse_yaml
 
 NAME = re.compile(r"^[a-z0-9]+(-[a-z0-9]+)*$")
@@ -90,10 +90,10 @@ def check_reference_depth(files, facts, params):
     def problem(directory, files):
         found = []
         for path in sorted(files):
-            if path.startswith(directory + "/") and path.endswith(".md") and path != f"{directory}/SKILL.md":
+            if path.startswith(directory + "/") and is_markdown(path) and path != f"{directory}/SKILL.md":
                 for link in relative_links(text(files[path])):
                     target = resolve(posixpath.dirname(path), link)
-                    if target.endswith(".md") and target.startswith(directory + "/") and target != f"{directory}/SKILL.md":
+                    if is_markdown(target) and target.startswith(directory + "/") and target != f"{directory}/SKILL.md":
                         found.append(f"{path} links to {target}")
         return "; ".join(found) or None
 

@@ -18,6 +18,11 @@ LINK = re.compile(r"\]\(\s*" + _DESTINATION + _TITLE + r"\s*\)")
 DEFINITION = re.compile(r"^ {0,3}\[(?!\^)[^\]\n]+\]:[ \t]*\n?[ \t]*" + _DESTINATION, re.M)
 
 
+def is_markdown(path: str) -> bool:
+    """Markdown by extension, in any case: a file system that ignores case serves EXTRA.MD as Markdown too."""
+    return path.lower().endswith((".md", ".markdown"))
+
+
 def skill_dirs(files: dict[str, bytes]) -> list[str]:
     return sorted(path[: -len("/SKILL.md")] for path in files if path.endswith("/SKILL.md"))
 
