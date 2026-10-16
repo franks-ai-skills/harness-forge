@@ -451,9 +451,14 @@ def flows(harness: str, out: Path, *, forge: Forge | None = None,
     return session.finish("completed" if all(checks.values()) else "flows did not hold")
 
 
+def _all_routing_cases(skill: str) -> list[dict]:
+    """Every case of the skill's routing file."""
+    return yaml.safe_load((ROOT / "evals" / skill / "routing.yaml").read_text(encoding="utf-8"))["cases"]
+
+
 def _routing_cases(skill: str) -> list[dict]:
     """One explicit, one implicit positive and one near miss from the skill's routing file."""
-    cases = yaml.safe_load((ROOT / "evals" / skill / "routing.yaml").read_text(encoding="utf-8"))["cases"]
+    cases = _all_routing_cases(skill)
     explicit = next(c for c in cases if c["mode"] == "explicit")
     implicit = next(c for c in cases if c["mode"] == "implicit" and c["expect"] == "trigger")
     near = next(c for c in cases if c["expect"] == "no-trigger")
@@ -474,11 +479,34 @@ def _baseline(harness: str, runner, environ) -> tuple[set[str], set[str] | None,
 def routing_smoke(harness: str, out: Path, *, runner=run_command, environ=None,
                   login_answer: str | None = None) -> dict:
     """Forge's four skills installed together; per skill an explicit, an implicit and a near-miss prompt."""
+    return _routing(harness, out, "routing-smoke", _routing_cases, 1, runner=runner, environ=environ,
+                    login_answer=login_answer)
+
+
+def routing(harness: str, out: Path, *, runner=run_command, environ=None, login_answer: str | None = None,
+            repeats: int = 3) -> dict:
+    """Plan task 14's routing evaluation: every case of every skill's routing file, each run ``repeats`` times
+    in a fresh session, with the pass counts per skill and mode."""
+    summary = _routing(harness, out, "routing", _all_routing_cases, repeats, runner=runner, environ=environ,
+                       login_answer=login_answer)
+    rates: dict[str, dict] = {}
+    for result in summary["results"]:
+        mode = "near_miss" if result["expected"] != "activates" else result["mode"]
+        counts = rates.setdefault(result["skill"], {}).setdefault(mode, {"runs": 0, "passed": 0})
+        counts["runs"] += 1
+        counts["passed"] += result["result"] == "pass"
+    summary["rates"] = rates
+    _write_json(out / "summary.json", summary)
+    return summary
+
+
+def _routing(harness: str, out: Path, name: str, select, repeats: int, *, runner, environ,
+             login_answer: str | None) -> dict:
     environ = os.environ if environ is None else environ
     out.mkdir(parents=True, exist_ok=True)
     runner = Recorder(runner, out / "streams")
-    summary = {"case": "routing-smoke", "harness": harness, "results": [], "status": "stopped", "clean": None,
-               "login_answer": login_answer}
+    summary = {"case": name, "harness": harness, "results": [], "status": "stopped", "clean": None,
+               "login_answer": login_answer, "repeats": repeats}
     checked = preflight(harness, "review", runner=runner, environ=environ, login_answer=login_answer)
     summary["preflight"] = {key: checked[key] for key in ("available", "reason", "version", "login")}
     if not checked["available"]:
@@ -501,8 +529,8 @@ def routing_smoke(harness: str, out: Path, *, runner=run_command, environ=None,
                 files[f".agents/skills/{skill}/{path.relative_to(source).as_posix()}"] = path.read_bytes()
     permitted = ["Skill", "Read"] if harness == "claude-code" else ["command_execution"]
     marker = "/" if harness == "claude-code" else "$"
-    for skill in SKILLS:
-        for case in _routing_cases(skill):
+    for skill, case, repeat in ((skill, case, repeat) for repeat in range(1, repeats + 1) for skill in SKILLS
+                                for case in select(skill)):
             prompt = f"{marker}{skill} {case['prompt']}" if case["mode"] == "explicit" else case["prompt"]
             expected = "activates" if case["expect"] == "trigger" else "does-not-activate"
             # A user-level skill of the same name would answer instead, as run_skill_runtime also refuses.
@@ -514,7 +542,8 @@ def routing_smoke(harness: str, out: Path, *, runner=run_command, environ=None,
                     harness, files, directories, f".agents/skills/{skill}", prompt, expected, permitted, {},
                     runner=runner, environ=environ, baseline=baseline, slash=case["mode"] == "explicit",
                     off=user)
-            summary["results"].append({"skill": skill, "case_id": case["id"], "mode": case["mode"], "prompt": prompt,
+            summary["results"].append({"skill": skill, "case_id": case["id"], "repeat": repeat, "mode": case["mode"],
+                                       "prompt": prompt,
                                        "expected": expected, "result": outcome, "reason": reason,
                                        "observed_activation": activation, "inventory": inventory})
     set_clean(summary, summary["results"])

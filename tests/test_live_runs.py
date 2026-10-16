@@ -262,6 +262,21 @@ class RoutingSmokeTest(unittest.TestCase):
         self.assertEqual(len(runner.worker_calls[2]["files"]),  # after both baseline launches
                          sum(1 for skill in FORGE_SKILLS for p in (FORGE / "skills" / skill).rglob("*") if p.is_file()))
 
+    def test_the_full_routing_run_repeats_every_case_and_counts_per_skill(self):
+        """Plan task 14: about 20 prompts per skill, three repeats, per harness."""
+        with tempfile.TemporaryDirectory(prefix="forge-routing-") as directory:
+            summary = LIVE.routing("claude-code", Path(directory), runner=RoutingRunner(), environ=PARENT, repeats=3)
+        total = sum(len(LIVE._all_routing_cases(skill)) for skill in FORGE_SKILLS)
+        self.assertEqual(len(summary["results"]), total * 3)
+        self.assertEqual({result["repeat"] for result in summary["results"]}, {1, 2, 3})
+        self.assertEqual(summary["case"], "routing")
+        for skill in FORGE_SKILLS:
+            rates = summary["rates"][skill]
+            cases = LIVE._all_routing_cases(skill)
+            self.assertEqual(rates["near_miss"]["runs"], 3 * sum(c["expect"] == "no-trigger" for c in cases))
+            self.assertEqual(rates["near_miss"]["passed"], rates["near_miss"]["runs"], "the scripted runner activates nothing implicitly")
+            self.assertEqual(rates["explicit"], {"runs": 3, "passed": 3})
+
     def test_a_user_skill_makes_the_run_unclean(self):
         summary = self.run_smoke(RoutingRunner(extra_skills=["my-own-skill"]))
         self.assertFalse(summary["clean"])
