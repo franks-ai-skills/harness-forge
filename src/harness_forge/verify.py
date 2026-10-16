@@ -16,6 +16,7 @@ from __future__ import annotations
 import copy
 import hashlib
 import re
+import unicodedata
 from dataclasses import asdict
 
 from harness_forge.checks import REGISTRY
@@ -50,7 +51,9 @@ def case_alias(directory: str, paths) -> str | None:
     for path in sorted(paths):
         relative = path[len(directory) + 1:] if path.startswith(directory + "/") else None
         for resource in RESOURCES:
-            if relative is not None and relative.lower() == resource.lower() and relative != resource:
+            # Folded as a case- and normalization-insensitive file system would, or wider: ſ is s, ａ is a.
+            if (relative is not None and relative != resource
+                    and unicodedata.normalize("NFKC", relative).casefold() == resource.casefold()):
                 return f"{path} is spelled differently from the resource {directory}/{resource}; rename it"
     return None
 

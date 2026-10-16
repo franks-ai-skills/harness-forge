@@ -333,11 +333,12 @@ class VerdictTest(unittest.TestCase):
 class CandidateLinkTest(unittest.TestCase):
     def test_a_resource_in_another_case_is_refused(self):
         scenario = Scenario(skill_decision())
-        alias = f".agents/skills/{NAME}/Agents/openai.yaml"
-        with self.assertRaisesRegex(ValueError, "spelled"):
-            prepare_run(scenario.record, {**scenario.files, alias: b"policy: {allow_implicit_invocation: false}\n"},
-                        RULES, scenario.confirmation, symlinks=scenario.symlinks, revision=REVISION,
-                        kb_version="0.1.0", worker_evidence=EVIDENCE)
+        for alias in (f".agents/skills/{NAME}/Agents/openai.yaml", f".agents/skills/{NAME}/agent\u017f/openai.yaml",
+                      f".agents/skills/{NAME}/agents/open\uff41i.yaml"):
+            with self.subTest(alias=alias), self.assertRaisesRegex(ValueError, "spelled"):
+                prepare_run(scenario.record, {**scenario.files, alias: b"policy: {allow_implicit_invocation: false}\n"},
+                            RULES, scenario.confirmation, symlinks=scenario.symlinks, revision=REVISION,
+                            kb_version="0.1.0", worker_evidence=EVIDENCE)
 
     def test_a_link_inside_a_part_directory_is_refused(self):
         scenario = Scenario(skill_decision())
