@@ -223,6 +223,19 @@ class WriteTest(unittest.TestCase):
         with self.assertRaises(ConflictError):
             write_skill(self.root, plan())
 
+    def test_a_wrong_link_is_replaced_only_when_the_user_names_it(self):
+        elsewhere = self.root / "elsewhere"
+        elsewhere.mkdir()
+        (elsewhere / "keep.md").write_text("kept\n", encoding="utf-8")
+        link = self.root / ".claude" / "skills" / NAME
+        link.parent.mkdir(parents=True)
+        link.symlink_to("../../elsewhere")
+        with self.assertRaises(ConflictError):
+            write_skill(self.root, plan())
+        write_skill(self.root, plan(), replace=[f".claude/skills/{NAME}"])
+        self.assertEqual(str(link.readlink()), f"../../.agents/skills/{NAME}")
+        self.assertEqual((elsewhere / "keep.md").read_text(encoding="utf-8"), "kept\n", "the old target is untouched")
+
     def test_a_file_the_plan_no_longer_has_stays_until_the_user_agrees(self):
         """A rebuild without accepted requirements, or from a command to a skill, plans fewer files."""
         write_skill(self.root, plan(reference_decision(recommended="commands", chosen="commands")))

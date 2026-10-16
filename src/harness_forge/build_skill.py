@@ -210,7 +210,7 @@ def write_skill(root: Path, planned: dict[str, str], *, replace: list[str] | tup
         target = root / key
         if isinstance(value, SymlinkTarget):
             if target.is_symlink():
-                if str(target.readlink()) != value:
+                if str(target.readlink()) != value and key not in replace:
                     conflicts.append(key)
                     diffs.append(f"{key}: links to {target.readlink()}, planned {value}")
             elif target.exists():
@@ -252,6 +252,8 @@ def write_skill(root: Path, planned: dict[str, str], *, replace: list[str] | tup
         target = root / key
         target.parent.mkdir(parents=True, exist_ok=True)
         if isinstance(value, SymlinkTarget):
+            if target.is_symlink() and str(target.readlink()) != value:
+                target.unlink()  # the link only, never its target; the user named it in --replace
             if not target.is_symlink():
                 target.symlink_to(value)
         elif not target.exists() or target.read_text(encoding="utf-8") != value:
