@@ -386,6 +386,23 @@ class RuntimeTest(unittest.TestCase):
                                    baseline_skills={"harness-verify"})[0][0]
         self.assertEqual(near_miss.result, "pass", near_miss.reason)
 
+    def test_a_claude_skill_called_after_another_skill_was_routed_second(self):
+        """The first skill chosen is the routing; a later call to the target is an attempt, not its activation."""
+        from harness_forge.runtime import _decide, _observe_claude
+        events = [{"type": "system", "subtype": "init", "tools": ["Skill"], "skills": [NAME, "harness-intake"],
+                   "plugins": [], "mcp_servers": []},
+                  {"type": "assistant", "message": {"content": [
+                      {"type": "tool_use", "id": "a", "name": "Skill", "input": {"skill": "harness-intake"}},
+                      {"type": "tool_use", "id": "b", "name": "Skill", "input": {"skill": NAME}}]}},
+                  tool_result("a"), tool_result("b"),
+                  {"type": "result", "subtype": "success", "is_error": False, "result": "done"}]
+        observed = _observe_claude("\n".join(json.dumps(event) for event in events) + "\n", NAME,
+                                   {"harness-intake"}, None, ["\0no marker"])
+        self.assertIsNone(observed["activation"])
+        self.assertIn(NAME, observed["attempted"])
+        self.assertEqual(_decide("claude-code", {"expected": "activates"}, observed, ["Skill"])[0], "fail")
+        self.assertEqual(_decide("claude-code", {"expected": "does-not-activate"}, observed, ["Skill"])[0], "fail")
+
     def test_a_codex_read_after_another_skill_is_that_skills_pointer(self):
         def command(text, output):
             return json.dumps({"type": "item.completed", "item": {"id": text[-9:], "type": "command_execution",

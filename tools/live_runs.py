@@ -451,6 +451,11 @@ def flows(harness: str, out: Path, *, forge: Forge | None = None,
     return session.finish("completed" if all(checks.values()) else "flows did not hold")
 
 
+# The reasons for which Codex cannot show a routing result: it reports no inventory, so neither a
+# non-activation nor an unread skill is observable. Counted in the pass rates, not as skipped cases.
+CODEX_UNOBSERVABLE = ("Codex has no observable signal", "Codex showed no observable activation signal")
+
+
 def _all_routing_cases(skill: str) -> list[dict]:
     """Every case of the skill's routing file."""
     return yaml.safe_load((ROOT / "evals" / skill / "routing.yaml").read_text(encoding="utf-8"))["cases"]
@@ -548,6 +553,10 @@ def _routing(harness: str, out: Path, name: str, select, repeats: int, *, runner
                                        "observed_activation": activation, "inventory": inventory})
     set_clean(summary, summary["results"])
     failed = any(result["result"] in ("fail", "error") for result in summary["results"])
-    summary["status"] = "completed with failures" if failed else "completed"
+    # A case that did not run blocks completion, except where Codex cannot show the result at all.
+    skipped = [result for result in summary["results"] if result["result"] == "not-run"
+               and not result["reason"].startswith(CODEX_UNOBSERVABLE)]
+    summary["status"] = ("completed with failures" if failed else
+                         f"incomplete: {len(skipped)} case(s) did not run" if skipped else "completed")
     _write_json(out / "summary.json", summary)
     return summary

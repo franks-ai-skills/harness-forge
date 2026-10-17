@@ -277,6 +277,21 @@ class RoutingSmokeTest(unittest.TestCase):
             self.assertEqual(rates["near_miss"]["passed"], rates["near_miss"]["runs"], "the scripted runner activates nothing implicitly")
             self.assertEqual(rates["explicit"], {"runs": 3, "passed": 3})
 
+    def test_cases_that_did_not_run_keep_the_routing_run_from_completing(self):
+        """Codex review: every case timing out still reported completed and exit code 0."""
+        class TimingOut(RoutingRunner):
+            def __call__(self, command, *, cwd, env, stdin, timeout):
+                launched = len(self.worker_calls)
+                answer = super().__call__(command, cwd=cwd, env=env, stdin=stdin, timeout=timeout)
+                if len(self.worker_calls) > launched and stdin != BASELINE_PROMPT:
+                    return Completed(124, "", "", True)
+                return answer
+        with tempfile.TemporaryDirectory(prefix="forge-routing-") as directory:
+            summary = LIVE.routing("claude-code", Path(directory), runner=TimingOut(), environ=PARENT, repeats=1)
+        self.assertTrue(summary["results"] and all(result["result"] == "not-run" for result in summary["results"]))
+        self.assertNotEqual(summary["status"], "completed")
+        self.assertEqual(LIVE.exit_code(summary), 1)
+
     def test_a_user_skill_makes_the_run_unclean(self):
         summary = self.run_smoke(RoutingRunner(extra_skills=["my-own-skill"]))
         self.assertFalse(summary["clean"])

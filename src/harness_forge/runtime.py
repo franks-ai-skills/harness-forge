@@ -225,7 +225,12 @@ def _observe_claude(stdout: str, name: str, baseline: set[str], workspace: Path 
                 signal = None
                 if block.get("name") == "Skill":
                     if name in (arguments.get("skill"), arguments.get("command")):
-                        signal = f"Skill tool called for {name}"
+                        if other_skill:
+                            # Another skill was chosen first: the target ran after it, as Codex's first read decides.
+                            observed["attempted"] = observed["attempted"] or f"Skill tool called for {name} after " \
+                                                                              "another skill"
+                        else:
+                            signal = f"Skill tool called for {name}"
                     else:
                         other_skill = True
                 elif block.get("name") == "Read" and observed["activation"] is None and not other_skill:
