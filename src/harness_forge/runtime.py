@@ -484,27 +484,32 @@ def _decide(harness: str, test_case: dict, observed: dict, permitted: list[str])
         if activated:
             return "pass", observed["activation"]
         if harness == "codex":
-            return "not-run", "Codex showed no observable activation signal"
+            return "not-run", UNOBSERVABLE["codex"][1]
         return "fail", "the skill was not activated"
     attempted = observed.get("attempted") or observed["activation"]
     if attempted:
         return "fail", f"activated on a near miss: {attempted}"
     if harness == "codex":
-        return "not-run", "Codex has no observable signal that proves non-activation"
+        return "not-run", UNOBSERVABLE["codex"][0]
     return "pass", "no Skill tool call for the candidate"
 
 
-def outcome_problem(result, case: dict) -> str | None:
+def outcome_problem(result, case: dict, candidate: Mapping[str, bytes] | None = None) -> str | None:
     """Why this runtime could not have produced ``result`` for ``case``, or None.
 
     What a case observed is the harness's to say; which outcomes follow from
     it, and which configurations run at all, is fixed here: Claude runs only
-    with contained tools, Codex cannot prove a non-activation, and a pass
-    agrees with the activation it observed.
+    with contained tools, a fixture that would replace one of the
+    ``candidate`` files stops the case with an error, Codex cannot prove a
+    non-activation, and a pass agrees with the activation it observed.
     """
     permitted = case["permitted_tools"].get(result.harness)
     if permitted is None:
         return f"case {case['id']} names no permitted tools for {result.harness}"
+    for path in (case.get("fixtures") or {}) if candidate is not None else ():
+        problem = fixture_problem(path, candidate)
+        if problem and result.result != "error":
+            return f"case {case['id']}: {problem}, so the runtime does not run it"
     uncontained = [tool for tool in permitted if result.harness == "claude-code" and tool not in CLAUDE_CONTAINED]
     if uncontained and result.result != "not-run":
         return f"case {case['id']} permits {', '.join(uncontained)}, so Claude Code does not run it"
@@ -519,6 +524,12 @@ def outcome_problem(result, case: dict) -> str | None:
     if result.expected == "does-not-activate" and result.observed_activation:
         return f"case {case['id']} passed although it observed an activation ({result.observed_activation!r})"
     return None
+
+
+# The not-run reasons that say Codex cannot observe the outcome, not that the case was skipped: a Codex run
+# gives one for every near miss, and for an implicit activation it could not see.
+UNOBSERVABLE = {"codex": ("Codex has no observable signal that proves non-activation",
+                          "Codex showed no observable activation signal")}
 
 
 def _markers(files: Mapping[str, bytes], target: str) -> list[str]:

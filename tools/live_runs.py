@@ -52,7 +52,7 @@ from harness_forge.adapters.base import preflight, run_command  # noqa: E402
 from harness_forge.contracts import write_decision  # noqa: E402
 from harness_forge.documents import load_document  # noqa: E402
 from harness_forge.models import Decision  # noqa: E402
-from harness_forge.runtime import activation_case, claude_skill_origins, shadowing  # noqa: E402
+from harness_forge.runtime import UNOBSERVABLE, activation_case, claude_skill_origins, shadowing  # noqa: E402
 
 TEST_RELAY = "confirmed by the test runner it was started with, not by a user in a session"
 UNCLEAN = ("competing skill", "executable components", "user-level skill named", "outside the throwaway workspace")
@@ -453,7 +453,7 @@ def flows(harness: str, out: Path, *, forge: Forge | None = None,
 
 # The reasons for which Codex cannot show a routing result: it reports no inventory, so neither a
 # non-activation nor an unread skill is observable. Counted in the pass rates, not as skipped cases.
-CODEX_UNOBSERVABLE = ("Codex has no observable signal", "Codex showed no observable activation signal")
+CODEX_UNOBSERVABLE = UNOBSERVABLE["codex"]
 
 
 def _all_routing_cases(skill: str) -> list[dict]:

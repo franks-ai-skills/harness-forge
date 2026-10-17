@@ -462,6 +462,24 @@ class RuntimeTest(unittest.TestCase):
         ]
         self.assertTrue(all(problems), problems)
 
+    def test_outcome_problem_refuses_results_of_a_case_whose_fixture_replaces_the_candidate(self):
+        """The runtime gives such a case an error before it runs; any other result was not made by it."""
+        from harness_forge.models import RuntimeResult
+        from harness_forge.runtime import UNOBSERVABLE, outcome_problem
+        candidate = {f"vendor/skills/{NAME}/SKILL.md": b"skill"}
+        case = {"id": "c", "expected": "activates", "prompt": "p", "permitted_tools": {"claude-code": ["Skill"]},
+                "fixtures": {f"vendor/skills/{NAME}/SKILL.md": "replaced"}}
+
+        def result(outcome, activation=None):
+            return RuntimeResult(run_id="r", part_id="A", case_id="c", prompt="p", expected="activates",
+                                 observed_activation=activation, result=outcome, reason="-", file_hashes={},
+                                 harness="claude-code", harness_version="1", environment="-", inventory="observed")
+
+        self.assertIn("would replace the candidate",
+                      outcome_problem(result("pass", f"Skill tool called for {NAME}"), case, candidate))
+        self.assertIsNone(outcome_problem(result("error"), case, candidate))
+        self.assertTrue(all(reason.startswith("Codex") for reason in UNOBSERVABLE["codex"]))
+
     def test_batched_calls_route_to_the_first_skill_whose_call_succeeded(self):
         """Calls in one message count in their order once their results are in, whatever order those arrive in."""
         from harness_forge.runtime import _observe_claude
