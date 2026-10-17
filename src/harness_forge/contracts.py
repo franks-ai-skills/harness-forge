@@ -588,15 +588,17 @@ FORGE_CONDITIONS = {
                                           "drifts silently",
 }
 EVERY_CONTROL = ("outside.gate.real-refs", "outside.gate.periodic-verification")
-# The agent-config paths of the KB's outside-gates guide, per target harness; skills live in .agents/ for both.
-AGENT_CONFIG = {"claude-code": ("`.claude/`", "`CLAUDE.md`"), "codex": ("`.codex/`", "`AGENTS.md`", "`AGENTS.override.md`")}
+# The agent-config paths the KB's configuration and outside-gates guides name for owner review, per target
+# harness; skills live in .agents/ for both.
+AGENT_CONFIG = {"claude-code": ("`.claude/`", "`CLAUDE.md`", "`.mcp.json`"),
+                "codex": ("`.codex/`", "`AGENTS.md`", "`AGENTS.override.md`")}
 
 
 def _codeowners_condition(targets: list[str]) -> str:
     paths = ["`.agents/`", *dict.fromkeys(path for target in targets for path in AGENT_CONFIG.get(target, ()))]
-    return (f"A CODEOWNERS entry names an owner for the agent's configuration ({', '.join(paths[:-1])} and "
-            f"{paths[-1]}), the CI workflow files and the CODEOWNERS file itself, and the branch rule requires "
-            "code-owner review")
+    return (f"A CODEOWNERS entry names an owner for every file that configures the agent, including "
+            f"{', '.join(paths)}, `.devcontainer/`, the CI workflow files and the CODEOWNERS file itself, and the "
+            "branch rule requires code-owner review")
 
 
 def _outside_section(decision: Decision, conditions: dict[str, str]) -> str:

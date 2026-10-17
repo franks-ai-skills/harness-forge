@@ -165,13 +165,14 @@ class ReadmeTest(unittest.TestCase):
         for named in ("`.codex/`", "`AGENTS.md`", "`AGENTS.override.md`", "`.agents/`"):
             self.assertIn(named, codex)
             self.assertIn(named, both)
-        for named in ("`.claude/`", "`CLAUDE.md`", "`.agents/`"):
+        for named in ("`.claude/`", "`CLAUDE.md`", "`.mcp.json`", "`.agents/`"):
             self.assertIn(named, claude)
             self.assertIn(named, both)
         self.assertNotIn("`.claude/`", codex)
         self.assertNotIn("`.codex/`", claude)
         for text in (codex, claude, both):
-            self.assertIn("the CI workflow files and the CODEOWNERS file itself", text)
+            self.assertIn("every file that configures the agent, including", text)
+            self.assertIn("`.devcontainer/`, the CI workflow files and the CODEOWNERS file itself", text)
 
     def test_unrelated_content_is_preserved_and_section_replaced(self):
         original = "# Repro\n\nIntro.\n\n## Outside controls\n\n- `old-control` (part A): recommended, not verified. Precaution; availability available.\n\n## Usage\n\nRun it.\n"
