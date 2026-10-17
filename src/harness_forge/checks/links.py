@@ -1,10 +1,11 @@
 # SPDX-License-Identifier: AGPL-3.0-only
 # Licensed under AGPLv3 together with the Harness Forge Generated Output
 # Exception; see LICENSE-OUTPUT-EXCEPTION.
-"""Link checkers: references inside a skill and the portable symlink."""
+"""Link checkers: references inside a skill, the portable symlink and the plugin layout."""
 
 from __future__ import annotations
 
+import json
 import posixpath
 
 from harness_forge.checks.common import each_skill, is_markdown, relative_links, resolve, skill_dirs, text
@@ -47,7 +48,37 @@ def check_portable_symlink(files, facts, params):
     return ("fail", "; ".join(problems)) if problems else ("pass", f"{len(directories)} skill(s) linked")
 
 
+PLUGIN_MANIFESTS = ("plugin.json", ".codex-plugin/plugin.json")
+
+
+def check_plugin_layout(files, facts, params):
+    """Each skill is skills/<name>/ under a plugin root that holds a JSON manifest Codex reads."""
+    directories = skill_dirs(files)
+    if not directories:
+        return "fail", "no SKILL.md in the checked files"
+    problems = []
+    for directory in directories:
+        parent = posixpath.dirname(directory)
+        if posixpath.basename(parent) != "skills":
+            problems.append(f"{directory}: a plugin skill must be skills/<name>/ under the plugin root")
+            continue
+        root = posixpath.dirname(parent)
+        manifests = [posixpath.join(root, name) for name in PLUGIN_MANIFESTS]
+        found = [path for path in manifests if path in files]
+        if not found:
+            problems.append(f"{directory}: the plugin root {root or '.'} holds neither {' nor '.join(manifests)}")
+            continue
+        try:
+            manifest = json.loads(text(files[found[0]]))
+        except (UnicodeDecodeError, ValueError):
+            manifest = None
+        if not isinstance(manifest, dict):
+            problems.append(f"{found[0]} is not a JSON object")
+    return ("fail", "; ".join(problems)) if problems else ("pass", f"{len(directories)} plugin skill(s) laid out")
+
+
 REGISTRY = {
     "links.relative-references": ("1.4.0", check_relative_references),
     "links.portable-symlink": ("1.0.0", check_portable_symlink),
+    "links.plugin-layout": ("1.0.0", check_plugin_layout),
 }

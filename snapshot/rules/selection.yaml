@@ -11,7 +11,9 @@
 # hook's handler; the first that holds applies, whether the mechanism is
 # built, reused or offered as an alternative. Every matching control
 # rule applies. reuse_confirmed is derived from
-# researched candidates, never asked. Encodes docs/overview.md and the
+# researched candidates, never asked. skill_home is where a part's skill
+# lives: repository for .agents/skills/, plugin for a plugin's skills/;
+# Forge derives it from the part, never asks. Encodes docs/overview.md and the
 # outside-gates intake questions (2026-10-09).
 facts:
 - id: target_set
@@ -192,6 +194,11 @@ facts:
   values:
   - true
   - false
+- id: skill_home
+  scope: part
+  values:
+  - repository
+  - plugin
 - id: outcome
   scope: part
   values:

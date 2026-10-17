@@ -105,7 +105,7 @@ Traps:
 - **OpenCode sees two copies.** With both directories populated, OpenCode discovers the skill twice, and it requires names to be unique across all locations ([skills][oc-skills]). Whether it deduplicates a symlinked duplicate is not recorded. `OPENCODE_DISABLE_CLAUDE_CODE_SKILLS=1` stops OpenCode from reading Claude Code skills ([skills][oc-skills]).
 - **Cloud runs ignore user scope.** Claude Code cloud sessions and routines do not read `~/.claude/skills/`; they load skills committed to the repository plus account-synced skills ([skills][cc-skills]). Commit skills that automation needs.
 - **Installer location.** Codex's `$skill-installer` writes to `$CODEX_HOME/skills`, which the source marks as deprecated, so a skill installed that way is not visible to Claude Code ([skills][cx-skills]).
-- **Plugins.** Both leads load `skills/<name>/SKILL.md` from plugins. Plugin packaging is covered in the vendor plugin pages ([Claude Code plugins][cc-plugins], [Codex plugins][cx-plugins]).
+- **Plugins.** Both leads load `skills/<name>/SKILL.md` from plugins, so a plugin skill needs no `.agents/skills/` copy or `.claude/skills/` link. Codex reads a plugin through the `plugin.json` manifest at its root, with `.codex-plugin/plugin.json` as a fallback; Claude Code's `.claude-plugin/plugin.json` is optional. Plugin packaging is covered in the vendor plugin pages ([Claude Code plugins][cc-plugins], [Codex plugins][cx-plugins]).
 
 ### Frontmatter
 

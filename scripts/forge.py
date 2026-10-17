@@ -56,7 +56,7 @@ from harness_forge.workflow import research_pass, verify_live  # noqa: E402
 from harness_forge.scope import affected_parts, earlier_run, preserved_parts, review_scope, settled  # noqa: E402
 from harness_forge.verify import (  # noqa: E402
     NEEDS_CONFIRMATION, affecting_rules, bound_inputs, case_alias, exclusion_token, finish_run, open_blocking_drift,
-    part_kind, prepare_run, selection_citations, selection_failures,
+    part_kind, plugin_manifests, prepare_run, selection_citations, selection_failures, skill_home,
 )
 from harness_forge.models import ReviewResponse, RuntimeResult  # noqa: E402
 from harness_forge.selection import (  # noqa: E402
@@ -478,6 +478,17 @@ def collect_target(root: Path, decision) -> tuple[dict[str, bytes], dict[str, st
         alias = case_alias(directory, files)
         if alias:
             raise _InvalidInput(alias)
+        if skill_home(part) == "plugin":
+            # The manifest Codex reads the plugin through: checked and bound with the part's skill.
+            for manifest in plugin_manifests(directory):
+                try:
+                    path = safe_path(root, manifest)
+                except ValueError as error:
+                    raise _InvalidInput(str(error)) from error
+                if path.is_file() and not path.is_symlink():
+                    if path.stat().st_size > 1024 * 1024:
+                        raise _InvalidInput(f"{manifest}: too large")
+                    files[manifest] = path.read_bytes()
     return files, symlinks
 
 
