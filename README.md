@@ -169,6 +169,11 @@ limits what those tests can prove:
 | Claude Code | The cases run without a sandbox, so only the `Skill`, `Read`, `Grep` and `Glob` tools can be permitted. Skills that stay listed with bundled skills turned off (your own, or built-ins that this setting keeps, such as `design`, `doctor` and `plugin-authoring` in 2.1.296) are turned off for each case with `skillOverrides`; a skill that still loads makes the case `not-run`. An explicit `/skill` invocation in print mode leaves no observable signal, so such a case reports `not-run`, not a pass. |
 | Codex | Codex does not report which skills, plugins and MCP servers it loaded, so its runs are best-effort: `clean` is null and the summary states the gap. Activation counts only when Codex prints the skill's whole `SKILL.md` with one reading command that names no other file, or with one `cat` whose first file it is and whose output starts with it; a read chained with other commands reports `not-run`. A near-miss case has no signal that proves non-activation and reports `not-run`. Codex 0.162 starts a `codex-code-mode-host` helper by default; on macOS, when the Homebrew cask installed it, Gatekeeper can stop its first launch at a prompt. |
 
+A reused skill that ships in a plugin (`skills/<name>/` beside the
+plugin's `plugin.json`) gets its static checks and review, but its
+runtime cases report `not-run` in both harnesses: a plugin skill loads
+through plugin installation, which the throwaway workspace does not do.
+
 ## Markdown reading
 
 Forge reads Markdown to find headings and sections, to skip code when it

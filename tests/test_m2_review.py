@@ -167,7 +167,7 @@ class AncestorSymlinkTest(unittest.TestCase):
 class PluginSkillCheckTest(unittest.TestCase):
     """Forge's own case: `check` on a repository whose reused skill ships in a plugin at the root."""
 
-    def check(self, manifest):
+    def check(self, manifest, path=f"skills/{NAME}"):
         import contextlib
         import importlib.util
         import io
@@ -176,15 +176,15 @@ class PluginSkillCheckTest(unittest.TestCase):
         with tempfile.TemporaryDirectory(prefix="forge-plugin-") as directory:
             root = Path(directory)
             built, _ = build_files(skill_decision())
-            for path, data in built.items():
-                target = root / path.replace(f".agents/skills/{NAME}/", f"skills/{NAME}/")
+            for built_path, data in built.items():
+                target = root / built_path.replace(f".agents/skills/{NAME}/", f"skills/{NAME}/")
                 target.parent.mkdir(parents=True, exist_ok=True)
                 target.write_bytes(data)
             if manifest is not None:
                 (root / "plugin.json").write_bytes(manifest)
             record = skill_decision(outcome="reuse", reuse={
                 "name": NAME, "source": "https://example.com/repro", "license": "MIT", "maintenance": "maintained",
-                "path": f"skills/{NAME}", "skill_home": "plugin"})
+                "path": path, "skill_home": "plugin"})
             (root / "README.md").write_text(update_outside_section("# Repo\n", record), encoding="utf-8")
             decision_path = write_decision(root, record, slug="repro", date="2026-10-17")
             revision = write_revision(root, "repro", REVISION)
@@ -202,6 +202,7 @@ class PluginSkillCheckTest(unittest.TestCase):
     def test_the_plugin_manifest_is_collected_and_checked(self):
         self.assertEqual(self.check(b'{"name": "repro-tools"}\n'), (0, []))
         self.assertEqual(self.check(None), (1, ["skills.portable.plugin-layout"]))
+        self.assertEqual(self.check(b'{"name": "repro-tools"}\n', path=f"skills/{NAME}/"), (0, []))
 
 
 class BlockedPartTest(unittest.TestCase):

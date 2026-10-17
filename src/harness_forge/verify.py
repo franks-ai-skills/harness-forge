@@ -93,7 +93,7 @@ def skill_home(part: dict) -> str | None:
 
 def plugin_manifests(directory: str) -> list[str]:
     """The manifests Codex reads at the root of the plugin that holds skills/<name>/ at ``directory``."""
-    root = posixpath.dirname(posixpath.dirname(directory))
+    root = posixpath.dirname(posixpath.dirname(directory.rstrip("/")))
     return [posixpath.join(root, name) for name in PLUGIN_MANIFESTS]
 
 
@@ -369,6 +369,8 @@ def prepare_run(
             "outside_controls": [{"part_id": part_id, "control": c["control"]} for c in part["outside_controls"]],
             "readme_path": README,
         }
+        # Only Forge decides where the skill lives: a value from the idea's facts or the answers never stands in.
+        facts.pop("skill_home", None)
         if home:
             facts["skill_home"] = home
         part_files = {path: files[path] for path in owned}

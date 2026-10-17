@@ -454,6 +454,7 @@ def collect_target(root: Path, decision) -> tuple[dict[str, bytes], dict[str, st
         directory = f".agents/skills/{part['slug']}" if kind == "build" else (part.get("reuse") or {}).get("path")
         if not directory or kind not in ("build", "local-reuse"):
             continue
+        directory = directory.rstrip("/")  # the schema allows a reused path with a trailing slash
         name = directory.rsplit("/", 1)[-1]
         try:
             base = safe_path(root, directory)

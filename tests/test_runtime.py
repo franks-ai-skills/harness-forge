@@ -78,6 +78,20 @@ class RuntimeTest(unittest.TestCase):
                                     environ=PARENT, **options)
         return results, runner
 
+    def test_a_plugin_skill_has_no_runtime_cases_yet(self):
+        """A plugin skill loads through plugin installation, which the throwaway workspace does not do."""
+        part = self.scenario.run.parts[0]
+        part.update(outcome="reuse", reuse={"name": NAME, "source": "https://example.com/repro", "license": "MIT",
+                                            "maintenance": "maintained", "path": SKILL_DIR, "skill_home": "plugin"})
+        for harness, stream in (("claude-code", claude_run()), ("codex", codex_run())):
+            with self.subTest(harness):
+                # Without given baseline skills, Claude's would come from two launches: none is needed here.
+                (result,), runner = self.run_cases(harness, stream, baseline_skills=None)
+                self.assertEqual(result.result, "not-run")
+                self.assertIn("plugin", result.reason)
+                self.assertTrue(result.reason.startswith("unavailable:"))
+                self.assertFalse(runner.worker_calls, "no case launches")
+
     def test_fixture_paths_that_cannot_all_be_files_stop_the_case_before_it_runs(self):
         """A file and a path below it cannot both be staged: the case is an error, not a crash."""
         from harness_forge.runtime import case_preflight, outcome_problem

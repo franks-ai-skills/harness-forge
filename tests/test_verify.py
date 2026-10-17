@@ -206,11 +206,12 @@ class PrecedenceTest(unittest.TestCase):
                                    revision=REVISION, kb_version="0.1.0", worker_evidence=EVIDENCE)
         assert_result(self, scenario.finish()["A"], "verified", "met by the verified build")
 
-    def plugin_reuse(self, home="plugin"):
+    def plugin_reuse(self, home="plugin", path=f"skills/{NAME}", idea_facts=None):
         """Forge's own case: a reused skill shipped in a plugin, skills/<name>/ beside the plugin's plugin.json."""
         reuse = {"name": NAME, "source": "https://example.com/repro", "license": "MIT", "maintenance": "maintained",
-                 "path": f"skills/{NAME}", **({"skill_home": home} if home else {})}
+                 "path": path, **({"skill_home": home} if home else {})}
         record = skill_decision(outcome="reuse", reuse=reuse)
+        record.record["facts"].update(idea_facts or {})
         built, _ = build_files(skill_decision())
         files = {path.replace(f".agents/skills/{NAME}/", f"skills/{NAME}/"): data for path, data in built.items()}
         files.update({"README.md": readme(record), "plugin.json": b'{"name": "repro-tools"}\n'})
@@ -238,8 +239,17 @@ class PrecedenceTest(unittest.TestCase):
         result = self.finish_plugin(record, {**files, "plugin.json": b'{"name": "other-tools"}\n'}, run)
         self.assertNotEqual(result.harness_result, "verified")
 
+    def test_a_plugin_path_with_a_trailing_slash_binds_the_same_manifest(self):
+        _, _, _, run = self.plugin_reuse(path=f"skills/{NAME}/")
+        self.assertIn("plugin.json", run.part_files["A"])
+
     def test_a_reused_skill_outside_agents_skills_needs_its_home(self):
-        record, files, _, run = self.plugin_reuse(home=None)
+        for idea_facts in ({}, {"skill_home": "repository"}, {"skill_home": False}):
+            with self.subTest(idea_facts=idea_facts):
+                self.assert_unresolved_home(idea_facts)
+
+    def assert_unresolved_home(self, idea_facts):
+        record, files, _, run = self.plugin_reuse(home=None, idea_facts=idea_facts)
         result = self.finish_plugin(record, files, run)
         self.assertEqual(result.harness_result, "not verified")
         unresolved = {r["rule_id"]: r["reason"] for r in result.rule_results if r["result"] == "error"}
