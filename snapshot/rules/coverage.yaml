@@ -519,7 +519,10 @@ pages:
       rules:
       - skills.portable.layout
       - skills.scope.committed-for-automation
-    - text: OpenCode sees two copies; installer location; plugins
+    - text: Plugins load skills/<name>/SKILL.md and need no copy or link
+      rules:
+      - skills.portable.plugin-layout
+    - text: OpenCode sees two copies; installer location
       status: not-a-rule
       reason: Harness facts without a checkable property for Claude Code and Codex builds.
   - section: frontmatter

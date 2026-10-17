@@ -206,6 +206,56 @@ class PrecedenceTest(unittest.TestCase):
                                    revision=REVISION, kb_version="0.1.0", worker_evidence=EVIDENCE)
         assert_result(self, scenario.finish()["A"], "verified", "met by the verified build")
 
+    def plugin_reuse(self, home="plugin", path=f"skills/{NAME}", idea_facts=None):
+        """Forge's own case: a reused skill shipped in a plugin, skills/<name>/ beside the plugin's plugin.json."""
+        reuse = {"name": NAME, "source": "https://example.com/repro", "license": "MIT", "maintenance": "maintained",
+                 "path": path, **({"skill_home": home} if home else {})}
+        record = skill_decision(outcome="reuse", reuse=reuse)
+        record.record["facts"].update(idea_facts or {})
+        built, _ = build_files(skill_decision())
+        files = {path.replace(f".agents/skills/{NAME}/", f"skills/{NAME}/"): data for path, data in built.items()}
+        files.update({"README.md": readme(record), "plugin.json": b'{"name": "repro-tools"}\n'})
+        contract = render_contract(record, REVISION, [], worker_evidence=EVIDENCE)
+        relay = {"choice": "confirm", "displayed_digest": contract.digest, "part_ids": ["A"], "run_id": "run-1"}
+        run = prepare_run(record, files, RULES, confirm_contract(contract, relay, run_id="run-1"), symlinks={},
+                          revision=REVISION, kb_version="0.1.0", worker_evidence=EVIDENCE)
+        return record, files, contract, run
+
+    def finish_plugin(self, record, files, run):
+        current = bound_inputs(record, files, RULES, symlinks={}, revision=REVISION, kb_version="0.1.0",
+                               worker_evidence=EVIDENCE)
+        return finish_run(run, validate_review(run, passing_review(run)), [], current)[0]
+
+    def test_a_reused_plugin_skill_is_checked_by_the_plugin_layout(self):
+        record, files, contract, run = self.plugin_reuse()
+        self.assertIn("skills.portable.plugin-layout", run.applicable_rules["A"])
+        self.assertIn("skills.portable.layout", run.not_applicable["A"])
+        self.assertIn("plugin.json", run.part_files["A"], "the manifest is checked and bound with the part")
+        self.assertIn("plugin", contract.text)
+        assert_result(self, self.finish_plugin(record, files, run), "verified", "met by the verified build")
+
+    def test_a_changed_plugin_manifest_invalidates_the_part(self):
+        record, files, _, run = self.plugin_reuse()
+        result = self.finish_plugin(record, {**files, "plugin.json": b'{"name": "other-tools"}\n'}, run)
+        self.assertNotEqual(result.harness_result, "verified")
+
+    def test_a_plugin_path_with_a_trailing_slash_binds_the_same_manifest(self):
+        _, _, _, run = self.plugin_reuse(path=f"skills/{NAME}/")
+        self.assertIn("plugin.json", run.part_files["A"])
+
+    def test_a_reused_skill_outside_agents_skills_needs_its_home(self):
+        for idea_facts in ({}, {"skill_home": "repository"}, {"skill_home": False}):
+            with self.subTest(idea_facts=idea_facts):
+                self.assert_unresolved_home(idea_facts)
+
+    def assert_unresolved_home(self, idea_facts):
+        record, files, _, run = self.plugin_reuse(home=None, idea_facts=idea_facts)
+        result = self.finish_plugin(record, files, run)
+        self.assertEqual(result.harness_result, "not verified")
+        unresolved = {r["rule_id"]: r["reason"] for r in result.rule_results if r["result"] == "error"}
+        for rule_id in ("skills.portable.layout", "skills.portable.plugin-layout"):
+            self.assertIn("skill_home", unresolved.get(rule_id, ""), result.rule_results)
+
     def test_builder_unavailable_part_is_blocked(self):
         hook = part("B", "Block force pushes", recommended="hooks", chosen="hooks", outside_controls=[])
         result = Scenario(skill_decision(hook), confirmed=("A", "B")).finish()["B"]

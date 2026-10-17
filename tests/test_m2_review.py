@@ -9,7 +9,7 @@ from dataclasses import asdict
 from pathlib import Path
 
 from harness_forge.build_skill import plan_skill
-from harness_forge.contracts import confirm_contract, render_contract, write_decision
+from harness_forge.contracts import confirm_contract, render_contract, update_outside_section, write_decision
 from harness_forge.documents import validate
 from harness_forge.models import Rule
 from harness_forge.report import render_report, report_data
@@ -162,6 +162,47 @@ class AncestorSymlinkTest(unittest.TestCase):
         with contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(io.StringIO()):
             code = module.main(["check", "--decision", str(decision_path), "--root", str(self.root)])
         self.assertEqual(code, 2)
+
+
+class PluginSkillCheckTest(unittest.TestCase):
+    """Forge's own case: `check` on a repository whose reused skill ships in a plugin at the root."""
+
+    def check(self, manifest, path=f"skills/{NAME}"):
+        import contextlib
+        import importlib.util
+        import io
+        from tests.test_verify import build_files
+
+        with tempfile.TemporaryDirectory(prefix="forge-plugin-") as directory:
+            root = Path(directory)
+            built, _ = build_files(skill_decision())
+            for built_path, data in built.items():
+                target = root / built_path.replace(f".agents/skills/{NAME}/", f"skills/{NAME}/")
+                target.parent.mkdir(parents=True, exist_ok=True)
+                target.write_bytes(data)
+            if manifest is not None:
+                (root / "plugin.json").write_bytes(manifest)
+            record = skill_decision(outcome="reuse", reuse={
+                "name": NAME, "source": "https://example.com/repro", "license": "MIT", "maintenance": "maintained",
+                "path": path, "skill_home": "plugin"})
+            (root / "README.md").write_text(update_outside_section("# Repo\n", record), encoding="utf-8")
+            decision_path = write_decision(root, record, slug="repro", date="2026-10-17")
+            revision = write_revision(root, "repro", REVISION)
+            specification = importlib.util.spec_from_file_location(
+                "forge_cli", Path(__file__).resolve().parents[1] / "scripts" / "forge.py")
+            module = importlib.util.module_from_spec(specification)
+            specification.loader.exec_module(module)
+            output, errors = io.StringIO(), io.StringIO()
+            with contextlib.redirect_stdout(output), contextlib.redirect_stderr(errors):
+                code = module.main(["check", "--decision", str(decision_path), "--root", str(root),
+                                    "--revision", str(revision)])
+        self.assertIn(code, (0, 1), errors.getvalue())
+        return code, json.loads(output.getvalue())["parts"][0]["failed_script_rules"]
+
+    def test_the_plugin_manifest_is_collected_and_checked(self):
+        self.assertEqual(self.check(b'{"name": "repro-tools"}\n'), (0, []))
+        self.assertEqual(self.check(None), (1, ["skills.portable.plugin-layout"]))
+        self.assertEqual(self.check(b'{"name": "repro-tools"}\n', path=f"skills/{NAME}/"), (0, []))
 
 
 class BlockedPartTest(unittest.TestCase):

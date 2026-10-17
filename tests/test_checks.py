@@ -12,7 +12,7 @@ from harness_forge.models import Rule
 FORGE = Path(__file__).resolve().parents[1]
 SNAPSHOT = FORGE / "snapshot"
 SKILL = ".agents/skills/repro-checklist"
-BOTH = {"targets": ["claude-code", "codex"], "target_set": "both", "part_id": "A"}
+BOTH = {"targets": ["claude-code", "codex"], "target_set": "both", "part_id": "A", "skill_home": "repository"}
 
 
 def snapshot_rules() -> list[Rule]:
@@ -105,6 +105,31 @@ class BoundaryTest(unittest.TestCase):
             with self.subTest(symlinks=symlinks):
                 self.assertEqual(run_check(rule, files, {**BOTH, "symlinks": symlinks}).status, "fail")
         self.assertEqual(run_check(rule, files, portable_facts()).status, "pass")
+
+    def test_a_plugin_skill_needs_skills_name_under_a_root_with_the_codex_manifest(self):
+        """Both harnesses load a plugin's skills/<name>/SKILL.md; Codex reads the plugin through plugin.json."""
+        rule = snapshot_rule("skills.portable.plugin-layout")
+        facts = {**BOTH, "skill_home": "plugin"}
+        body = b"---\nname: repro-checklist\ndescription: d\n---\nBody.\n"
+        manifest = b'{"name": "repro-tools"}\n'
+        for label, files in (("at the root", {"skills/repro-checklist/SKILL.md": body, "plugin.json": manifest}),
+                             ("in a marketplace", {"plugins/repro/skills/repro-checklist/SKILL.md": body,
+                                                   "plugins/repro/.codex-plugin/plugin.json": manifest})):
+            with self.subTest(label):
+                self.assertEqual(run_check(rule, files, facts).status, "pass")
+        for label, files in (("no Codex manifest", {"skills/repro-checklist/SKILL.md": body,
+                                                    ".claude-plugin/plugin.json": manifest}),
+                             ("a manifest that is not JSON", {"skills/repro-checklist/SKILL.md": body,
+                                                              "plugin.json": b"name: repro-tools\n"}),
+                             ("outside skills/", {"tools/repro-checklist/SKILL.md": body, "plugin.json": manifest})):
+            with self.subTest(label):
+                self.assertEqual(run_check(rule, files, facts).status, "fail")
+        repository = {"skills/repro-checklist/SKILL.md": body, "plugin.json": manifest}
+        self.assertEqual(run_check(rule, repository, BOTH).status, "not-applicable")
+        self.assertEqual(run_check(snapshot_rule("skills.portable.layout"), repository, facts).status,
+                         "not-applicable")
+        unknown = {key: value for key, value in BOTH.items() if key != "skill_home"}
+        self.assertEqual(run_check(rule, repository, unknown).status, "error", "an unknown home decides nothing")
 
     def test_dangling_and_escaping_references_fail(self):
         rule = snapshot_rule("skills.references.resolve")

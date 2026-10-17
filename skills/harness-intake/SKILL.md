@@ -89,7 +89,12 @@ command prints bounded JSON.
    and ask those questions only if the user considers that alternative.
    Describe a reused mechanism from the researched candidate in `reuse`
    and the required `variant`; the output gives no pros or cons for it.
-   Record the candidate's own `variant` in the part's `reuse`. Offer the full assessment of all ten mechanisms as
+   Record the candidate's own `variant` in the part's `reuse`. For a
+   skill already in the repository, record its directory as `path` and
+   where it lives as `skill_home`: `repository` for
+   `.agents/skills/<name>`, `plugin` for `skills/<name>` beside a
+   plugin's `plugin.json`. Ask the user to confirm the home; leave it out
+   when they cannot, and verification reports it as unresolved. Offer the full assessment of all ten mechanisms as
    detail: ruled out (with the conflicting requirement and its source),
    not preferred, or unresolved (with the facts that were not needed to
    decide). Say "ruled out" only where the output does. For each

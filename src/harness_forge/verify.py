@@ -15,10 +15,12 @@ from __future__ import annotations
 
 import copy
 import hashlib
+import posixpath
 import re
 from dataclasses import asdict
 
 from harness_forge.checks import REGISTRY
+from harness_forge.checks.links import PLUGIN_MANIFESTS
 from harness_forge.checks.runner import evaluate_applicability, run_check
 from harness_forge.contracts import confirmation_problem, part_ids_problem
 from harness_forge.documents import canonical_digest, fold_name, validate
@@ -73,6 +75,26 @@ def _skill_dir(part: dict) -> str | None:
     if kind == "local-reuse":
         return part["reuse"]["path"].rstrip("/")
     return None
+
+
+def skill_home(part: dict) -> str | None:
+    """Where the part's skill lives: Forge builds into the repository; a reused skill's home is the one the
+    decision records, or the repository for one under .agents/skills/. None when it is not known."""
+    kind = part_kind(part)
+    if kind == "build":
+        return "repository"
+    if kind != "local-reuse":
+        return None
+    reuse = part["reuse"]
+    if reuse.get("skill_home"):
+        return reuse["skill_home"]
+    return "repository" if reuse["path"].startswith(".agents/skills/") else None
+
+
+def plugin_manifests(directory: str) -> list[str]:
+    """The manifests Codex reads at the root of the plugin that holds skills/<name>/ at ``directory``."""
+    root = posixpath.dirname(posixpath.dirname(directory.rstrip("/")))
+    return [posixpath.join(root, name) for name in PLUGIN_MANIFESTS]
 
 
 def _idea_rules(revision: AcceptedRevision | None) -> dict[str, list[Rule]]:
@@ -321,6 +343,10 @@ def prepare_run(
         run.applicable_rules[part_id] = []
         directory = _skill_dir(part)
         owned = sorted(path for path in files if directory and path.startswith(directory + "/"))
+        home = skill_home(part)
+        if directory and home == "plugin":
+            # The plugin's manifest is part of how both harnesses load the skill: checked and bound with it.
+            owned += [path for path in plugin_manifests(directory) if path in files]
         if part["outside_controls"] and README in files:
             owned.append(README)
         run.part_files[part_id] = owned
@@ -343,6 +369,10 @@ def prepare_run(
             "outside_controls": [{"part_id": part_id, "control": c["control"]} for c in part["outside_controls"]],
             "readme_path": README,
         }
+        # Only Forge decides where the skill lives: a value from the idea's facts or the answers never stands in.
+        facts.pop("skill_home", None)
+        if home:
+            facts["skill_home"] = home
         part_files = {path: files[path] for path in owned}
         if part_kind(part) == "remote-reuse":
             continue

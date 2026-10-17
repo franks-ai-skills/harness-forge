@@ -131,7 +131,8 @@ def _part_text(part: dict) -> list[str]:
         reuse = part["reuse"]
         lines.append(f"  Reused artifact: {reuse['name']} from {reuse['source']}; license {reuse['license']}; "
                      f"maintenance {reuse['maintenance']}; form {reuse.get('variant') or 'not recorded'}; "
-                     f"local path {reuse.get('path') or 'none, not available locally'}")
+                     f"local path {reuse.get('path') or 'none, not available locally'}"
+                     + (f"; skill home {reuse['skill_home']}" if reuse.get("skill_home") else ""))
     if part["outside_controls"]:
         lines.append("  Outside controls (recommended, not verified):")
         for control in part["outside_controls"]:

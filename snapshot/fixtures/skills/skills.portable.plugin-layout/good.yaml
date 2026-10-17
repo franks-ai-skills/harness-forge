@@ -1,0 +1,27 @@
+# Synthetic good case for skills.portable.plugin-layout: the plugin root holds plugin.json.
+facts:
+  targets:
+  - claude-code
+  - codex
+  target_set: both
+  skill_home: plugin
+  part_id: A
+  symlinks: {}
+files:
+  plugins/repro-tools/plugin.json: '{"name": "repro-tools", "version": "1.0.0", "description": "Reproduction checklists."}
+
+    '
+  plugins/repro-tools/skills/repro-checklist/SKILL.md: '---
+
+    name: repro-checklist
+
+    description: Turns an approved bug report into a reproduction checklist with environment, steps, expected and observed behavior. Use when asked for reproduction steps. Not for running the reproducer.
+
+    ---
+
+    # Reproduction checklist
+
+
+    Write the environment, the steps, and the expected and observed behavior.
+
+    '

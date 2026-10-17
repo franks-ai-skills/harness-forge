@@ -67,6 +67,10 @@ checkers:
     version: 1.0.0
     summary: Each skill under .agents/skills/<name>/ has .claude/skills/<name> as a symbolic link with target ../../.agents/skills/<name>.
     params: {type: object, properties: {}, additionalProperties: false}
+  - id: links.plugin-layout
+    version: 1.0.0
+    summary: Each skill directory is skills/<name>/ under a plugin root that holds plugin.json or .codex-plugin/plugin.json.
+    params: {type: object, properties: {}, additionalProperties: false}
   - id: outside.readme-coverage
     version: 1.2.0
     summary: The README section under heading holds only lines Forge writes there and lists every outside control from the decision record with its part letter and status.

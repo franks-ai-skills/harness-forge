@@ -190,12 +190,14 @@ class WriteTest(unittest.TestCase):
         write_skill(self.root, plan())
         files = {p.relative_to(self.root).as_posix(): p.read_bytes()
                  for p in (self.root / ".agents").rglob("*") if p.is_file()}
-        facts = {"targets": ["claude-code", "codex"], "target_set": "both", "part_id": "A",
+        facts = {"targets": ["claude-code", "codex"], "target_set": "both", "part_id": "A", "skill_home": "repository",
                  "symlinks": {f".claude/skills/{NAME}": os.readlink(self.root / ".claude" / "skills" / NAME)}}
         for rule in PINNED:
             if rule.check == "script":
                 with self.subTest(rule=rule.id):
-                    self.assertEqual(run_check(rule, files, facts).status, "pass")
+                    # A built skill lives in the repository, so the plugin layout is not its rule.
+                    expected = "not-applicable" if rule.id == "skills.portable.plugin-layout" else "pass"
+                    self.assertEqual(run_check(rule, files, facts).status, expected)
 
     def test_matching_existing_skill_is_preserved(self):
         planned = plan()

@@ -32,6 +32,7 @@ from harness_forge.adapters import codex
 from harness_forge.adapters.base import Completed, Runner, preflight, run_command, worker_environment
 from harness_forge.documents import fold_name, load_document, safe_path
 from harness_forge.models import RuntimeResult, VerificationRun
+from harness_forge.verify import skill_home
 
 MODES = ("explicit", "implicit", "negative")
 EXPECTED = ("activates", "does-not-activate")
@@ -144,6 +145,10 @@ def claude_skill_origins(runner: Runner, environ: Mapping[str, str], *, timeout:
         return set(), None
     return listed - user, user
 
+
+# A plugin skill loads through plugin installation, which the throwaway workspace does not perform.
+PLUGIN_RUNTIME = ("unavailable: runtime cases for a skill shipped in a plugin are not supported yet; its static "
+                  "checks and review still apply")
 
 UNKNOWN_ORIGINS = "unavailable: Forge could not tell bundled skills from the user's, so nothing is exempt"
 
@@ -753,11 +758,14 @@ def run_skill_runtime(
             raise ValueError(f"case {test_case['id']}: the files are not exactly the part's frozen files")
     environ = os.environ if environ is None else environ
     checked = preflight(harness, "review", runner=runner, environ=environ, login_answer=login_answer)
+    plugin_parts = {part["id"] for part in run.parts if skill_home(part) == "plugin"}
     user_skills: set[str] | None = set()
     if baseline_skills is None:
+        # Two launches tell Claude's bundled skills from the user's; only a case that runs needs them.
+        launches = any(test_case["part_id"] not in plugin_parts for test_case in cases)
         baseline_skills, user_skills = (
             claude_skill_origins(runner, environ, timeout=timeout, workspace_root=workspace_root)
-            if harness == "claude-code" and checked["available"] else (set(), set()))
+            if harness == "claude-code" and checked["available"] and launches else (set(), set()))
     results = []
     for test_case in cases:
         directory = run.part_dirs[test_case["part_id"]]
@@ -788,6 +796,9 @@ def run_skill_runtime(
 
         if not checked["available"]:
             results.append(result("not-run", f"unavailable: {checked['reason']}"))
+            continue
+        if test_case["part_id"] in plugin_parts:
+            results.append(result("not-run", PLUGIN_RUNTIME))
             continue
         stop = case_preflight(harness, test_case, directory, staged, links)
         if stop:

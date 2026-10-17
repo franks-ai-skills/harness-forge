@@ -4,6 +4,7 @@ facts:
   - claude-code
   - codex
   target_set: both
+  skill_home: repository
   part_id: A
   symlinks: {}
 files:
