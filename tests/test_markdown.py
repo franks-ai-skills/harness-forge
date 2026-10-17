@@ -428,6 +428,53 @@ class ParserDeviationTest(unittest.TestCase):
         markdown_headings("```\n" + "\\[" * 32000 + "\n```\n")
         self.assertLess(time.monotonic() - started, 2)
 
+    def test_html_blocks_that_can_interrupt_a_paragraph_do(self):
+        entry = "## Outside controls\n\n- `event-gate` (part B): recommended, not verified.\n"
+        for opener in ("<!--", "<script>", "<div>"):
+            for before in ("Text", "[a]: ok.md"):
+                with self.subTest(opener=opener, before=before):
+                    text = f"# T\n\n{before}\n{opener}\n{entry}"
+                    self.assertIsNone(markdown_section(text, "Outside controls"))
+                    self.assertEqual(coverage(text), "fail")
+
+    def test_a_closing_raw_tag_alone_starts_a_block(self):
+        entry = "## Outside controls\n\n- `event-gate` (part B): recommended, not verified.\n"
+        for name in ("pre", "script", "style", "textarea"):
+            with self.subTest(name=name):
+                self.assertIsNone(markdown_section(f"# T\n\n</{name}>\n{entry}", "Outside controls"))
+
+    def test_reference_labels_match_as_commonmark_normalizes_them(self):
+        for body in ("[a b]: ok.md\n[a\u00a0b]: missing.md\n\n[a\u00a0b]\n", "[I]: ok.md\n[\u0131]: missing.md\n\n[\u0131]\n"):
+            with self.subTest(body=body):
+                status, reason = self.links(body)
+                self.assertEqual(status, "fail")
+                self.assertIn("missing.md", reason)
+        self.assertEqual(self.links("[\u1e9e]: ok.md\n\n[SS]\n")[0], "pass", "Unicode case fold: \u1e9e matches SS")
+
+    def test_a_label_is_measured_as_its_paragraph_reads_it(self):
+        status, reason = self.links("[a\n" + " " * 5000 + "b]: missing.md\n\n[a b]\n")
+        self.assertEqual(status, "fail")
+        self.assertIn("missing.md", reason)
+        markdown_headings("[\n\n" + "a" * 1000 + "]: text\n")
+
+    def test_a_new_container_ends_the_definitions_paragraph(self):
+        for body in ("[a]: ok.md\n>     [example](missing.md)\n", "[a]: ok.md\n- <custom>\n  [example](missing.md)\n"):
+            with self.subTest(body=body):
+                self.assertEqual(self.links(body)[0], "pass")
+
+    def test_unfinished_inline_html_is_not_searched_for_again_at_every_opener(self):
+        """markdown-it-py's own rule took 26 s for 64 KiB of "<?"; markdown-it-py without HTML takes about 0.6 s."""
+        import time
+        from harness_forge.documents import UnreadableMarkdown, markdown_links
+        for unit in ("<?", "<!--", "<a b='", "<![CDATA["):
+            with self.subTest(unit=unit):
+                started = time.monotonic()
+                try:
+                    markdown_links("x " + unit * (65536 // len(unit)))
+                except UnreadableMarkdown:
+                    pass  # each "<![CDATA[" opens a bracket: nesting at the parser's limit is refused
+                self.assertLess(time.monotonic() - started, 3)
+
     def test_file_destinations_are_kept(self):
         status, reason = self.links("[required](< file:missing.md>)\n")
         self.assertEqual(status, "fail", "with its leading space the destination has no scheme: a relative path")
