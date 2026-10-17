@@ -475,6 +475,34 @@ class ParserDeviationTest(unittest.TestCase):
                     pass  # each "<![CDATA[" opens a bracket: nesting at the parser's limit is refused
                 self.assertLess(time.monotonic() - started, 3)
 
+    def test_definitions_are_extracted_from_their_paragraph_with_its_containers(self):
+        """CommonMark: a definition is part of a paragraph, with its lazy continuation and container bounds."""
+        for body in ("> [a]: ok.md\n    [broken](missing.md) $ARGUMENTS\n", "- [a]: ok.md\n<custom>\n[broken](missing.md)\n"):
+            with self.subTest(body=body):
+                status, reason = self.links(body)
+                self.assertEqual(status, "fail")
+                self.assertIn("missing.md", reason)
+        self.assertIn("$ARGUMENTS", without_code("> [a]: ok.md\n    [broken](missing.md) $ARGUMENTS\n"))
+        self.assertEqual(self.links("- [a]: ok.md\n-     [example](missing.md)\n")[0], "pass", "a sibling item's code")
+        self.assertNotIn("Outside controls",
+                         [title for _, _, title in markdown_headings("> [a]: ok.md\nOutside controls\n---\n")])
+        self.assertEqual([title for _, _, title in markdown_headings("[a]: ok.md\nTitle\n=====\n")], ["Title"])
+
+    def test_destinations_follow_commonmark_escapes_and_entities(self):
+        for body in ("[x](https://foo\\\t[broken](missing.md))\n", "[x](<https://foo\\\n[broken](missing.md)>)\n",
+                     "[broken](https&#00000058;//missing.md)\n", "[broken](https&#x0000003a;//missing.md)\n"):
+            with self.subTest(body=body):
+                status, reason = self.links(body)
+                self.assertEqual(status, "fail")
+                self.assertIn("missing", reason)
+        from harness_forge.documents import markdown_links
+        self.assertEqual(markdown_links("[x](&#0;) [y](a\\(b) [z](&amp;&#x41;&copy;)\n"), ["\ufffd", "a(b", "&A\u00a9"])
+        self.assertEqual(self.links("[x](&#0;)\n", {".agents/skills/s/&": b"x"})[0], "fail")
+
+    def test_a_long_tag_is_still_a_tag(self):
+        body = 'Text <custom title="' + "x" * 5000 + '`"> [broken](missing.md) `\n'
+        self.assertEqual(self.links(body)[0], "fail")
+
     def test_file_destinations_are_kept(self):
         status, reason = self.links("[required](< file:missing.md>)\n")
         self.assertEqual(status, "fail", "with its leading space the destination has no scheme: a relative path")

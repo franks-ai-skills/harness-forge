@@ -185,12 +185,14 @@ items and block quotes.
 - Where markdown-it-py reads other than CommonMark 0.31.2, Forge uses
   its own rules: HTML blocks and inline HTML with ASCII tag names and
   only spaces and tabs as whitespace (markdown-it-py's Unicode patterns
-  take `<scrıpt>` for `<script>` and a form feed for a space), link
-  labels of at most 999 characters, and the line after a link reference
-  definition continuing its paragraph.
+  take `<scrıpt>` for `<script>` and a form feed for a space); link
+  reference definitions taken from the start of their paragraph, with
+  labels of at most 999 characters (a longer one is paragraph text);
+  labels matched after Unicode case folding; and link destinations whose
+  backslash escapes and entity references resolve as CommonMark says.
 - Forge refuses blocks or inline elements nested 20 levels deep, which
-  markdown-it-py skips, and a definition label longer than 999
-  characters across lines. Checks of such a file fail and the README
+  markdown-it-py skips, and a setext underline below nothing but link
+  reference definitions. Checks of such a file fail and the README
   writer refuses it.
 - Inside its own README sections Forge accepts only the lines it writes
   there, and it appends a section only where it shows as a heading of
