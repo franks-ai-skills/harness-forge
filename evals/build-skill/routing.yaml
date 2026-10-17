@@ -2,17 +2,17 @@
 skill: build-skill
 cases:
   - {id: explicit, prompt: "Build part A from the decision record.", expect: trigger, mode: explicit}
-  - {id: build-decided, prompt: "The reproduction-checklist skill is decided and confirmed; build it.", expect: trigger, mode: implicit}
+  - {id: build-decided, prompt: "Harness Forge decided and confirmed the reproduction-checklist skill; build it.", expect: trigger, mode: implicit}
   - {id: near-miss-undecided, prompt: "I need something that writes reproduction checklists.", expect: no-trigger, mode: implicit}
   - {id: near-miss-verify, prompt: "Check whether my built skill meets its requirements.", expect: no-trigger, mode: implicit}
-  - {id: build-command, prompt: "The release-notes command is decided; generate it.", expect: trigger, mode: implicit}
-  - {id: rebuild-after-change, prompt: "The requirements changed after research; rebuild the skill for part B.", expect: trigger, mode: implicit}
+  - {id: build-command, prompt: "Harness Forge decided a user-invoked release-notes command; generate its skill package.", expect: trigger, mode: implicit}
+  - {id: rebuild-after-change, prompt: "The accepted requirements for part B changed after Harness Forge's research; rebuild that part's skill.", expect: trigger, mode: implicit}
   - {id: write-skill-files, prompt: "Write the SKILL.md and the .claude/skills symlink for the part confirmed in the Harness Forge decision record.", expect: trigger, mode: implicit}
-  - {id: build-all-parts, prompt: "Build every decided skill part from the decision record.", expect: trigger, mode: implicit}
-  - {id: resolve-conflict, prompt: "The build reported a diff against my existing skill; replace SKILL.md as shown.", expect: trigger, mode: implicit}
-  - {id: build-codex-only, prompt: "Build the confirmed skill for Codex only.", expect: trigger, mode: implicit}
-  - {id: generate-from-contract, prompt: "Generate the portable skill package from the confirmed contract.", expect: trigger, mode: implicit}
-  - {id: user-invoked, prompt: "Build part C as a user-invoked command, as we decided.", expect: trigger, mode: implicit}
+  - {id: build-all-parts, prompt: "Build every skill part decided in the Harness Forge decision record.", expect: trigger, mode: implicit}
+  - {id: resolve-conflict, prompt: "Harness Forge's build reported a diff against my existing skill; replace its SKILL.md as the diff shows.", expect: trigger, mode: implicit}
+  - {id: build-codex-only, prompt: "Build the skill confirmed in the Harness Forge decision record for Codex only.", expect: trigger, mode: implicit}
+  - {id: generate-from-contract, prompt: "Generate the portable skill package from the confirmed Harness Forge contract.", expect: trigger, mode: implicit}
+  - {id: user-invoked, prompt: "Build part C of the Harness Forge decision as a user-invoked command.", expect: trigger, mode: implicit}
   - {id: near-miss-research, prompt: "Research what a good release-notes skill must contain.", expect: no-trigger, mode: implicit}
   - {id: near-miss-handwrite, prompt: "Write me a quick SKILL.md for formatting SQL, no process needed.", expect: no-trigger, mode: implicit}
   - {id: near-miss-fix-code, prompt: "Build the project and fix the compiler errors.", expect: no-trigger, mode: implicit}

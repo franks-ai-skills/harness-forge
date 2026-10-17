@@ -1,5 +1,6 @@
 """The routing evaluation's cases: about 20 per skill, with near misses that must not trigger it (plan task 14)."""
 
+import re
 import unittest
 from pathlib import Path
 
@@ -32,6 +33,25 @@ class RoutingCasesTest(unittest.TestCase):
             for other, other_prompts in triggers.items():
                 if other != skill:
                     self.assertFalse(prompts & other_prompts, f"{skill} and {other} both expect {prompts & other_prompts}")
+
+
+    def test_a_trigger_names_the_forge_record_or_the_idea_it_concerns(self):
+        """Each case runs in a fresh session: a trigger cannot lean on an earlier turn for what "it" or "the skill" is.
+
+        A build or verify trigger names Harness Forge, whose records it acts on;
+        a research trigger names Harness Forge or the tooling idea it researches
+        before building.
+        """
+        for skill in ("harness-research", "build-skill", "harness-verify"):
+            cases = yaml.safe_load((EVALS / skill / "routing.yaml").read_text(encoding="utf-8"))["cases"]
+            for case in cases:
+                if case["expect"] != "trigger" or case["mode"] != "implicit":
+                    continue
+                prompt = case["prompt"]
+                with self.subTest(skill=skill, case=case["id"]):
+                    self.assertTrue("Harness Forge" in prompt
+                                    or (skill == "harness-research" and re.search(r"\bbuild", prompt)), prompt)
+                    self.assertIsNone(re.search(r"\b(this|we built|we decided|we agreed)\b", prompt), prompt)
 
 
 if __name__ == "__main__":
