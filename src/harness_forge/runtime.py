@@ -22,6 +22,7 @@ import posixpath
 import re
 import shlex
 import tempfile
+from dataclasses import replace
 from pathlib import Path
 from typing import Iterable, Mapping
 
@@ -188,7 +189,7 @@ _CLAUDE_SKILL_PATH = re.compile(r"^(?:.*/)?\.(?:claude|agents)/skills/([^/]+)/SK
 
 
 def _observe_claude(stdout: str, name: str, baseline: set[str], workspace: Path | None = None,
-                    markers: list[str] | None = None) -> dict:
+                    markers: list[str] | None = None, directory: str | None = None) -> dict:
     """Activation, tool calls and what else stayed loaded, from the init, assistant and tool-result events.
 
     A Skill or Read call activates only once its tool result arrives without
@@ -248,8 +249,10 @@ def _observe_claude(stdout: str, name: str, baseline: set[str], workspace: Path 
                     # the model; a reference alone shows file access only. After
                     # another skill ran, such a read follows that skill's pointer.
                     path = posixpath.normpath(str(arguments.get("file_path", "")))
-                    if path in {f"{base}/{folder}/{name}/SKILL.md" for base in roots
-                                for folder in (".claude/skills", ".agents/skills")}:
+                    # The candidate's own directory too: a skill reused in place is staged under its path.
+                    if path in {f"{base}/{folder}/SKILL.md" for base in roots
+                                for folder in (f".claude/skills/{name}", f".agents/skills/{name}", directory)
+                                if folder}:
                         signal = f"read SKILL.md from the {name} skill"
                     elif (_CLAUDE_SKILL_PATH.match(path) or [None, name])[1] != name:
                         # Another skill's SKILL.md: reading it chooses that skill, as a Skill call would.
@@ -491,6 +494,33 @@ def _decide(harness: str, test_case: dict, observed: dict, permitted: list[str])
     return "pass", "no Skill tool call for the candidate"
 
 
+def outcome_problem(result, case: dict) -> str | None:
+    """Why this runtime could not have produced ``result`` for ``case``, or None.
+
+    What a case observed is the harness's to say; which outcomes follow from
+    it, and which configurations run at all, is fixed here: Claude runs only
+    with contained tools, Codex cannot prove a non-activation, and a pass
+    agrees with the activation it observed.
+    """
+    permitted = case["permitted_tools"].get(result.harness)
+    if permitted is None:
+        return f"case {case['id']} names no permitted tools for {result.harness}"
+    uncontained = [tool for tool in permitted if result.harness == "claude-code" and tool not in CLAUDE_CONTAINED]
+    if uncontained and result.result != "not-run":
+        return f"case {case['id']} permits {', '.join(uncontained)}, so Claude Code does not run it"
+    if (result.prompt, result.expected) != (case["prompt"], case["expected"]):
+        return f"case {case['id']} ran another prompt or expectation than declared"
+    if result.result != "pass":
+        return None
+    if result.expected == "activates" and not result.observed_activation:
+        return f"case {case['id']} passed an activation without observing one"
+    if result.expected == "does-not-activate" and result.harness == "codex":
+        return f"case {case['id']} passed a near miss in Codex, which has no signal that proves non-activation"
+    if result.expected == "does-not-activate" and result.observed_activation:
+        return f"case {case['id']} passed although it observed an activation ({result.observed_activation!r})"
+    return None
+
+
 def _markers(files: Mapping[str, bytes], target: str) -> list[str]:
     """Every non-empty line of the candidate's SKILL.md: a complete read prints them all, so its
     instructions reached the model, whichever command's output the lines came from."""
@@ -559,7 +589,8 @@ def activation_case(
             return "not-run", f"unavailable: the harness could not start: {error}", None, "not observable"
         # What the harness did before it stopped counts, also when it timed out or failed. Observed while the
         # workspace and its links exist, so paths resolve where the harness found them.
-        observed = (_observe_claude(completed.stdout, name, baseline | companions, workspace, _markers(files, target))
+        observed = (_observe_claude(completed.stdout, name, baseline | companions, workspace, _markers(files, target),
+                                    directory=target)
                     if harness == "claude-code"
                     else _observe_codex(completed.stdout, target, _markers(files, target), workspace,
                                         workspace.resolve()))
@@ -638,11 +669,14 @@ def run_skill_runtime(
 
         def result(outcome: str, reason: str, activation: str | None = None,
                    inventory: str = "not observable") -> RuntimeResult:
-            return RuntimeResult(run_id=run.run_id, part_id=test_case["part_id"], case_id=test_case["id"],
-                                 prompt=test_case["prompt"], expected=test_case["expected"],
-                                 observed_activation=activation, result=outcome, reason=reason, file_hashes=hashes,
-                                 harness=harness, harness_version=checked["version"], environment=environment,
-                                 inventory=inventory)
+            built = RuntimeResult(run_id=run.run_id, part_id=test_case["part_id"], case_id=test_case["id"],
+                                  prompt=test_case["prompt"], expected=test_case["expected"],
+                                  observed_activation=activation, result=outcome, reason=reason, file_hashes=hashes,
+                                  harness=harness, harness_version=checked["version"], environment=environment,
+                                  inventory=inventory)
+            # The rule the reference checker applies to stored results holds for every result made here.
+            problem = outcome_problem(built, test_case)
+            return built if problem is None else replace(built, result="error", reason=f"inconsistent: {problem}")
 
         if not checked["available"]:
             results.append(result("not-run", f"unavailable: {checked['reason']}"))

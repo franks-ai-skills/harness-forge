@@ -422,6 +422,46 @@ class RuntimeTest(unittest.TestCase):
         self.assertEqual(observe(failed=True)["activation"], f"Skill tool called for {NAME}",
                          "a failed read loaded no other skill")
 
+    def test_a_reused_skill_activates_when_read_from_its_own_directory(self):
+        """A skill reused in place is staged under its own path, as well as under its .claude/skills link."""
+        from harness_forge.runtime import _observe_claude
+        for path in (f"/w/vendor/skills/{NAME}/SKILL.md", f"/w/.claude/skills/{NAME}/SKILL.md"):
+            with self.subTest(path=path):
+                events = [{"type": "assistant", "message": {"content": [
+                              {"type": "tool_use", "id": "a", "name": "Read", "input": {"file_path": path}}]}},
+                          tool_result("a", content="whole skill"),
+                          {"type": "result", "subtype": "success", "is_error": False, "result": "done"}]
+                observed = _observe_claude("\n".join(json.dumps(event) for event in events) + "\n", NAME, set(),
+                                           Path("/w"), ["whole skill"], directory=f"vendor/skills/{NAME}")
+                self.assertEqual(observed["activation"], f"read SKILL.md from the {NAME} skill")
+
+    def test_outcome_problem_names_results_the_runtime_cannot_produce(self):
+        from harness_forge.models import RuntimeResult
+        from harness_forge.runtime import outcome_problem
+
+        def result(harness, expected, outcome, activation=None):
+            return RuntimeResult(run_id="r", part_id="A", case_id="c", prompt="p", expected=expected,
+                                 observed_activation=activation, result=outcome, reason="-", file_hashes={},
+                                 harness=harness, harness_version="1", environment="-", inventory="observed")
+
+        def case(expected, tools=("Skill",)):
+            return {"id": "c", "expected": expected, "prompt": "p",
+                    "permitted_tools": {"claude-code": list(tools), "codex": ["command_execution"]}}
+
+        signal = f"Skill tool called for {NAME}"
+        self.assertIsNone(outcome_problem(result("claude-code", "activates", "pass", signal), case("activates")))
+        self.assertIsNone(outcome_problem(result("claude-code", "does-not-activate", "pass"), case("does-not-activate")))
+        self.assertIsNone(outcome_problem(result("codex", "does-not-activate", "not-run"), case("does-not-activate")))
+        self.assertIsNone(outcome_problem(result("claude-code", "activates", "not-run"), case("activates", ("Bash",))))
+        problems = [
+            outcome_problem(result("codex", "does-not-activate", "pass"), case("does-not-activate")),
+            outcome_problem(result("claude-code", "activates", "pass", signal), case("activates", ("Skill", "Bash"))),
+            outcome_problem(result("claude-code", "activates", "pass"), case("activates")),
+            outcome_problem(result("claude-code", "does-not-activate", "pass", signal), case("does-not-activate")),
+            outcome_problem(result("claude-code", "activates", "pass", signal), case("does-not-activate")),
+        ]
+        self.assertTrue(all(problems), problems)
+
     def test_batched_calls_route_to_the_first_skill_whose_call_succeeded(self):
         """Calls in one message count in their order once their results are in, whatever order those arrive in."""
         from harness_forge.runtime import _observe_claude
