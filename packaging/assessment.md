@@ -24,6 +24,8 @@ fetched on 2026-10-09.
 | `jsonschema-specifications` | 2025.9.1 | >=3.9 | no |
 | `pyyaml` | 6.0.3 | >=3.8 | optional libyaml extension; the wheels are per platform |
 | `typing-extensions` | 4.16.0 (Python < 3.13 only) | >=3.9 | no |
+| `markdown-it-py` | 4.2.0 | >=3.10 | no |
+| `mdurl` | 0.1.2 | >=3.7 | no |
 
 `jsonschema` 4.26.0 requires `attrs`, `jsonschema-specifications`,
 `referencing` and `rpds-py`; `referencing` 0.37.0 adds `typing-extensions`
@@ -78,6 +80,54 @@ python3 -m venv <forge-env>
 - T13 decides where `<forge-env>` lives for each harness and how the skills
   find it. Claude Code provides `${CLAUDE_PLUGIN_DATA}` for persistent
   plugin data; Codex documents `PLUGIN_DATA` for plugin hooks.
+
+## Markdown parser
+
+Added on 2026-10-17 (owner decision of 2026-10-16). Forge's own scanner
+modelled fenced code, HTML blocks and ATX headings but no list items,
+block quotes, indented code or setext headings, so a fence inside a list
+item could hide a broken link or a heading. `markdown-it-py` (MIT, the
+Executable Books project) is a CommonMark parser in pure Python whose
+only dependency is `mdurl` (MIT); both ship one universal wheel, so the
+platform table below is unchanged. Forge uses its `commonmark` preset,
+keeps link destinations as written (`normalizeLink` is the identity,
+`validateLink` accepts every destination, since Forge classifies schemes
+itself) and replaces the rules where it reads other than CommonMark
+0.31.2, as four Codex review rounds found. HTML blocks and inline HTML:
+markdown-it-py's patterns use Python's Unicode `\s` and
+`re.IGNORECASE`, so `</scrıpt>` closed a `<script>` block and a form
+feed counted as whitespace, and declarations needed an uppercase
+letter; Forge's rules keep markdown-it's paragraph-interruption chains
+and find the end of an inline comment, instruction or CDATA section
+once per paragraph (markdown-it-py's own rule took 26 s for 64 KiB of
+`<?`). Reference definitions: markdown-it-py's block rule ended the
+paragraph at a definition, so the next line could start indented code
+or a lone tag block, and inside containers it lost lazy continuation;
+Forge disables that rule and takes definitions from the start of each
+paragraph after block parsing, as CommonMark defines them, with labels
+of at most 999 characters and the paragraph's line indentation removed.
+Labels are case folded and collapse only spaces, tabs and line endings
+(markdown-it-py collapsed Unicode whitespace and folded with
+`lower().upper()`, which matched `ı` with `I`). Link destinations: a
+backslash escapes only ASCII punctuation, and entity references follow
+CommonMark's digit limits, with U+FFFD for 0, surrogates and code
+points past U+10FFFF (markdown-it-py let a backslash carry a tab or a
+line ending and decoded `&#00000058;`). The destination parser is set
+on Forge's parser instance (`helpers`); the label function is set in
+markdown-it-py's link and image modules, which look it up by name.
+Wrappers at the entry of the block and inline tokenizers notice nesting
+that reaches the parser's limit, where it skips content, and Forge
+refuses such files. Token trees are cached only
+for documents up to 64 KiB. A substitution of the affected characters
+before parsing was tried and dropped: it changed link destinations,
+headings and reference labels. markdown-it-py's text accumulation stays
+quadratic on a paragraph of alternating punctuation, also without HTML:
+about 10 s for 1 MiB, Forge's input limit.
+
+`cmarkgfm`, the bindings to GitHub's cmark-gfm, would read exactly as
+GitHub renders, but it publishes no wheel for macOS x86_64 (and its
+newest release none for Windows arm64), which Forge's binary-only
+installation needs.
 
 ## Library behavior Forge must configure
 

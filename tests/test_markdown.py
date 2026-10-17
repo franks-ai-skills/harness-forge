@@ -1,4 +1,4 @@
-"""One Markdown reading for every section, heading and code check (Codex fix review round 2)."""
+"""One Markdown reading, CommonMark by markdown-it-py, for every section, heading, code and link check."""
 
 import tempfile
 import unittest
@@ -115,8 +115,9 @@ class ForgeSectionTest(unittest.TestCase):
     def test_the_writer_refuses_a_section_holding_lines_it_did_not_write(self):
         written = update_readme("# Repro\n", decision(reach="user"))
         setext = written + "License\n=======\n\nMIT.\n"
-        with self.assertRaisesRegex(ValueError, "Where the skills load.*lines Forge did not write"):
-            update_readme(setext, decision())
+        rewritten = update_readme(setext, decision())
+        self.assertNotIn("## Where the skills load", rewritten)
+        self.assertIn("License\n=======\n\nMIT.\n", rewritten, "a setext heading ends Forge's section and stays")
         note = written.replace("## Where the skills load\n\n", "## Where the skills load\n\nMy note.\n\n")
         with self.assertRaisesRegex(ValueError, "My note"):
             update_readme(note, decision(reach="user"))
@@ -261,18 +262,15 @@ class HtmlBlockBoundaryTest(unittest.TestCase):
         titles = [title for _, _, title in markdown_headings("# T\n\n<pre-note>\n## Fake\n\n## Real\n")]
         self.assertEqual(titles, ["T", "Real"])
 
-    def test_a_lone_tag_below_other_text_makes_the_document_unreadable(self):
-        """Whether it starts HTML block kind 7 depends on paragraph state Forge does not track (round 7)."""
-        from harness_forge.documents import UnreadableMarkdown
-        for before in ("Some text", "***", "===", "[a]:", " \tcode", ">", "- item", "Text\n==="):
+    def test_a_lone_tag_below_other_text_is_read_as_commonmark_reads_it(self):
+        """Paragraph, list, quote and definition state decide whether a tag line starts an HTML block."""
+        for before, real_heading in (("Some text", True), ("***", False), ("===", True), ("[a]:", True),
+                                     (" \tcode", False), (">", False), ("- item", True), ("Text\n===", False)):
             with self.subTest(before=before):
                 text = f"# T\n\n{before}\n<custom-tag>\n## Outside controls\n\n## Real\n"
-                with self.assertRaisesRegex(UnreadableMarkdown, "line [0-9]+: .*blank line"):
-                    markdown_headings(text)
-                self.assertEqual(coverage(text), "fail")
-                self.assertEqual(self.links(f"{before}\n<guide>\n[Required](missing.md)\n"), "fail")
-                with self.assertRaises(UnreadableMarkdown):
-                    update_readme(text, outside_only())
+                titles = [title for _, _, title in markdown_headings(text)]
+                self.assertEqual("Outside controls" in titles, real_heading, titles)
+                self.assertIn("Real", titles)
 
     def test_a_lone_tag_after_a_blank_line_heading_or_closed_block_starts_kind_seven(self):
         for before in ("", "# Title", "```\ncode\n```", "<!-- note -->"):
@@ -286,6 +284,262 @@ class HtmlBlockBoundaryTest(unittest.TestCase):
     def test_tag_names_are_ascii(self):
         self.assertEqual(self.links("<\u017fpan>\n[Required](missing.md)\n"), "fail")
         self.assertEqual(self.links("<scr\u0131pt>\n[Required](missing.md)\n"), "fail")
+
+
+class ContainerTest(unittest.TestCase):
+    """Fences, HTML blocks and indented code inside list items and block quotes (Codex fix review round 8)."""
+
+    def links(self, reference):
+        files = {".agents/skills/s/SKILL.md": b"---\nname: s\ndescription: d\n---\nRead [r](references/r.md).\n",
+                 ".agents/skills/s/references/r.md": reference.encode()}
+        return check_relative_references(files, {}, {})
+
+    def test_a_block_left_open_in_a_list_item_ends_with_the_item(self):
+        for opener in ("```", "<pre>", "<!--"):
+            with self.subTest(opener=opener):
+                text = f"- a\n\n  {opener}\n- b\n\n[Required](missing.md)\n\n## Real\n"
+                status, reason = self.links(text)
+                self.assertEqual(status, "fail")
+                self.assertIn("missing.md", reason)
+                self.assertIn("real", heading_anchors(text))
+                self.assertIsNotNone(markdown_section(text, "Real"))
+
+    def test_code_inside_a_quote_or_list_item_holds_no_link_or_heading(self):
+        for block in ("> ```\n> [Example](missing.md)\n> ## Fake\n> ```\n",
+                      "- item\n\n      [Example](missing.md)\n      ## Fake\n",
+                      "> <pre>\n> [Example](missing.md)\n> ## Fake\n> </pre>\n"):
+            with self.subTest(block=block):
+                self.assertEqual(self.links(block + "\nText.\n")[0], "pass")
+                self.assertNotIn("fake", heading_anchors(block))
+
+    def test_the_writer_finds_a_section_after_a_list_item_with_a_fence(self):
+        written = update_readme("# Repro\n", decision(reach="user"))
+        before = "# Repro\n\n- example\n  ```\n  code\n"
+        readme = before + written.split("# Repro\n", 1)[1]
+        self.assertEqual(readme.count("## Where the skills load"), 1)
+        self.assertEqual(update_readme(readme, decision(reach="user")).count("## Where the skills load"), 1)
+        self.assertEqual(update_readme(before, decision(reach="user")).count("## Where the skills load"), 1,
+                         "the item's fence ends with the list, so the appended section shows")
+
+    def test_setext_headings_are_headings(self):
+        text = "Page\n====\n\nPractices\n---------\n\nText.\n"
+        self.assertEqual([(level, title) for _, level, title in markdown_headings(text)], [(1, "Page"), (2, "Practices")])
+        self.assertEqual(heading_anchors(text, range(2, 4)), {"practices"})
+
+    def test_a_quoted_heading_is_no_section(self):
+        self.assertIsNone(markdown_section("# T\n\n> ## Outside controls\n", "Outside controls"))
+
+    def test_nesting_beyond_the_parser_limit_is_unreadable(self):
+        from harness_forge.documents import UnreadableMarkdown
+        deep = ">" * 25 + " [Required](missing.md)\n"
+        with self.assertRaises(UnreadableMarkdown):
+            markdown_headings(deep)
+        self.assertEqual(self.links(deep)[0], "fail")
+        self.assertEqual(coverage("# Repro\n\n" + deep), "fail")
+
+
+class ParserDeviationTest(unittest.TestCase):
+    """Where markdown-it-py reads other than CommonMark, Forge reads as CommonMark or refuses (Codex review round 1)."""
+
+    def links(self, body, extra=None):
+        files = {".agents/skills/s/SKILL.md": ("---\nname: s\ndescription: d\n---\n" + body).encode(),
+                 ".agents/skills/s/ok.md": b"Fine.\n", **(extra or {})}
+        return check_relative_references(files, {}, {})
+
+    def test_unicode_letters_and_spaces_are_no_tag_names_or_whitespace(self):
+        hidden = "<script>\n</scr\u0131pt>\n## Outside controls\n\n- `event-gate` (part B): recommended, not verified.\n"
+        self.assertIsNone(markdown_section("# T\n\n" + hidden, "Outside controls"), "the block is still open")
+        self.assertEqual(coverage("# T\n\n" + hidden), "fail")
+        for body in ("<script\u00a0>\n[broken](missing.md)\n\n## Real\n", "<custom>\u00a0\n[broken](missing.md)\n",
+                     "<\u017fcript>\n[broken](missing.md)\n", "<scr\u0131pt>\n[broken](missing.md)\n"):
+            with self.subTest(body=body):
+                self.assertEqual(self.links(body)[0], "fail")
+        self.assertIn("Real", [title for _, _, title in markdown_headings("<script\u00a0>\n\n## Real\n")])
+
+    def test_comments_and_processing_instructions_may_hold_any_text(self):
+        for text in ("<!--\u00e9-->\n\n# Title\n", "<?\u03c0?>\n\n# Title\n"):
+            with self.subTest(text=text):
+                self.assertEqual([title for _, _, title in markdown_headings(text)], ["Title"])
+
+    def test_a_line_below_a_reference_definition_continues_its_paragraph(self):
+        """CommonMark extracts definitions from a paragraph: indented text or a lone tag below one is paragraph text."""
+        for body in ("[a]: ok.md\n    [broken](missing.md) $ARGUMENTS\n", "[a]: ok.md\n<custom>\n[broken](missing.md)\n",
+                     "> [a]: ok.md\n>     [broken](missing.md)\n"):
+            with self.subTest(body=body):
+                status, reason = self.links(body)
+                self.assertEqual(status, "fail")
+                self.assertIn("missing.md", reason)
+        self.assertEqual(self.links("[a]: ok.md\n\n    [example](missing.md)\n")[0], "pass",
+                         "after a blank line, indented code is code in CommonMark too")
+        self.assertEqual(self.links("[a]: ok.md\n<script>\n[example](missing.md)\n</script>\n")[0], "pass",
+                         "a <script> block can interrupt a paragraph")
+        for text in ("-\n  <custom>\n  text\n", "1.\n       code\n"):
+            with self.subTest(text=text):
+                markdown_headings(text)
+
+    def test_source_text_is_never_changed_before_parsing(self):
+        from harness_forge.documents import markdown_links
+        self.assertEqual(markdown_links("[r](\u0130.md)\n"), ["\u0130.md"])
+        self.assertEqual([title for _, _, title in markdown_headings("## \u0130stanbul\n")], ["\u0130stanbul"])
+        status, reason = self.links("[a^b]: ok.md\n[a\u00a0b]: missing.md\n\n[a\u00a0b]\n")
+        self.assertEqual(status, "fail")
+        self.assertIn("missing.md", reason)
+
+    def test_only_space_and_tab_bound_an_html_block_start(self):
+        for body in ("<script\f>\n[broken](missing.md)\n\n## Real\n", "<script\v>\n[broken](missing.md)\n\n## Real\n",
+                     "<custom>\v\n[broken](missing.md)\n", "<custom>\f\n[broken](missing.md)\n"):
+            with self.subTest(body=body):
+                self.assertEqual(self.links(body)[0], "fail")
+        self.assertIn("Real", [title for _, _, title in markdown_headings("<script\f>\n\n## Real\n")])
+
+    def test_a_declaration_may_start_with_a_lowercase_letter(self):
+        titles = [title for _, _, title in markdown_headings("<!doctype\n## Fake\n>\n\n## Real\n")]
+        self.assertEqual(titles, ["Real"], "CommonMark 0.31.2: <! and an ASCII letter of either case")
+
+    def test_nested_lists_at_the_nesting_limit_are_refused(self):
+        from harness_forge.documents import UnreadableMarkdown
+        for body in ("- " * 10 + "[broken](missing.md)\n", "> - " * 7 + "[broken](missing.md)\n"):
+            with self.subTest(body=body):
+                with self.assertRaises(UnreadableMarkdown):
+                    markdown_headings(body)
+                self.assertEqual(self.links(body)[0], "fail")
+        markdown_headings("- " * 8 + "fine\n")
+
+    def test_inline_lookahead_at_the_nesting_limit_is_refused(self):
+        from harness_forge.documents import UnreadableMarkdown
+        body = "[" * 21 + "Required](missing.md)\n"
+        with self.assertRaises(UnreadableMarkdown):
+            markdown_headings(body)
+        self.assertEqual(self.links(body)[0], "fail")
+
+    def test_an_overlong_reference_label_is_no_definition(self):
+        import time
+        for body in ("[" + "a" * 1000 + ']: ok.md "[broken](missing.md)"\n',
+                     "[" + "\\a" * 500 + ']: ok.md "[broken](missing.md)"\n'):
+            with self.subTest(body=body[:20]):
+                status, reason = self.links(body)
+                self.assertEqual(status, "fail", "CommonMark reads it as paragraph text with a link")
+                self.assertIn("missing.md", reason)
+        escaped = "[" + "a" * 500 + "\\]" + "a" * 600 + ']: ok.md "[broken](missing.md)"\n'
+        self.assertEqual(self.links(escaped)[0], "fail", "an escaped bracket does not end the label")
+        self.assertEqual(self.links("```\n[" + "a" * 1000 + "]: example\n```\n")[0], "pass")
+        self.assertEqual(self.links("`[" + "a" * 1000 + "]: example`\n")[0], "pass")
+        started = time.monotonic()
+        markdown_headings("```\n" + "\\[" * 32000 + "\n```\n")
+        self.assertLess(time.monotonic() - started, 2)
+
+    def test_html_blocks_that_can_interrupt_a_paragraph_do(self):
+        entry = "## Outside controls\n\n- `event-gate` (part B): recommended, not verified.\n"
+        for opener in ("<!--", "<script>", "<div>"):
+            for before in ("Text", "[a]: ok.md"):
+                with self.subTest(opener=opener, before=before):
+                    text = f"# T\n\n{before}\n{opener}\n{entry}"
+                    self.assertIsNone(markdown_section(text, "Outside controls"))
+                    self.assertEqual(coverage(text), "fail")
+
+    def test_a_closing_raw_tag_alone_starts_a_block(self):
+        entry = "## Outside controls\n\n- `event-gate` (part B): recommended, not verified.\n"
+        for name in ("pre", "script", "style", "textarea"):
+            with self.subTest(name=name):
+                self.assertIsNone(markdown_section(f"# T\n\n</{name}>\n{entry}", "Outside controls"))
+
+    def test_reference_labels_match_as_commonmark_normalizes_them(self):
+        for body in ("[a b]: ok.md\n[a\u00a0b]: missing.md\n\n[a\u00a0b]\n", "[I]: ok.md\n[\u0131]: missing.md\n\n[\u0131]\n"):
+            with self.subTest(body=body):
+                status, reason = self.links(body)
+                self.assertEqual(status, "fail")
+                self.assertIn("missing.md", reason)
+        self.assertEqual(self.links("[\u1e9e]: ok.md\n\n[SS]\n")[0], "pass", "Unicode case fold: \u1e9e matches SS")
+
+    def test_a_label_is_measured_as_its_paragraph_reads_it(self):
+        status, reason = self.links("[a\n" + " " * 5000 + "b]: missing.md\n\n[a b]\n")
+        self.assertEqual(status, "fail")
+        self.assertIn("missing.md", reason)
+        markdown_headings("[\n\n" + "a" * 1000 + "]: text\n")
+
+    def test_a_new_container_ends_the_definitions_paragraph(self):
+        for body in ("[a]: ok.md\n>     [example](missing.md)\n", "[a]: ok.md\n- <custom>\n  [example](missing.md)\n"):
+            with self.subTest(body=body):
+                self.assertEqual(self.links(body)[0], "pass")
+
+    def test_unfinished_inline_html_is_not_searched_for_again_at_every_opener(self):
+        """markdown-it-py's own rule took 26 s for 64 KiB of "<?"; markdown-it-py without HTML takes about 0.6 s."""
+        import time
+        from harness_forge.documents import UnreadableMarkdown, markdown_links
+        for unit in ("<?", "<!--", "<a b='", "<![CDATA["):
+            with self.subTest(unit=unit):
+                started = time.monotonic()
+                try:
+                    markdown_links("x " + unit * (65536 // len(unit)))
+                except UnreadableMarkdown:
+                    pass  # each "<![CDATA[" opens a bracket: nesting at the parser's limit is refused
+                self.assertLess(time.monotonic() - started, 3)
+
+    def test_definitions_are_extracted_from_their_paragraph_with_its_containers(self):
+        """CommonMark: a definition is part of a paragraph, with its lazy continuation and container bounds."""
+        for body in ("> [a]: ok.md\n    [broken](missing.md) $ARGUMENTS\n", "- [a]: ok.md\n<custom>\n[broken](missing.md)\n"):
+            with self.subTest(body=body):
+                status, reason = self.links(body)
+                self.assertEqual(status, "fail")
+                self.assertIn("missing.md", reason)
+        self.assertIn("$ARGUMENTS", without_code("> [a]: ok.md\n    [broken](missing.md) $ARGUMENTS\n"))
+        self.assertEqual(self.links("- [a]: ok.md\n-     [example](missing.md)\n")[0], "pass", "a sibling item's code")
+        self.assertNotIn("Outside controls",
+                         [title for _, _, title in markdown_headings("> [a]: ok.md\nOutside controls\n---\n")])
+        self.assertEqual([title for _, _, title in markdown_headings("[a]: ok.md\nTitle\n=====\n")], ["Title"])
+
+    def test_destinations_follow_commonmark_escapes_and_entities(self):
+        for body in ("[x](https://foo\\\t[broken](missing.md))\n", "[x](<https://foo\\\n[broken](missing.md)>)\n",
+                     "[broken](https&#00000058;//missing.md)\n", "[broken](https&#x0000003a;//missing.md)\n"):
+            with self.subTest(body=body):
+                status, reason = self.links(body)
+                self.assertEqual(status, "fail")
+                self.assertIn("missing", reason)
+        from harness_forge.documents import markdown_links
+        self.assertEqual(markdown_links("[x](&#0;) [y](a\\(b) [z](&amp;&#x41;&copy;)\n"), ["\ufffd", "a(b", "&A\u00a9"])
+        self.assertEqual(self.links("[x](&#0;)\n", {".agents/skills/s/&": b"x"})[0], "fail")
+
+    def test_a_long_tag_is_still_a_tag(self):
+        body = 'Text <custom title="' + "x" * 5000 + '`"> [broken](missing.md) `\n'
+        self.assertEqual(self.links(body)[0], "fail")
+
+    def test_only_commonmark_whitespace_is_trimmed_from_a_paragraph(self):
+        for body in ('\u00a0[a]: https://ok "[broken](missing.md)"\n', '[a]: https://ok "[broken](missing.md)"\u00a0\n',
+                     '\u00a0[a]: https://ok "[broken](missing.md)"\nTitle\n---\n'):
+            with self.subTest(body=body):
+                status, reason = self.links(body)
+                self.assertEqual(status, "fail")
+                self.assertIn("missing.md", reason)
+
+    def test_a_setext_heading_starts_after_its_definitions(self):
+        for ending in ("\n", "\r\n", "\r"):
+            with self.subTest(ending=repr(ending)):
+                text = ending.join(["[a]: ok.md", "Outside controls", "---", ""])
+                start = len("[a]: ok.md" + ending)
+                self.assertEqual(markdown_section(text, "Outside controls")[0], start)
+        from harness_forge.research import rejected_domains
+        with tempfile.TemporaryDirectory() as directory:
+            (Path(directory) / "docs").mkdir()
+            (Path(directory) / "docs" / "sources.md").write_text(
+                "[a\n| `innocent.example` |]: ok.md\nRejected domains\n---\n\n| `bad.example` | reason |\n", encoding="utf-8")
+            hosts = rejected_domains(Path(directory))["hosts"]
+        self.assertIn("bad.example", hosts)
+        self.assertNotIn("innocent.example", hosts)
+
+    def test_file_destinations_are_kept(self):
+        status, reason = self.links("[required](< file:missing.md>)\n")
+        self.assertEqual(status, "fail", "with its leading space the destination has no scheme: a relative path")
+        self.assertIn("file:missing.md", reason)
+        from harness_forge.documents import markdown_links
+        self.assertEqual(markdown_links("[a](file:missing.md) [b](javascript:x)\n"), ["file:missing.md", "javascript:x"])
+
+    def test_large_documents_are_not_kept_in_memory(self):
+        from harness_forge.documents import _parse
+        _parse.cache_clear()
+        markdown_headings("# Big\n" * 20000)
+        self.assertEqual(_parse.cache_info().currsize, 0)
+        markdown_headings("# Small\n")
+        self.assertEqual(_parse.cache_info().currsize, 1)
 
 
 class ReportLinesTest(unittest.TestCase):

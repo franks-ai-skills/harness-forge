@@ -12,8 +12,11 @@ remote references.
 from __future__ import annotations
 
 import hashlib
+import html
+import importlib
 import json
 import re
+import types
 import unicodedata
 from functools import lru_cache
 from pathlib import Path
@@ -22,6 +25,12 @@ from typing import Any
 import yaml
 from jsonschema import Draft202012Validator
 from jsonschema.exceptions import SchemaError
+from markdown_it import MarkdownIt
+from markdown_it import helpers as _helpers
+from markdown_it.helpers.parse_link_destination import _Result
+from markdown_it.rules_block.lheading import lheading as _lheading_rule
+from markdown_it.rules_block.paragraph import paragraph as _paragraph_rule
+from markdown_it.rules_inline.html_inline import isLinkClose, isLinkOpen
 from referencing import Registry, Resource
 
 MAX_DOCUMENT_BYTES = 1024 * 1024
@@ -454,28 +463,276 @@ def validate_kb(root: Path) -> list[str]:
 
 
 _LINE = re.compile(r"[^\r\n]*(?:\r\n|\n|\r|$)")
-_OPENER = re.compile(r" {0,3}(`{3,}|~{3,})(.*)")
+# Block and inline nesting beyond this is not parsed: markdown-it skips the rest of that container.
+_MAX_NESTING = 20
+_CODE_BLOCKS = ("fence", "code_block", "html_block")
+_CACHED_BYTES = 64 * 1024
 
-
-# CommonMark 0.31.2 HTML blocks: start condition and end condition per kind.
-# Kinds 1-5 end at a line holding their end marker, 6 and 7 at a blank line;
-# kind 7 cannot interrupt a paragraph.
+# markdown-it-py's HTML patterns use Python's Unicode \s and re.IGNORECASE, so it read </scrıpt> as </script>
+# and a form feed as whitespace, and it starts a declaration only with an uppercase letter. Forge replaces its
+# two HTML rules with CommonMark 0.31.2's: ASCII tag names, spaces and tabs (inline also line endings).
 _BLOCK_TAGS = ("address|article|aside|base|basefont|blockquote|body|caption|center|col|colgroup|dd|details|dialog|"
                "dir|div|dl|dt|fieldset|figcaption|figure|footer|form|frame|frameset|h1|h2|h3|h4|h5|h6|head|header|"
                "hr|html|iframe|legend|li|link|main|menu|menuitem|nav|noframes|ol|optgroup|option|p|param|search|"
                "section|summary|table|tbody|td|tfoot|th|thead|title|tr|track|ul")
-_ATTRIBUTE = r"""(?:[ \t]+[A-Za-z_:][A-Za-z0-9_.:-]*(?:[ \t]*=[ \t]*(?:[^ \t"'=<>`]+|'[^']*'|"[^"]*"))?)"""
+_RAW_TAGS = "pre|script|style|textarea"
+_ATTRIBUTE = r"""(?:[ \t\n]+[A-Za-z_:][A-Za-z0-9_.:-]*(?:[ \t\n]*=[ \t\n]*(?:[^ \t\n"'=<>`]+|'[^']*'|"[^"]*"))?)"""
+_OPEN_TAG = rf"<[A-Za-z][A-Za-z0-9-]*{_ATTRIBUTE}*[ \t\n]*/?>"
+_CLOSE_TAG = r"</[A-Za-z][A-Za-z0-9-]*[ \t\n]*>"
+# Start pattern, end pattern (None: a blank line) and whether the block can interrupt a paragraph.
 _HTML_BLOCKS = (
-    (re.compile(r" {0,3}<(?:pre|script|style|textarea)(?:[ \t>]|$)", re.I | re.A),
-     re.compile(r"</(?:pre|script|style|textarea)>", re.I | re.A), True),
-    (re.compile(r" {0,3}<!--"), re.compile(r"-->"), True),
-    (re.compile(r" {0,3}<\?"), re.compile(r"\?>"), True),
-    (re.compile(r" {0,3}<![A-Za-z]"), re.compile(r">"), True),
-    (re.compile(r" {0,3}<!\[CDATA\["), re.compile(r"\]\]>"), True),
-    (re.compile(rf" {{0,3}}</?(?:{_BLOCK_TAGS})(?:[ \t]|/?>|$)", re.I | re.A), None, True),
-    (re.compile(rf" {{0,3}}(?:<(?!(?:pre|script|style|textarea)(?![A-Za-z0-9-]))[A-Za-z][A-Za-z0-9-]*{_ATTRIBUTE}*"
-                r"[ \t]*/?>|</[A-Za-z][A-Za-z0-9-]*[ \t]*>)[ \t]*$", re.I | re.A), None, False),
+    (re.compile(rf"<(?:{_RAW_TAGS})(?:[ \t>]|$)", re.I | re.A), re.compile(rf"</(?:{_RAW_TAGS})>", re.I | re.A), True),
+    (re.compile(r"<!--"), re.compile(r"-->"), True),
+    (re.compile(r"<\?"), re.compile(r"\?>"), True),
+    (re.compile(r"<![A-Za-z]"), re.compile(r">"), True),
+    (re.compile(r"<!\[CDATA\["), re.compile(r"\]\]>"), True),
+    (re.compile(rf"</?(?:{_BLOCK_TAGS})(?:[ \t]|/?>|$)", re.I | re.A), None, True),
+    (re.compile(rf"(?!<(?:{_RAW_TAGS})(?![A-Za-z0-9-]))(?:{_OPEN_TAG}|{_CLOSE_TAG})[ \t]*$", re.I | re.A), None, False),
 )
+_INLINE_TAG = re.compile(rf"{_OPEN_TAG}|{_CLOSE_TAG}", re.A)
+_TOO_DEEP = "forge_too_deep"
+
+
+def _html_block(state, start: int, end: int, silent: bool) -> bool:
+    """markdown-it-py's html_block rule with CommonMark 0.31.2's start and end conditions."""
+    position = state.bMarks[start] + state.tShift[start]
+    if state.is_code_block(start) or state.src[position:position + 1] != "<":
+        return False
+    text = state.src[position:state.eMarks[start]]
+    kind = next((kind for kind in _HTML_BLOCKS if kind[0].match(text)), None)
+    if kind is None:
+        return False
+    if silent:
+        return kind[2]
+    closer = kind[1]
+    line = start + 1
+    if not (closer.search(text) if closer else False):
+        while line < end and state.sCount[line] >= state.blkIndent:
+            text = state.src[state.bMarks[line] + state.tShift[line]:state.eMarks[line]]
+            if closer.search(text) if closer else not text:
+                line += bool(text)
+                break
+            line += 1
+    state.line = line
+    token = state.push("html_block", "", 0)
+    token.map = [start, line]
+    token.content = state.getLines(start, line, state.blkIndent, True)
+    return True
+
+
+def _find(state, needle: str, start: int) -> int:
+    """``state.src.find(needle, start)``, remembered per inline text: positions only grow, so an unfinished
+    comment or instruction is searched for once, not once per opener."""
+    cache = state.env.setdefault("forge_inline_finds", {})
+    known = cache.get(needle)
+    if known is not None and known[0] is state.src and known[1] <= start and (known[2] == -1 or known[2] >= start):
+        return known[2]
+    found = state.src.find(needle, start)
+    cache[needle] = (state.src, start, found)
+    return found
+
+
+def _html_inline(state, silent: bool) -> bool:
+    """markdown-it-py's html_inline rule with CommonMark 0.31.2's raw HTML, found in linear time."""
+    source, position, maximum = state.src, state.pos, state.posMax
+    if source[position] != "<" or position + 2 >= maximum:
+        return False
+    end = -1
+    if source.startswith(("<!-->", "<!--->"), position):
+        end = position + (5 if source.startswith("<!-->", position) else 6)
+    elif source.startswith("<!--", position):
+        end = _find(state, "-->", position + 4) + 3
+    elif source.startswith("<?", position):
+        end = _find(state, "?>", position + 2) + 2
+    elif source.startswith("<![CDATA[", position):
+        end = _find(state, "]]>", position + 9) + 3
+    elif re.match(r"<![A-Za-z]", source[position:position + 3]):
+        end = _find(state, ">", position + 2) + 1
+    elif match := _INLINE_TAG.match(source, position, maximum):
+        end = match.end()
+    if end <= position + 2 or end > maximum:
+        return False
+    if not silent:
+        token = state.push("html_inline", "", 0)
+        token.content = source[position:end]
+        state.linkLevel += isLinkOpen(token.content)
+        state.linkLevel -= isLinkClose(token.content)
+    state.pos = end
+    return True
+
+
+_PUNCTUATION = frozenset("!\"#$%&'()*+,-./:;<=>?@[\\]^_`{|}~")
+# Backslash escapes of ASCII punctuation and entity references, as CommonMark 0.31.2 resolves them.
+_ESCAPE_OR_ENTITY = re.compile(r"\\([!-/:-@\[-`{-~])|&(?:#([0-9]{1,7})|#[xX]([0-9a-fA-F]{1,6})|([A-Za-z][A-Za-z0-9]{0,31}));")
+
+
+def _resolve(text: str) -> str:
+    """Escapes and entity references resolved; a numeric reference to 0, a surrogate or past U+10FFFF is U+FFFD."""
+    def replace(match: re.Match) -> str:
+        if match.group(1):
+            return match.group(1)
+        if match.group(4):
+            return html.entities.html5.get(match.group(4) + ";", match.group(0))
+        code = int(match.group(2), 10) if match.group(2) else int(match.group(3), 16)
+        return chr(code) if 0 < code <= 0x10FFFF and not 0xD800 <= code <= 0xDFFF else "\ufffd"
+    return _ESCAPE_OR_ENTITY.sub(replace, text)
+
+
+def _destination(text: str, position: int, maximum: int) -> _Result:
+    """CommonMark 0.31.2's link destination: a backslash escapes ASCII punctuation only, so it cannot carry a
+    control character or a line ending into the destination (markdown-it-py lets it escape any character)."""
+    result, start = _Result(), position
+    if text[position:position + 1] == "<":
+        position += 1
+        while position < maximum:
+            character = text[position]
+            if character in "\n<":
+                return result
+            if character == ">":
+                result.ok, result.pos, result.str = True, position + 1, _resolve(text[start + 1:position])
+                return result
+            position += 2 if character == "\\" and text[position + 1:position + 2] in _PUNCTUATION else 1
+        return result
+    depth = 0
+    while position < maximum:
+        character = text[position]
+        if ord(character) <= 0x20 or character == "\x7f":
+            break
+        if character == "\\" and position + 1 < maximum and text[position + 1] in _PUNCTUATION:
+            position += 2
+            continue
+        if character == "(":
+            depth += 1
+            if depth > 32:
+                return result
+        elif character == ")":
+            if depth == 0:
+                break
+            depth -= 1
+        position += 1
+    if position > start and depth == 0:
+        result.ok, result.pos, result.str = True, position, _resolve(text[start:position])
+    return result
+
+
+def _blank(text: str, position: int, line_ending: bool) -> int:
+    """Past spaces and tabs, and with ``line_ending`` past one line ending and the spaces and tabs after it."""
+    while position < len(text) and text[position] in " \t":
+        position += 1
+    if line_ending and text[position:position + 1] == "\n":
+        position = _blank(text, position + 1, False)
+    return position
+
+
+def _definition(text: str, position: int) -> tuple[int, str, str, str] | None:
+    """(end, label, destination, title) of the link reference definition at ``position``, or None."""
+    if text[position:position + 1] != "[":
+        return None
+    index = position + 1
+    while index < len(text) and text[index] != "]":
+        if text[index] == "[":
+            return None
+        index += 2 if text[index] == "\\" and text[index + 1:index + 2] in _PUNCTUATION else 1
+    label = text[position + 1:index]
+    if index >= len(text) or text[index + 1:index + 2] != ":" or len(label) > 999 or not label.strip(" \t\n"):
+        return None
+    start = _blank(text, index + 2, True)
+    destination = _destination(text, start, len(text))
+    if not destination.ok:
+        return None
+    after = destination.pos
+    title_start = _blank(text, after, True)
+    if title_start > after and title_start < len(text):
+        title = _helpers.parseLinkTitle(text, title_start, len(text), None)
+        end = _blank(text, title.pos, False) if title.ok else -1
+        if title.ok and text[end:end + 1] in ("", "\n"):
+            return end + 1, label, destination.str, _resolve(text[title_start + 1:title.pos - 1])
+    end = _blank(text, after, False)
+    if text[end:end + 1] in ("", "\n"):
+        return end + 1, label, destination.str, ""
+    return None
+
+
+def _definitions(state) -> None:
+    """Core rule before inline parsing: CommonMark takes link reference definitions from the start of each
+    paragraph, so they keep the paragraph's container, lazy continuation and end (markdown-it-py's block rule
+    ended the paragraph at a definition). The first definition of a label wins."""
+    references = state.env.setdefault("references", {})
+    for index, token in enumerate(state.tokens):
+        opener = state.tokens[index - 1] if index else None
+        if token.type != "inline" or opener is None or not (
+                opener.type == "paragraph_open" or (opener.type == "heading_open" and opener.markup in ("=", "-"))):
+            continue
+        # CommonMark's raw paragraph content drops each line's initial spaces and tabs; markdown-it keeps them.
+        token.content = "\n".join(line.lstrip(" \t") for line in token.content.split("\n"))
+        position = 0
+        while found := _definition(token.content, position):
+            position, label, destination, title = found
+            references.setdefault(_normalize_label(label), {"href": destination, "title": title})
+        if position and opener.type == "heading_open" and not token.content[position:].strip(" \t\n"):
+            # CommonMark reads the underline as text then; markdown-it-py made the definition a heading.
+            raise UnreadableMarkdown(f"line {opener.map[0] + 1}: a setext underline below only link reference "
+                                     "definitions")
+        # The block now starts below its definitions, one source line per content line.
+        consumed = token.content.count("\n", 0, position)
+        for block in (opener, token):
+            if block.map and consumed:
+                block.map = [block.map[0] + consumed, block.map[1]]
+        token.content = token.content[position:]
+
+
+def _normalize_label(label: str) -> str:
+    """CommonMark's label normalization: Unicode case fold, spaces, tabs and line endings trimmed and collapsed.
+    markdown-it-py collapses Python's Unicode whitespace and folds with lower().upper(), which matches ı with I."""
+    return re.sub(r"[ \t\n]+", " ", label.casefold().strip(" \t\n"))
+
+
+def _ascii_trimmed(rule):
+    """markdown-it-py's paragraph or setext rule with its content trimmed of spaces, tabs and line endings only:
+    its Unicode strip() also removed a non-breaking space, which CommonMark keeps (and which can keep text
+    from being a link reference definition)."""
+    def trimmed(state, start: int, end: int, silent: bool) -> bool:
+        count = len(state.tokens)
+        matched = rule(state, start, end, silent)
+        if matched and not silent and len(state.tokens) >= count + 2:
+            opener, inline = state.tokens[count], state.tokens[count + 1]
+            last = state.line if opener.type == "paragraph_open" else state.line - 1  # a setext underline
+            inline.content = state.getLines(start, last, state.blkIndent, False).strip(" \t\n")
+        return matched
+    return trimmed
+
+
+def _watch(method):
+    """Notes a call at the nesting limit, where markdown-it skips the content instead of parsing it."""
+    def watched(state, *arguments):
+        if state.level >= _MAX_NESTING:
+            state.env[_TOO_DEEP] = True
+        return method(state, *arguments)
+    return watched
+
+
+def _markdown_parser() -> MarkdownIt:
+    parser = MarkdownIt("commonmark", {"maxNesting": _MAX_NESTING})
+    # Destinations as written, escapes resolved: a relative link is a file path, and Forge classifies schemes.
+    parser.normalizeLink = lambda url: url
+    parser.validateLink = lambda url: True
+    # The same alternative chains as markdown-it's own rule: an HTML block can interrupt these.
+    parser.block.ruler.at("html_block", _html_block, {"alt": ["paragraph", "reference", "blockquote"]})
+    parser.block.ruler.disable("reference")
+    for name, rule in (("paragraph", _paragraph_rule), ("lheading", _lheading_rule)):
+        parser.block.ruler.at(name, _ascii_trimmed(rule))
+    parser.core.ruler.before("inline", "forge_definitions", _definitions)
+    parser.helpers = types.SimpleNamespace(parseLinkLabel=_helpers.parseLinkLabel, parseLinkDestination=_destination,
+                                           parseLinkTitle=_helpers.parseLinkTitle)
+    parser.inline.ruler.at("html_inline", _html_inline)
+    # Definitions and the links that use them share one normalization; markdown-it-py's link and image rules
+    # look it up by name in their modules (which the package shadows with the rule functions, hence importlib).
+    for name in ("markdown_it.rules_inline.link", "markdown_it.rules_inline.image"):
+        importlib.import_module(name).normalizeReference = _normalize_label
+    parser.block.tokenize = _watch(parser.block.tokenize)
+    parser.inline.tokenize = _watch(parser.inline.tokenize)
+    parser.inline.skipToken = _watch(parser.inline.skipToken)
+    return parser
 
 
 def fold_name(name: str) -> str:
@@ -485,93 +742,79 @@ def fold_name(name: str) -> str:
 
 
 class UnreadableMarkdown(ValueError):
-    """Text whose block structure depends on what Forge does not track; checks fail and writers refuse on it."""
+    """Text markdown-it-py would read differently from CommonMark or not at all; checks fail and writers refuse on it."""
 
 
-def _scan(markdown: str) -> tuple[list[tuple[int, str, bool]], bool]:
-    """Lines with their code flag, and whether the text ends inside a block that text appended to it would join."""
-    # settled: no paragraph can be open, because the line before was blank, a heading or the end of a block.
-    lines, fence, html, settled, offset = [], None, None, True, 0
+_PARSER = _markdown_parser()
+
+
+def _parse(markdown: str) -> tuple[tuple, dict]:
+    """CommonMark tokens and reference definitions; UnreadableMarkdown where markdown-it-py would misread."""
+    if len(markdown) <= _CACHED_BYTES:
+        return _parse_cached(markdown)
+    return _parse_text(markdown)
+
+
+def _parse_text(markdown: str) -> tuple[tuple, dict]:
+    env: dict = {}
+    tokens = tuple(_PARSER.parse(markdown, env))
+    if env.get(_TOO_DEEP):
+        raise UnreadableMarkdown(f"blocks or inline elements nested {_MAX_NESTING} or more levels deep")
+    return tokens, env.get("references", {})
+
+
+_parse_cached = lru_cache(maxsize=32)(_parse_text)
+_parse.cache_clear = _parse_cached.cache_clear
+_parse.cache_info = _parse_cached.cache_info
+
+
+def _line_offsets(markdown: str) -> list[tuple[int, str]]:
+    """(offset, line without its ending) per line, split as CommonMark splits: at \\r\\n, \\n or \\r."""
+    lines, offset = [], 0
     for match in _LINE.finditer(markdown):
         raw = match.group(0)
         if not raw and lines:
             break
-        line = raw.rstrip("\r\n")
-        opener = _OPENER.fullmatch(line)
-        if html is not None:
-            if html == "blank" and not line.strip(" \t"):
-                html = None
-                lines.append((offset, line, False))
-            else:
-                if html != "blank" and html.search(line):
-                    html = None
-                lines.append((offset, line, True))
-            settled = html is None
-        elif fence:
-            if opener and opener.group(1)[0] == fence[0] and len(opener.group(1)) >= len(fence) \
-                    and not opener.group(2).strip(" \t"):
-                fence = None
-            lines.append((offset, line, True))
-            settled = fence is None
-        elif opener and not (opener.group(1)[0] == "`" and "`" in opener.group(2)):
-            fence = opener.group(1)
-            lines.append((offset, line, True))
-        elif kind := next(((start, end, interrupts) for start, end, interrupts in _HTML_BLOCKS if start.match(line)),
-                          None):
-            start, end, interrupts = kind
-            if not interrupts and not settled:
-                # Kind 7 starts only where no paragraph is open; after other text that depends on
-                # lists, quotes, definitions and indentation, which Forge does not model.
-                raise UnreadableMarkdown(f"line {len(lines) + 1}: an HTML tag alone on its line directly below "
-                                         "other text; put a blank line before it")
-            # The end condition may hold on the opening line itself, as in <!--> or <?>.
-            html = None if end is not None and end.search(line) else (end or "blank")
-            lines.append((offset, line, True))
-            settled = html is None
-        else:
-            lines.append((offset, line, False))
-            settled = not line.strip(" \t") or bool(re.match(r" {0,3}#{1,6}(?:[ \t]|$)", line))
+        lines.append((offset, raw.rstrip("\r\n")))
         offset += len(raw)
         if not raw:
             break
-    return lines, bool(fence) or html not in (None, "blank")
+    return lines
 
 
 def markdown_lines(markdown: str) -> list[tuple[int, str, bool]]:
-    """(offset, line without its ending, inside code) for each line, with CommonMark's fenced code blocks.
+    """(offset, line without its ending, inside code) for each line, as CommonMark (markdown-it-py) reads it.
 
-    A backtick fence's info string holds no backtick; a closing fence uses
-    the opener's character, at least as many, and only spaces or tabs after
-    them; an unclosed fence runs to the end. Fence lines count as code, and
-    so do HTML blocks (all seven CommonMark kinds). Indented code, setext
-    headings and containers such as block quotes and lists are not
-    modelled: callers that must not misread them accept only lines they
-    recognize. A lone tag line directly below other text raises
-    UnreadableMarkdown, because only paragraph state decides whether it
-    starts an HTML block.
+    Code is every line of a fenced or indented code block or an HTML block,
+    also inside list items and block quotes.
     """
-    return _scan(markdown)[0]
-
-
-def markdown_open_block(markdown: str) -> bool:
-    """Whether the text ends inside a code fence or an HTML comment, so that text appended to it would not show."""
-    return _scan(markdown)[1]
+    tokens, _ = _parse(markdown)
+    code = {line for token in tokens if token.type in _CODE_BLOCKS and token.map for line in range(*token.map)}
+    return [(offset, line, number in code) for number, (offset, line) in enumerate(_line_offsets(markdown))]
 
 
 def markdown_prose(markdown: str) -> str:
-    """The text with every fenced code line left empty, so that line numbers stay."""
+    """The text with every code line left empty, so that line numbers stay."""
     return "\n".join("" if code else line for _, line, code in markdown_lines(markdown))
 
 
 def markdown_headings(markdown: str) -> list[tuple[int, int, str]]:
-    """(offset, level, text) of each ATX heading outside fenced code blocks."""
-    headings = []
-    for offset, line, code in markdown_lines(markdown):
-        if not code and (heading := re.fullmatch(r" {0,3}(#{1,6})(?:[ \t]+(.*?))?[ \t]*", line)):
-            # A closing run of # after a space is no part of the title, as in CommonMark.
-            title = re.sub(r"(?:^|[ \t]+)#+$", "", heading.group(2) or "")
-            headings.append((offset, len(heading.group(1)), title))
-    return headings
+    """(offset, level, text) of each ATX or setext heading outside list items, block quotes and code.
+
+    A heading inside a container is part of that container, not a section of the document.
+    """
+    tokens, _ = _parse(markdown)
+    offsets = [offset for offset, _ in _line_offsets(markdown)]
+    return [(offsets[token.map[0]], int(token.tag[1]), tokens[index + 1].content)
+            for index, token in enumerate(tokens) if token.type == "heading_open" and token.level == 0]
+
+
+def markdown_links(markdown: str) -> list[str]:
+    """Destinations of every link, image and reference definition, as written with escapes resolved."""
+    tokens, references = _parse(markdown)
+    links = [child.attrs.get("href") or child.attrs.get("src") for token in tokens for child in token.children or ()
+             if child.type in ("link_open", "image")]
+    return [link for link in links if link] + [reference["href"] for reference in references.values()]
 
 
 def markdown_section(markdown: str, heading: str) -> tuple[int, int] | None:

@@ -8,15 +8,7 @@ from __future__ import annotations
 import posixpath
 import re
 
-from harness_forge.documents import UnreadableMarkdown, markdown_prose, parse_yaml, split_frontmatter
-
-_DESTINATION = r"(?:<([^<>\n]*)>|((?:[^\s<>()]|\([^\s<>()]*\))+))"
-_TITLE = r"""(?:\s+(?:"[^"]*"|'[^']*'|\([^()]*\)))?"""
-# Inline links and images, with an optional title, and reference definitions;
-# a footnote definition ([^1]: text) is not a link.
-LINK = re.compile(r"\]\(\s*" + _DESTINATION + _TITLE + r"\s*\)")
-DEFINITION = re.compile(r"^ {0,3}\[(?!\^)[^\]\n]+\]:[ \t]*\n?[ \t]*" + _DESTINATION, re.M)
-
+from harness_forge.documents import UnreadableMarkdown, markdown_links, markdown_prose, parse_yaml, split_frontmatter
 
 def is_markdown(path: str) -> bool:
     """Markdown by extension, in any case: a file system that ignores case serves EXTRA.MD as Markdown too."""
@@ -53,9 +45,7 @@ def relative_links(markdown: str, *, frontmatter: bool = False) -> list[str]:
             markdown = split_frontmatter(markdown)[1]
         except ValueError:
             pass
-    markdown = without_code(markdown)
-    for angled, bare in LINK.findall(markdown) + DEFINITION.findall(markdown):
-        target = angled or bare
+    for target in markdown_links(markdown):
         if re.match(r"^[a-zA-Z][a-zA-Z0-9+.-]*:", target) or target.startswith("#"):
             continue
         links.append(target.split("#")[0])
