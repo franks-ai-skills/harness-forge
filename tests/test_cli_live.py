@@ -437,6 +437,15 @@ class LiveCommandsTest(unittest.TestCase):
         self.assertEqual(code, 0, stderr)
         self.assertTrue((self.root / ".harness/overrides/skills.description.length.yaml").exists())
 
+        # The contract the user confirms shows the loosening warning: the digest binds the override, from which
+        # the warning follows; prepare-contract always shows it (design: adversarial fixtures).
+        code, shown, stderr = cli("prepare-contract", "--decision", self.decision, "--evidence",
+                                  self.root / ".scratch/workers.json", "--revision",
+                                  self.root / ".harness/research/repro.rules.yaml")
+        self.assertEqual(code, 0, stderr)
+        self.assertIn("Warning: it changes its parameters for the error rule skills.description.length, which may "
+                      "loosen it", shown["text"])
+
         code, _, stderr = cli("verify", *arguments)
         self.assertEqual(code, 2, "the old confirmation does not cover the override")
         self.assertIn("does not confirm", stderr)
@@ -910,7 +919,11 @@ class LiveCommandsTest(unittest.TestCase):
         code, _, stderr = cli("scope", "--harness", "claude-code", "--decision", self.decision, "--root", self.root, *revision,
                               "--evidence", workers, "--slug", "repro", "--fixed", "A")
         self.assertEqual(code, 2, "the scope is computed for the confirmed contract")
-        review, extensive = scope()["options"]
+        shown = scope()
+        review, extensive = shown["options"]
+        # The owner asked whether this meant "our current work or the skill we are creating" (owner test).
+        self.assertIn(f"`{NAME}`", shown["question"])
+        self.assertIn("built in this repository", shown["question"])
         self.assertEqual((review["label"], review["parts"]), ("Review (recommended)", ["A"]))
         [kept] = review["kept"]
         self.assertEqual((kept["part_id"], kept["run_id"], kept["harness_result"]), ("B", "verify-1", "not applicable"))
@@ -1543,7 +1556,9 @@ class LiveCommandsTest(unittest.TestCase):
         readme = (self.root / "README.md").read_text(encoding="utf-8")
         self.assertTrue(readme.startswith("# Repro\n"))
         self.assertIn("`codeowners-agent-config` (part A): recommended, not verified", readme)
-        self.assertIn("together with the setting that requires code-owner review (`outside.codeowners.agent-config`)", readme)
+        self.assertIn("and CODEOWNERS owns itself (`outside.ci.workflow-protected`)", readme, "a KB rule's statement")
+        self.assertIn("the branch rule requires code-owner review (`outside.codeowners.agent-config`)", readme,
+                      "Forge's own wording of the CODEOWNERS condition")
         self.assertEqual(output["written"], "README.md")
 
     def test_build_refuses_without_a_matching_confirmation(self):

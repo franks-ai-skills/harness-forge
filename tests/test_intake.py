@@ -134,7 +134,45 @@ class ReadmeTest(unittest.TestCase):
         readme = update_outside_section("# Repro\n", self.outside_only(),
                                         conditions={"outside.merge.no-agent-bypass": condition})
         self.assertIn(f"  - {condition} (`outside.merge.no-agent-bypass`)", readme)
-        self.assertIn("  - `outside.codeowners.agent-config`", readme)
+        self.assertIn("  - `outside.ci.workflow-protected`", readme)
+
+    def test_every_entry_meets_the_rules_the_reviewer_judges_it_by(self):
+        """The reviewer judged identical entries differently across parts (owner test): each entry now says it."""
+        record = self.outside_only()
+        record.record["parts"][1]["outside_controls"][0]["prerequisites"].append("outside.gate.periodic-verification")
+        readme = update_outside_section("# Repro\n", record)
+        entries = readme.split("\n- ")[1:]
+        self.assertEqual(len(entries), 2)
+        for entry in entries:
+            self.assertEqual(entry.count("(`outside.gate.periodic-verification`)"), 1, entry)
+            self.assertEqual(entry.count("(`outside.gate.real-refs`)"), 1, entry)
+        self.assertIn("It targets the real refs and resources it protects, such as", readme,
+                      "the KB rule's examples stay examples: CODEOWNERS protects no production account (Codex review)")
+        codeowners = next(entry for entry in entries if entry.startswith("`codeowners-agent-config`"))
+        line = next(line for line in codeowners.splitlines() if "(`outside.codeowners.agent-config`)" in line)
+        for named in ("`.agents/`", "`.claude/`", "`AGENTS.md`", "code-owner review"):
+            self.assertIn(named, line)
+
+    def test_the_codeowners_condition_names_the_targets_configuration(self):
+        """The KB's agent-config paths for the harnesses the idea targets, and the files that gate them."""
+        def line(targets):
+            record = self.outside_only()
+            record.record["targets"] = targets
+            readme = update_outside_section("# Repro\n", record)
+            return next(line for line in readme.splitlines() if "(`outside.codeowners.agent-config`)" in line)
+
+        codex, claude, both = line(["codex"]), line(["claude-code"]), line(["claude-code", "codex"])
+        for named in ("`.codex/`", "`AGENTS.md`", "`AGENTS.override.md`", "`.agents/`"):
+            self.assertIn(named, codex)
+            self.assertIn(named, both)
+        for named in ("`.claude/`", "`CLAUDE.md`", "`.mcp.json`", "`.agents/`"):
+            self.assertIn(named, claude)
+            self.assertIn(named, both)
+        self.assertNotIn("`.claude/`", codex)
+        self.assertNotIn("`.codex/`", claude)
+        for text in (codex, claude, both):
+            self.assertIn("every file that configures the agent, including", text)
+            self.assertIn("`.devcontainer/`, the CI workflow files and the CODEOWNERS file itself", text)
 
     def test_unrelated_content_is_preserved_and_section_replaced(self):
         original = "# Repro\n\nIntro.\n\n## Outside controls\n\n- `old-control` (part A): recommended, not verified. Precaution; availability available.\n\n## Usage\n\nRun it.\n"

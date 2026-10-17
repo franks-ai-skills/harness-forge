@@ -2,7 +2,23 @@
 skill: harness-verify
 cases:
   - {id: explicit, prompt: "Verify the reproduction-checklist skill.", expect: trigger, mode: explicit}
-  - {id: after-build, prompt: "I fixed the description; check the skill again against its requirements.", expect: trigger, mode: implicit}
-  - {id: goal-met, prompt: "Does the built skill meet the goal we agreed on?", expect: trigger, mode: implicit}
+  - {id: after-build, prompt: "I fixed the description of the skill Harness Forge built; check it again against its accepted requirements.", expect: trigger, mode: implicit}
+  - {id: goal-met, prompt: "Does the skill Harness Forge built for part A meet the goal confirmed in its decision record?", expect: trigger, mode: implicit}
   - {id: near-miss-platform, prompt: "Check whether branch protection is enabled on GitHub.", expect: no-trigger, mode: implicit}
   - {id: near-miss-build, prompt: "Build the skill we decided on.", expect: no-trigger, mode: implicit}
+  - {id: reverify-fixed, prompt: "I fixed part A of the Harness Forge decision; re-verify it.", expect: trigger, mode: implicit}
+  - {id: check-requirements, prompt: "Check the skill Harness Forge built against its accepted requirements and the pinned rules.", expect: trigger, mode: implicit}
+  - {id: runtime-cases, prompt: "Run Harness Forge's runtime cases for the reproduction-checklist skill it built.", expect: trigger, mode: implicit}
+  - {id: report, prompt: "Write Harness Forge's verification report for the reproduction-checklist build.", expect: trigger, mode: implicit}
+  - {id: extensive, prompt: "Do an Extensive review of every part in the Harness Forge decision record.", expect: trigger, mode: implicit}
+  - {id: is-it-verified, prompt: "Is the reproduction-checklist skill that Harness Forge built verified now?", expect: trigger, mode: implicit}
+  - {id: forge-own-skills, prompt: "Verify Harness Forge's own skills against their contract.", expect: trigger, mode: implicit}
+  - {id: after-rebuild, prompt: "Harness Forge rebuilt the reproduction-checklist skill; verify it against its contract.", expect: trigger, mode: implicit}
+  - {id: goal-review, prompt: "Have Harness Forge's reviewer judge whether the built part B meets its goal.", expect: trigger, mode: implicit}
+  - {id: near-miss-tests, prompt: "Run the unit tests.", expect: no-trigger, mode: implicit}
+  - {id: near-miss-lint, prompt: "Check this file for lint errors.", expect: no-trigger, mode: implicit}
+  - {id: near-miss-pr-review, prompt: "Review my pull request.", expect: no-trigger, mode: implicit}
+  - {id: near-miss-intake, prompt: "I want a hook that blocks force pushes.", expect: no-trigger, mode: implicit}
+  - {id: near-miss-validate-json, prompt: "Validate this JSON against its schema.", expect: no-trigger, mode: implicit}
+  - {id: near-miss-plugin-validate, prompt: "Run claude plugin validate on this repo.", expect: no-trigger, mode: implicit}
+  - {id: near-miss-app-rebuild, prompt: "The rebuild finished; check that the app starts.", expect: no-trigger, mode: implicit}

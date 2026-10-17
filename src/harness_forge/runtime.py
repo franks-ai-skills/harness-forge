@@ -22,6 +22,7 @@ import posixpath
 import re
 import shlex
 import tempfile
+from dataclasses import replace
 from pathlib import Path
 from typing import Iterable, Mapping
 
@@ -53,6 +54,8 @@ def fixture_problem(path: str, candidate: Mapping[str, bytes] | None = None) -> 
     file system.
     """
     parts = path.split("/")
+    if any(ord(character) < 0x20 or ord(character) == 0x7f for character in path):
+        return f"fixture {path!r} names a control character, which no staged file may"
     if "\\" in path or any(part in ("", ".", "..") for part in parts):
         return f"fixture {path} is not a plain relative path"
     taken = {fold_name(name) for name in candidate or {}}
@@ -184,8 +187,11 @@ def _result_text(block: dict) -> str:
     return "\n".join(item.get("text", "") for item in content or [] if isinstance(item, dict))
 
 
+_CLAUDE_SKILL_PATH = re.compile(r"^(?:.*/)?\.(?:claude|agents)/skills/([^/]+)/SKILL\.md$")
+
+
 def _observe_claude(stdout: str, name: str, baseline: set[str], workspace: Path | None = None,
-                    markers: list[str] | None = None) -> dict:
+                    markers: list[str] | None = None, directory: str | None = None) -> dict:
     """Activation, tool calls and what else stayed loaded, from the init, assistant and tool-result events.
 
     A Skill or Read call activates only once its tool result arrives without
@@ -198,6 +204,12 @@ def _observe_claude(stdout: str, name: str, baseline: set[str], workspace: Path 
     pending: dict[str, str] = {}
     reads: dict[str, tuple[str, dict]] = {}
     skill_reads: set[str] = set()
+    other_reads: set[str] = set()
+    # Each call's place in the order the model made them: a skill-choosing call counts from that place once its
+    # result is in, so results that arrive in another order cannot change which skill came first.
+    order: dict[str, int] = {}
+    credited: list[tuple[int, str]] = []
+    chosen_other: list[int] = []
     # Only the candidate in the throwaway workspace counts; a same-named skill elsewhere is not it.
     roots = ({str(workspace), str(Path(workspace).resolve())} if workspace is not None else {""})
     for event in _events(stdout):
@@ -219,13 +231,19 @@ def _observe_claude(stdout: str, name: str, baseline: set[str], workspace: Path 
                 if not isinstance(block, dict) or block.get("type") != "tool_use":
                     continue
                 observed["calls"].append(str(block.get("name")))
+                order.setdefault(str(block.get("id")), len(order))
                 arguments = block.get("input") if isinstance(block.get("input"), dict) else {}
                 if workspace is not None and _tool_paths(str(block.get("name")), arguments):
                     reads[str(block.get("id"))] = (str(block.get("name")), arguments)
                 signal = None
                 if block.get("name") == "Skill":
                     if name in (arguments.get("skill"), arguments.get("command")):
-                        signal = f"Skill tool called for {name}"
+                        if other_skill:
+                            # Another skill was chosen first: the target ran after it, as Codex's first read decides.
+                            observed["attempted"] = observed["attempted"] or f"Skill tool called for {name} after " \
+                                                                              "another skill"
+                        else:
+                            signal = f"Skill tool called for {name}"
                     else:
                         other_skill = True
                 elif block.get("name") == "Read" and observed["activation"] is None and not other_skill:
@@ -233,9 +251,15 @@ def _observe_claude(stdout: str, name: str, baseline: set[str], workspace: Path 
                     # the model; a reference alone shows file access only. After
                     # another skill ran, such a read follows that skill's pointer.
                     path = posixpath.normpath(str(arguments.get("file_path", "")))
-                    if path in {f"{base}/{folder}/{name}/SKILL.md" for base in roots
-                                for folder in (".claude/skills", ".agents/skills")}:
+                    # The candidate's own directory too: a skill reused in place is staged under its path.
+                    if path in {f"{base}/{folder}/SKILL.md" for base in roots
+                                for folder in (f".claude/skills/{name}", f".agents/skills/{name}", directory)
+                                if folder}:
                         signal = f"read SKILL.md from the {name} skill"
+                    elif (_CLAUDE_SKILL_PATH.match(path) or [None, name])[1] != name:
+                        # Another skill's SKILL.md: reading it chooses that skill, as a Skill call would.
+                        # The candidate's name elsewhere is no other skill's choice.
+                        other_reads.add(str(block.get("id")))
                 if signal:
                     observed["attempted"] = observed["attempted"] or signal
                     pending[str(block.get("id"))] = signal
@@ -245,11 +269,14 @@ def _observe_claude(stdout: str, name: str, baseline: set[str], workspace: Path 
             for block in blocks:
                 if not (isinstance(block, dict) and block.get("type") == "tool_result" and block.get("is_error") is not True):
                     continue
+                if str(block.get("tool_use_id")) in other_reads:
+                    other_skill = True
+                    chosen_other.append(order[str(block.get("tool_use_id"))])
                 signal = pending.get(str(block.get("tool_use_id")))
                 # A read activates only when it returned the whole SKILL.md: a line or two loads no instructions.
                 if signal and (str(block.get("tool_use_id")) not in skill_reads
                                or _whole(_result_text(block), markers or ["\0no marker"])):
-                    observed["activation"] = observed["activation"] or signal
+                    credited.append((order[str(block.get("tool_use_id"))], signal))
                 if str(block.get("tool_use_id")) in reads:
                     # Judged only once the call succeeded: a failed call reached nothing.
                     tool, arguments = reads[str(block["tool_use_id"])]
@@ -267,6 +294,9 @@ def _observe_claude(stdout: str, name: str, baseline: set[str], workspace: Path 
         if event.get("type") == "result":
             observed["completed"] = event.get("is_error") is False and event.get("subtype") == "success"
             observed["errored"] = not observed["completed"]
+    # The candidate activated when its call came before every other skill's read that succeeded.
+    first = [signal for place, signal in sorted(credited) if place < min(chosen_other, default=len(order))]
+    observed["activation"] = observed["activation"] or (first[0] if first else None)
     observed["attempted"] = observed["activation"] or observed["attempted"]
     return observed
 
@@ -456,14 +486,103 @@ def _decide(harness: str, test_case: dict, observed: dict, permitted: list[str])
         if activated:
             return "pass", observed["activation"]
         if harness == "codex":
-            return "not-run", "Codex showed no observable activation signal"
+            return "not-run", UNOBSERVABLE["codex"][1]
         return "fail", "the skill was not activated"
     attempted = observed.get("attempted") or observed["activation"]
     if attempted:
         return "fail", f"activated on a near miss: {attempted}"
     if harness == "codex":
-        return "not-run", "Codex has no observable signal that proves non-activation"
+        return "not-run", UNOBSERVABLE["codex"][0]
     return "pass", "no Skill tool call for the candidate"
+
+
+def _staging_problem(harness: str, files: Mapping[str, bytes], fixtures: Mapping[str, str], skill_dirs: list[str],
+                     links: Mapping[str, str] | None) -> str | None:
+    """Why the throwaway workspace cannot hold these files, fixtures and links, or None."""
+    for path in fixtures:
+        problem = fixture_problem(path, files)
+        if problem:
+            return problem
+    folded = {fold_name(path): path for path in [*files, *fixtures]}
+    for key, path in folded.items():
+        parts = key.split("/")
+        for count in range(1, len(parts)):
+            above = folded.get("/".join(parts[:count]))
+            if above:
+                return f"fixture paths {above} and {path} cannot both be files"
+    if harness == "claude-code":
+        wanted = links if links is not None else {f".claude/skills/{d.rsplit('/', 1)[-1]}": f"../../{d}"
+                                                  for d in skill_dirs}
+        for path, link_target in wanted.items():
+            resolved = posixpath.normpath(posixpath.join(posixpath.dirname(path), link_target))
+            if path != f".claude/skills/{resolved.rsplit('/', 1)[-1]}" or resolved not in skill_dirs:
+                return f"the link {path} does not point at the candidate it is named for"
+    return None
+
+
+def case_preflight(harness: str, case: dict, directory: str, candidate: Mapping[str, bytes] | None,
+                   links: Mapping[str, str] | None = None) -> tuple[str, str] | None:
+    """The result a case gets before it runs, from its own definition and the candidate, or None.
+
+    One order for the producer and for replay: Claude runs only with
+    contained tools (not-run), then the workspace must hold the candidate,
+    the fixtures and the links (error). Whether the harness is available or
+    a user skill shadows the candidate depends on the machine; those come
+    before and after this, as not-run. Without the ``candidate`` files only
+    the tools are checked.
+    """
+    permitted = case["permitted_tools"].get(harness, [])
+    uncontained = [tool for tool in permitted if harness == "claude-code" and tool not in CLAUDE_CONTAINED]
+    if uncontained:
+        return "not-run", (f"unavailable: Claude runs the case without a sandbox; {', '.join(uncontained)} cannot "
+                           f"be permitted, only {', '.join(CLAUDE_CONTAINED)}")
+    problem = (_staging_problem(harness, candidate, case.get("fixtures") or {}, [directory], links)
+               if candidate is not None else None)
+    return ("error", problem) if problem else None
+
+
+def outcome_problem(result, case: dict,
+                    staged: tuple[str, Mapping[str, bytes], Mapping[str, str] | None] | None = None) -> str | None:
+    """Why this runtime could not have produced ``result`` for ``case``, or None.
+
+    What a case observed is the harness's to say; which outcomes follow from
+    it, and which configurations run at all, is fixed here. With what was
+    ``staged`` (the candidate's directory, its files and the repository's
+    links for it), a case that case_preflight stops has that result, unless
+    the machine stopped it first (not-run, "unavailable: ..."). An unobservable Codex result names
+    the expectation it belongs to and observes no activation; a pass agrees
+    with the activation it observed, and a near miss never passes in Codex.
+    """
+    permitted = case["permitted_tools"].get(result.harness)
+    if permitted is None:
+        return f"case {case['id']} names no permitted tools for {result.harness}"
+    if (result.prompt, result.expected) != (case["prompt"], case["expected"]):
+        return f"case {case['id']} ran another prompt or expectation than declared"
+    stop = case_preflight(result.harness, case, *(staged or ("", None, None)))
+    if stop:
+        machine = result.result == "not-run" and result.reason.startswith("unavailable: ")
+        if stop and (result.result, result.reason) != stop and not machine:
+            return f"case {case['id']} stops before it runs ({stop[0]}: {stop[1]}), not with {result.result}"
+    near_miss, unseen_activation = UNOBSERVABLE["codex"]
+    if result.result == "not-run" and result.reason in (near_miss, unseen_activation):
+        wanted = "does-not-activate" if result.reason == near_miss else "activates"
+        if result.harness != "codex" or result.expected != wanted or result.observed_activation:
+            return f"case {case['id']} is not-run as unobservable, which contradicts its expectation or observation"
+    if result.result != "pass":
+        return None
+    if result.expected == "activates" and not result.observed_activation:
+        return f"case {case['id']} passed an activation without observing one"
+    if result.expected == "does-not-activate" and result.harness == "codex":
+        return f"case {case['id']} passed a near miss in Codex, which has no signal that proves non-activation"
+    if result.expected == "does-not-activate" and result.observed_activation:
+        return f"case {case['id']} passed although it observed an activation ({result.observed_activation!r})"
+    return None
+
+
+# The not-run reasons that say Codex cannot observe the outcome, not that the case was skipped: a Codex run
+# gives one for every near miss, and for an implicit activation it could not see.
+UNOBSERVABLE = {"codex": ("Codex has no observable signal that proves non-activation",
+                          "Codex showed no observable activation signal")}
 
 
 def _markers(files: Mapping[str, bytes], target: str) -> list[str]:
@@ -495,10 +614,9 @@ def activation_case(
     """
     name = target.rsplit("/", 1)[-1]
     companions = {directory.rsplit("/", 1)[-1] for directory in skill_dirs} - {name}
-    for path in fixtures:
-        problem = fixture_problem(path, files)
-        if problem:
-            return "error", problem, None, "not observable"
+    problem = _staging_problem(harness, files, fixtures, skill_dirs, links)
+    if problem:
+        return "error", problem, None, "not observable"
     with tempfile.TemporaryDirectory(prefix="forge-runtime-", dir=workspace_root) as temporary:
         workspace = Path(temporary)
         for path, data in files.items():
@@ -516,11 +634,8 @@ def activation_case(
         if harness == "claude-code":
             wanted = links if links is not None else {f".claude/skills/{d.rsplit('/', 1)[-1]}": f"../../{d}"
                                                       for d in skill_dirs}
+            # _staging_problem checked that each link points at the candidate it is named for.
             for path, link_target in wanted.items():
-                resolved = posixpath.normpath(posixpath.join(posixpath.dirname(path), link_target))
-                if path != f".claude/skills/{resolved.rsplit('/', 1)[-1]}" or resolved not in skill_dirs:
-                    return "error", f"the link {path} does not point at the candidate it is named for", None, \
-                        "not observable"
                 link = safe_path(workspace, path)
                 link.parent.mkdir(parents=True, exist_ok=True)
                 link.symlink_to(link_target)
@@ -534,7 +649,8 @@ def activation_case(
             return "not-run", f"unavailable: the harness could not start: {error}", None, "not observable"
         # What the harness did before it stopped counts, also when it timed out or failed. Observed while the
         # workspace and its links exist, so paths resolve where the harness found them.
-        observed = (_observe_claude(completed.stdout, name, baseline | companions, workspace, _markers(files, target))
+        observed = (_observe_claude(completed.stdout, name, baseline | companions, workspace, _markers(files, target),
+                                    directory=target)
                     if harness == "claude-code"
                     else _observe_codex(completed.stdout, target, _markers(files, target), workspace,
                                         workspace.resolve()))
@@ -603,6 +719,10 @@ def run_skill_runtime(
         directory = run.part_dirs[test_case["part_id"]]
         name = directory.rsplit("/", 1)[-1]
         hashes = {path: digest for path, digest in frozen.items() if path.startswith(directory + "/")}
+        staged = {path: data for path, data in files.items() if path.startswith(directory + "/")}
+        # The repository's own links for the part, as they are: a missing one stays missing.
+        links = {link: run.frozen_inputs["symlinks"][link] for link in run.part_links.get(test_case["part_id"], [])
+                 if link in run.frozen_inputs["symlinks"]}
         permitted = list(test_case["permitted_tools"][harness])
         fixtures = dict(test_case.get("fixtures") or {})
         environment = "; ".join([
@@ -613,29 +733,26 @@ def run_skill_runtime(
 
         def result(outcome: str, reason: str, activation: str | None = None,
                    inventory: str = "not observable") -> RuntimeResult:
-            return RuntimeResult(run_id=run.run_id, part_id=test_case["part_id"], case_id=test_case["id"],
-                                 prompt=test_case["prompt"], expected=test_case["expected"],
-                                 observed_activation=activation, result=outcome, reason=reason, file_hashes=hashes,
-                                 harness=harness, harness_version=checked["version"], environment=environment,
-                                 inventory=inventory)
+            built = RuntimeResult(run_id=run.run_id, part_id=test_case["part_id"], case_id=test_case["id"],
+                                  prompt=test_case["prompt"], expected=test_case["expected"],
+                                  observed_activation=activation, result=outcome, reason=reason, file_hashes=hashes,
+                                  harness=harness, harness_version=checked["version"], environment=environment,
+                                  inventory=inventory)
+            # The rule the reference checker applies to stored results holds for every result made here.
+            problem = outcome_problem(built, test_case, (directory, staged, links))
+            return built if problem is None else replace(built, result="error", reason=f"inconsistent: {problem}")
 
         if not checked["available"]:
             results.append(result("not-run", f"unavailable: {checked['reason']}"))
             continue
-        uncontained = [tool for tool in permitted if harness == "claude-code" and tool not in CLAUDE_CONTAINED]
-        if uncontained:
-            results.append(result("not-run", f"unavailable: Claude runs the case without a sandbox; "
-                                             f"{', '.join(uncontained)} cannot be permitted, only "
-                                             f"{', '.join(CLAUDE_CONTAINED)}"))
+        stop = case_preflight(harness, test_case, directory, staged, links)
+        if stop:
+            results.append(result(*stop))
             continue
         blocked = shadowing(directory.rsplit("/", 1)[-1], user_skills)
         if blocked:
             results.append(result("not-run", blocked))
             continue
-        staged = {path: data for path, data in files.items() if path.startswith(directory + "/")}
-        # The repository's own links for the part, as they are: a missing one stays missing.
-        links = {link: run.frozen_inputs["symlinks"][link] for link in run.part_links.get(test_case["part_id"], [])
-                 if link in run.frozen_inputs["symlinks"]}
         outcome, reason, activation, inventory = activation_case(
             harness, staged, [directory], directory, test_case["prompt"], test_case["expected"], permitted, fixtures,
             runner=runner, environ=environ, baseline=set(baseline_skills), timeout=timeout,

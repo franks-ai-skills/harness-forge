@@ -1,5 +1,5 @@
 # Routing cases for harness-intake: should the skill load for the prompt?
-# Run per harness at least three times; plan task 11 runs the smoke subset.
+# Run per harness three times (plan task 14); task 11's smoke runs one explicit, implicit and near-miss case.
 skill: harness-intake
 cases:
   - {id: explicit, prompt: "I want a skill that writes reproduction checklists", expect: trigger, mode: explicit}  # the runner prefixes /harness-intake or $harness-intake
@@ -9,3 +9,16 @@ cases:
   - {id: near-miss-verify, prompt: "Verify the skill I already built in .agents/skills/repro-checklist.", expect: no-trigger, mode: implicit}
   - {id: near-miss-coding, prompt: "Fix the failing test in src/parser.py.", expect: no-trigger, mode: implicit}
   - {id: near-miss-question, prompt: "What does the description field of SKILL.md do in Codex?", expect: no-trigger, mode: implicit}
+  - {id: lint-hook-idea, prompt: "I want the agent to run the linter after every file it edits. What should that be?", expect: trigger, mode: implicit}
+  - {id: release-notes-command, prompt: "I'd like a command my team can type to draft release notes from merged PRs.", expect: trigger, mode: implicit}
+  - {id: secret-guard, prompt: "Make sure our coding agent can never read the .env files in this repo.", expect: trigger, mode: implicit}
+  - {id: subagent-or-skill, prompt: "Would a subagent or a skill be better for running our database migrations checklist?", expect: trigger, mode: implicit}
+  - {id: plugin-for-team, prompt: "We want to share our review conventions with every repo in the org through the agent. Where do I start?", expect: trigger, mode: implicit}
+  - {id: codex-and-claude, prompt: "Set up something that works in both Claude Code and Codex to enforce our commit message format.", expect: trigger, mode: implicit}
+  - {id: triage-agent, prompt: "I want an agent that triages new GitHub issues and labels them.", expect: trigger, mode: implicit}
+  - {id: idea-unclear, prompt: "I have an idea for agent tooling around flaky tests but I'm not sure what form it should take.", expect: trigger, mode: implicit}
+  - {id: near-miss-research, prompt: "Research which existing tools turn bug reports into reproduction steps.", expect: no-trigger, mode: implicit}
+  - {id: near-miss-build-decided, prompt: "Build part A from the confirmed decision record.", expect: no-trigger, mode: implicit}
+  - {id: near-miss-explain-hooks, prompt: "Explain what a PreToolUse hook receives on stdin in Claude Code.", expect: no-trigger, mode: implicit}
+  - {id: near-miss-edit-agents-md, prompt: "Add a line to AGENTS.md saying we use pnpm.", expect: no-trigger, mode: implicit}
+  - {id: near-miss-refactor, prompt: "Refactor the payment module to use the new client.", expect: no-trigger, mode: implicit}

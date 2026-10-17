@@ -578,9 +578,34 @@ def load_decision(path: Path, *, root: Path | None = None) -> Decision:
 # --- README hand-off --------------------------------------------------------
 
 
+# Conditions Forge words itself. The reviewer judges every recommendation by the first two, and by the
+# third where a control lists it; a condition that only repeated a rule's statement got different verdicts
+# for identical entries (owner test).
+FORGE_CONDITIONS = {
+    "outside.gate.real-refs": "It targets the real refs and resources it protects, such as the default and release "
+                              "branches and tags or the production accounts",
+    "outside.gate.periodic-verification": "Its configuration is checked periodically, because gate configuration "
+                                          "drifts silently",
+}
+EVERY_CONTROL = ("outside.gate.real-refs", "outside.gate.periodic-verification")
+# The agent-config paths the KB's configuration and outside-gates guides name for owner review, per target
+# harness; skills live in .agents/ for both.
+AGENT_CONFIG = {"claude-code": ("`.claude/`", "`CLAUDE.md`", "`.mcp.json`"),
+                "codex": ("`.codex/`", "`AGENTS.md`", "`AGENTS.override.md`")}
+
+
+def _codeowners_condition(targets: list[str]) -> str:
+    paths = ["`.agents/`", *dict.fromkeys(path for target in targets for path in AGENT_CONFIG.get(target, ()))]
+    return (f"A CODEOWNERS entry names an owner for every file that configures the agent, including "
+            f"{', '.join(paths)}, `.devcontainer/`, the CI workflow files and the CODEOWNERS file itself, and the "
+            "branch rule requires code-owner review")
+
+
 def _outside_section(decision: Decision, conditions: dict[str, str]) -> str:
     lines = [f"## {OUTSIDE_HEADING}", ""]
     entries = []
+    conditions = {**conditions, **FORGE_CONDITIONS,
+                  "outside.codeowners.agent-config": _codeowners_condition(decision.record["targets"])}
     for part in decision.record["parts"]:
         for control in part["outside_controls"]:
             role = "required for the goal" if control["required_for_goal"] else "precaution"
@@ -588,7 +613,7 @@ def _outside_section(decision: Decision, conditions: dict[str, str]) -> str:
                 f"- `{control['control']}` (part {part['id']}): {OUTSIDE_STATUS}. {role.capitalize()}; "
                 f"availability {control['availability']}. It works as a gate only when:"
             )
-            for rule_id in control["prerequisites"]:
+            for rule_id in dict.fromkeys([*control["prerequisites"], *EVERY_CONTROL]):
                 # A statement may span lines; the README holds it on one, as Forge reads it back.
                 condition = " ".join((conditions.get(rule_id) or "").split())
                 entries.append(f"  - {condition} (`{rule_id}`)" if condition else f"  - `{rule_id}`")

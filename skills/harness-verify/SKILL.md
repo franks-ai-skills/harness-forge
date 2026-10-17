@@ -47,7 +47,7 @@ root, which downloads Forge's pinned packages from PyPI once.
    <parts the builder fixed> --cases <runtime cases>` with the
    confirmation from step 1 and the harness and cases step 3 will run
    (only that harness's earlier runtime evidence can be kept), and ask
-   once:
+   its `question` once, word for word, with the options
    `Review (recommended)` or `Extensive review (rarely needed)`, showing
    each option's parts and judged-rule count. Review judges the fixed
    parts, every part linked to them and every part whose inputs or
