@@ -26,6 +26,7 @@ fixtures:
             tests.test_verify.PrecedenceTest.test_local_reuse_is_checked_read_only_like_a_build]
   - fixture: An override that loosens a security rule without the explicit warning having been shown
     tests: [tests.test_overrides.ValidationTest.test_a_supported_correction_is_valid_and_warns_when_it_loosens_an_error_rule,
+            tests.test_overrides.ValidationTest.test_retiring_a_security_warning_rule_warns_as_a_security_rule,
             tests.test_cli_live.LiveCommandsTest.test_an_adopted_override_is_checked_shown_and_bound_to_the_confirmation]
   - fixture: Research reused after the goal changed
     tests: [tests.test_research.BriefTest.test_research_is_reused_only_for_the_same_brief,

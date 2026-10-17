@@ -75,6 +75,12 @@ class ValidationTest(unittest.TestCase):
         self.assertIn("eligibility rule, which makes a chosen mechanism a goal conflict",
                       check(retire_exclusion)["warnings"][0])
 
+    def test_retiring_a_security_warning_rule_warns_as_a_security_rule(self):
+        """A security rule warns although its severity is only a warning, unlike an ordinary warning rule."""
+        self.assertEqual(check(override(rule=None, rule_id="security.untrusted-input.as-data"))["warnings"],
+                         ["retires the security rule security.untrusted-input.as-data: nothing checks it in this "
+                          "repository any more"])
+
     def test_forged_or_overreaching_overrides_are_invalid(self):
         unsupported = copy.deepcopy(RESEARCH)
         unsupported[0]["support"][0]["verdict"] = "unsupported"
