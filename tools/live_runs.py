@@ -34,6 +34,7 @@ from __future__ import annotations
 
 import contextlib
 import datetime
+import hashlib
 import importlib.util
 import io
 import json
@@ -48,11 +49,11 @@ ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT / "src") not in sys.path:
     sys.path.insert(0, str(ROOT / "src"))
 
-from harness_forge.adapters.base import preflight, run_command  # noqa: E402
+from harness_forge.adapters.base import Completed, preflight, run_command  # noqa: E402
 from harness_forge.contracts import write_decision  # noqa: E402
 from harness_forge.documents import load_document  # noqa: E402
 from harness_forge.models import Decision  # noqa: E402
-from harness_forge.runtime import UNOBSERVABLE, activation_case, claude_skill_origins, shadowing  # noqa: E402
+from harness_forge.runtime import UNOBSERVABLE, activation_case, claude_skill_origins, judge_run, shadowing  # noqa: E402
 
 TEST_RELAY = "confirmed by the test runner it was started with, not by a user in a session"
 UNCLEAN = ("competing skill", "executable components", "user-level skill named", "outside the throwaway workspace")
@@ -494,15 +495,83 @@ def routing(harness: str, out: Path, *, runner=run_command, environ=None, login_
     in a fresh session, with the pass counts per skill and mode."""
     summary = _routing(harness, out, "routing", _all_routing_cases, repeats, runner=runner, environ=environ,
                        login_answer=login_answer)
+    summary["rates"] = _rates(summary["results"])
+    _write_json(out / "summary.json", summary)
+    return summary
+
+
+def _rates(results: list[dict]) -> dict[str, dict]:
+    """Runs and passes per skill and mode; every near miss counts as one mode."""
     rates: dict[str, dict] = {}
-    for result in summary["results"]:
+    for result in results:
         mode = "near_miss" if result["expected"] != "activates" else result["mode"]
         counts = rates.setdefault(result["skill"], {}).setdefault(mode, {"runs": 0, "passed": 0})
         counts["runs"] += 1
         counts["passed"] += result["result"] == "pass"
-    summary["rates"] = rates
-    _write_json(out / "summary.json", summary)
-    return summary
+    return rates
+
+
+def _recorded_workspace(harness: str, stream: dict) -> Path | None:
+    """The throwaway workspace a recorded case ran in: Codex's -C argument, Claude's init event cwd."""
+    if harness == "codex":
+        command = stream["command"]
+        return Path(command[command.index("-C") + 1]) if "-C" in command else None
+    for line in stream["stdout"].splitlines():
+        try:
+            event = json.loads(line)
+        except ValueError:
+            continue
+        if event.get("type") == "system" and event.get("subtype") == "init" and isinstance(event.get("cwd"), str):
+            return Path(event["cwd"])
+    return None
+
+
+def rescore(out: Path, *, scorer: str) -> dict:
+    """Judge a recorded routing or routing-smoke run again with the current observer, launching nothing.
+
+    Each case's recorded stream is judged as activation_case judges a live
+    one, under its own workspace path. The result goes to ``rescored.json``
+    beside the run, with each case's recorded result; the recorded files
+    stay as they are. ``scorer`` names the Forge revision that judged, and
+    ``skills_sha256`` the skill files it matched reads against: today's,
+    which must be the ones the run installed.
+    A case without a stream, which never launched, keeps its recorded result.
+    """
+    summary = json.loads((out / "summary.json").read_text(encoding="utf-8"))
+    harness = summary["harness"]
+    streams: dict[str, list[dict]] = {}
+    for path in sorted((out / "streams").glob("*.json")):
+        stream = json.loads(path.read_text(encoding="utf-8"))
+        streams.setdefault(stream["stdin"], []).append(stream)
+    files = {}
+    for skill in SKILLS:
+        source = ROOT / "skills" / skill
+        for path in sorted(source.rglob("*")):
+            if path.is_file():
+                files[f".agents/skills/{skill}/{path.relative_to(source).as_posix()}"] = path.read_bytes()
+    permitted = ["Skill", "Read"] if harness == "claude-code" else ["command_execution"]
+    baseline = set(summary.get("baseline", {}).get("skills", []))
+    results = []
+    for recorded in summary["results"]:
+        queue = streams.get(recorded["prompt"], [])
+        result = {**recorded, "recorded_result": recorded["result"], "recorded_reason": recorded["reason"]}
+        if queue:
+            stream = queue.pop(0)
+            completed = Completed(stream["returncode"], stream["stdout"], stream["stderr"], stream["timed_out"])
+            outcome, reason, activation, inventory = judge_run(
+                harness, completed, files, f".agents/skills/{recorded['skill']}", _recorded_workspace(harness, stream),
+                baseline | (set(SKILLS) - {recorded["skill"]}), recorded["expected"], permitted,
+                slash=recorded["mode"] == "explicit")
+            result.update({"result": outcome, "reason": reason, "observed_activation": activation,
+                           "inventory": inventory})
+        results.append(result)
+    digest = hashlib.sha256()
+    for path, data in sorted(files.items()):
+        digest.update(path.encode() + b"\0" + hashlib.sha256(data).digest())
+    rescored = {"case": summary["case"], "harness": harness, "scorer": scorer, "skills_sha256": digest.hexdigest(),
+                "results": results, "rates": _rates(results)}
+    _write_json(out / "rescored.json", rescored)
+    return rescored
 
 
 def _routing(harness: str, out: Path, name: str, select, repeats: int, *, runner, environ,

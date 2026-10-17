@@ -29,7 +29,7 @@ from typing import Iterable, Mapping
 
 from harness_forge.access import inside, tool_paths
 from harness_forge.adapters import codex
-from harness_forge.adapters.base import Runner, preflight, run_command, worker_environment
+from harness_forge.adapters.base import Completed, Runner, preflight, run_command, worker_environment
 from harness_forge.documents import fold_name, load_document, safe_path
 from harness_forge.models import RuntimeResult, VerificationRun
 
@@ -678,13 +678,26 @@ def activation_case(
                                timeout=timeout)
         except OSError as error:
             return "not-run", f"unavailable: the harness could not start: {error}", None, "not observable"
-        # What the harness did before it stopped counts, also when it timed out or failed. Observed while the
-        # workspace and its links exist, so paths resolve where the harness found them.
-        observed = (_observe_claude(completed.stdout, name, baseline | companions, workspace, _markers(files, target),
-                                    directory=target)
-                    if harness == "claude-code"
-                    else _observe_codex(completed.stdout, target, _markers(files, target), workspace,
-                                        workspace.resolve()))
+        # Judged while the workspace and its links exist, so paths resolve where the harness found them.
+        return judge_run(harness, completed, files, target, workspace, baseline | companions, expected, permitted,
+                         slash=slash, timeout=timeout)
+
+
+def judge_run(harness: str, completed: Completed, files: Mapping[str, bytes], target: str, workspace: Path | None,
+              baseline: set[str], expected: str, permitted: list[str], *, slash: bool = False,
+              timeout: int = RUNTIME_TIMEOUT) -> tuple[str, str, str | None, str]:
+    """activation_case's verdict on a finished run: (outcome, reason, observed activation, inventory).
+
+    ``baseline`` holds every skill that does not compete, the other
+    installed skills included. A recorded run can be judged again here,
+    with its own workspace path, after the workspace is gone.
+    """
+    name = target.rsplit("/", 1)[-1]
+    # What the harness did before it stopped counts, also when it timed out or failed.
+    observed = (_observe_claude(completed.stdout, name, baseline, workspace, _markers(files, target), directory=target)
+                if harness == "claude-code"
+                else _observe_codex(completed.stdout, target, _markers(files, target),
+                                    *(() if workspace is None else (workspace, workspace.resolve()))))
     outside = sorted(set(observed["calls"]) - set(permitted))
     if outside:
         return "fail", f"tool outside the declared list: {', '.join(outside)}", None, observed["inventory"]
