@@ -503,6 +503,29 @@ class ParserDeviationTest(unittest.TestCase):
         body = 'Text <custom title="' + "x" * 5000 + '`"> [broken](missing.md) `\n'
         self.assertEqual(self.links(body)[0], "fail")
 
+    def test_only_commonmark_whitespace_is_trimmed_from_a_paragraph(self):
+        for body in ('\u00a0[a]: https://ok "[broken](missing.md)"\n', '[a]: https://ok "[broken](missing.md)"\u00a0\n',
+                     '\u00a0[a]: https://ok "[broken](missing.md)"\nTitle\n---\n'):
+            with self.subTest(body=body):
+                status, reason = self.links(body)
+                self.assertEqual(status, "fail")
+                self.assertIn("missing.md", reason)
+
+    def test_a_setext_heading_starts_after_its_definitions(self):
+        for ending in ("\n", "\r\n", "\r"):
+            with self.subTest(ending=repr(ending)):
+                text = ending.join(["[a]: ok.md", "Outside controls", "---", ""])
+                start = len("[a]: ok.md" + ending)
+                self.assertEqual(markdown_section(text, "Outside controls")[0], start)
+        from harness_forge.research import rejected_domains
+        with tempfile.TemporaryDirectory() as directory:
+            (Path(directory) / "docs").mkdir()
+            (Path(directory) / "docs" / "sources.md").write_text(
+                "[a\n| `innocent.example` |]: ok.md\nRejected domains\n---\n\n| `bad.example` | reason |\n", encoding="utf-8")
+            hosts = rejected_domains(Path(directory))["hosts"]
+        self.assertIn("bad.example", hosts)
+        self.assertNotIn("innocent.example", hosts)
+
     def test_file_destinations_are_kept(self):
         status, reason = self.links("[required](< file:missing.md>)\n")
         self.assertEqual(status, "fail", "with its leading space the destination has no scheme: a relative path")

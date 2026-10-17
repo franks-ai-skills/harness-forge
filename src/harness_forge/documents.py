@@ -28,6 +28,8 @@ from jsonschema.exceptions import SchemaError
 from markdown_it import MarkdownIt
 from markdown_it import helpers as _helpers
 from markdown_it.helpers.parse_link_destination import _Result
+from markdown_it.rules_block.lheading import lheading as _lheading_rule
+from markdown_it.rules_block.paragraph import paragraph as _paragraph_rule
 from markdown_it.rules_inline.html_inline import isLinkClose, isLinkOpen
 from referencing import Registry, Resource
 
@@ -667,10 +669,15 @@ def _definitions(state) -> None:
         while found := _definition(token.content, position):
             position, label, destination, title = found
             references.setdefault(_normalize_label(label), {"href": destination, "title": title})
-        if position and opener.type == "heading_open" and not token.content[position:].strip():
+        if position and opener.type == "heading_open" and not token.content[position:].strip(" \t\n"):
             # CommonMark reads the underline as text then; markdown-it-py made the definition a heading.
             raise UnreadableMarkdown(f"line {opener.map[0] + 1}: a setext underline below only link reference "
                                      "definitions")
+        # The block now starts below its definitions, one source line per content line.
+        consumed = token.content.count("\n", 0, position)
+        for block in (opener, token):
+            if block.map and consumed:
+                block.map = [block.map[0] + consumed, block.map[1]]
         token.content = token.content[position:]
 
 
@@ -678,6 +685,21 @@ def _normalize_label(label: str) -> str:
     """CommonMark's label normalization: Unicode case fold, spaces, tabs and line endings trimmed and collapsed.
     markdown-it-py collapses Python's Unicode whitespace and folds with lower().upper(), which matches ı with I."""
     return re.sub(r"[ \t\n]+", " ", label.casefold().strip(" \t\n"))
+
+
+def _ascii_trimmed(rule):
+    """markdown-it-py's paragraph or setext rule with its content trimmed of spaces, tabs and line endings only:
+    its Unicode strip() also removed a non-breaking space, which CommonMark keeps (and which can keep text
+    from being a link reference definition)."""
+    def trimmed(state, start: int, end: int, silent: bool) -> bool:
+        count = len(state.tokens)
+        matched = rule(state, start, end, silent)
+        if matched and not silent and len(state.tokens) >= count + 2:
+            opener, inline = state.tokens[count], state.tokens[count + 1]
+            last = state.line if opener.type == "paragraph_open" else state.line - 1  # a setext underline
+            inline.content = state.getLines(start, last, state.blkIndent, False).strip(" \t\n")
+        return matched
+    return trimmed
 
 
 def _watch(method):
@@ -697,6 +719,8 @@ def _markdown_parser() -> MarkdownIt:
     # The same alternative chains as markdown-it's own rule: an HTML block can interrupt these.
     parser.block.ruler.at("html_block", _html_block, {"alt": ["paragraph", "reference", "blockquote"]})
     parser.block.ruler.disable("reference")
+    for name, rule in (("paragraph", _paragraph_rule), ("lheading", _lheading_rule)):
+        parser.block.ruler.at(name, _ascii_trimmed(rule))
     parser.core.ruler.before("inline", "forge_definitions", _definitions)
     parser.helpers = types.SimpleNamespace(parseLinkLabel=_helpers.parseLinkLabel, parseLinkDestination=_destination,
                                            parseLinkTitle=_helpers.parseLinkTitle)
