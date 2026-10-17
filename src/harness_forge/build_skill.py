@@ -50,9 +50,9 @@ def _template(name: str, **values: str) -> str:
     """A template with its {# ... #} comment lines, such as the license notice, dropped and its values filled."""
     text = "".join(line for line in (TEMPLATES / name).read_text(encoding="utf-8").splitlines(keepends=True)
                    if not (line.startswith("{#") and line.rstrip().endswith("#}")))
-    for key, value in values.items():
-        text = text.replace("{{" + key + "}}", value)
-    return text
+    # One pass over the template's own slots: a value that quotes a slot, such as a procedure printing
+    # "{{untrusted}}", stays as written.
+    return re.sub(r"\{\{(\w+)\}\}", lambda match: values.get(match.group(1), match.group(0)), text)
 
 
 def _limit(rules: list[Rule], rule_id: str, key: str, default: int) -> int:

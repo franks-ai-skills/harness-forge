@@ -83,6 +83,16 @@ class PlanTest(unittest.TestCase):
         self.assertNotIn("uploads logs", "".join(planned.values()))
         self.assertEqual(planned[f".claude/skills/{NAME}"], f"../../.agents/skills/{NAME}")
 
+    def test_inserted_text_keeps_literal_template_markers(self):
+        """Only the template's own slots are filled: a procedure or requirement quoting a slot stays as written."""
+        from harness_forge.build_skill import _template
+        procedure = PROCEDURE + "4. Print the literal {{untrusted}} and {{reference}} markers.\n"
+        skill_md = plan(procedure=procedure)[f".agents/skills/{NAME}/SKILL.md"]
+        self.assertIn("4. Print the literal {{untrusted}} and {{reference}} markers.", skill_md)
+        body = _template("body.md.tmpl", title="T", requirements="## Requirements\n\n1. Keep {{procedure}}.\n\n",
+                         untrusted="", procedure="Step.\n", reference="")
+        self.assertIn("1. Keep {{procedure}}.", body)
+
     def test_each_requirement_is_stated_once_with_one_period(self):
         planned = plan()
         text = "".join(content for path, content in planned.items() if path.endswith(".md"))
