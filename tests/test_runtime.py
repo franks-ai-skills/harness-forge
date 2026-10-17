@@ -780,6 +780,19 @@ class RuntimeTest(unittest.TestCase):
                 self.assertIsNotNone(fixture_problem(path, candidate))
         self.assertIsNone(fixture_problem("bug-report.md", candidate))
 
+    def test_a_fixture_path_with_a_control_character_is_refused_when_the_cases_load(self):
+        """No file system stages a NUL; other control characters only hide what a path names."""
+        import tempfile
+        from harness_forge.runtime import fixture_problem
+        for path in ("bug\0report.md", "bug\nreport.md", "notes/\x1b[2Jx.md", "bug\x7freport.md"):
+            with self.subTest(path=repr(path)):
+                self.assertIn("control character", fixture_problem(path) or "")
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "cases.yaml"
+            path.write_text(json.dumps({"cases": [case(fixtures={"bug\0report.md": "x"})]}), encoding="utf-8")
+            with self.assertRaisesRegex(ValueError, "control character"):
+                load_cases(path)
+
     def test_a_case_whose_fixture_changed_the_staged_candidate_does_not_run(self):
         """Whatever a file system folds, the staged candidate must keep its frozen bytes."""
         from unittest import mock

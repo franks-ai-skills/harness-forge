@@ -54,6 +54,8 @@ def fixture_problem(path: str, candidate: Mapping[str, bytes] | None = None) -> 
     file system.
     """
     parts = path.split("/")
+    if any(ord(character) < 0x20 or ord(character) == 0x7f for character in path):
+        return f"fixture {path!r} names a control character, which no staged file may"
     if "\\" in path or any(part in ("", ".", "..") for part in parts):
         return f"fixture {path} is not a plain relative path"
     taken = {fold_name(name) for name in candidate or {}}
