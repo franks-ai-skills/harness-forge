@@ -586,17 +586,24 @@ FORGE_CONDITIONS = {
                               "branches and tags or the production accounts",
     "outside.gate.periodic-verification": "Its configuration is checked periodically, because gate configuration "
                                           "drifts silently",
-    "outside.codeowners.agent-config": "A CODEOWNERS entry names an owner for the agent's configuration (`.agents/`, "
-                                       "`.claude/`, `AGENTS.md` and `CLAUDE.md`), and the branch rule requires "
-                                       "code-owner review",
 }
 EVERY_CONTROL = ("outside.gate.real-refs", "outside.gate.periodic-verification")
+# The agent-config paths of the KB's outside-gates guide, per target harness; skills live in .agents/ for both.
+AGENT_CONFIG = {"claude-code": ("`.claude/`", "`CLAUDE.md`"), "codex": ("`.codex/`", "`AGENTS.md`", "`AGENTS.override.md`")}
+
+
+def _codeowners_condition(targets: list[str]) -> str:
+    paths = ["`.agents/`", *dict.fromkeys(path for target in targets for path in AGENT_CONFIG.get(target, ()))]
+    return (f"A CODEOWNERS entry names an owner for the agent's configuration ({', '.join(paths[:-1])} and "
+            f"{paths[-1]}), the CI workflow files and the CODEOWNERS file itself, and the branch rule requires "
+            "code-owner review")
 
 
 def _outside_section(decision: Decision, conditions: dict[str, str]) -> str:
     lines = [f"## {OUTSIDE_HEADING}", ""]
     entries = []
-    conditions = {**conditions, **FORGE_CONDITIONS}
+    conditions = {**conditions, **FORGE_CONDITIONS,
+                  "outside.codeowners.agent-config": _codeowners_condition(decision.record["targets"])}
     for part in decision.record["parts"]:
         for control in part["outside_controls"]:
             role = "required for the goal" if control["required_for_goal"] else "precaution"

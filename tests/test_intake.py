@@ -153,6 +153,26 @@ class ReadmeTest(unittest.TestCase):
         for named in ("`.agents/`", "`.claude/`", "`AGENTS.md`", "code-owner review"):
             self.assertIn(named, line)
 
+    def test_the_codeowners_condition_names_the_targets_configuration(self):
+        """The KB's agent-config paths for the harnesses the idea targets, and the files that gate them."""
+        def line(targets):
+            record = self.outside_only()
+            record.record["targets"] = targets
+            readme = update_outside_section("# Repro\n", record)
+            return next(line for line in readme.splitlines() if "(`outside.codeowners.agent-config`)" in line)
+
+        codex, claude, both = line(["codex"]), line(["claude-code"]), line(["claude-code", "codex"])
+        for named in ("`.codex/`", "`AGENTS.md`", "`AGENTS.override.md`", "`.agents/`"):
+            self.assertIn(named, codex)
+            self.assertIn(named, both)
+        for named in ("`.claude/`", "`CLAUDE.md`", "`.agents/`"):
+            self.assertIn(named, claude)
+            self.assertIn(named, both)
+        self.assertNotIn("`.claude/`", codex)
+        self.assertNotIn("`.codex/`", claude)
+        for text in (codex, claude, both):
+            self.assertIn("the CI workflow files and the CODEOWNERS file itself", text)
+
     def test_unrelated_content_is_preserved_and_section_replaced(self):
         original = "# Repro\n\nIntro.\n\n## Outside controls\n\n- `old-control` (part A): recommended, not verified. Precaution; availability available.\n\n## Usage\n\nRun it.\n"
         updated = update_outside_section(original, self.outside_only())
