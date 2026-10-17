@@ -422,6 +422,26 @@ class RuntimeTest(unittest.TestCase):
         self.assertEqual(observe(failed=True)["activation"], f"Skill tool called for {NAME}",
                          "a failed read loaded no other skill")
 
+    def test_batched_calls_route_to_the_first_skill_whose_call_succeeded(self):
+        """Calls in one message count in their order once their results are in, whatever order those arrive in."""
+        from harness_forge.runtime import _observe_claude
+        other = {"type": "tool_use", "id": "a", "name": "Read",
+                 "input": {"file_path": "/w/.claude/skills/harness-intake/SKILL.md"}}
+        target = {"type": "tool_use", "id": "b", "name": "Skill", "input": {"skill": NAME}}
+
+        def observe(calls, results):
+            events = [{"type": "assistant", "message": {"content": calls}}, *results,
+                      {"type": "result", "subtype": "success", "is_error": False, "result": "done"}]
+            return _observe_claude("\n".join(json.dumps(event) for event in events) + "\n", NAME, set(), None,
+                                   ["\0no marker"])
+
+        self.assertIsNone(observe([other, target], [tool_result("a"), tool_result("b")])["activation"])
+        self.assertIsNone(observe([other, target], [tool_result("b"), tool_result("a")])["activation"])
+        self.assertEqual(observe([other, target], [tool_result("a", failed=True), tool_result("b")])["activation"],
+                         f"Skill tool called for {NAME}")
+        self.assertEqual(observe([target, other], [tool_result("a"), tool_result("b")])["activation"],
+                         f"Skill tool called for {NAME}")
+
     def test_a_codex_read_after_another_skill_is_that_skills_pointer(self):
         def command(text, output):
             return json.dumps({"type": "item.completed", "item": {"id": text[-9:], "type": "command_execution",

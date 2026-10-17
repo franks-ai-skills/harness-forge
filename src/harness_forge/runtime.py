@@ -184,7 +184,7 @@ def _result_text(block: dict) -> str:
     return "\n".join(item.get("text", "") for item in content or [] if isinstance(item, dict))
 
 
-_CLAUDE_SKILL_PATH = re.compile(r"^(?:.*/)?\.(?:claude|agents)/skills/[^/]+/SKILL\.md$")
+_CLAUDE_SKILL_PATH = re.compile(r"^(?:.*/)?\.(?:claude|agents)/skills/([^/]+)/SKILL\.md$")
 
 
 def _observe_claude(stdout: str, name: str, baseline: set[str], workspace: Path | None = None,
@@ -202,6 +202,11 @@ def _observe_claude(stdout: str, name: str, baseline: set[str], workspace: Path 
     reads: dict[str, tuple[str, dict]] = {}
     skill_reads: set[str] = set()
     other_reads: set[str] = set()
+    # Each call's place in the order the model made them: a skill-choosing call counts from that place once its
+    # result is in, so results that arrive in another order cannot change which skill came first.
+    order: dict[str, int] = {}
+    credited: list[tuple[int, str]] = []
+    chosen_other: list[int] = []
     # Only the candidate in the throwaway workspace counts; a same-named skill elsewhere is not it.
     roots = ({str(workspace), str(Path(workspace).resolve())} if workspace is not None else {""})
     for event in _events(stdout):
@@ -223,6 +228,7 @@ def _observe_claude(stdout: str, name: str, baseline: set[str], workspace: Path 
                 if not isinstance(block, dict) or block.get("type") != "tool_use":
                     continue
                 observed["calls"].append(str(block.get("name")))
+                order.setdefault(str(block.get("id")), len(order))
                 arguments = block.get("input") if isinstance(block.get("input"), dict) else {}
                 if workspace is not None and _tool_paths(str(block.get("name")), arguments):
                     reads[str(block.get("id"))] = (str(block.get("name")), arguments)
@@ -245,8 +251,9 @@ def _observe_claude(stdout: str, name: str, baseline: set[str], workspace: Path 
                     if path in {f"{base}/{folder}/{name}/SKILL.md" for base in roots
                                 for folder in (".claude/skills", ".agents/skills")}:
                         signal = f"read SKILL.md from the {name} skill"
-                    elif _CLAUDE_SKILL_PATH.match(path):
+                    elif (_CLAUDE_SKILL_PATH.match(path) or [None, name])[1] != name:
                         # Another skill's SKILL.md: reading it chooses that skill, as a Skill call would.
+                        # The candidate's name elsewhere is no other skill's choice.
                         other_reads.add(str(block.get("id")))
                 if signal:
                     observed["attempted"] = observed["attempted"] or signal
@@ -259,11 +266,12 @@ def _observe_claude(stdout: str, name: str, baseline: set[str], workspace: Path 
                     continue
                 if str(block.get("tool_use_id")) in other_reads:
                     other_skill = True
+                    chosen_other.append(order[str(block.get("tool_use_id"))])
                 signal = pending.get(str(block.get("tool_use_id")))
                 # A read activates only when it returned the whole SKILL.md: a line or two loads no instructions.
                 if signal and (str(block.get("tool_use_id")) not in skill_reads
                                or _whole(_result_text(block), markers or ["\0no marker"])):
-                    observed["activation"] = observed["activation"] or signal
+                    credited.append((order[str(block.get("tool_use_id"))], signal))
                 if str(block.get("tool_use_id")) in reads:
                     # Judged only once the call succeeded: a failed call reached nothing.
                     tool, arguments = reads[str(block["tool_use_id"])]
@@ -281,6 +289,9 @@ def _observe_claude(stdout: str, name: str, baseline: set[str], workspace: Path 
         if event.get("type") == "result":
             observed["completed"] = event.get("is_error") is False and event.get("subtype") == "success"
             observed["errored"] = not observed["completed"]
+    # The candidate activated when its call came before every other skill's read that succeeded.
+    first = [signal for place, signal in sorted(credited) if place < min(chosen_other, default=len(order))]
+    observed["activation"] = observed["activation"] or (first[0] if first else None)
     observed["attempted"] = observed["activation"] or observed["attempted"]
     return observed
 
