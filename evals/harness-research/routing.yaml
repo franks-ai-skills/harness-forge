@@ -8,13 +8,13 @@ cases:
   - {id: near-miss-build, prompt: "Build the skill we decided on.", expect: no-trigger, mode: implicit}
   - {id: pitfalls, prompt: "What usually goes wrong with automated code review bots? Find sources before we design ours.", expect: trigger, mode: implicit}
   - {id: existing-plugins, prompt: "Is there already a plugin or skill that drafts changelogs? Look it up.", expect: trigger, mode: implicit}
-  - {id: deep-pass-part, prompt: "Run the deep research pass for part B.", expect: trigger, mode: implicit}
-  - {id: survey-pass, prompt: "Do the survey research for the idea we just confirmed.", expect: trigger, mode: implicit}
+  - {id: deep-pass-part, prompt: "Run Harness Forge's deep research pass for part B of the decision record.", expect: trigger, mode: implicit}
+  - {id: survey-pass, prompt: "Run Harness Forge's survey research for the idea recorded in .harness/decisions/.", expect: trigger, mode: implicit}
   - {id: security-concerns, prompt: "Research the security risks of letting an agent post issue comments automatically.", expect: trigger, mode: implicit}
   - {id: requirements-from-sources, prompt: "Propose requirements for the triage skill, each backed by a source.", expect: trigger, mode: implicit}
   - {id: good-practice-domain, prompt: "How do experienced teams write good bug reproduction steps? I want cited findings for our skill.", expect: trigger, mode: implicit}
   - {id: license-maintenance, prompt: "Check the license and maintenance state of the tools that already do this before we build our own.", expect: trigger, mode: implicit}
-  - {id: accept-requirements, prompt: "Let me go through the proposed requirements and accept the ones I want.", expect: trigger, mode: implicit}
+  - {id: accept-requirements, prompt: "Show me the requirements Harness Forge's deep research proposed for part A so I can accept or reject them.", expect: trigger, mode: implicit}
   - {id: near-miss-intake, prompt: "I want a skill that turns bug reports into reproduction checklists.", expect: no-trigger, mode: implicit}
   - {id: near-miss-harness-docs, prompt: "Which settings file does Codex read for MCP servers?", expect: no-trigger, mode: implicit}
   - {id: near-miss-web-question, prompt: "What's the latest Python release?", expect: no-trigger, mode: implicit}

@@ -437,6 +437,15 @@ class LiveCommandsTest(unittest.TestCase):
         self.assertEqual(code, 0, stderr)
         self.assertTrue((self.root / ".harness/overrides/skills.description.length.yaml").exists())
 
+        # The contract the user confirms shows the loosening warning: the digest binds the override, from which
+        # the warning follows; prepare-contract always shows it (design: adversarial fixtures).
+        code, shown, stderr = cli("prepare-contract", "--decision", self.decision, "--evidence",
+                                  self.root / ".scratch/workers.json", "--revision",
+                                  self.root / ".harness/research/repro.rules.yaml")
+        self.assertEqual(code, 0, stderr)
+        self.assertIn("Warning: it changes its parameters for the error rule skills.description.length, which may "
+                      "loosen it", shown["text"])
+
         code, _, stderr = cli("verify", *arguments)
         self.assertEqual(code, 2, "the old confirmation does not cover the override")
         self.assertIn("does not confirm", stderr)

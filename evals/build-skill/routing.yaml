@@ -7,7 +7,7 @@ cases:
   - {id: near-miss-verify, prompt: "Check whether my built skill meets its requirements.", expect: no-trigger, mode: implicit}
   - {id: build-command, prompt: "The release-notes command is decided; generate it.", expect: trigger, mode: implicit}
   - {id: rebuild-after-change, prompt: "The requirements changed after research; rebuild the skill for part B.", expect: trigger, mode: implicit}
-  - {id: write-skill-files, prompt: "Write the SKILL.md and the symlink for the part we confirmed.", expect: trigger, mode: implicit}
+  - {id: write-skill-files, prompt: "Write the SKILL.md and the .claude/skills symlink for the part confirmed in the Harness Forge decision record.", expect: trigger, mode: implicit}
   - {id: build-all-parts, prompt: "Build every decided skill part from the decision record.", expect: trigger, mode: implicit}
   - {id: resolve-conflict, prompt: "The build reported a diff against my existing skill; replace SKILL.md as shown.", expect: trigger, mode: implicit}
   - {id: build-codex-only, prompt: "Build the confirmed skill for Codex only.", expect: trigger, mode: implicit}

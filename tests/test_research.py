@@ -246,6 +246,13 @@ class AcceptanceTest(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "idea.repro.b.steps belongs to part B, not A"):
             accept_requirements([other], {"idea.repro.b.steps": "accept"}, BRIEF, part_id="A")
 
+    def test_an_idea_rule_naming_a_checker_outside_the_catalog_is_refused(self):
+        for checker in ("made.up-checker", "skills.not-in-catalog"):
+            with self.subTest(checker=checker):
+                rule = idea_rule("idea.repro.a.custom", "Uses a custom check", check="script", checker=checker, params={})
+                with self.assertRaisesRegex(ValueError, "not a catalog checker"):
+                    accept_requirements([rule], {"idea.repro.a.custom": "accept"}, BRIEF, part_id="A")
+
     def test_a_loaded_revision_gets_the_acceptance_checks(self):
         """A rehashed file cannot bring in a checker or a part that acceptance refuses."""
         forbidden = idea_rule("idea.repro.a.always", "Always passes", check="script", checker="selection.match",

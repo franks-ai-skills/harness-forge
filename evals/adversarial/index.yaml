@@ -26,7 +26,7 @@ fixtures:
             tests.test_verify.PrecedenceTest.test_local_reuse_is_checked_read_only_like_a_build]
   - fixture: An override that loosens a security rule without the explicit warning having been shown
     tests: [tests.test_overrides.ValidationTest.test_a_supported_correction_is_valid_and_warns_when_it_loosens_an_error_rule,
-            tests.test_contracts.ConfirmTest.test_a_confirmation_binds_the_overrides_it_showed]
+            tests.test_cli_live.LiveCommandsTest.test_an_adopted_override_is_checked_shown_and_bound_to_the_confirmation]
   - fixture: Research reused after the goal changed
     tests: [tests.test_research.BriefTest.test_research_is_reused_only_for_the_same_brief,
             tests.test_research.BriefTest.test_changed_inputs_invalidate_the_brief_digest]
@@ -37,5 +37,6 @@ fixtures:
     tests: [tests.test_research.AcceptanceTest.test_only_accepted_requirements_reach_the_revision,
             tests.test_build_skill.PlanTest.test_plan_contains_only_accepted_requirements]
   - fixture: An idea rule that names a checker outside the catalog or a script path
-    tests: [tests.test_research.AcceptanceTest.test_requirements_belong_to_the_accepted_part,
+    tests: [tests.test_research.AcceptanceTest.test_an_idea_rule_naming_a_checker_outside_the_catalog_is_refused,
+            tests.test_research.AcceptanceTest.test_a_loaded_revision_gets_the_acceptance_checks,
             tests.test_rule_schema.ClosedRulesTest.test_script_path_as_checker_is_rejected]

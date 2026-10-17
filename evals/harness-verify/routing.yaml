@@ -13,7 +13,7 @@ cases:
   - {id: extensive, prompt: "Do a full re-verification of every part.", expect: trigger, mode: implicit}
   - {id: is-it-verified, prompt: "Is the skill we built verified now?", expect: trigger, mode: implicit}
   - {id: forge-own-skills, prompt: "Verify Forge's own skills against their contract.", expect: trigger, mode: implicit}
-  - {id: after-rebuild, prompt: "The rebuild finished; check it.", expect: trigger, mode: implicit}
+  - {id: after-rebuild, prompt: "Harness Forge rebuilt the reproduction-checklist skill; verify it against its contract.", expect: trigger, mode: implicit}
   - {id: goal-review, prompt: "Have the reviewer judge whether part B meets its goal.", expect: trigger, mode: implicit}
   - {id: near-miss-tests, prompt: "Run the unit tests.", expect: no-trigger, mode: implicit}
   - {id: near-miss-lint, prompt: "Check this file for lint errors.", expect: no-trigger, mode: implicit}
@@ -21,3 +21,4 @@ cases:
   - {id: near-miss-intake, prompt: "I want a hook that blocks force pushes.", expect: no-trigger, mode: implicit}
   - {id: near-miss-validate-json, prompt: "Validate this JSON against its schema.", expect: no-trigger, mode: implicit}
   - {id: near-miss-plugin-validate, prompt: "Run claude plugin validate on this repo.", expect: no-trigger, mode: implicit}
+  - {id: near-miss-app-rebuild, prompt: "The rebuild finished; check that the app starts.", expect: no-trigger, mode: implicit}
