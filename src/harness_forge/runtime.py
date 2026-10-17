@@ -494,27 +494,78 @@ def _decide(harness: str, test_case: dict, observed: dict, permitted: list[str])
     return "pass", "no Skill tool call for the candidate"
 
 
-def outcome_problem(result, case: dict, candidate: Mapping[str, bytes] | None = None) -> str | None:
+def _staging_problem(harness: str, files: Mapping[str, bytes], fixtures: Mapping[str, str], skill_dirs: list[str],
+                     links: Mapping[str, str] | None) -> str | None:
+    """Why the throwaway workspace cannot hold these files, fixtures and links, or None."""
+    for path in fixtures:
+        problem = fixture_problem(path, files)
+        if problem:
+            return problem
+    folded = {fold_name(path): path for path in [*files, *fixtures]}
+    for key, path in folded.items():
+        parts = key.split("/")
+        for count in range(1, len(parts)):
+            above = folded.get("/".join(parts[:count]))
+            if above:
+                return f"fixture paths {above} and {path} cannot both be files"
+    if harness == "claude-code":
+        wanted = links if links is not None else {f".claude/skills/{d.rsplit('/', 1)[-1]}": f"../../{d}"
+                                                  for d in skill_dirs}
+        for path, link_target in wanted.items():
+            resolved = posixpath.normpath(posixpath.join(posixpath.dirname(path), link_target))
+            if path != f".claude/skills/{resolved.rsplit('/', 1)[-1]}" or resolved not in skill_dirs:
+                return f"the link {path} does not point at the candidate it is named for"
+    return None
+
+
+def case_preflight(harness: str, case: dict, directory: str, candidate: Mapping[str, bytes] | None,
+                   links: Mapping[str, str] | None = None) -> tuple[str, str] | None:
+    """The result a case gets before it runs, from its own definition and the candidate, or None.
+
+    One order for the producer and for replay: Claude runs only with
+    contained tools (not-run), then the workspace must hold the candidate,
+    the fixtures and the links (error). Whether the harness is available or
+    a user skill shadows the candidate depends on the machine; those come
+    before and after this, as not-run. Without the ``candidate`` files only
+    the tools are checked.
+    """
+    permitted = case["permitted_tools"].get(harness, [])
+    uncontained = [tool for tool in permitted if harness == "claude-code" and tool not in CLAUDE_CONTAINED]
+    if uncontained:
+        return "not-run", (f"unavailable: Claude runs the case without a sandbox; {', '.join(uncontained)} cannot "
+                           f"be permitted, only {', '.join(CLAUDE_CONTAINED)}")
+    problem = (_staging_problem(harness, candidate, case.get("fixtures") or {}, [directory], links)
+               if candidate is not None else None)
+    return ("error", problem) if problem else None
+
+
+def outcome_problem(result, case: dict,
+                    staged: tuple[str, Mapping[str, bytes], Mapping[str, str] | None] | None = None) -> str | None:
     """Why this runtime could not have produced ``result`` for ``case``, or None.
 
     What a case observed is the harness's to say; which outcomes follow from
-    it, and which configurations run at all, is fixed here: Claude runs only
-    with contained tools, a fixture that would replace one of the
-    ``candidate`` files stops the case with an error, Codex cannot prove a
-    non-activation, and a pass agrees with the activation it observed.
+    it, and which configurations run at all, is fixed here. With what was
+    ``staged`` (the candidate's directory, its files and the repository's
+    links for it), a case that case_preflight stops has that result, unless
+    the machine stopped it first (not-run, "unavailable: ..."). An unobservable Codex result names
+    the expectation it belongs to and observes no activation; a pass agrees
+    with the activation it observed, and a near miss never passes in Codex.
     """
     permitted = case["permitted_tools"].get(result.harness)
     if permitted is None:
         return f"case {case['id']} names no permitted tools for {result.harness}"
-    for path in (case.get("fixtures") or {}) if candidate is not None else ():
-        problem = fixture_problem(path, candidate)
-        if problem and result.result != "error":
-            return f"case {case['id']}: {problem}, so the runtime does not run it"
-    uncontained = [tool for tool in permitted if result.harness == "claude-code" and tool not in CLAUDE_CONTAINED]
-    if uncontained and result.result != "not-run":
-        return f"case {case['id']} permits {', '.join(uncontained)}, so Claude Code does not run it"
     if (result.prompt, result.expected) != (case["prompt"], case["expected"]):
         return f"case {case['id']} ran another prompt or expectation than declared"
+    stop = case_preflight(result.harness, case, *(staged or ("", None, None)))
+    if stop:
+        machine = result.result == "not-run" and result.reason.startswith("unavailable: ")
+        if stop and (result.result, result.reason) != stop and not machine:
+            return f"case {case['id']} stops before it runs ({stop[0]}: {stop[1]}), not with {result.result}"
+    near_miss, unseen_activation = UNOBSERVABLE["codex"]
+    if result.result == "not-run" and result.reason in (near_miss, unseen_activation):
+        wanted = "does-not-activate" if result.reason == near_miss else "activates"
+        if result.harness != "codex" or result.expected != wanted or result.observed_activation:
+            return f"case {case['id']} is not-run as unobservable, which contradicts its expectation or observation"
     if result.result != "pass":
         return None
     if result.expected == "activates" and not result.observed_activation:
@@ -561,10 +612,9 @@ def activation_case(
     """
     name = target.rsplit("/", 1)[-1]
     companions = {directory.rsplit("/", 1)[-1] for directory in skill_dirs} - {name}
-    for path in fixtures:
-        problem = fixture_problem(path, files)
-        if problem:
-            return "error", problem, None, "not observable"
+    problem = _staging_problem(harness, files, fixtures, skill_dirs, links)
+    if problem:
+        return "error", problem, None, "not observable"
     with tempfile.TemporaryDirectory(prefix="forge-runtime-", dir=workspace_root) as temporary:
         workspace = Path(temporary)
         for path, data in files.items():
@@ -582,11 +632,8 @@ def activation_case(
         if harness == "claude-code":
             wanted = links if links is not None else {f".claude/skills/{d.rsplit('/', 1)[-1]}": f"../../{d}"
                                                       for d in skill_dirs}
+            # _staging_problem checked that each link points at the candidate it is named for.
             for path, link_target in wanted.items():
-                resolved = posixpath.normpath(posixpath.join(posixpath.dirname(path), link_target))
-                if path != f".claude/skills/{resolved.rsplit('/', 1)[-1]}" or resolved not in skill_dirs:
-                    return "error", f"the link {path} does not point at the candidate it is named for", None, \
-                        "not observable"
                 link = safe_path(workspace, path)
                 link.parent.mkdir(parents=True, exist_ok=True)
                 link.symlink_to(link_target)
@@ -670,6 +717,10 @@ def run_skill_runtime(
         directory = run.part_dirs[test_case["part_id"]]
         name = directory.rsplit("/", 1)[-1]
         hashes = {path: digest for path, digest in frozen.items() if path.startswith(directory + "/")}
+        staged = {path: data for path, data in files.items() if path.startswith(directory + "/")}
+        # The repository's own links for the part, as they are: a missing one stays missing.
+        links = {link: run.frozen_inputs["symlinks"][link] for link in run.part_links.get(test_case["part_id"], [])
+                 if link in run.frozen_inputs["symlinks"]}
         permitted = list(test_case["permitted_tools"][harness])
         fixtures = dict(test_case.get("fixtures") or {})
         environment = "; ".join([
@@ -686,26 +737,20 @@ def run_skill_runtime(
                                   harness=harness, harness_version=checked["version"], environment=environment,
                                   inventory=inventory)
             # The rule the reference checker applies to stored results holds for every result made here.
-            problem = outcome_problem(built, test_case)
+            problem = outcome_problem(built, test_case, (directory, staged, links))
             return built if problem is None else replace(built, result="error", reason=f"inconsistent: {problem}")
 
         if not checked["available"]:
             results.append(result("not-run", f"unavailable: {checked['reason']}"))
             continue
-        uncontained = [tool for tool in permitted if harness == "claude-code" and tool not in CLAUDE_CONTAINED]
-        if uncontained:
-            results.append(result("not-run", f"unavailable: Claude runs the case without a sandbox; "
-                                             f"{', '.join(uncontained)} cannot be permitted, only "
-                                             f"{', '.join(CLAUDE_CONTAINED)}"))
+        stop = case_preflight(harness, test_case, directory, staged, links)
+        if stop:
+            results.append(result(*stop))
             continue
         blocked = shadowing(directory.rsplit("/", 1)[-1], user_skills)
         if blocked:
             results.append(result("not-run", blocked))
             continue
-        staged = {path: data for path, data in files.items() if path.startswith(directory + "/")}
-        # The repository's own links for the part, as they are: a missing one stays missing.
-        links = {link: run.frozen_inputs["symlinks"][link] for link in run.part_links.get(test_case["part_id"], [])
-                 if link in run.frozen_inputs["symlinks"]}
         outcome, reason, activation, inventory = activation_case(
             harness, staged, [directory], directory, test_case["prompt"], test_case["expected"], permitted, fixtures,
             runner=runner, environ=environ, baseline=set(baseline_skills), timeout=timeout,

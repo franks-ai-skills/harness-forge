@@ -78,6 +78,53 @@ class RuntimeTest(unittest.TestCase):
                                     environ=PARENT, **options)
         return results, runner
 
+    def test_fixture_paths_that_cannot_all_be_files_stop_the_case_before_it_runs(self):
+        """A file and a path below it cannot both be staged: the case is an error, not a crash."""
+        from harness_forge.runtime import case_preflight, outcome_problem
+        nested = case(fixtures={"bug-report.md": "Steps.", "bug-report.md/nested.txt": "More."})
+        results, runner = self.run_cases("claude-code", claude_run(), cases=[nested])
+        self.assertEqual(results[0].result, "error", results[0].reason)
+        self.assertIn("cannot both be files", results[0].reason)
+        self.assertEqual(runner.worker_calls, [])
+        candidate = {path: data for path, data in self.files.items() if path.startswith(SKILL_DIR + "/")}
+        self.assertIsNone(outcome_problem(results[0], nested, (SKILL_DIR, candidate, None)))
+        vendor = {f"vendor/skills/{NAME}/SKILL.md": b"skill"}
+        self.assertEqual(case_preflight("codex", case(fixtures={"vendor": "x"}), f"vendor/skills/{NAME}", vendor)[0],
+                         "error")
+
+    def test_every_result_the_runtime_makes_meets_the_shared_outcome_rule(self):
+        """With several blocking conditions, the producer's one ordered preflight decides, and replay agrees."""
+        from harness_forge.runtime import outcome_problem
+        blocked = case(permitted_tools={"claude-code": ["Skill", "Bash"], "codex": ["command_execution"]},
+                       fixtures={f"{SKILL_DIR}/SKILL.md": "replaced", "notes.md": "x", "notes.md/deeper": "y"})
+        candidate = {path: data for path, data in self.files.items() if path.startswith(SKILL_DIR + "/")}
+        for harness in ("claude-code", "codex"):
+            with self.subTest(harness=harness):
+                result = self.run_cases(harness, claude_run() if harness == "claude-code" else codex_run(),
+                                        cases=[blocked])[0][0]
+                self.assertIn(result.result, ("not-run", "error"))
+                self.assertIsNone(outcome_problem(result, blocked, (SKILL_DIR, candidate, None)), result.reason)
+
+    def test_an_unobservable_result_matches_its_expectation_and_observes_nothing(self):
+        from harness_forge.models import RuntimeResult
+        from harness_forge.runtime import UNOBSERVABLE, outcome_problem
+
+        def result(expected, reason, activation=None):
+            return RuntimeResult(run_id="r", part_id="A", case_id="c", prompt="p", expected=expected,
+                                 observed_activation=activation, result="not-run", reason=reason, file_hashes={},
+                                 harness="codex", harness_version="1", environment="-", inventory="not observable")
+
+        def declared(expected):
+            return {"id": "c", "expected": expected, "prompt": "p", "permitted_tools": {"codex": ["command_execution"]}}
+
+        near_miss, activation = UNOBSERVABLE["codex"]
+        self.assertIsNone(outcome_problem(result("does-not-activate", near_miss), declared("does-not-activate")))
+        self.assertIsNone(outcome_problem(result("activates", activation), declared("activates")))
+        self.assertTrue(outcome_problem(result("does-not-activate", near_miss, f"read {SKILL_DIR}/SKILL.md"),
+                                        declared("does-not-activate")))
+        self.assertTrue(outcome_problem(result("activates", near_miss), declared("activates")))
+        self.assertTrue(outcome_problem(result("does-not-activate", activation), declared("does-not-activate")))
+
     def test_only_the_frozen_candidate_enters_a_throwaway_workspace(self):
         results, runner = self.run_cases("claude-code", claude_run(),
                                          cases=[case(fixtures={"bug-report.md": "Steps: open the app."})])
@@ -437,7 +484,7 @@ class RuntimeTest(unittest.TestCase):
 
     def test_outcome_problem_names_results_the_runtime_cannot_produce(self):
         from harness_forge.models import RuntimeResult
-        from harness_forge.runtime import outcome_problem
+        from harness_forge.runtime import case_preflight, outcome_problem
 
         def result(harness, expected, outcome, activation=None):
             return RuntimeResult(run_id="r", part_id="A", case_id="c", prompt="p", expected=expected,
@@ -452,7 +499,9 @@ class RuntimeTest(unittest.TestCase):
         self.assertIsNone(outcome_problem(result("claude-code", "activates", "pass", signal), case("activates")))
         self.assertIsNone(outcome_problem(result("claude-code", "does-not-activate", "pass"), case("does-not-activate")))
         self.assertIsNone(outcome_problem(result("codex", "does-not-activate", "not-run"), case("does-not-activate")))
-        self.assertIsNone(outcome_problem(result("claude-code", "activates", "not-run"), case("activates", ("Bash",))))
+        stop = case_preflight("claude-code", case("activates", ("Bash",)), SKILL_DIR, None)
+        self.assertIsNone(outcome_problem(RuntimeResult(**{**result("claude-code", "activates", "not-run").__dict__,
+                                                            "reason": stop[1]}), case("activates", ("Bash",))))
         problems = [
             outcome_problem(result("codex", "does-not-activate", "pass"), case("does-not-activate")),
             outcome_problem(result("claude-code", "activates", "pass", signal), case("activates", ("Skill", "Bash"))),
@@ -465,7 +514,7 @@ class RuntimeTest(unittest.TestCase):
     def test_outcome_problem_refuses_results_of_a_case_whose_fixture_replaces_the_candidate(self):
         """The runtime gives such a case an error before it runs; any other result was not made by it."""
         from harness_forge.models import RuntimeResult
-        from harness_forge.runtime import UNOBSERVABLE, outcome_problem
+        from harness_forge.runtime import UNOBSERVABLE, case_preflight, outcome_problem
         candidate = {f"vendor/skills/{NAME}/SKILL.md": b"skill"}
         case = {"id": "c", "expected": "activates", "prompt": "p", "permitted_tools": {"claude-code": ["Skill"]},
                 "fixtures": {f"vendor/skills/{NAME}/SKILL.md": "replaced"}}
@@ -476,8 +525,10 @@ class RuntimeTest(unittest.TestCase):
                                  harness="claude-code", harness_version="1", environment="-", inventory="observed")
 
         self.assertIn("would replace the candidate",
-                      outcome_problem(result("pass", f"Skill tool called for {NAME}"), case, candidate))
-        self.assertIsNone(outcome_problem(result("error"), case, candidate))
+                      outcome_problem(result("pass", f"Skill tool called for {NAME}"), case, (f"vendor/skills/{NAME}", candidate, None)))
+        stop = case_preflight("claude-code", case, f"vendor/skills/{NAME}", candidate)
+        stopped = RuntimeResult(**{**result("error").__dict__, "reason": stop[1]})
+        self.assertIsNone(outcome_problem(stopped, case, (f"vendor/skills/{NAME}", candidate, None)))
         self.assertTrue(all(reason.startswith("Codex") for reason in UNOBSERVABLE["codex"]))
 
     def test_batched_calls_route_to_the_first_skill_whose_call_succeeded(self):
