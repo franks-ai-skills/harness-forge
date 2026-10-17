@@ -184,6 +184,9 @@ def _result_text(block: dict) -> str:
     return "\n".join(item.get("text", "") for item in content or [] if isinstance(item, dict))
 
 
+_CLAUDE_SKILL_PATH = re.compile(r"^(?:.*/)?\.(?:claude|agents)/skills/[^/]+/SKILL\.md$")
+
+
 def _observe_claude(stdout: str, name: str, baseline: set[str], workspace: Path | None = None,
                     markers: list[str] | None = None) -> dict:
     """Activation, tool calls and what else stayed loaded, from the init, assistant and tool-result events.
@@ -198,6 +201,7 @@ def _observe_claude(stdout: str, name: str, baseline: set[str], workspace: Path 
     pending: dict[str, str] = {}
     reads: dict[str, tuple[str, dict]] = {}
     skill_reads: set[str] = set()
+    other_reads: set[str] = set()
     # Only the candidate in the throwaway workspace counts; a same-named skill elsewhere is not it.
     roots = ({str(workspace), str(Path(workspace).resolve())} if workspace is not None else {""})
     for event in _events(stdout):
@@ -241,6 +245,9 @@ def _observe_claude(stdout: str, name: str, baseline: set[str], workspace: Path 
                     if path in {f"{base}/{folder}/{name}/SKILL.md" for base in roots
                                 for folder in (".claude/skills", ".agents/skills")}:
                         signal = f"read SKILL.md from the {name} skill"
+                    elif _CLAUDE_SKILL_PATH.match(path):
+                        # Another skill's SKILL.md: reading it chooses that skill, as a Skill call would.
+                        other_reads.add(str(block.get("id")))
                 if signal:
                     observed["attempted"] = observed["attempted"] or signal
                     pending[str(block.get("id"))] = signal
@@ -250,6 +257,8 @@ def _observe_claude(stdout: str, name: str, baseline: set[str], workspace: Path 
             for block in blocks:
                 if not (isinstance(block, dict) and block.get("type") == "tool_result" and block.get("is_error") is not True):
                     continue
+                if str(block.get("tool_use_id")) in other_reads:
+                    other_skill = True
                 signal = pending.get(str(block.get("tool_use_id")))
                 # A read activates only when it returned the whole SKILL.md: a line or two loads no instructions.
                 if signal and (str(block.get("tool_use_id")) not in skill_reads
