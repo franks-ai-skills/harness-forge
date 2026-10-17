@@ -582,8 +582,8 @@ def load_decision(path: Path, *, root: Path | None = None) -> Decision:
 # third where a control lists it; a condition that only repeated a rule's statement got different verdicts
 # for identical entries (owner test).
 FORGE_CONDITIONS = {
-    "outside.gate.real-refs": "It covers the real refs and resources: the default and release branches, the tags "
-                              "and the production accounts",
+    "outside.gate.real-refs": "It targets the real refs and resources it protects, such as the default and release "
+                              "branches and tags or the production accounts",
     "outside.gate.periodic-verification": "Its configuration is checked periodically, because gate configuration "
                                           "drifts silently",
     "outside.codeowners.agent-config": "A CODEOWNERS entry names an owner for the agent's configuration (`.agents/`, "

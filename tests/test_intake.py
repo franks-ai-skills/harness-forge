@@ -146,6 +146,8 @@ class ReadmeTest(unittest.TestCase):
         for entry in entries:
             self.assertEqual(entry.count("(`outside.gate.periodic-verification`)"), 1, entry)
             self.assertEqual(entry.count("(`outside.gate.real-refs`)"), 1, entry)
+        self.assertIn("It targets the real refs and resources it protects, such as", readme,
+                      "the KB rule's examples stay examples: CODEOWNERS protects no production account (Codex review)")
         codeowners = next(entry for entry in entries if entry.startswith("`codeowners-agent-config`"))
         line = next(line for line in codeowners.splitlines() if "(`outside.codeowners.agent-config`)" in line)
         for named in ("`.agents/`", "`.claude/`", "`AGENTS.md`", "code-owner review"):
