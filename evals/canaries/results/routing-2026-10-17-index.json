@@ -3,8 +3,9 @@
   "date": "2026-10-17",
   "plan": "T14 routing evaluation",
   "run_revision": "8cc2066",
-  "scorer_revision": "97ac5b4",
+  "scorer_revision": "430582c",
   "repeats": 3,
+  "streams_manifest_sha256": "SHA-256 of the UTF-8 text made of one line per streams/*.json file, sorted by file name: the file name, one space, the file's SHA-256 in lowercase hex, a newline",
   "cases_per_repeat": 81,
   "inputs": {
     "evals/build-skill/routing.yaml": "23c62a93883e8989420f1878c7802bd4d2dd9d27259a3ef6e0f19363dbf43167",
@@ -164,35 +165,35 @@
         {
           "batch": "batch-01",
           "summary_sha256": "8116305ebe964a929a4caba2bbb01455935bff460abe2789381535c0e653956e",
-          "rescored_sha256": "1003d6b20fcaf98cdd3de9044a30dcf0d8886e3bdf1ad59657a6bbfbe78780c1",
+          "rescored_sha256": "3ae4436ba41318038a035d7ee5e40cb3e1c82baad37cee6e7013e9ee8d8521a5",
           "streams": 12,
           "streams_manifest_sha256": "f1d21b51b943c5bce34714cb7bee6ba7fb73e2347dfe2a812fa53c317062df44"
         },
         {
           "batch": "batch-02",
           "summary_sha256": "c75b71484770ab079078b8b6c779acdc9aa7ce922a11c16da8be5f5784060231",
-          "rescored_sha256": "024ad7808aca4f60f7587064e52d74bc1d9794243425f8aa7b2bbe6b3c5db000",
+          "rescored_sha256": "1efa07e566a64ff2e723d50b665d32814613574b166341e9a2a38b01d46f35b8",
           "streams": 22,
           "streams_manifest_sha256": "29ea8b0bc786eb971933254b908b575e3c20e8fe41cac21cc1ba6a7b21634b52"
         },
         {
           "batch": "batch-03",
           "summary_sha256": "445503c5576bf6ed69e826296ac4276e66c77c7c88c2c6e1cd1beeef1da2699c",
-          "rescored_sha256": "dcbfe3170081a1f3656ffdfa231f3f5984580a66a65eec49aed167a56ddbcf2b",
+          "rescored_sha256": "bbfe7163a097bc0bc9a734079e1e7156ab036e24bca5a77bc4810591930a5e03",
           "streams": 42,
           "streams_manifest_sha256": "8b1eed74de3b324bb113aed44e84f1f2f2ccfbdc1e88072377f04b667b03d2a5"
         },
         {
           "batch": "batch-04",
           "summary_sha256": "9a2efc34ab66802e4a7a598162a129a54f443dfc463e39eb7283324303e9a6df",
-          "rescored_sha256": "ea976b07e36194082f3fe2e6a839d787078f665c70491833d30e8c2e10e8e1fb",
+          "rescored_sha256": "52782e082692d5d03b80346739f5b36e3fe40fd19857702d016e635b6cbbb271",
           "streams": 82,
           "streams_manifest_sha256": "ec258df4e6ebd574ba94353994ae9a128003f1a0fec356babcc1db6300b95f2c"
         },
         {
           "batch": "batch-05",
           "summary_sha256": "a9ef9d68e67d63a277225c3c6de73654e9e8d4f90c1eb3f8010ec6181e6a2cea",
-          "rescored_sha256": "6e3f5103f8ce288f165414ceb5cf60fcb3e8c01f3f82670e827fba2c4b1ac848",
+          "rescored_sha256": "1e64955a68eba8dc0feb1da41566e0e044ddd1e146122a59f7f18f0e9024ea3d",
           "streams": 95,
           "streams_manifest_sha256": "831560ee23243b533ee4f3ebd51cc5b4eb9ed15efebb4bbe57969ae0b18ad844"
         }
@@ -345,35 +346,35 @@
         {
           "batch": "batch-01",
           "summary_sha256": "0adf3b6b07cd9d559d5abd01a14ce432d79a7de25cc39a24228f2bcf92b559f1",
-          "rescored_sha256": "a53ab07002c64026b22725d82bc0898c627825c99dde082392726203453d41bb",
+          "rescored_sha256": "d2a6f66ad6440f4092228aa9f5759b505f3af4f43b2230638ec676466d91b1d0",
           "streams": 10,
           "streams_manifest_sha256": "4eb04d80bee59f569c2493ac67e7158f017d9cd5f760f7b5f23b9db4b20b09ac"
         },
         {
           "batch": "batch-02",
           "summary_sha256": "cf071ed0c33216d3ad683ba21a06ecb02f1954ae209efa6961e030224a8d91e1",
-          "rescored_sha256": "540677b2b81f0e9f2fac7f5dfd30f0c93145fec7346a2f9f8ea75b3fb6dea238",
+          "rescored_sha256": "97a41148dee4e2387da365de48a9794f7b9acbccb4a695662c482e2f62df69c3",
           "streams": 20,
           "streams_manifest_sha256": "582b4c5a24bd1c401ad704fc048f5b9a9ab7ddf07b18bb4fcb5f6835ba44081e"
         },
         {
           "batch": "batch-03",
           "summary_sha256": "8751dd166cfbfef3f983a2534f625b5d7588bd751c6ebc4a0b868d33442f8abc",
-          "rescored_sha256": "18cc28ba2b4c1e90672ffaa80309a38f4bf35a4a876b81c30f7a84db2bda02ff",
+          "rescored_sha256": "69f2589e04edc003bdaba0aa7245373c9f649e665705dda2fd471e307dfe32af",
           "streams": 40,
           "streams_manifest_sha256": "f1af7341fd85c622a6a25920912656be54befd13003f969d77a2faf61b813e02"
         },
         {
           "batch": "batch-04",
           "summary_sha256": "da2b241f8199f13b178660f93aa5ba91e686be6e7c52cb3858a222827e14a189",
-          "rescored_sha256": "854e20042ed2f7f8aecde7211794d86887d30157f028cab9d756bed71fe543de",
+          "rescored_sha256": "e2c4ff76722818fa21f040eed8083d9f6b4bb788da4e9061f79f87d724331df9",
           "streams": 80,
           "streams_manifest_sha256": "a917d5d5a44dcc471d463e8a6725e2c7d2548affba9bacc75dee89eec3e230ea"
         },
         {
           "batch": "batch-05",
           "summary_sha256": "b221cf71ea4c0fb4c8b78d86a01280f021dfec3c00066812af8281476c8a876d",
-          "rescored_sha256": "135a4ea6c4c40def2bd8b1b7bc518fd56ce297005b71bcea779b7a464698c13c",
+          "rescored_sha256": "4946a5258a3892ba3d12744ea8741580d36bb54b84caadec90c236d602464061",
           "streams": 93,
           "streams_manifest_sha256": "998523936c4eee242be14e44687079f3f3a5a6935d154a49152ff963f700a518"
         }
