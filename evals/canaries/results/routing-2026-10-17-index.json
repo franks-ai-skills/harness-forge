@@ -1,0 +1,383 @@
+{
+  "record": "routing-2026-10-17",
+  "date": "2026-10-17",
+  "plan": "T14 routing evaluation",
+  "run_revision": "8cc2066",
+  "scorer_revision": "97ac5b4",
+  "repeats": 3,
+  "cases_per_repeat": 81,
+  "inputs": {
+    "evals/build-skill/routing.yaml": "23c62a93883e8989420f1878c7802bd4d2dd9d27259a3ef6e0f19363dbf43167",
+    "evals/harness-intake/routing.yaml": "2c5f1be82b1c3c6e2c86da96546f2dfce289e5e84c560306e5982184bb472e97",
+    "evals/harness-research/routing.yaml": "66471200f92358df5dd889992ad5c311c06d6024c13a70fd3ba8140a39b105ac",
+    "evals/harness-verify/routing.yaml": "37d8c8fc9614ecf89bdcfd2bb7880af497c25d17ae1fcf66767b936fb34975bc"
+  },
+  "harnesses": {
+    "claude-code": {
+      "version": "2.1.302 (Claude Code)",
+      "login_type": "subscription",
+      "model": "claude-opus-5-5",
+      "runs": 243,
+      "recorded_results": {
+        "not-run": 12,
+        "pass": 225,
+        "fail": 6
+      },
+      "rescored_results": {
+        "not-run": 12,
+        "pass": 225,
+        "fail": 6
+      },
+      "rescored_rates": {
+        "harness-intake": {
+          "explicit": {
+            "runs": 3,
+            "passed": 0
+          },
+          "implicit": {
+            "runs": 33,
+            "passed": 29
+          },
+          "near_miss": {
+            "runs": 24,
+            "passed": 24
+          }
+        },
+        "harness-research": {
+          "explicit": {
+            "runs": 3,
+            "passed": 0
+          },
+          "implicit": {
+            "runs": 33,
+            "passed": 33
+          },
+          "near_miss": {
+            "runs": 24,
+            "passed": 24
+          }
+        },
+        "build-skill": {
+          "explicit": {
+            "runs": 3,
+            "passed": 0
+          },
+          "implicit": {
+            "runs": 27,
+            "passed": 26
+          },
+          "near_miss": {
+            "runs": 30,
+            "passed": 30
+          }
+        },
+        "harness-verify": {
+          "explicit": {
+            "runs": 3,
+            "passed": 0
+          },
+          "implicit": {
+            "runs": 33,
+            "passed": 32
+          },
+          "near_miss": {
+            "runs": 27,
+            "passed": 27
+          }
+        }
+      },
+      "skills_sha256": [
+        "9d19f36e0931847c3e032aacd50fc8509b40eefa16460baae1fe0a2abd6d248e"
+      ],
+      "run_seconds": 4056,
+      "tokens": {
+        "input": 1326,
+        "cached": 4263990,
+        "cache_write": 1946840,
+        "output": 259396,
+        "cost_usd": 21.82
+      },
+      "limits_percent": [
+        {
+          "batch": 1,
+          "cases": 10,
+          "before": {
+            "five_hour": 7,
+            "week": 35
+          },
+          "after": {
+            "five_hour": 11,
+            "week": 35
+          }
+        },
+        {
+          "batch": 2,
+          "cases": 20,
+          "before": {
+            "five_hour": 12,
+            "week": 35
+          },
+          "after": {
+            "five_hour": 20,
+            "week": 36
+          }
+        },
+        {
+          "batch": 3,
+          "cases": 40,
+          "before": {
+            "five_hour": 21,
+            "week": 36
+          },
+          "after": {
+            "five_hour": 41,
+            "week": 37
+          }
+        },
+        {
+          "batch": 4,
+          "cases": 80,
+          "before": {
+            "five_hour": 42,
+            "week": 37
+          },
+          "after": {
+            "five_hour": 79,
+            "week": 41
+          }
+        },
+        {
+          "batch": 5,
+          "cases": 93,
+          "before": {
+            "five_hour": 0,
+            "week": 41
+          },
+          "after": {
+            "five_hour": 46,
+            "week": 45
+          }
+        }
+      ],
+      "batches_jsonl_sha256": "46bffbb121d79e807e73f2ab621aea49a932085f67724afc7cac378cbb1cb5ad",
+      "evidence": [
+        {
+          "batch": "batch-01",
+          "summary_sha256": "8116305ebe964a929a4caba2bbb01455935bff460abe2789381535c0e653956e",
+          "rescored_sha256": "1003d6b20fcaf98cdd3de9044a30dcf0d8886e3bdf1ad59657a6bbfbe78780c1",
+          "streams": 12,
+          "streams_manifest_sha256": "f1d21b51b943c5bce34714cb7bee6ba7fb73e2347dfe2a812fa53c317062df44"
+        },
+        {
+          "batch": "batch-02",
+          "summary_sha256": "c75b71484770ab079078b8b6c779acdc9aa7ce922a11c16da8be5f5784060231",
+          "rescored_sha256": "024ad7808aca4f60f7587064e52d74bc1d9794243425f8aa7b2bbe6b3c5db000",
+          "streams": 22,
+          "streams_manifest_sha256": "29ea8b0bc786eb971933254b908b575e3c20e8fe41cac21cc1ba6a7b21634b52"
+        },
+        {
+          "batch": "batch-03",
+          "summary_sha256": "445503c5576bf6ed69e826296ac4276e66c77c7c88c2c6e1cd1beeef1da2699c",
+          "rescored_sha256": "dcbfe3170081a1f3656ffdfa231f3f5984580a66a65eec49aed167a56ddbcf2b",
+          "streams": 42,
+          "streams_manifest_sha256": "8b1eed74de3b324bb113aed44e84f1f2f2ccfbdc1e88072377f04b667b03d2a5"
+        },
+        {
+          "batch": "batch-04",
+          "summary_sha256": "9a2efc34ab66802e4a7a598162a129a54f443dfc463e39eb7283324303e9a6df",
+          "rescored_sha256": "ea976b07e36194082f3fe2e6a839d787078f665c70491833d30e8c2e10e8e1fb",
+          "streams": 82,
+          "streams_manifest_sha256": "ec258df4e6ebd574ba94353994ae9a128003f1a0fec356babcc1db6300b95f2c"
+        },
+        {
+          "batch": "batch-05",
+          "summary_sha256": "a9ef9d68e67d63a277225c3c6de73654e9e8d4f90c1eb3f8010ec6181e6a2cea",
+          "rescored_sha256": "6e3f5103f8ce288f165414ceb5cf60fcb3e8c01f3f82670e827fba2c4b1ac848",
+          "streams": 95,
+          "streams_manifest_sha256": "831560ee23243b533ee4f3ebd51cc5b4eb9ed15efebb4bbe57969ae0b18ad844"
+        }
+      ]
+    },
+    "codex": {
+      "version": "codex-cli 0.162.1",
+      "login_type": "subscription",
+      "model": "not reported in the stream",
+      "runs": 243,
+      "recorded_results": {
+        "pass": 105,
+        "not-run": 138
+      },
+      "rescored_results": {
+        "pass": 109,
+        "not-run": 134
+      },
+      "rescored_rates": {
+        "harness-intake": {
+          "explicit": {
+            "runs": 3,
+            "passed": 1
+          },
+          "implicit": {
+            "runs": 33,
+            "passed": 31
+          },
+          "near_miss": {
+            "runs": 24,
+            "passed": 0
+          }
+        },
+        "harness-research": {
+          "explicit": {
+            "runs": 3,
+            "passed": 1
+          },
+          "implicit": {
+            "runs": 33,
+            "passed": 19
+          },
+          "near_miss": {
+            "runs": 24,
+            "passed": 0
+          }
+        },
+        "build-skill": {
+          "explicit": {
+            "runs": 3,
+            "passed": 0
+          },
+          "implicit": {
+            "runs": 27,
+            "passed": 26
+          },
+          "near_miss": {
+            "runs": 30,
+            "passed": 0
+          }
+        },
+        "harness-verify": {
+          "explicit": {
+            "runs": 3,
+            "passed": 1
+          },
+          "implicit": {
+            "runs": 33,
+            "passed": 30
+          },
+          "near_miss": {
+            "runs": 27,
+            "passed": 0
+          }
+        }
+      },
+      "skills_sha256": [
+        "9d19f36e0931847c3e032aacd50fc8509b40eefa16460baae1fe0a2abd6d248e"
+      ],
+      "run_seconds": 3591,
+      "tokens": {
+        "input": 2975913,
+        "cached": 7999360,
+        "output": 87005
+      },
+      "limits_percent": [
+        {
+          "batch": 1,
+          "cases": 10,
+          "before": {
+            "five_hour": 3,
+            "week": 67
+          },
+          "after": {
+            "five_hour": 8,
+            "week": 68
+          }
+        },
+        {
+          "batch": 2,
+          "cases": 20,
+          "before": {
+            "five_hour": 8,
+            "week": 68
+          },
+          "after": {
+            "five_hour": 16,
+            "week": 69
+          }
+        },
+        {
+          "batch": 3,
+          "cases": 40,
+          "before": {
+            "five_hour": 16,
+            "week": 69
+          },
+          "after": {
+            "five_hour": 33,
+            "week": 72
+          }
+        },
+        {
+          "batch": 4,
+          "cases": 80,
+          "before": {
+            "five_hour": 33,
+            "week": 72
+          },
+          "after": {
+            "five_hour": 61,
+            "week": 76
+          }
+        },
+        {
+          "batch": 5,
+          "cases": 93,
+          "before": {
+            "five_hour": 0,
+            "week": 76
+          },
+          "after": {
+            "five_hour": 34,
+            "week": 82
+          }
+        }
+      ],
+      "batches_jsonl_sha256": "2de28deac637d9dff30eb0a7cdac33ac0884361a1bcaac71c0ca9c2643130e55",
+      "evidence": [
+        {
+          "batch": "batch-01",
+          "summary_sha256": "0adf3b6b07cd9d559d5abd01a14ce432d79a7de25cc39a24228f2bcf92b559f1",
+          "rescored_sha256": "a53ab07002c64026b22725d82bc0898c627825c99dde082392726203453d41bb",
+          "streams": 10,
+          "streams_manifest_sha256": "4eb04d80bee59f569c2493ac67e7158f017d9cd5f760f7b5f23b9db4b20b09ac"
+        },
+        {
+          "batch": "batch-02",
+          "summary_sha256": "cf071ed0c33216d3ad683ba21a06ecb02f1954ae209efa6961e030224a8d91e1",
+          "rescored_sha256": "540677b2b81f0e9f2fac7f5dfd30f0c93145fec7346a2f9f8ea75b3fb6dea238",
+          "streams": 20,
+          "streams_manifest_sha256": "582b4c5a24bd1c401ad704fc048f5b9a9ab7ddf07b18bb4fcb5f6835ba44081e"
+        },
+        {
+          "batch": "batch-03",
+          "summary_sha256": "8751dd166cfbfef3f983a2534f625b5d7588bd751c6ebc4a0b868d33442f8abc",
+          "rescored_sha256": "18cc28ba2b4c1e90672ffaa80309a38f4bf35a4a876b81c30f7a84db2bda02ff",
+          "streams": 40,
+          "streams_manifest_sha256": "f1af7341fd85c622a6a25920912656be54befd13003f969d77a2faf61b813e02"
+        },
+        {
+          "batch": "batch-04",
+          "summary_sha256": "da2b241f8199f13b178660f93aa5ba91e686be6e7c52cb3858a222827e14a189",
+          "rescored_sha256": "854e20042ed2f7f8aecde7211794d86887d30157f028cab9d756bed71fe543de",
+          "streams": 80,
+          "streams_manifest_sha256": "a917d5d5a44dcc471d463e8a6725e2c7d2548affba9bacc75dee89eec3e230ea"
+        },
+        {
+          "batch": "batch-05",
+          "summary_sha256": "b221cf71ea4c0fb4c8b78d86a01280f021dfec3c00066812af8281476c8a876d",
+          "rescored_sha256": "135a4ea6c4c40def2bd8b1b7bc518fd56ce297005b71bcea779b7a464698c13c",
+          "streams": 93,
+          "streams_manifest_sha256": "998523936c4eee242be14e44687079f3f3a5a6935d154a49152ff963f700a518"
+        }
+      ]
+    }
+  }
+}
