@@ -53,7 +53,8 @@ from harness_forge.adapters.base import Completed, preflight, run_command  # noq
 from harness_forge.contracts import write_decision  # noqa: E402
 from harness_forge.documents import load_document  # noqa: E402
 from harness_forge.models import Decision  # noqa: E402
-from harness_forge.runtime import UNOBSERVABLE, activation_case, claude_skill_origins, judge_run, shadowing  # noqa: E402
+from harness_forge.runtime import (  # noqa: E402
+    BASELINE_PROMPT, UNOBSERVABLE, activation_case, claude_skill_origins, judge_run, shadowing)
 
 TEST_RELAY = "confirmed by the test runner it was started with, not by a user in a session"
 UNCLEAN = ("competing skill", "executable components", "user-level skill named", "outside the throwaway workspace")
@@ -535,14 +536,20 @@ def rescore(out: Path, *, scorer: str) -> dict:
     stay as they are. ``scorer`` names the Forge revision that judged, and
     ``skills_sha256`` the skill files it matched reads against: today's,
     which must be the ones the run installed.
-    A case without a stream, which never launched, keeps its recorded result.
+    A run with a case that never launched is refused: its streams cannot be
+    bound to the results one to one.
     """
     summary = json.loads((out / "summary.json").read_text(encoding="utf-8"))
     harness = summary["harness"]
-    streams: dict[str, list[dict]] = {}
-    for path in sorted((out / "streams").glob("*.json")):
-        stream = json.loads(path.read_text(encoding="utf-8"))
-        streams.setdefault(stream["stdin"], []).append(stream)
+    # The recorder numbers launches in order: Claude's baseline launches, then one per case that launched.
+    streams = [stream for stream in (json.loads(path.read_text(encoding="utf-8"))
+                                     for path in sorted((out / "streams").glob("*.json")))
+               if stream["stdin"] != BASELINE_PROMPT]
+    if len(streams) != len(summary["results"]) or any(
+            stream["stdin"] != result["prompt"] for stream, result in zip(streams, summary["results"])):
+        # A case that never launched has no stream, and another case may share its prompt.
+        raise ValueError(f"cannot bind {len(streams)} recorded case streams to {len(summary['results'])} results "
+                         "one to one")
     files = {}
     for skill in SKILLS:
         source = ROOT / "skills" / skill
@@ -552,19 +559,15 @@ def rescore(out: Path, *, scorer: str) -> dict:
     permitted = ["Skill", "Read"] if harness == "claude-code" else ["command_execution"]
     baseline = set(summary.get("baseline", {}).get("skills", []))
     results = []
-    for recorded in summary["results"]:
-        queue = streams.get(recorded["prompt"], [])
-        result = {**recorded, "recorded_result": recorded["result"], "recorded_reason": recorded["reason"]}
-        if queue:
-            stream = queue.pop(0)
-            completed = Completed(stream["returncode"], stream["stdout"], stream["stderr"], stream["timed_out"])
-            outcome, reason, activation, inventory = judge_run(
-                harness, completed, files, f".agents/skills/{recorded['skill']}", _recorded_workspace(harness, stream),
-                baseline | (set(SKILLS) - {recorded["skill"]}), recorded["expected"], permitted,
-                slash=recorded["mode"] == "explicit")
-            result.update({"result": outcome, "reason": reason, "observed_activation": activation,
-                           "inventory": inventory})
-        results.append(result)
+    for recorded, stream in zip(summary["results"], streams):
+        completed = Completed(stream["returncode"], stream["stdout"], stream["stderr"], stream["timed_out"])
+        outcome, reason, activation, inventory = judge_run(
+            harness, completed, files, f".agents/skills/{recorded['skill']}", _recorded_workspace(harness, stream),
+            baseline | (set(SKILLS) - {recorded["skill"]}), recorded["expected"], permitted,
+            slash=recorded["mode"] == "explicit")
+        results.append({**recorded, "recorded_result": recorded["result"], "recorded_reason": recorded["reason"],
+                        "result": outcome, "reason": reason, "observed_activation": activation,
+                        "inventory": inventory})
     digest = hashlib.sha256()
     for path, data in sorted(files.items()):
         digest.update(path.encode() + b"\0" + hashlib.sha256(data).digest())

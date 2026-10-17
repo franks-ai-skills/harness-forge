@@ -309,6 +309,17 @@ class RoutingSmokeTest(unittest.TestCase):
         self.assertEqual(len(rescored["results"]), len(summary["results"]))
         self.assertEqual(rescored["rates"][implicit["skill"]]["implicit"], {"runs": 1, "passed": 1})
 
+    def test_a_recorded_run_with_cases_that_never_launched_is_not_judged_again(self):
+        """Codex review: a skipped case would take the stream of a later case with the same prompt."""
+        with tempfile.TemporaryDirectory(prefix="forge-routing-") as directory:
+            out = Path(directory)
+            summary = LIVE.routing_smoke("claude-code", out, runner=RoutingRunner(user_skills=["harness-intake"]),
+                                         environ=PARENT)
+            self.assertTrue(any(r["reason"].startswith("unavailable:") for r in summary["results"]))
+            with self.assertRaisesRegex(ValueError, "cannot bind"):
+                LIVE.rescore(out, scorer="test-revision")
+            self.assertFalse((out / "rescored.json").exists())
+
     def test_cases_that_did_not_run_keep_the_routing_run_from_completing(self):
         """Codex review: every case timing out still reported completed and exit code 0."""
         class TimingOut(RoutingRunner):
