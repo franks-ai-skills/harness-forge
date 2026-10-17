@@ -29,7 +29,7 @@ from typing import Iterable, Mapping
 
 from harness_forge.access import inside, tool_paths
 from harness_forge.adapters import codex
-from harness_forge.adapters.base import Runner, preflight, run_command, worker_environment
+from harness_forge.adapters.base import Completed, Runner, preflight, run_command, worker_environment
 from harness_forge.documents import fold_name, load_document, safe_path
 from harness_forge.models import RuntimeResult, VerificationRun
 
@@ -422,6 +422,36 @@ def _reads_only(item: dict, candidate: set[str]) -> bool:
     return not needs_number and script and len(operands) == 1 and operands[0] in candidate
 
 
+def _cat_first(item: dict, candidate: set[str], markers: list[str]) -> bool:
+    """Whether the command is one `cat` of several files, the first the candidate's SKILL.md, whose output
+    starts with that file whole.
+
+    cat prints its files in order, so the output's start is the first file's
+    own text: a later file cannot supply it, and a read cut short does not
+    start with it.
+    """
+    segments = _segments(str(item.get("command", "")))
+    if len(segments) != 1 or posixpath.basename(segments[0][0]) != "cat":
+        return False
+    operands, options = [], True
+    for word in segments[0][1:]:
+        if options and word == "--":
+            options = False
+        elif options and word.startswith("-") and word != "-":
+            if not re.fullmatch(_READ_OPTIONS["cat"][0], word):
+                return False
+        elif word.startswith("-"):
+            # After a file, BSD cat reads "-n" as a file and GNU cat as an option.
+            return False
+        else:
+            options = False
+            operands.append(posixpath.normpath(word))
+    if len(operands) < 2 or operands[0] not in candidate:
+        return False
+    lines = [line.rstrip() for line in _lines(str(item.get("aggregated_output", ""))) if line.strip()]
+    return bool(markers) and lines[:len(markers)] == markers
+
+
 def _whole(output: str, markers: list[str]) -> bool:
     """Whether output holds the candidate's SKILL.md (_markers) whole: its non-empty lines in order, repeated
     lines included, as one run of the output's non-empty lines (line numbers removed)."""
@@ -459,7 +489,8 @@ def _observe_codex(stdout: str, directory: str, markers: list[str] | None = None
                 read = _skills_read(item)
                 first_skill = first_skill or (read[0][0] if read else None)
                 if (first_skill == name and any(path in candidate for _, path in read)
-                        and _reads_only(item, candidate) and _printed(item, markers or [])):
+                        and ((_reads_only(item, candidate) and _printed(item, markers or []))
+                             or _cat_first(item, candidate, markers or []))):
                     observed["activation"] = f"read {directory}/SKILL.md"
         observed["completed"] = observed["completed"] or event.get("type") == "turn.completed"
         observed["errored"] = observed["errored"] or event.get("type") in ("turn.failed", "error")
@@ -647,13 +678,26 @@ def activation_case(
                                timeout=timeout)
         except OSError as error:
             return "not-run", f"unavailable: the harness could not start: {error}", None, "not observable"
-        # What the harness did before it stopped counts, also when it timed out or failed. Observed while the
-        # workspace and its links exist, so paths resolve where the harness found them.
-        observed = (_observe_claude(completed.stdout, name, baseline | companions, workspace, _markers(files, target),
-                                    directory=target)
-                    if harness == "claude-code"
-                    else _observe_codex(completed.stdout, target, _markers(files, target), workspace,
-                                        workspace.resolve()))
+        # Judged while the workspace and its links exist, so paths resolve where the harness found them.
+        return judge_run(harness, completed, files, target, workspace, baseline | companions, expected, permitted,
+                         slash=slash, timeout=timeout)
+
+
+def judge_run(harness: str, completed: Completed, files: Mapping[str, bytes], target: str, workspace: Path | None,
+              baseline: set[str], expected: str, permitted: list[str], *, slash: bool = False,
+              timeout: int = RUNTIME_TIMEOUT) -> tuple[str, str, str | None, str]:
+    """activation_case's verdict on a finished run: (outcome, reason, observed activation, inventory).
+
+    ``baseline`` holds every skill that does not compete, the other
+    installed skills included. A recorded run can be judged again here,
+    with its own workspace path, after the workspace is gone.
+    """
+    name = target.rsplit("/", 1)[-1]
+    # What the harness did before it stopped counts, also when it timed out or failed.
+    observed = (_observe_claude(completed.stdout, name, baseline, workspace, _markers(files, target), directory=target)
+                if harness == "claude-code"
+                else _observe_codex(completed.stdout, target, _markers(files, target),
+                                    *(() if workspace is None else (workspace, workspace.resolve()))))
     outside = sorted(set(observed["calls"]) - set(permitted))
     if outside:
         return "fail", f"tool outside the declared list: {', '.join(outside)}", None, observed["inventory"]

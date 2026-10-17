@@ -623,6 +623,41 @@ class RuntimeTest(unittest.TestCase):
                 result = self.run_cases("codex", command(text) + "\n" + codex_run(read_skill=False))[0][0]
                 self.assertEqual(result.result, "pass", result.reason)
 
+    def test_a_codex_cat_counts_when_the_candidate_is_its_first_file_and_starts_the_output(self):
+        """cat prints its files in order, so the output's start is the first file's own text (routing
+        evaluation, 2026-10-17: `cat SKILL.md references/contract.md` was the model's read)."""
+        other = ".agents/skills/other-skill/SKILL.md"
+        tail = "---\nname: other-skill\ndescription: Another skill.\n---\nOther text.\n"
+
+        def command(text, output):
+            return json.dumps({"type": "item.completed", "item": {"id": "c", "type": "command_execution", "command": text,
+                                                                 "exit_code": 0, "status": "completed",
+                                                                 "aggregated_output": output}})
+
+        for label, text, output in (
+                ("a reference after it", f"cat {SKILL_DIR}/SKILL.md {SKILL_DIR}/references/contract.md",
+                 BUILT + "# Contract\n"),
+                ("another skill after it", f"cat {SKILL_DIR}/SKILL.md {other}", BUILT + tail),
+                ("as Codex runs it", f"/bin/zsh -lc 'cat {SKILL_DIR}/SKILL.md {SKILL_DIR}/references/contract.md'",
+                 BUILT + "# Contract\n"),
+                ("numbered", f"cat -n {SKILL_DIR}/SKILL.md {other}",
+                 "".join(f"{n:6}\t{line}\n" for n, line in enumerate((BUILT + tail).splitlines(), 1)))):
+            with self.subTest(label):
+                result = self.run_cases("codex", command(text, output) + "\n" + codex_run(read_skill=False))[0][0]
+                self.assertEqual(result.result, "pass", result.reason)
+        lines = BUILT.splitlines(keepends=True)
+        for label, text, output in (
+                ("another skill first", f"cat {other} {SKILL_DIR}/SKILL.md", tail + BUILT),
+                ("the start cut off", f"cat {SKILL_DIR}/SKILL.md fixtures/copied-skill.md",
+                 "".join(lines[2:]) + "\n…truncated…\n" + BUILT),
+                ("standard input", f"cat {SKILL_DIR}/SKILL.md -", BUILT),
+                ("piped", f"cat {SKILL_DIR}/SKILL.md {other} | head -n 400", BUILT + tail),
+                ("redirected", f"cat {SKILL_DIR}/SKILL.md {other} > /dev/null", BUILT + tail),
+                ("partial reader", f"head -n 400 {SKILL_DIR}/SKILL.md {other}", BUILT + tail)):
+            with self.subTest(label):
+                result = self.run_cases("codex", command(text, output) + "\n" + codex_run(read_skill=False))[0][0]
+                self.assertEqual(result.result, "not-run", result.reason)
+
     def test_only_the_prompt_not_tool_output_can_show_a_slash_invocation(self):
         marker = f"<command-name>/{NAME}</command-name>"
         def run_with(user_event):

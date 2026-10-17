@@ -277,6 +277,49 @@ class RoutingSmokeTest(unittest.TestCase):
             self.assertEqual(rates["near_miss"]["passed"], rates["near_miss"]["runs"], "the scripted runner activates nothing implicitly")
             self.assertEqual(rates["explicit"], {"runs": 3, "passed": 3})
 
+    def test_a_recorded_routing_run_is_judged_again_without_a_launch(self):
+        """Routing evaluation, 2026-10-17: a corrected observer re-judges the recorded streams, so a scorer fix
+        needs no second live run. The run's own files stay as recorded."""
+        with tempfile.TemporaryDirectory(prefix="forge-routing-") as directory:
+            out = Path(directory)
+            summary = LIVE.routing_smoke("claude-code", out, runner=RoutingRunner(), environ=PARENT)
+            implicit = next(r for r in summary["results"] if r["mode"] == "implicit")
+            # The model called the skill in this run: the recorded stream says so; the recorded verdict does not.
+            for path in sorted((out / "streams").glob("*.json")):
+                stream = json.loads(path.read_text(encoding="utf-8"))
+                if stream["stdin"] == implicit["prompt"]:
+                    events = [json.loads(line) for line in stream["stdout"].splitlines()]
+                    events[1:1] = [
+                        {"type": "assistant", "message": {"content": [
+                            {"type": "tool_use", "id": "s", "name": "Skill", "input": {"skill": implicit["skill"]}}]}},
+                        {"type": "user", "message": {"content": [
+                            {"type": "tool_result", "tool_use_id": "s", "content": "Launching skill"}]}}]
+                    stream["stdout"] = "\n".join(json.dumps(event) for event in events) + "\n"
+                    path.write_text(json.dumps(stream), encoding="utf-8")
+            recorded = {path.name: path.read_bytes() for path in out.rglob("*") if path.is_file()}
+            rescored = LIVE.rescore(out, scorer="test-revision")
+            self.assertEqual({path.name: path.read_bytes() for path in out.rglob("*")
+                              if path.is_file() and path.name != "rescored.json"}, recorded)
+            self.assertEqual(json.loads((out / "rescored.json").read_text(encoding="utf-8")), rescored)
+        self.assertEqual(rescored["scorer"], "test-revision")
+        self.assertRegex(rescored["skills_sha256"], "^[0-9a-f]{64}$")
+        changed = [(r["case_id"], r["recorded_result"], r["result"]) for r in rescored["results"]
+                   if r["recorded_result"] != r["result"]]
+        self.assertEqual(changed, [(implicit["case_id"], "fail", "pass")])
+        self.assertEqual(len(rescored["results"]), len(summary["results"]))
+        self.assertEqual(rescored["rates"][implicit["skill"]]["implicit"], {"runs": 1, "passed": 1})
+
+    def test_a_recorded_run_with_cases_that_never_launched_is_not_judged_again(self):
+        """Codex review: a skipped case would take the stream of a later case with the same prompt."""
+        with tempfile.TemporaryDirectory(prefix="forge-routing-") as directory:
+            out = Path(directory)
+            summary = LIVE.routing_smoke("claude-code", out, runner=RoutingRunner(user_skills=["harness-intake"]),
+                                         environ=PARENT)
+            self.assertTrue(any(r["reason"].startswith("unavailable:") for r in summary["results"]))
+            with self.assertRaisesRegex(ValueError, "cannot bind"):
+                LIVE.rescore(out, scorer="test-revision")
+            self.assertFalse((out / "rescored.json").exists())
+
     def test_cases_that_did_not_run_keep_the_routing_run_from_completing(self):
         """Codex review: every case timing out still reported completed and exit code 0."""
         class TimingOut(RoutingRunner):
