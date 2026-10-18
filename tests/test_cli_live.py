@@ -719,6 +719,17 @@ class LiveCommandsTest(unittest.TestCase):
         self.assertIn("selection.eligibility.own-context-skills", stderr)
         self.assertEqual(stderr.strip(), "forge.py: " + cli.module._selection_problem(
             load_decision(self.decision), "A", cli.module._selection_rules()))
+        # A confirmation of that contract, made without prepare-contract's check, still builds nothing.
+        from harness_forge.contracts import render_contract
+        digest = render_contract(load_decision(self.decision), None, [], worker_evidence=workers["worker_evidence"],
+                                 described={}, drift=cli.module._drift(self.root)).digest
+        relay = cli.write("relay-unchecked.json", {"choice": "confirm", "displayed_digest": digest, "part_ids": ["A"],
+                                                   "run_id": "verify-1"})
+        code, _, stderr = cli("build", "--decision", self.decision, "--part", "A", "--evidence", evidence,
+                              "--relay", relay, "--description", cli.write("description.txt", DESCRIPTION),
+                              "--procedure", cli.write("procedure.md", PROCEDURE), "--root", self.root)
+        self.assertEqual(code, 2)
+        self.assertIn("goal conflict", stderr)
 
         code, output, stderr = cli("resolve-conflict", "--decision", self.decision, "--part", "A", "--choice", "keep",
                                    "--reason", "A skill is what my team knows.")
