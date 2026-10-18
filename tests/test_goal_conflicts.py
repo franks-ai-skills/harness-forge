@@ -1,5 +1,6 @@
 """Goal conflicts: a chosen mechanism the confirmed answers rule out, and the three ways forward."""
 
+import json
 import unittest
 from pathlib import Path
 
@@ -200,6 +201,42 @@ class ResolutionTest(unittest.TestCase):
         self.assertIn("Goal conflict: skills is ruled out by selection.eligibility.own-context-skills; kept "
                       "(Decided after seeing the conflict.)", contract.text)
         self.assertNotEqual(contract.digest, render_contract(conflicted(), None, [], worker_evidence=EVIDENCE).digest)
+
+
+class ContractRefusalTest(unittest.TestCase):
+    """A contract is not shown for confirmation while a part's recorded selection is one build would refuse."""
+
+    def prepare(self, record):
+        import tempfile
+        from harness_forge.contracts import write_decision
+        from tests.test_branch_review import run_cli
+        with tempfile.TemporaryDirectory(prefix="forge-cli-") as directory:
+            path = write_decision(Path(directory), record, slug="repro", date="2026-10-18")
+            return run_cli("prepare-contract", "--decision", str(path))
+
+    def guarded(self, required=True):
+        answers = {**ANSWERS, "must_survive_compromise": "required"}
+        computed = selection_state(part("A", "Goal", answers=answers, outcome="outside-alongside"),
+                                   decision().record["facts"], RULES)["recommendation"].controls
+        controls = [{"control": c["id"], "prerequisites": c["prerequisites"], "availability": "available",
+                     "required_for_goal": c["required_for_goal"] and required} for c in computed]
+        return decision(part("A", "Goal", answers=answers, outcome="outside-alongside", outside_controls=controls))
+
+    def test_a_goal_control_recorded_as_a_precaution_is_refused(self):
+        self.assertEqual(self.prepare(self.guarded())[0], 0)
+        code, stdout, stderr = self.prepare(self.guarded(required=False))
+        self.assertEqual((code, stdout), (2, ""))
+        self.assertIn("records compromise-resistant-gate as a precaution although the goal needs it", stderr)
+
+    def test_an_unanswered_goal_conflict_is_refused_and_a_kept_one_is_shown(self):
+        code, _, stderr = self.prepare(conflicted())
+        self.assertEqual(code, 2)
+        self.assertIn("goal conflict", stderr)
+        kept = resolve_goal_conflict(conflicted(), "A", "keep", None, "Decided after seeing the conflict.",
+                                     rules=RULES, date="2026-10-18")["decision"]
+        code, stdout, stderr = self.prepare(kept)
+        self.assertEqual(code, 0, stderr)
+        self.assertIn("kept", json.loads(stdout)["text"])
 
 
 if __name__ == "__main__":

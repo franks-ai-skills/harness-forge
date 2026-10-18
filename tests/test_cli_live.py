@@ -44,6 +44,20 @@ class NotApplicableRunner(ResearchRunner):
         return answer
 
 
+def outside_only(record, part_id="B", goal="Never merge without review"):
+    """An outside-only part as select records it: irreversible, so only outside controls enforce it."""
+    from harness_forge.selection import selection_state
+    from tests.builders import ANSWERS
+    from tests.test_goal_conflicts import RULES
+    draft = part(part_id, goal, answers={**ANSWERS, "irreversible": True}, outcome="outside-instead",
+                 recommended=None, chosen=None)
+    controls = selection_state(draft, record.record["facts"], RULES)["recommendation"].controls
+    draft["outside_controls"] = [{"control": c["id"], "prerequisites": c["prerequisites"],
+                                  "availability": c["availability"], "required_for_goal": c["required_for_goal"]}
+                                 for c in controls]
+    return draft
+
+
 class Cli:
     def __init__(self, runner, root):
         specification = importlib.util.spec_from_file_location("forge_cli_live", FORGE / "scripts" / "forge.py")
@@ -661,8 +675,7 @@ class LiveCommandsTest(unittest.TestCase):
         from harness_forge.research import make_brief, revision_digest, write_revision
         cli, arguments = self.build_ready(ResearchRunner([finding()]))
         record = load_decision(self.decision)
-        record.record["parts"].append(part("B", "Never merge without review", outcome="outside-instead",
-                                           recommended=None, chosen=None))
+        record.record["parts"].append(outside_only(record))
         # A requirements file that holds only B's (empty) acceptance, as an edit could leave it.
         briefs = {"B": make_brief(record, "deep", "B").digest}
         only_b = AcceptedRevision(rule_ids=[], rules=[], brief_digests=briefs, digest=revision_digest(briefs, []))
@@ -694,19 +707,18 @@ class LiveCommandsTest(unittest.TestCase):
         self.assertEqual(output["goal_conflict"]["severity"], "error")
         self.assertEqual(output["goal_conflict"]["choices"], ["recommended", "adjust-goal", "keep"])
 
-    def test_build_waits_for_the_goal_conflict_and_verify_keeps_its_error(self):
+    def test_an_unanswered_goal_conflict_is_neither_shown_nor_built(self):
         self.conflict()
         cli = Cli(ResearchRunner([finding()]), self.root)
         _, workers, _ = cli("workers", "--harness", "claude-code")
         evidence = cli.write("workers.json", workers)
-        relay = cli.confirm(self.decision, "verify-1")
-        build = ["build", "--decision", self.decision, "--part", "A", "--evidence", evidence, "--relay", relay,
-                 "--description", cli.write("description.txt", DESCRIPTION),
-                 "--procedure", cli.write("procedure.md", PROCEDURE), "--root", self.root]
-        code, _, stderr = cli(*build)
+        # The contract is not shown while the conflict is unanswered; build refuses the same selection.
+        code, _, stderr = cli("prepare-contract", "--decision", self.decision, "--evidence", evidence)
         self.assertEqual(code, 2)
         self.assertIn("goal conflict", stderr)
         self.assertIn("selection.eligibility.own-context-skills", stderr)
+        self.assertEqual(stderr.strip(), "forge.py: " + cli.module._selection_problem(
+            load_decision(self.decision), "A", cli.module._selection_rules()))
 
         code, output, stderr = cli("resolve-conflict", "--decision", self.decision, "--part", "A", "--choice", "keep",
                                    "--reason", "A skill is what my team knows.")
@@ -714,11 +726,10 @@ class LiveCommandsTest(unittest.TestCase):
         self.assertEqual((output["next_stage"], output["remaining_error_ids"]),
                          ("report", ["selection.eligibility.own-context-skills"]))
         self.assertEqual(load_decision(self.decision).part("A")["goal_conflict"]["choice"], "keep")
-        code, _, stderr = cli(*build)
-        self.assertEqual(code, 2, "the changed record needs a new confirmation")
-        self.assertIn("does not confirm", stderr)
         relay = cli.confirm(self.decision, "verify-2")
-        build[build.index("--relay") + 1] = relay
+        build = ["build", "--decision", self.decision, "--part", "A", "--evidence", evidence, "--relay", relay,
+                 "--description", cli.write("description.txt", DESCRIPTION),
+                 "--procedure", cli.write("procedure.md", PROCEDURE), "--root", self.root]
         code, _, stderr = cli(*build)
         self.assertEqual(code, 2, "a build still needs the accepted requirements")
         self.assertIn("--revision is required", stderr)
@@ -746,19 +757,20 @@ class LiveCommandsTest(unittest.TestCase):
                       "the user kept it", line)
         self.assertTrue(line.rstrip(" |").endswith(", ".join(conflict["failing"][0]["sources"])))
 
-    def test_a_stale_recommendation_is_not_built(self):
+    def test_a_stale_recommendation_is_neither_shown_nor_built(self):
         record = load_decision(self.decision)
         record.part("A")["recommended"] = "subagents"
         write_decision(self.root, record, slug="repro", date="2026-10-10")
         cli = Cli(FakeRunner(), self.root)
         _, workers, _ = cli("workers", "--harness", "claude-code")
         evidence = cli.write("workers.json", workers)
-        relay = cli.confirm(self.decision, "verify-1")
-        code, _, stderr = cli("build", "--decision", self.decision, "--part", "A", "--evidence", evidence,
-                              "--relay", relay, "--description", cli.write("description.txt", DESCRIPTION),
-                              "--procedure", cli.write("procedure.md", PROCEDURE), "--root", self.root)
+        # Neither shown for confirmation nor built; a confirmed override can still make it stale at build
+        # (test_full_pipeline).
+        code, _, stderr = cli("prepare-contract", "--decision", self.decision, "--evidence", evidence)
         self.assertEqual(code, 2)
         self.assertIn("is not what its answers give now", stderr)
+        self.assertIn("is not what its answers give now", cli.module._selection_problem(
+            load_decision(self.decision), "A", cli.module._selection_rules()))
 
     def reconfirm(self, cli, arguments, run_id="verify-drift"):
         """A new confirmation after the contract changed, such as recorded drift; updates arguments in place."""
@@ -869,8 +881,7 @@ class LiveCommandsTest(unittest.TestCase):
 
     def test_break_fix_and_review_scopes(self):
         record = load_decision(self.decision)
-        record.record["parts"].append(part("B", "Never merge without review", outcome="outside-instead",
-                                           recommended=None, chosen=None))
+        record.record["parts"].append(outside_only(record))
         write_decision(self.root, record, slug="repro", date="2026-10-10")
         runner = ResearchRunner([finding()])
         original_confirm = Cli.confirm
@@ -1308,8 +1319,7 @@ class LiveCommandsTest(unittest.TestCase):
 
     def test_research_covers_only_confirmed_parts(self):
         record = load_decision(self.decision)
-        record.record["parts"].append(part("B", "Never merge without review", outcome="outside-instead",
-                                           recommended=None, chosen=None))
+        record.record["parts"].append(outside_only(record))
         write_decision(self.root, record, slug="repro", date="2026-10-10")
         runner = ResearchRunner([finding()])
         cli = Cli(runner, self.root)
