@@ -70,9 +70,8 @@ root, which downloads Forge's pinned packages from PyPI once.
    fixtures its prompt needs. For a user-invoked command, write the
    explicit prompt as the request alone, without `/` or `$`: the model
    cannot start the skill, so Forge runs that case as `/<name> <prompt>`
-   in Claude Code and `$<name> <prompt>` in Codex. Claude Code shows no
-   signal for that invocation, so there the case reports not-run and the
-   part stays not verified; tell the user before verifying. Each case's `permitted_tools` lists tools
+   in Claude Code and `$<name> <prompt>` in Codex. Each case's
+   `permitted_tools` lists tools
    for the decision's target harnesses only, and the file is plain YAML:
    Forge refuses anchors and aliases, so repeat shared fixtures. A Claude
    Code case may permit only `Skill`, `Read`, `Grep` and `Glob`: it runs
