@@ -24,6 +24,12 @@ configuration and the contract digest. A
 line marked as a hint from an untrusted record only points at
 differences; it is not part of what the user confirms.
 
+`refused_parts` names each part whose recorded selection build would
+refuse, with the reason: a stale selection, an open question or an
+unanswered goal conflict. Show them, offer only the other parts for
+confirmation, and fix each refused part with `select` (or the
+goal-conflict question) before it is confirmed.
+
 ## How to ask
 
 Ask one multiple-choice question with exactly two options, `Confirm` and

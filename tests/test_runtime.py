@@ -2,6 +2,7 @@
 
 import json
 import unittest
+from dataclasses import replace
 from pathlib import Path
 
 import yaml
@@ -671,6 +672,42 @@ class RuntimeTest(unittest.TestCase):
             with self.subTest(label):
                 result = self.run_cases("codex", command(text, output) + "\n" + codex_run(read_skill=False))[0][0]
                 self.assertEqual(result.result, "not-run", result.reason)
+
+    def test_a_user_invoked_skill_is_started_explicitly_the_way_the_user_starts_it(self):
+        """The model cannot start a user-invoked skill, so its explicit case runs as /name or $name."""
+        from harness_forge.runtime import SLASH_UNSEEN, outcome_problem
+        self.scenario = Scenario(skill_decision(chosen="commands"))
+        self.files = {path: data for path, data in self.scenario.files.items() if path.startswith(SKILL_DIR + "/")}
+        cases = [case(), case("implicit"), case("negative", expected="does-not-activate")]
+        built = self.files[f"{SKILL_DIR}/SKILL.md"].decode()
+        for harness, stream, marker in (("claude-code", claude_run(skill_call=None), f"/{NAME}"),
+                                        ("codex", codex_run().replace(json.dumps(BUILT), json.dumps(built)), f"${NAME}")):
+            with self.subTest(harness):
+                results, runner = self.run_cases(harness, stream, cases=cases)
+                prompts = [call["stdin"] for call in runner.worker_calls if call["stdin"] != BASELINE_PROMPT]
+                self.assertEqual(prompts, [f"{marker} Prompt for explicit.", "Prompt for implicit.",
+                                           "Prompt for negative."])
+                explicit = results[0]
+                self.assertEqual(explicit.prompt, "Prompt for explicit.")
+                self.assertIn(f"invoked as {marker}", explicit.environment)
+                self.assertNotIn("invoked as", results[1].environment)
+                if harness == "claude-code":
+                    # Claude's stream shows nothing for /name: unobserved, not a failed skill.
+                    self.assertEqual((explicit.result, explicit.reason), ("not-run", SLASH_UNSEEN))
+                else:
+                    self.assertEqual(explicit.result, "pass", explicit.reason)
+                self.assertIsNone(outcome_problem(explicit, cases[0], (SKILL_DIR, self.files, None)))
+
+    def test_a_model_invoked_skill_keeps_its_explicit_prompt_and_a_failed_activation(self):
+        from harness_forge.runtime import SLASH_UNSEEN, outcome_problem
+        (result,), runner = self.run_cases("claude-code", claude_run(skill_call=None))
+        self.assertEqual([call["stdin"] for call in runner.worker_calls], ["Prompt for explicit."])
+        self.assertEqual(result.result, "fail", result.reason)
+        # The unobserved-invocation result belongs only to a user-invoked skill's explicit case.
+        unseen = replace(result, result="not-run", reason=SLASH_UNSEEN)
+        self.assertIn("user-invoked", outcome_problem(unseen, case(), (SKILL_DIR, self.files, None)))
+        self.assertIn("user-invoked", outcome_problem(replace(unseen, expected="does-not-activate"),
+                                                      case(expected="does-not-activate"), None))
 
     def test_only_the_prompt_not_tool_output_can_show_a_slash_invocation(self):
         marker = f"<command-name>/{NAME}</command-name>"

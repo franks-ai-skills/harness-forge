@@ -30,7 +30,8 @@ from typing import Iterable, Mapping
 from harness_forge.access import inside, tool_paths
 from harness_forge.adapters import codex
 from harness_forge.adapters.base import Completed, Runner, preflight, run_command, worker_environment
-from harness_forge.documents import fold_name, load_document, safe_path
+from harness_forge.checks.common import frontmatter
+from harness_forge.documents import fold_name, load_document, parse_yaml, safe_path
 from harness_forge.models import RuntimeResult, VerificationRun
 from harness_forge.verify import skill_home
 
@@ -599,6 +600,12 @@ def outcome_problem(result, case: dict,
         machine = result.result == "not-run" and result.reason.startswith("unavailable: ")
         if stop and (result.result, result.reason) != stop and not machine:
             return f"case {case['id']} stops before it runs ({stop[0]}: {stop[1]}), not with {result.result}"
+    if result.result == "not-run" and result.reason == SLASH_UNSEEN:
+        invoked = staged is None or user_invoked(result.harness, staged[1] or {}, staged[0])
+        if case.get("mode", "explicit") != "explicit" or result.expected != "activates" or not invoked \
+                or result.observed_activation:
+            return f"case {case['id']} is not-run as an unobserved invocation, which only a user-invoked skill's " \
+                   "explicit case can be"
     near_miss, unseen_activation = UNOBSERVABLE["codex"]
     if result.result == "not-run" and result.reason in (near_miss, unseen_activation):
         wanted = "does-not-activate" if result.reason == near_miss else "activates"
@@ -613,6 +620,26 @@ def outcome_problem(result, case: dict,
     if result.expected == "does-not-activate" and result.observed_activation:
         return f"case {case['id']} passed although it observed an activation ({result.observed_activation!r})"
     return None
+
+
+# A user-invoked skill is out of the model's reach: the user starts it with its name after this prefix
+# (Claude Code skills, disable-model-invocation; Codex skills, policy.allow_implicit_invocation).
+INVOCATION = {"claude-code": "/", "codex": "$"}
+# The not-run reason of an explicit /name or $name invocation that left no signal in the harness's stream.
+SLASH_UNSEEN = "the explicit invocation left no observable activation signal"
+
+
+def user_invoked(harness: str, files: Mapping[str, bytes], directory: str) -> bool:
+    """Whether ``harness`` keeps the model from starting the skill in ``directory``, so only its user does."""
+    try:
+        if harness == "claude-code":
+            fields, _ = frontmatter(files[f"{directory}/SKILL.md"])
+            return fields.get("disable-model-invocation") is True
+        config = parse_yaml(files.get(f"{directory}/agents/openai.yaml", b"").decode("utf-8")) or {}
+    except (KeyError, ValueError, UnicodeDecodeError):
+        return False
+    policy = config.get("policy") if isinstance(config, dict) else None
+    return isinstance(policy, dict) and policy.get("allow_implicit_invocation") is False
 
 
 # The not-run reasons that say Codex cannot observe the outcome, not that the case was skipped: a Codex run
@@ -718,7 +745,7 @@ def judge_run(harness: str, completed: Completed, files: Mapping[str, bytes], ta
         return "error", f"the harness exited with {completed.returncode}", None, observed["inventory"]
     outcome, reason = _decide(harness, {"expected": expected}, observed, permitted)
     if slash and outcome == "fail" and observed["activation"] is None and expected == "activates":
-        return "not-run", "the explicit invocation left no observable activation signal", None, observed["inventory"]
+        return "not-run", SLASH_UNSEEN, None, observed["inventory"]
     return outcome, reason, observed["activation"], observed["inventory"]
 
 
@@ -777,8 +804,12 @@ def run_skill_runtime(
                  if link in run.frozen_inputs["symlinks"]}
         permitted = list(test_case["permitted_tools"][harness])
         fixtures = dict(test_case.get("fixtures") or {})
+        # The model cannot start a user-invoked skill: its explicit case is the user's own invocation.
+        invoked = test_case["mode"] == "explicit" and user_invoked(harness, staged, directory)
+        prompt = f"{INVOCATION[harness]}{name} {test_case['prompt']}" if invoked else test_case["prompt"]
         environment = "; ".join([
             "throwaway workspace with only the frozen skill and fixtures",
+            *([f"invoked as {INVOCATION[harness]}{name}"] if invoked else []),
             f"tools: {', '.join(permitted) or 'none'}", "network: none requested",
             *[f"{path} sha256 {hashlib.sha256(text.encode()).hexdigest()}" for path, text in sorted(fixtures.items())],
         ])
@@ -809,8 +840,8 @@ def run_skill_runtime(
             results.append(result("not-run", blocked))
             continue
         outcome, reason, activation, inventory = activation_case(
-            harness, staged, [directory], directory, test_case["prompt"], test_case["expected"], permitted, fixtures,
+            harness, staged, [directory], directory, prompt, test_case["expected"], permitted, fixtures,
             runner=runner, environ=environ, baseline=set(baseline_skills), timeout=timeout,
-            workspace_root=workspace_root, links=links, off=user_skills or ())
+            workspace_root=workspace_root, links=links, off=user_skills or (), slash=invoked)
         results.append(result(outcome, reason, activation, inventory))
     return results

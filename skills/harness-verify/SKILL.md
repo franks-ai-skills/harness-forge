@@ -61,12 +61,18 @@ root, which downloads Forge's pinned packages from PyPI once.
    `run_id`; for Extensive review, pass `--scope extensive`. Each verify
    run writes a new report, so ask the scope question again before
    running step 3 again, also after confirming a rule as not applicable.
-3. For a built skill, write its runtime cases as a YAML file shaped like
+3. For a built skill, write its runtime cases to `.harness/cases.yaml`
+   in the repository, so they stay with the report, shaped like
    `evals/smoke/vertical.yaml` in the Forge plugin root: an `explicit`
    case that names the skill, an `implicit` case with a request a user
    would make (not for a user-invoked command), and a `negative` near
    miss, a neighboring request that must not activate it, each with the
-   fixtures its prompt needs. Each case's `permitted_tools` lists tools
+   fixtures its prompt needs. For a user-invoked command, write the
+   explicit prompt as the request alone, without `/` or `$`: the model
+   cannot start the skill, so Forge runs that case as `/<name> <prompt>`
+   in Claude Code and `$<name> <prompt>` in Codex. Claude Code shows no
+   signal for that invocation, so there the case reports not-run and the
+   part stays not verified; tell the user before verifying. Each case's `permitted_tools` lists tools
    for the decision's target harnesses only, and the file is plain YAML:
    Forge refuses anchors and aliases, so repeat shared fixtures. A Claude
    Code case may permit only `Skill`, `Read`, `Grep` and `Glob`: it runs

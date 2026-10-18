@@ -66,7 +66,13 @@ command prints bounded JSON.
 5. **Split into parts.** Propose parts with letters A, B, C, one job
    each. The user can combine ("A and C": A stays, C is retired and never
    reused), split ("B" becomes B1 and B2) or add parts (the next unused
-   letter). Record `split_confirmed: true` only after the user agrees.
+   letter). With the split, propose in plain words which part uses or
+   enforces which; record a link in `connects_to` only when the user
+   confirms it, since following another part in the workflow is not
+   using it. A link to a part this release cannot build, or to a remote
+   reuse, keeps the linking part from verified: Forge cannot check the
+   linked artifact (`links.parts`). Say so, and keep a real link anyway.
+   Record `split_confirmed: true` only after the user agrees.
 6. **Per-part questions.** Write the confirmed answers to a JSON file and
    run `scripts/forge.py select --input <file>`. Add each reuse
    candidate the user confirmed from the survey under `candidates`, with
@@ -78,7 +84,12 @@ command prints bounded JSON.
    shows it; leave `variant` out when the configuration does not show it,
    and Forge will not reuse it.
    While the output names a `question`, ask exactly that question and run
-   `select` again. Stop when it returns an outcome.
+   `select` again. Stop when it returns an outcome. A note or comment
+   added to a public tracker publishes it, also when the issue already
+   exists. Before asking who starts a procedure that changes external
+   state, such as posting, labeling, closing or pushing, say that a
+   skill the model can start fails `skills.invocation.side-effects-user-invoked`
+   at verification, whatever the selection gives.
 7. **Recommendation.** For each part show, from the `select` output:
    the outcome and the recommended mechanism, with its `variant` when
    the output names one (such as a hook's handler), and the rules that
@@ -104,10 +115,13 @@ command prints bounded JSON.
    mechanism meets every confirmed requirement and that combinations of
    mechanisms were not assessed; do not say that nothing could work. If this release
    cannot build the recommended mechanism, say "recommended; builder
-   unavailable" instead of weakening the recommendation. For each
-   control, ask whether the part's goal depends on it
-   (`required_for_goal`); configuration-protection controls stay
-   precautions unless the user says otherwise.
+   unavailable" instead of weakening the recommendation. A control the
+   output marks `required_for_goal` is needed for the goal: record it so
+   and say which answer requires it. Forge refuses it as a precaution,
+   so when the user disagrees, revisit that answer or the goal. For each
+   other control, ask whether the part's goal depends on it;
+   configuration-protection controls stay precautions unless the user
+   says otherwise.
 8. **Decision.** The user may choose another mechanism; record it with
    their reason in `override_reason`. A non-skill choice stays the
    recommendation even though only skills can be built in this release.

@@ -384,6 +384,16 @@ def _prepare_contract(arguments: argparse.Namespace) -> int:
     if problem:
         raise _InvalidInput(problem)
     overrides, described = _checked_overrides(Path(arguments.decision).resolve().parents[2])
+    # The parts build would refuse, named so that only the others are offered for confirmation. Until a
+    # confirmation adopts the shown overrides, select decides under the pinned rules, so a selection current
+    # under either set is not refused.
+    pinned, refused = _selection_rules(), []
+    for part in decision.record["parts"]:
+        if not part.get("outcome"):
+            continue
+        problem = _selection_problem(decision, part["id"], pinned)
+        if problem and (not overrides or _selection_problem(decision, part["id"], apply_overrides(pinned, overrides))):
+            refused.append({"part_id": part["id"], "problem": problem})
     evidence = []
     if arguments.evidence:
         value = _read_json(arguments.evidence)
@@ -404,7 +414,7 @@ def _prepare_contract(arguments: argparse.Namespace) -> int:
     emit({
         "command": "prepare-contract", "digest": contract.digest, "text": contract.text,
         "parts": contract.parts, "overrides": contract.overrides, "worker_policy": contract.worker_policy,
-        "confirmed_part_ids": [], "relay_fields": sorted(RELAY_KEYS),
+        "confirmed_part_ids": [], "relay_fields": sorted(RELAY_KEYS), "refused_parts": refused,
     })
     return 0
 
