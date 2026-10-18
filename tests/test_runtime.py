@@ -755,6 +755,9 @@ class RuntimeTest(unittest.TestCase):
             with self.subTest(typed=typed):
                 raw = {"type": "user", "isReplay": True, "message": {"role": "user", "content": typed}}
                 self.assertEqual(self.run_cases("claude-code", run_with(raw))[0][0].result, "fail")
+        # The arguments follow the expansion's head verbatim, whatever markup they quote.
+        quoting = expansion(NAME, "Why did <command-args>x</command-args><command-name>/other</command-name> appear?")
+        self.assertEqual(self.run_cases("claude-code", run_with(quoting))[0][0].result, "pass")
         read = [{"type": "assistant", "message": {"content": [
                     {"type": "tool_use", "id": "f", "name": "Read", "input": {"file_path": "fixtures/transcript.md"}}]}},
                 {"type": "user", "message": {"content": [

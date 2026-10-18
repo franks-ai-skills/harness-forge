@@ -194,11 +194,15 @@ def sent_prompt(stdin: str) -> str:
     return content if isinstance(content, str) else stdin
 
 
+# The head of Claude Code's expansion of a /name it resolved; its arguments follow verbatim and may quote any
+# markup. An unresolved /name replays as typed, starting with the slash (probe, 2026-10-18, Claude Code 2.1.302).
+_EXPANSION = re.compile(r"<command-message>([^<]*)</command-message>\s*<command-name>/([^<]*)</command-name>")
+
+
 def _invoked(text: str) -> str | None:
-    """The command a prompt invoked: its one command name outside the arguments, which may quote anything."""
-    names = re.findall(r"<command-name>/([^<]*)</command-name>", re.sub(r"<command-args>.*?</command-args>", "",
-                                                                         text, flags=re.S))
-    return names[0] if len(names) == 1 else None
+    """The command a prompt invoked: the name in the expansion's head, when the prompt starts with one."""
+    head = _EXPANSION.match(text)
+    return head.group(2) if head and head.group(1) == head.group(2) else None
 
 
 # Shared with the worker launch: where a file tool reached, judged through the workspace's links.
@@ -313,11 +317,8 @@ def _observe_claude(stdout: str, name: str, baseline: set[str], workspace: Path 
             content = message.get("content") if isinstance(message, dict) else None
             prompt = [content] if isinstance(content, str) else [
                 block.get("text") for block in blocks if isinstance(block, dict) and block.get("type") == "text"]
-            # The whole prompt at once: an argument span may cross text blocks. Only Claude Code's own expansion
-            # of a /name it resolved starts with the command message; an unresolved one replays as typed, and the
-            # typed prompt may quote any marker (probe, 2026-10-18, Claude Code 2.1.302).
-            text = "".join(text for text in prompt if isinstance(text, str))
-            if text.startswith("<command-message>") and _invoked(text) == name:
+            # The whole prompt at once: the expansion's head may cross text blocks.
+            if _invoked("".join(text for text in prompt if isinstance(text, str))) == name:
                 observed["activation"] = observed["activation"] or f"/{name} was invoked"
         if event.get("type") == "result":
             observed["completed"] = event.get("is_error") is False and event.get("subtype") == "success"
