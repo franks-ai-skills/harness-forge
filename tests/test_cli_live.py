@@ -707,24 +707,19 @@ class LiveCommandsTest(unittest.TestCase):
         self.assertEqual(output["goal_conflict"]["severity"], "error")
         self.assertEqual(output["goal_conflict"]["choices"], ["recommended", "adjust-goal", "keep"])
 
-    def test_an_unanswered_goal_conflict_is_neither_shown_nor_built(self):
+    def test_an_unanswered_goal_conflict_is_refused_and_not_built(self):
         self.conflict()
         cli = Cli(ResearchRunner([finding()]), self.root)
         _, workers, _ = cli("workers", "--harness", "claude-code")
         evidence = cli.write("workers.json", workers)
-        # The contract is not shown while the conflict is unanswered; build refuses the same selection.
-        code, _, stderr = cli("prepare-contract", "--decision", self.decision, "--evidence", evidence)
-        self.assertEqual(code, 2)
-        self.assertIn("goal conflict", stderr)
-        self.assertIn("selection.eligibility.own-context-skills", stderr)
-        self.assertEqual(stderr.strip(), "forge.py: " + cli.module._selection_problem(
-            load_decision(self.decision), "A", cli.module._selection_rules()))
-        # A confirmation of that contract, made without prepare-contract's check, still builds nothing.
-        from harness_forge.contracts import render_contract
-        digest = render_contract(load_decision(self.decision), None, [], worker_evidence=workers["worker_evidence"],
-                                 described={}, drift=cli.module._drift(self.root)).digest
-        relay = cli.write("relay-unchecked.json", {"choice": "confirm", "displayed_digest": digest, "part_ids": ["A"],
-                                                   "run_id": "verify-1"})
+        # The contract names the part as refused while the conflict is unanswered; build refuses it too.
+        code, contract, stderr = cli("prepare-contract", "--decision", self.decision, "--evidence", evidence)
+        self.assertEqual(code, 0, stderr)
+        self.assertEqual(contract["refused_parts"], [{"part_id": "A", "problem": cli.module._selection_problem(
+            load_decision(self.decision), "A", cli.module._selection_rules())}])
+        self.assertIn("selection.eligibility.own-context-skills", contract["refused_parts"][0]["problem"])
+        relay = cli.write("relay-verify-1.json", {"choice": "confirm", "displayed_digest": contract["digest"],
+                                                  "part_ids": ["A"], "run_id": "verify-1"})
         code, _, stderr = cli("build", "--decision", self.decision, "--part", "A", "--evidence", evidence,
                               "--relay", relay, "--description", cli.write("description.txt", DESCRIPTION),
                               "--procedure", cli.write("procedure.md", PROCEDURE), "--root", self.root)
@@ -768,20 +763,22 @@ class LiveCommandsTest(unittest.TestCase):
                       "the user kept it", line)
         self.assertTrue(line.rstrip(" |").endswith(", ".join(conflict["failing"][0]["sources"])))
 
-    def test_a_stale_recommendation_is_neither_shown_nor_built(self):
+    def test_a_stale_recommendation_is_refused_and_not_built(self):
         record = load_decision(self.decision)
         record.part("A")["recommended"] = "subagents"
         write_decision(self.root, record, slug="repro", date="2026-10-10")
         cli = Cli(FakeRunner(), self.root)
         _, workers, _ = cli("workers", "--harness", "claude-code")
         evidence = cli.write("workers.json", workers)
-        # Neither shown for confirmation nor built; a confirmed override can still make it stale at build
-        # (test_full_pipeline).
-        code, _, stderr = cli("prepare-contract", "--decision", self.decision, "--evidence", evidence)
+        refused = cli("prepare-contract", "--decision", self.decision, "--evidence", evidence)[1]["refused_parts"]
+        relay = cli.confirm(self.decision, "verify-1")
+        self.assertEqual([item["part_id"] for item in refused], ["A"])
+        self.assertIn("is not what its answers give now", refused[0]["problem"])
+        code, _, stderr = cli("build", "--decision", self.decision, "--part", "A", "--evidence", evidence,
+                              "--relay", relay, "--description", cli.write("description.txt", DESCRIPTION),
+                              "--procedure", cli.write("procedure.md", PROCEDURE), "--root", self.root)
         self.assertEqual(code, 2)
         self.assertIn("is not what its answers give now", stderr)
-        self.assertIn("is not what its answers give now", cli.module._selection_problem(
-            load_decision(self.decision), "A", cli.module._selection_rules()))
 
     def reconfirm(self, cli, arguments, run_id="verify-drift"):
         """A new confirmation after the contract changed, such as recorded drift; updates arguments in place."""
