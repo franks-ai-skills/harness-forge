@@ -610,8 +610,8 @@ def _routing(harness: str, out: Path, name: str, select, repeats: int, *, runner
                                 for case in select(skill)):
             prompt = f"{marker}{skill} {case['prompt']}" if case["mode"] == "explicit" else case["prompt"]
             expected = "activates" if case["expect"] == "trigger" else "does-not-activate"
-            # A user-level skill of the same name would answer instead, as run_skill_runtime also refuses.
-            blocked = shadowing(skill, user)
+            # A user-level or bundled skill of its name would answer instead, as run_skill_runtime also refuses.
+            blocked = shadowing(skill, user, baseline)
             if blocked:
                 outcome, reason, activation, inventory = "not-run", blocked, None, "not observable"
             else:

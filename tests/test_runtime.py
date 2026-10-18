@@ -227,6 +227,15 @@ class RuntimeTest(unittest.TestCase):
                                 baseline_skills={"debug", "verify"})[0][0]
         self.assertEqual(result.result, "pass", result.reason)
 
+    def test_a_candidate_named_like_a_bundled_skill_does_not_run(self):
+        """A bundled skill of the candidate's name answers its Skill call or /name, also when the candidate
+        did not load, and nothing in the stream tells the two apart."""
+        replayed = with_event(claude_run(), expansion(NAME, "Prompt for explicit."))
+        (result,), runner = self.run_cases("claude-code", replayed, baseline_skills={NAME, "verify"})
+        self.assertEqual(result.result, "not-run")
+        self.assertEqual(result.reason, f"unavailable: a bundled skill named {NAME} answers to the candidate's name")
+        self.assertFalse(runner.worker_calls, "no case launches")
+
     def test_claude_built_ins_come_from_an_empty_launch_with_the_cases_settings(self):
         class Baseline(FakeRunner):
             def __call__(self, command, *, cwd, env, stdin, timeout):

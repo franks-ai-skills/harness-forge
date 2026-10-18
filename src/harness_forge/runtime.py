@@ -154,12 +154,15 @@ PLUGIN_RUNTIME = ("unavailable: runtime cases for a skill shipped in a plugin ar
 UNKNOWN_ORIGINS = "unavailable: Forge could not tell bundled skills from the user's, so nothing is exempt"
 
 
-def shadowing(name: str, user_skills: set[str] | None) -> str | None:
-    """Why a case of the skill ``name`` cannot run: unknown skill origins, or a user-level skill of its name."""
+def shadowing(name: str, user_skills: set[str] | None, bundled: Iterable[str] = ()) -> str | None:
+    """Why a case of the skill ``name`` cannot run: unknown skill origins, or a user-level or bundled skill of
+    its name. A bundled one answers the candidate's Skill call or /name also when the candidate did not load."""
     if user_skills is None:
         return UNKNOWN_ORIGINS
     if name in user_skills:
         return f"unavailable: a user-level skill named {name} takes precedence over the candidate"
+    if name in bundled:
+        return f"unavailable: a bundled skill named {name} answers to the candidate's name"
     return None
 
 
@@ -860,7 +863,7 @@ def run_skill_runtime(
         if stop:
             results.append(result(*stop))
             continue
-        blocked = shadowing(directory.rsplit("/", 1)[-1], user_skills)
+        blocked = shadowing(directory.rsplit("/", 1)[-1], user_skills, baseline_skills)
         if blocked:
             results.append(result("not-run", blocked))
             continue
