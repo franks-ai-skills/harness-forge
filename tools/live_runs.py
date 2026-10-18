@@ -54,7 +54,7 @@ from harness_forge.contracts import write_decision  # noqa: E402
 from harness_forge.documents import load_document  # noqa: E402
 from harness_forge.models import Decision  # noqa: E402
 from harness_forge.runtime import (  # noqa: E402
-    BASELINE_PROMPT, UNOBSERVABLE, activation_case, claude_skill_origins, judge_run, shadowing)
+    BASELINE_PROMPT, UNOBSERVABLE, activation_case, claude_skill_origins, judge_run, sent_prompt, shadowing)
 
 TEST_RELAY = "confirmed by the test runner it was started with, not by a user in a session"
 UNCLEAN = ("competing skill", "executable components", "user-level skill named", "outside the throwaway workspace")
@@ -546,7 +546,7 @@ def rescore(out: Path, *, scorer: str) -> dict:
                                      for path in sorted((out / "streams").glob("*.json")))
                if stream["stdin"] != BASELINE_PROMPT]
     if len(streams) != len(summary["results"]) or any(
-            stream["stdin"] != result["prompt"] for stream, result in zip(streams, summary["results"])):
+            sent_prompt(stream["stdin"]) != result["prompt"] for stream, result in zip(streams, summary["results"])):
         # A case that never launched has no stream, and another case may share its prompt.
         raise ValueError(f"cannot bind {len(streams)} recorded case streams to {len(summary['results'])} results "
                          "one to one")
@@ -610,8 +610,8 @@ def _routing(harness: str, out: Path, name: str, select, repeats: int, *, runner
                                 for case in select(skill)):
             prompt = f"{marker}{skill} {case['prompt']}" if case["mode"] == "explicit" else case["prompt"]
             expected = "activates" if case["expect"] == "trigger" else "does-not-activate"
-            # A user-level skill of the same name would answer instead, as run_skill_runtime also refuses.
-            blocked = shadowing(skill, user)
+            # A user-level or bundled skill of its name would answer instead, as run_skill_runtime also refuses.
+            blocked = shadowing(skill, user, baseline)
             if blocked:
                 outcome, reason, activation, inventory = "not-run", blocked, None, "not observable"
             else:

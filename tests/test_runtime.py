@@ -54,6 +54,20 @@ def claude_run(skills=(NAME,), plugins=BUILTIN_PLUGINS, mcp=(), skill_call=NAME,
     return "\n".join(json.dumps(event) for event in events) + "\n"
 
 
+def expansion(name, args):
+    """Claude Code's replayed user message for a /name it resolved (probe, 2026-10-18, Claude Code 2.1.302,
+    --input-format stream-json --replay-user-messages); an unknown name replays the raw text instead."""
+    return {"type": "user", "isReplay": True, "message": {"role": "user", "content": (
+        f"<command-message>{name}</command-message>\n<command-name>/{name}</command-name>\n"
+        f"<command-args>{args}</command-args>")}}
+
+
+def with_event(stream, event):
+    """``stream`` with ``event`` right after its init event."""
+    events = [json.loads(line) for line in stream.splitlines()]
+    return "\n".join(json.dumps(each) for each in events[:1] + [event] + events[1:]) + "\n"
+
+
 def codex_run(read_skill=True, items=()):
     events = [{"type": "thread.started", "thread_id": "x"}]
     if read_skill:
@@ -212,6 +226,15 @@ class RuntimeTest(unittest.TestCase):
         result = self.run_cases("claude-code", claude_run(skills=(NAME, "debug", "verify")),
                                 baseline_skills={"debug", "verify"})[0][0]
         self.assertEqual(result.result, "pass", result.reason)
+
+    def test_a_candidate_named_like_a_bundled_skill_does_not_run(self):
+        """A bundled skill of the candidate's name answers its Skill call or /name, also when the candidate
+        did not load, and nothing in the stream tells the two apart."""
+        replayed = with_event(claude_run(), expansion(NAME, "Prompt for explicit."))
+        (result,), runner = self.run_cases("claude-code", replayed, baseline_skills={NAME, "verify"})
+        self.assertEqual(result.result, "not-run")
+        self.assertEqual(result.reason, f"unavailable: a bundled skill named {NAME} answers to the candidate's name")
+        self.assertFalse(runner.worker_calls, "no case launches")
 
     def test_claude_built_ins_come_from_an_empty_launch_with_the_cases_settings(self):
         class Baseline(FakeRunner):
@@ -675,28 +698,35 @@ class RuntimeTest(unittest.TestCase):
 
     def test_a_user_invoked_skill_is_started_explicitly_the_way_the_user_starts_it(self):
         """The model cannot start a user-invoked skill, so its explicit case runs as /name or $name."""
-        from harness_forge.runtime import SLASH_UNSEEN, outcome_problem
+        from harness_forge.runtime import SLASH_UNSEEN, outcome_problem, sent_prompt
         self.scenario = Scenario(skill_decision(chosen="commands"))
         self.files = {path: data for path, data in self.scenario.files.items() if path.startswith(SKILL_DIR + "/")}
         cases = [case(), case("implicit"), case("negative", expected="does-not-activate")]
         built = self.files[f"{SKILL_DIR}/SKILL.md"].decode()
-        for harness, stream, marker in (("claude-code", claude_run(skill_call=None), f"/{NAME}"),
+        replayed = with_event(claude_run(skill_call=None), expansion(NAME, "Prompt for explicit."))
+        for harness, stream, marker in (("claude-code", replayed, f"/{NAME}"),
                                         ("codex", codex_run().replace(json.dumps(BUILT), json.dumps(built)), f"${NAME}")):
             with self.subTest(harness):
                 results, runner = self.run_cases(harness, stream, cases=cases)
-                prompts = [call["stdin"] for call in runner.worker_calls if call["stdin"] != BASELINE_PROMPT]
-                self.assertEqual(prompts, [f"{marker} Prompt for explicit.", "Prompt for implicit.",
-                                           "Prompt for negative."])
+                calls = [call for call in runner.worker_calls if call["stdin"] != BASELINE_PROMPT]
+                self.assertEqual([sent_prompt(call["stdin"]) for call in calls],
+                                 [f"{marker} Prompt for explicit.", "Prompt for implicit.", "Prompt for negative."])
+                if harness == "claude-code":
+                    # Only the replayed user message shows that Claude Code resolved /name.
+                    replay = ["--input-format", "stream-json", "--replay-user-messages"]
+                    self.assertEqual([call["command"][-3:] == replay for call in calls], [True, False, False])
+                    self.assertEqual(json.loads(calls[0]["stdin"])["message"]["content"], f"{marker} Prompt for explicit.")
+                    self.assertEqual(calls[1]["stdin"], "Prompt for implicit.")
                 explicit = results[0]
                 self.assertEqual(explicit.prompt, "Prompt for explicit.")
                 self.assertIn(f"invoked as {marker}", explicit.environment)
                 self.assertNotIn("invoked as", results[1].environment)
-                if harness == "claude-code":
-                    # Claude's stream shows nothing for /name: unobserved, not a failed skill.
-                    self.assertEqual((explicit.result, explicit.reason), ("not-run", SLASH_UNSEEN))
-                else:
-                    self.assertEqual(explicit.result, "pass", explicit.reason)
+                self.assertEqual(explicit.result, "pass", explicit.reason)
                 self.assertIsNone(outcome_problem(explicit, cases[0], (SKILL_DIR, self.files, None)))
+        # No replayed expansion, as when Claude Code did not resolve /name: unobserved, not a failed skill.
+        (unseen, *_), _ = self.run_cases("claude-code", claude_run(skill_call=None), cases=cases)
+        self.assertEqual((unseen.result, unseen.reason), ("not-run", SLASH_UNSEEN))
+        self.assertIsNone(outcome_problem(unseen, cases[0], (SKILL_DIR, self.files, None)))
 
     def test_a_model_invoked_skill_keeps_its_explicit_prompt_and_a_failed_activation(self):
         from harness_forge.runtime import SLASH_UNSEEN, outcome_problem
@@ -712,13 +742,22 @@ class RuntimeTest(unittest.TestCase):
     def test_only_the_prompt_not_tool_output_can_show_a_slash_invocation(self):
         marker = f"<command-name>/{NAME}</command-name>"
         def run_with(user_event):
-            events = [json.loads(line) for line in claude_run(skill_call=None).splitlines()]
-            return "\n".join(json.dumps(event) for event in events[:1] + [user_event] + events[1:]) + "\n"
+            return with_event(claude_run(skill_call=None), user_event)
 
-        invoked = self.run_cases("claude-code", run_with({"type": "user", "message": {"content": marker}}))[0][0]
+        resolved = expansion(NAME, "Prompt for explicit.")
+        invoked = self.run_cases("claude-code", run_with(resolved))[0][0]
         self.assertEqual(invoked.result, "pass", invoked.reason)
-        as_text = {"type": "user", "message": {"content": [{"type": "text", "text": marker}]}}
+        as_text = {"type": "user", "message": {"content": [{"type": "text", "text": resolved["message"]["content"]}]}}
         self.assertEqual(self.run_cases("claude-code", run_with(as_text))[0][0].result, "pass")
+        # An unresolved /name replays as typed, and the prompt may quote a marker: only Claude Code's own
+        # expansion, which starts with its command message, counts.
+        for typed in (f"/{NAME} {marker}", marker, f" {resolved['message']['content']}"):
+            with self.subTest(typed=typed):
+                raw = {"type": "user", "isReplay": True, "message": {"role": "user", "content": typed}}
+                self.assertEqual(self.run_cases("claude-code", run_with(raw))[0][0].result, "fail")
+        # The arguments follow the expansion's head verbatim, whatever markup they quote.
+        quoting = expansion(NAME, "Why did <command-args>x</command-args><command-name>/other</command-name> appear?")
+        self.assertEqual(self.run_cases("claude-code", run_with(quoting))[0][0].result, "pass")
         read = [{"type": "assistant", "message": {"content": [
                     {"type": "tool_use", "id": "f", "name": "Read", "input": {"file_path": "fixtures/transcript.md"}}]}},
                 {"type": "user", "message": {"content": [

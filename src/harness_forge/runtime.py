@@ -154,12 +154,15 @@ PLUGIN_RUNTIME = ("unavailable: runtime cases for a skill shipped in a plugin ar
 UNKNOWN_ORIGINS = "unavailable: Forge could not tell bundled skills from the user's, so nothing is exempt"
 
 
-def shadowing(name: str, user_skills: set[str] | None) -> str | None:
-    """Why a case of the skill ``name`` cannot run: unknown skill origins, or a user-level skill of its name."""
+def shadowing(name: str, user_skills: set[str] | None, bundled: Iterable[str] = ()) -> str | None:
+    """Why a case of the skill ``name`` cannot run: unknown skill origins, or a user-level or bundled skill of
+    its name. A bundled one answers the candidate's Skill call or /name also when the candidate did not load."""
     if user_skills is None:
         return UNKNOWN_ORIGINS
     if name in user_skills:
         return f"unavailable: a user-level skill named {name} takes precedence over the candidate"
+    if name in bundled:
+        return f"unavailable: a bundled skill named {name} answers to the candidate's name"
     return None
 
 
@@ -175,11 +178,31 @@ def _events(stdout: str) -> list[dict]:
     return events
 
 
+def stream_input(prompt: str) -> str:
+    """A prompt as one stream-json user message, for --input-format stream-json."""
+    return json.dumps({"type": "user", "message": {"role": "user", "content": prompt}}) + "\n"
+
+
+def sent_prompt(stdin: str) -> str:
+    """The prompt a launch sent: a stream-json user message's content, or the plain text itself."""
+    try:
+        event = json.loads(stdin)
+    except ValueError:
+        return stdin
+    content = event.get("message", {}).get("content") if isinstance(event, dict) and event.get("type") == "user" \
+        and isinstance(event.get("message"), dict) else None
+    return content if isinstance(content, str) else stdin
+
+
+# The head of Claude Code's expansion of a /name it resolved; its arguments follow verbatim and may quote any
+# markup. An unresolved /name replays as typed, starting with the slash (probe, 2026-10-18, Claude Code 2.1.302).
+_EXPANSION = re.compile(r"<command-message>([^<]*)</command-message>\s*<command-name>/([^<]*)</command-name>")
+
+
 def _invoked(text: str) -> str | None:
-    """The command a prompt invoked: its one command name outside the arguments, which may quote anything."""
-    names = re.findall(r"<command-name>/([^<]*)</command-name>", re.sub(r"<command-args>.*?</command-args>", "",
-                                                                         text, flags=re.S))
-    return names[0] if len(names) == 1 else None
+    """The command a prompt invoked: the name in the expansion's head, when the prompt starts with one."""
+    head = _EXPANSION.match(text)
+    return head.group(2) if head and head.group(1) == head.group(2) else None
 
 
 # Shared with the worker launch: where a file tool reached, judged through the workspace's links.
@@ -294,7 +317,7 @@ def _observe_claude(stdout: str, name: str, baseline: set[str], workspace: Path 
             content = message.get("content") if isinstance(message, dict) else None
             prompt = [content] if isinstance(content, str) else [
                 block.get("text") for block in blocks if isinstance(block, dict) and block.get("type") == "text"]
-            # The whole prompt at once: an argument span may cross text blocks.
+            # The whole prompt at once: the expansion's head may cross text blocks.
             if _invoked("".join(text for text in prompt if isinstance(text, str))) == name:
                 observed["activation"] = observed["activation"] or f"/{name} was invoked"
         if event.get("type") == "result":
@@ -671,8 +694,9 @@ def activation_case(
     symbolic links, recreated as they are, so a missing .claude/skills link
     stays missing; without them, each skill directory gets its link (the
     routing smoke installs Forge's own skills that way). A slash or $
-    invocation (``slash``) may load the skill without a tool call; with no
-    observed signal it is not-run. ``off`` names the user-level skills
+    invocation (``slash``) may load the skill without a tool call; Claude
+    then replays the prompt, which shows its expansion of a resolved /name.
+    With no observed signal the case is not-run. ``off`` names the user-level skills
     turned off for Claude; one the case still lists competes.
     """
     name = target.rsplit("/", 1)[-1]
@@ -703,6 +727,11 @@ def activation_case(
                 link.parent.mkdir(parents=True, exist_ok=True)
                 link.symlink_to(link_target)
             command = _claude_command(permitted, off=off)
+            if slash:
+                # The stream shows a /name Claude Code resolved only as the replayed user message
+                # (probe, 2026-10-18, Claude Code 2.1.302); plain --print input leaves no event for it.
+                command += ["--input-format", "stream-json", "--replay-user-messages"]
+                prompt = stream_input(prompt)
         else:
             command = codex.command("review", str(workspace), structured=False)
         try:
@@ -835,7 +864,7 @@ def run_skill_runtime(
         if stop:
             results.append(result(*stop))
             continue
-        blocked = shadowing(directory.rsplit("/", 1)[-1], user_skills)
+        blocked = shadowing(directory.rsplit("/", 1)[-1], user_skills, baseline_skills)
         if blocked:
             results.append(result("not-run", blocked))
             continue

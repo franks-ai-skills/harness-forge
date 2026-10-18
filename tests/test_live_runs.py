@@ -8,8 +8,9 @@ import unittest
 from pathlib import Path
 
 from harness_forge.adapters.base import Completed
-from harness_forge.runtime import BASELINE_PROMPT
+from harness_forge.runtime import BASELINE_PROMPT, sent_prompt
 from tests.test_adapters import PARENT, FakeRunner, claude_stream
+from tests.test_runtime import expansion
 from tests.test_workflow import ResearchRunner, fetch_page, finding
 
 FORGE = Path(__file__).resolve().parents[1]
@@ -204,7 +205,7 @@ class FlowsRunTest(unittest.TestCase):
 
 
 class RoutingRunner(FakeRunner):
-    """Baseline lists two built-ins; a slash prompt shows its command marker; nothing else activates."""
+    """Baseline lists two built-ins; a slash prompt replays as Claude Code expands it; nothing else activates."""
 
     def __init__(self, extra_skills=(), user_skills=()):
         super().__init__()
@@ -221,9 +222,9 @@ class RoutingRunner(FakeRunner):
             events = [init(self.user + ([] if "disableBundledSkills" in " ".join(command) else ["debug", "verify"]))]
         else:
             events = [init(FORGE_SKILLS + ["debug", "verify"] + self.extra)]
-            if stdin.startswith("/"):
-                name = stdin.split()[0][1:]
-                events.append({"type": "user", "message": {"content": f"<command-name>/{name}</command-name>"}})
+            if sent_prompt(stdin).startswith("/"):
+                name, args = sent_prompt(stdin)[1:].split(" ", 1)
+                events.append(expansion(name, args))
         events.append({"type": "result", "subtype": "success", "is_error": False, "result": "ok"})
         return Completed(0, "\n".join(json.dumps(e) for e in events) + "\n", "", False)
 
