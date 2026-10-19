@@ -594,7 +594,7 @@ def _routing(harness: str, out: Path, name: str, select, repeats: int, *, runner
                            "observed": behavior}
     if user is None:
         # Not Codex's accepted inventory gap: without the origins no Claude case can run, so the smoke stops.
-        summary["status"] = "stopped: Forge could not tell bundled skills from the user's"
+        summary["status"] = "stopped: an empty Claude Code launch failed, timed out or listed no skills"
         _write_json(out / "summary.json", summary)
         return summary
     files, directories = {}, []

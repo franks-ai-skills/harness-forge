@@ -46,11 +46,16 @@ root, which downloads Forge's pinned packages from PyPI once.
    confirmed record of the whole idea, which has no parts yet): what
    people already do in the idea's domain, existing skills, plugins or
    tools that meet the goal, and findings that suggest parts or answers.
-3. **Deep pass,** once per chosen part: what the result must contain, the
-   domain's pitfalls and security concerns, and proposed requirements as
-   `idea.<slug>.<part>.<name>` rules that are judged or use a catalog
-   checker. Requirements are about the result's content and behavior;
-   the pinned KB rules already cover how the harness runs it.
+3. **Deep pass,** once per part that Forge builds or that reuses a skill
+   in the repository: `verify` refuses such a part without accepted
+   requirements, even none, from a deep pass under its current brief, so
+   one changed goal or answer needs a new pass. A remote reuse, a
+   nothing-fits or an outside part needs none. Each pass covers what the
+   result must contain, the domain's pitfalls and security concerns, and
+   proposed requirements as `idea.<slug>.<part>.<name>` rules that are
+   judged or use a catalog checker. Requirements are about the result's
+   content and behavior; the pinned KB rules already cover how the
+   harness runs it.
 4. **Check every finding.** Run `scripts/forge.py research --decision
    <record> --root <repository> --pass survey|deep [--part <id>]
    --harness <this harness> --evidence <workers output> --relay <relay>
