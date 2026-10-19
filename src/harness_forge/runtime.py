@@ -151,7 +151,8 @@ def claude_skill_origins(runner: Runner, environ: Mapping[str, str], *, timeout:
 PLUGIN_RUNTIME = ("unavailable: runtime cases for a skill shipped in a plugin are not supported yet; its static "
                   "checks and review still apply")
 
-UNKNOWN_ORIGINS = "unavailable: Forge could not tell bundled skills from the user's, so nothing is exempt"
+UNKNOWN_ORIGINS = ("unavailable: an empty Claude Code launch failed, timed out or listed no skills, so Forge cannot "
+                   "tell bundled skills from the user's")
 
 
 def shadowing(name: str, user_skills: set[str] | None, bundled: Iterable[str] = ()) -> str | None:

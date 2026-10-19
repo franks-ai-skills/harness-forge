@@ -424,7 +424,9 @@ class RuntimeTest(unittest.TestCase):
                 runner = Probe(worker=claude_run(skills=(NAME, "my-personal")))
                 result = self.run_cases("claude-code", None, runner=runner, baseline_skills=None)[0][0]
                 self.assertEqual(result.result, "not-run", result.reason)
-                self.assertIn("could not tell bundled skills from the user's", result.reason)
+                # A usage limit stops these launches too: the reason names the launch, not the skills.
+                self.assertEqual(result.reason, "unavailable: an empty Claude Code launch failed, timed out or listed "
+                                                "no skills, so Forge cannot tell bundled skills from the user's")
                 self.assertEqual(len(runner.worker_calls), 2, "no case launches")
 
     def test_a_claude_read_of_the_candidates_skill_md_counts_as_activation(self):

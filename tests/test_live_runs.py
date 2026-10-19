@@ -389,7 +389,7 @@ class RoutingSmokeTest(unittest.TestCase):
 
         runner = FailedProbe()
         summary = self.run_smoke(runner)
-        self.assertEqual(summary["status"], "stopped: Forge could not tell bundled skills from the user's")
+        self.assertEqual(summary["status"], "stopped: an empty Claude Code launch failed, timed out or listed no skills")
         self.assertEqual((summary["results"], LIVE.exit_code(summary)), ([], 1))
         self.assertNotIn("inventory_gap", summary)
         self.assertEqual(len(runner.worker_calls), 2, "only the two baseline launches")
