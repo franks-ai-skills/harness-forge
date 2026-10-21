@@ -205,6 +205,42 @@ class PluginSkillCheckTest(unittest.TestCase):
         self.assertEqual(self.check(b'{"name": "repro-tools"}\n', path=f"skills/{NAME}/"), (0, []))
 
 
+class DependencyCollectionTest(unittest.TestCase):
+    """`collect_target` reads a reused skill's declared dependencies, without generated caches."""
+
+    def collect(self, dependencies):
+        import importlib.util
+        from harness_forge.contracts import load_decision
+
+        with tempfile.TemporaryDirectory(prefix="forge-dependencies-") as directory:
+            root = Path(directory).resolve()  # as forge.py resolves --root
+            for relative, data in {f"skills/{NAME}/SKILL.md": b"---\nname: x\ndescription: y\n---\n",
+                                   "scripts/forge.py": b"import lib\n", "src/lib/core.py": b"STEPS = 3\n",
+                                   "src/lib/__pycache__/core.cpython-311.pyc": b"\0", "src/lib/old.pyc": b"\0"}.items():
+                (root / relative).parent.mkdir(parents=True, exist_ok=True)
+                (root / relative).write_bytes(data)
+            record = skill_decision(outcome="reuse", reuse={
+                "name": NAME, "source": "https://example.com/repro", "license": "MIT", "maintenance": "maintained",
+                "path": f"skills/{NAME}", "skill_home": "plugin", "dependencies": dependencies})
+            decision_path = write_decision(root, record, slug="repro", date="2026-10-21")
+            specification = importlib.util.spec_from_file_location(
+                "forge_cli", Path(__file__).resolve().parents[1] / "scripts" / "forge.py")
+            module = importlib.util.module_from_spec(specification)
+            specification.loader.exec_module(module)
+            try:
+                files, _ = module.collect_target(root, load_decision(decision_path))
+            except module._InvalidInput as error:
+                return str(error)
+            return sorted(files)
+
+    def test_declared_dependencies_are_collected_without_caches(self):
+        self.assertEqual(self.collect(["scripts/forge.py", "src/lib/"]),
+                         ["scripts/forge.py", f"skills/{NAME}/SKILL.md", "src/lib/core.py"])
+
+    def test_a_missing_dependency_is_refused(self):
+        self.assertIn("not a file or directory", self.collect(["src/missing"]))
+
+
 class BlockedPartTest(unittest.TestCase):
     """Finding 5: an explicitly blocked part stays blocked."""
 

@@ -62,6 +62,12 @@ def make_brief(decision: Decision, pass_name: str, part_id: str | None) -> Resea
     }
     if part_id is not None:
         content["part_id"] = part_id
+    # A candidate the user named for reuse: the survey sees every one, a deep pass those of its part and of
+    # no part. Only a brief with candidates carries the field, so earlier briefs keep their digests.
+    candidates = [dict(candidate) for candidate in record.get("research_candidates", [])
+                  if part_id is None or candidate.get("part_id") in (None, part_id)]
+    if candidates:
+        content["research_candidates"] = candidates
     return ResearchBrief(pass_name=pass_name, part_id=part_id, content=content, digest=canonical_digest(content))
 
 

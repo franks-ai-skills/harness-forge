@@ -8,9 +8,10 @@ decision record; the brief is your whole input.
 
 `request.json`, shown in your prompt: its `inputs` hold the pass
 (`survey` or `deep`), the part for a deep pass, the `brief` (the goals,
-the user's own picture, the targets, the reach and the parts with their
-confirmed answers) and the `brief_digest`. Research only what this brief
-needs.
+the user's own picture, the targets, the reach, the parts with their
+confirmed answers and, when the user named any, `research_candidates`:
+existing skills, plugins or tools to consider for reuse) and the
+`brief_digest`. Research only what this brief needs.
 
 ## Scope: the idea, not the harness
 
@@ -25,11 +26,14 @@ do not research it, and do not cite harness documentation for it.
 - **Survey pass:** what people already do for this goal and which
   approaches exist; whether an existing skill, plugin or tool already
   meets it, with its source, license and maintenance state; findings
-  that suggest an extra part or answer a deciding question.
+  that suggest an extra part or answer a deciding question. Check every
+  named research candidate the same way: whether it fits the goal, its
+  license and its maintenance state, from its own source.
 - **Deep pass,** for the brief's one part: what the result must contain
   to meet the part's goal, the domain's pitfalls and security concerns,
   and requirements about the result's content and behavior that can be
-  checked. Propose each requirement as a
+  checked. When the brief names a research candidate for the part,
+  check its fit, license and maintenance state too. Propose each requirement as a
   rule with id `idea.<slug>.<part>.<name>`, `check: judged`, or
   `check: script` with a checker id from the brief's checker list.
 

@@ -178,6 +178,19 @@ class BriefTest(unittest.TestCase):
         self.assertEqual(set(brief.content), {"pass", "goals", "picture", "targets", "reach", "parts"})
         self.assertNotIn("body", brief.content)
 
+    def test_named_reuse_candidates_reach_the_survey_and_their_part_only(self):
+        named = [{"name": "repro-steps", "source": "https://example.com/repro-steps", "part_id": "A"},
+                 {"name": "triage-kit", "source": "https://example.com/triage-kit"},
+                 {"name": "label-bot", "source": "https://example.com/label-bot", "part_id": "B"}]
+        record = decision(part("A", "Write a reproduction checklist when asked"), part("B", "Label every report"),
+                          research_candidates=named)
+        self.assertEqual(make_brief(record, "survey", None).content["research_candidates"], named)
+        self.assertEqual([c["name"] for c in make_brief(record, "deep", "A").content["research_candidates"]],
+                         ["repro-steps", "triage-kit"])
+        without = decision(part("A", "Write a reproduction checklist when asked"), part("B", "Label every report"))
+        self.assertNotEqual(make_brief(record, "deep", "A").digest, make_brief(without, "deep", "A").digest)
+        self.assertNotIn("research_candidates", make_brief(without, "deep", "A").content)
+
     def test_research_is_reused_only_for_the_same_brief(self):
         brief = make_brief(decision(), "deep", "A")
         record = {"briefs": [{"pass": "deep", "part_id": "A", "digest": brief.digest}]}

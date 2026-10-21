@@ -500,7 +500,33 @@ def collect_target(root: Path, decision) -> tuple[dict[str, bytes], dict[str, st
                     if path.stat().st_size > 1024 * 1024:
                         raise _InvalidInput(f"{manifest}: too large")
                     files[manifest] = path.read_bytes()
+        for dependency in (part.get("reuse") or {}).get("dependencies", []):
+            _collect_dependency(root, dependency.rstrip("/"), files)
     return files, symlinks
+
+
+def _collect_dependency(root: Path, dependency: str, files: dict[str, bytes]) -> None:
+    """Read one declared dependency of a reused skill, a file or a directory, as its skill's files are read.
+
+    Generated caches are not the implementation and stay out; a declared path that does not exist is an error.
+    """
+    try:
+        base = safe_path(root, dependency)
+    except ValueError as error:
+        raise _InvalidInput(str(error)) from error
+    if base.is_symlink() or not (base.is_file() or base.is_dir()):
+        raise _InvalidInput(f"the declared dependency {dependency} is not a file or directory in the repository")
+    for path in [base] if base.is_file() else sorted(base.rglob("*")):
+        relative = path.relative_to(root).as_posix()
+        if "__pycache__" in path.relative_to(root).parts or path.suffix == ".pyc":
+            continue
+        if path.is_symlink():
+            raise _InvalidInput(f"{relative} is a symbolic link inside a declared dependency; Forge reviews only "
+                                "regular files there")
+        if path.is_file():
+            if path.stat().st_size > 1024 * 1024 or len(files) >= MAX_COLLECTED_FILES:
+                raise _InvalidInput(f"{relative}: too large, or too many files")
+            files.setdefault(relative, path.read_bytes())
 
 
 def _unattended(arguments: argparse.Namespace):

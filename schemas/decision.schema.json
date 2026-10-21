@@ -369,6 +369,15 @@
                 "type": "string",
                 "pattern": "^(?!.*\\.\\.)(?!/)[A-Za-z0-9._/-]+$"
               },
+              "dependencies": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "pattern": "^(?!.*\\.\\.)(?!/)[A-Za-z0-9._/-]+$"
+                },
+                "minItems": 1,
+                "uniqueItems": true
+              },
               "skill_home": {
                 "enum": [
                   "repository",
@@ -551,6 +560,34 @@
         "pattern": "^F[0-9]+$"
       },
       "uniqueItems": true
+    },
+    "research_candidates": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200
+          },
+          "source": {
+            "type": "string",
+            "pattern": "^https://[^\\s]+$",
+            "maxLength": 2000
+          },
+          "part_id": {
+            "type": "string",
+            "pattern": "^[A-Z][0-9]*$"
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "name",
+          "source"
+        ]
+      },
+      "minItems": 1
     },
     "split_confirmed": {
       "type": "boolean"
