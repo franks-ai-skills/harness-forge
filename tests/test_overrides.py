@@ -127,6 +127,15 @@ class ValidationTest(unittest.TestCase):
         self.assertEqual(checked["status"], "invalid")
         self.assertTrue(any("invalid params for selection.match" in problem for problem in checked["problems"]))
 
+    def test_a_selection_rules_control_lists_only_pinned_rules(self):
+        protection = next(rule for rule in PINNED if rule.id == "selection.control.configuration-protection")
+        control = protection.params["implies"]["control"]
+        typo = {**protection.to_dict(), "params": {**protection.params, "implies": {"control": {
+            **control, "prerequisites": [*control["prerequisites"], "outside.gate.typo"]}}}}
+        checked = check(override(rule=typo, rule_id=protection.id))
+        self.assertEqual(checked["status"], "invalid")
+        self.assertIn("the new rule's control lists outside.gate.typo, which is not a pinned rule", checked["problems"])
+
     def test_after_a_kb_update_it_proposes_removal_or_asks(self):
         differs = check(override(), kb_version="0.2.0")
         self.assertEqual((differs["status"], differs["kb_comparison"]), ("kb-updated", "differs"))
