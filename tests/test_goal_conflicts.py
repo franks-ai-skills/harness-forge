@@ -88,6 +88,10 @@ class RecordedSelectionTest(unittest.TestCase):
         weakened = [{**c, "prerequisites": c["prerequisites"][:1]} for c in recorded]
         self.assertIn("drops prerequisites", self.state(part("A", "Goal", answers=guarded, outcome="outside-alongside",
                                                              outside_controls=weakened))["problem"])
+        widened = [{**c, "prerequisites": [*c["prerequisites"], "outside.ci.made-up"]} for c in recorded]
+        self.assertIn("adds prerequisites to compromise-resistant-gate that the selection does not give: "
+                      "outside.ci.made-up", self.state(part("A", "Goal", answers=guarded, outcome="outside-alongside",
+                                                            outside_controls=widened))["problem"])
         extra = recorded + [{"control": "merge-rules", "prerequisites": [], "availability": "available",
                              "required_for_goal": False}]
         self.assertIn("merge-rules", self.state(part("A", "Goal", answers=guarded, outcome="outside-alongside",

@@ -2438,7 +2438,11 @@ rules:
         family: merge rules
         prerequisites:
         - outside.codeowners.agent-config
+        - outside.merge.no-agent-bypass
+        - outside.merge.requester-cannot-approve
         - outside.ci.workflow-protected
+        - outside.gate.no-broader-bypass
+        - outside.gate.plan-enforced
         required_for_goal: false
   statement: Every built harness setup recommends code owners for the agent's own configuration files with required code-owner review
   applies_to:
@@ -2448,6 +2452,7 @@ rules:
   evidence: Inference
   sources:
   - docs/guide/outside-gates.md#branch-protection-and-merge-rules-the-gate-is-separation-of-identities
+  - docs/guide/outside-gates.md#seven-conditions-turn-a-control-into-a-gate
   contested: false
 - id: selection.control.merge-rule-for-agent-prs
   concept: selection
@@ -2468,6 +2473,7 @@ rules:
         - outside.merge.no-agent-bypass
         - outside.merge.requester-cannot-approve
         - outside.gate.real-refs
+        - outside.gate.no-broader-bypass
         - outside.gate.plan-enforced
         - outside.gate.periodic-verification
         required_for_goal: false
@@ -2479,6 +2485,7 @@ rules:
   evidence: Inference
   sources:
   - docs/guide/outside-gates.md#four-outcomes-from-six-intake-questions
+  - docs/guide/outside-gates.md#seven-conditions-turn-a-control-into-a-gate
   contested: false
 - id: selection.control.event-gate
   concept: selection
@@ -2505,6 +2512,9 @@ rules:
         - outside.merge.no-agent-bypass
         - outside.merge.requester-cannot-approve
         - outside.ci.required-on-ref
+        - outside.ci.source-pinned
+        - outside.ci.workflow-protected
+        - outside.gate.no-broader-bypass
         - outside.gate.plan-enforced
         - outside.gate.periodic-verification
         required_for_goal: true
@@ -2548,8 +2558,11 @@ rules:
         prerequisites:
         - outside.gate.real-refs
         - outside.merge.no-agent-bypass
-        - outside.gate.no-broader-bypass
+        - outside.merge.requester-cannot-approve
+        - outside.ci.required-on-ref
+        - outside.ci.source-pinned
         - outside.ci.workflow-protected
+        - outside.gate.no-broader-bypass
         - outside.gate.plan-enforced
         - outside.gate.periodic-verification
         required_for_goal: true
@@ -2586,6 +2599,7 @@ rules:
         id: outer-isolation
         family: isolation
         prerequisites:
+        - outside.merge.no-agent-bypass
         - outside.gate.no-broader-bypass
         required_for_goal: false
   statement: Bypass modes, untrusted repositories, or untrusted input with secrets and egress add an isolation recommendation
@@ -2596,4 +2610,5 @@ rules:
   evidence: Inference
   sources:
   - docs/guide/outside-gates.md#four-outcomes-from-six-intake-questions
+  - docs/guide/outside-gates.md#seven-conditions-turn-a-control-into-a-gate
   contested: false

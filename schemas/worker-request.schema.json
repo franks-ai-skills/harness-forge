@@ -327,6 +327,37 @@
                             "object",
                             "null"
                           ]
+                        },
+                        "outside_controls": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "additionalProperties": false,
+                            "required": [
+                              "control",
+                              "required_for_goal",
+                              "prerequisites"
+                            ],
+                            "properties": {
+                              "control": {
+                                "type": "string",
+                                "pattern": "^[a-z0-9][a-z0-9-]*$",
+                                "maxLength": 200
+                              },
+                              "required_for_goal": {
+                                "type": "boolean"
+                              },
+                              "prerequisites": {
+                                "type": "array",
+                                "items": {
+                                  "type": "string",
+                                  "pattern": "^outside\\.[a-z0-9-]+(\\.[a-z0-9-]+)+$"
+                                },
+                                "minItems": 1,
+                                "uniqueItems": true
+                              }
+                            }
+                          }
                         }
                       },
                       "additionalProperties": false,
@@ -336,7 +367,8 @@
                         "answers",
                         "outcome",
                         "mechanism",
-                        "reuse"
+                        "reuse",
+                        "outside_controls"
                       ]
                     }
                   }

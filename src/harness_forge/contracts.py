@@ -610,6 +610,14 @@ FORGE_CONDITIONS = {
                                           "drifts silently",
 }
 EVERY_CONTROL = ("outside.gate.real-refs", "outside.gate.periodic-verification")
+
+
+def effective_prerequisites(control: dict) -> list[str]:
+    """The conditions under which a recorded control works as a gate: its own, then those every control has.
+
+    The README lists them, and verification judges exactly these against the control.
+    """
+    return list(dict.fromkeys([*control["prerequisites"], *EVERY_CONTROL]))
 # The agent-config paths the KB's configuration and outside-gates guides name for owner review, per target
 # harness; skills live in .agents/ for both.
 AGENT_CONFIG = {"claude-code": ("`.claude/`", "`CLAUDE.md`", "`.mcp.json`"),
@@ -635,7 +643,7 @@ def _outside_section(decision: Decision, conditions: dict[str, str]) -> str:
                 f"- `{control['control']}` (part {part['id']}): {OUTSIDE_STATUS}. {role.capitalize()}; "
                 f"availability {control['availability']}. It works as a gate only when:"
             )
-            for rule_id in dict.fromkeys([*control["prerequisites"], *EVERY_CONTROL]):
+            for rule_id in effective_prerequisites(control):
                 # A statement may span lines; the README holds it on one, as Forge reads it back.
                 condition = " ".join((conditions.get(rule_id) or "").split())
                 entries.append(f"  - {condition} (`{rule_id}`)" if condition else f"  - `{rule_id}`")

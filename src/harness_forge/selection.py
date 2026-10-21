@@ -498,6 +498,11 @@ def _controls_problem(part: dict, recommendation: Recommendation) -> str | None:
         dropped = set(computed[control_id]["prerequisites"]) - set(recorded[control_id]["prerequisites"])
         if dropped:
             problems.append(f"drops prerequisites of {control_id}: {', '.join(sorted(dropped))}")
+        # Verification judges exactly the listed conditions, so one the selection does not give would go unchecked.
+        added = set(recorded[control_id]["prerequisites"]) - set(computed[control_id]["prerequisites"])
+        if added:
+            problems.append(f"adds prerequisites to {control_id} that the selection does not give: "
+                            f"{', '.join(sorted(added))}")
     return "; ".join(problems) or None
 
 

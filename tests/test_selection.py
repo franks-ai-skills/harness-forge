@@ -79,6 +79,10 @@ class SpecialCasesTest(unittest.TestCase):
         case = self.case("concept-skills")
         controls = recommend(case["answers"], case["whole_idea"], RULES, []).controls
         self.assertEqual([(c["id"], c["required_for_goal"]) for c in controls], [("codeowners-agent-config", False)])
+        # The branch rule that requires code-owner review is a merge rule, so it carries the merge conditions.
+        self.assertEqual(controls[0]["prerequisites"], [
+            "outside.ci.workflow-protected", "outside.codeowners.agent-config", "outside.gate.no-broader-bypass",
+            "outside.gate.plan-enforced", "outside.merge.no-agent-bypass", "outside.merge.requester-cannot-approve"])
 
     def test_reuse_needs_confirmed_fit_license_and_maintenance(self):
         case = self.case("outcome-reuse")

@@ -51,7 +51,7 @@
   kind: must
   severity: warning
   check: judged
-  statement: Approval comes from an identity other than the author, the last pusher and the launching user, and resets on new pushes
+  statement: Where the control requires approval, approval comes from an identity other than the author, the last pusher and the launching user, and it resets on new pushes
   applies_to: {harnesses: [claude-code, codex, opencode]}
   evidence: Inference
   sources:
@@ -78,7 +78,7 @@
   kind: must
   severity: warning
   check: judged
-  statement: The sources a gate's checks run are pinned
+  statement: Where the gate runs checks, the sources they run are pinned
   applies_to: {harnesses: [claude-code, codex, opencode]}
   evidence: Inference
   sources: [docs/guide/outside-gates.md#seven-conditions-turn-a-control-into-a-gate]
@@ -89,7 +89,7 @@
   kind: must
   severity: warning
   check: judged
-  statement: Workflow, scanner and policy files that define a gate are under code owners or come from outside the repository at a pinned ref, and CODEOWNERS owns itself
+  statement: Workflow, scanner and policy files that define a gate are under code owners or come from outside the repository at a pinned ref, and where CODEOWNERS is used, CODEOWNERS owns itself
   applies_to: {harnesses: [claude-code, codex, opencode]}
   evidence: Inference
   sources: [docs/guide/outside-gates.md#seven-conditions-turn-a-control-into-a-gate]

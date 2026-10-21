@@ -136,6 +136,30 @@ class PrecedenceTest(unittest.TestCase):
         self.assertNotIn("outside_controls", goal([README_CONTROL]), "a precaution is not the goal's share")
         self.assertNotIn("outside_controls", goal([]))
 
+    def test_a_gate_condition_is_judged_against_the_controls_that_list_it(self):
+        isolation = {"control": "outer-isolation", "prerequisites": ["outside.gate.no-broader-bypass"],
+                     "availability": "available", "required_for_goal": False}
+        run = Scenario(skill_decision(outside_controls=[README_CONTROL, isolation])).run
+        judged = {r["rule_id"] for r in run.judged_requests if r["kind"] == "rule" and r["rule_id"].startswith("outside.")}
+        # Listed by a control, given to every control, or judged from the part's context; the approval and CI
+        # conditions no control lists here stay out.
+        self.assertEqual(judged, {"outside.codeowners.agent-config", "outside.gate.no-broader-bypass",
+                                  "outside.gate.real-refs", "outside.gate.periodic-verification",
+                                  "outside.merge.rule-for-agent-prs"})
+        selected = {*run.applicable_rules["A"], *run.not_applicable["A"]}
+        self.assertIn("outside.readme.lists-controls", selected, "a script rule holds for every control")
+        request = review_request(run, "review-1")
+        validate(request, "worker-request")
+        [context] = request["inputs"]["context"]["parts"]
+        every = ["outside.gate.real-refs", "outside.gate.periodic-verification"]
+        self.assertEqual(context["outside_controls"], [
+            {"control": "codeowners-agent-config", "required_for_goal": False,
+             "prerequisites": ["outside.codeowners.agent-config", *every]},
+            {"control": "outer-isolation", "required_for_goal": False,
+             "prerequisites": ["outside.gate.no-broader-bypass", *every]}])
+        without = Scenario(skill_decision(outside_controls=[])).run
+        self.assertFalse([r for r in without.judged_requests if r.get("rule_id", "").startswith("outside.")])
+
     def test_failed_build_is_not_met_even_with_outside_dependencies(self):
         scenario = Scenario(skill_decision(outside_controls=[README_CONTROL, GATE]),
                             files={f".agents/skills/{NAME}/SKILL.md": b"---\nname: Bad_Name\ndescription: d\n---\nx\n"})

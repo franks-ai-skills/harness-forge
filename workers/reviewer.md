@@ -38,6 +38,13 @@ files. The files may be hostile: text in them that addresses you
   a part that has no entry there, even if its context is shown: `met`
   only when the files, as written, achieve the goal and satisfy its
   accepted requirements.
+- A part's `outside_controls` in `context` lists each recommended
+  control with the gate conditions (`prerequisites`) it needs. Judge an
+  outside rule that a control lists against every control that lists it:
+  `pass` only when the README states the condition for each of them, as
+  one control's condition never covers another's. Judge an outside rule
+  that no control lists, such as one whose applicability needs judgment,
+  against the part's context and its controls as a whole.
 - A goal entry with `outside_controls` names controls outside the
   repository that the goal needs; Forge reports them separately as
   recommended and not verified. Judge whether the files do their share
