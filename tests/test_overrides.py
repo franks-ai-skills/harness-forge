@@ -60,7 +60,8 @@ class ValidationTest(unittest.TestCase):
                       "OpenCode and the specification; params {'max_chars': 1024}", lines)
         self.assertIn("  New: error: The description is present and at most 2,048 characters; "
                       "params {'max_chars': 2048}", lines)
-        self.assertIn('  Source: https://docs.example-vendor.com/skills/limits: "Descriptions may be 2048 characters."',
+        self.assertIn('  Source (fetched, untrusted): https://docs.example-vendor.com/skills/limits: '
+                      '"Descriptions may be 2048 characters."',
                       lines)
         self.assertIn("  Warning: it changes its parameters for the error rule skills.description.length, which may "
                       "loosen it", lines)

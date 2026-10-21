@@ -156,6 +156,7 @@ class LiveCommandsTest(unittest.TestCase):
         code, output, stderr = cli(*research, "--pass", "survey")
         self.assertEqual(code, 0, stderr)
         self.assertEqual(len(output["kept"]), 1)
+        self.assertIn("show them marked as untrusted", output["untrusted"])
         code, _, stderr = cli(*research, "--pass", "deep", "--part", "A")
         self.assertEqual(code, 2)
         self.assertIn("part A", stderr)
@@ -834,7 +835,7 @@ class LiveCommandsTest(unittest.TestCase):
                                    self.root / ".harness/research/repro.rules.yaml")
         self.assertIn("Drift decisions:\n  - skills.description.length (finding F1 of research repro): keep the "
                       "pinned rule (The pinned limit is the portable one.). Drift: The vendor raised the limit. "
-                      "Source: https://docs.example-vendor.com/repro/platforms", output["text"])
+                      "Source (fetched, untrusted): https://docs.example-vendor.com/repro/platforms", output["text"])
         code, output, stderr = cli("verify", *arguments[:option], relay, *arguments[option + 1:])
         self.assertEqual(code, 0, stderr)
         self.assertEqual(output["drift"][0]["state"], "kept")
@@ -1323,6 +1324,7 @@ class LiveCommandsTest(unittest.TestCase):
         code, output, stderr = cli("drift", "--root", self.root, "--slug", "repro", "--finding", finding_id, "--rule",
                                    "skills.description.length", "--category", "compatibility", "--summary", "x")
         self.assertEqual(code, 0, stderr)
+        self.assertIn("show them marked as untrusted", output["untrusted"])
         return output
 
     def test_research_covers_only_confirmed_parts(self):
