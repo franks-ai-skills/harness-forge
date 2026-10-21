@@ -167,7 +167,7 @@ limits what those tests can prove:
 | Harness | Gap |
 | --- | --- |
 | Claude Code | The cases run without a sandbox, so only the `Skill`, `Read`, `Grep` and `Glob` tools can be permitted. Skills that stay listed with bundled skills turned off (your own, or built-ins that this setting keeps, such as `design`, `doctor` and `plugin-authoring` in 2.1.296) are turned off for each case with `skillOverrides`; a skill that still loads makes the case `not-run`. So does a candidate named like a bundled skill, which would answer its `Skill` call or `/<name>`. A user-invoked skill (`disable-model-invocation: true`) is out of the model's reach, so Forge runs its explicit case as `/<name> <prompt>`, sent as a stream-json message that Claude Code replays: only its own expansion of a resolved `/<name>` counts as activation, and a case without one reports `not-run`, not a pass. |
-| Codex | Codex does not report which skills, plugins and MCP servers it loaded, so its runs are best-effort: `clean` is null and the summary states the gap. Activation counts only when Codex prints the skill's whole `SKILL.md` with one reading command that names no other file, or with one `cat` whose first file it is and whose output starts with it; a read chained with other commands reports `not-run`. A near-miss case has no signal that proves non-activation and reports `not-run`. A user-invoked skill (`policy.allow_implicit_invocation: false`) gets its explicit case as `$<name> <prompt>`. Codex 0.162 starts a `codex-code-mode-host` helper by default; on macOS, when the Homebrew cask installed it, Gatekeeper can stop its first launch at a prompt. |
+| Codex | Codex does not report which skills, plugins and MCP servers it loaded, so its runs are best-effort: `clean` is null and the summary states the gap. Activation counts only when Codex prints the skill's whole `SKILL.md` with one reading command that names no other file, or with one `cat` whose first file it is and whose output starts with it; a read chained with other commands reports `not-run`. A near-miss case has no signal that proves non-activation and reports `not-run`. A user-invoked skill (`policy.allow_implicit_invocation: false`) gets its explicit case as `$<name> <prompt>`; Codex injects the skill without a stream event, so that case passes only when the model also reads `SKILL.md`, and otherwise reports `not-run`. Codex 0.162 starts a `codex-code-mode-host` helper by default; on macOS, when the Homebrew cask installed it, Gatekeeper can stop its first launch at a prompt. |
 
 A reused skill that ships in a plugin (`skills/<name>/` beside the
 plugin's `plugin.json`) gets its static checks and review, but its
@@ -203,7 +203,7 @@ items and block quotes.
   there, and it appends a section only where it shows as a heading of
   its own.
 
-## Outside controls
+## Research isolation guidance
 
 **Research environment isolation — recommended, not verified.** Research
 fetches untrusted web content even when the project is trusted. Run it in
@@ -281,3 +281,13 @@ contributions: [CONTRIBUTING.md](CONTRIBUTING.md).
 command. `tools/live_checks.py` runs the automated live checks with your
 subscription; with an API-key or unknown login, pass
 `--login-answer continue` on each run to accept that it can cost extra.
+
+**Temporary, development only:** with
+`HARNESS_FORGE_TEMPORARY_CODEX_ROLLOUT=1`, a Codex explicit case of a
+user-invoked skill runs without `--ephemeral`. Forge reads that run's own
+session rollout in `$CODEX_HOME/sessions` (default `~/.codex/sessions`),
+credits "instructions injected" when Codex recorded the candidate's
+exact `SKILL.md`, and deletes the file. It reads no other session file.
+This shows that the instructions reached the model, not that the
+procedure ran. It is off by default, no test or reference case depends
+on it, and it will be removed.

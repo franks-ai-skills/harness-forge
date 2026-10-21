@@ -24,8 +24,12 @@ command prints bounded JSON.
   own idea and say what the answer changes for it. Offer the choices as
   A, B, C, recommended first, and accept a letter as the answer; use the
   harness's multiple-choice tool where it has one. Don't cite this skill
-  or Forge as the reason for a question. Never ask two questions at once,
-  even when both are pending.
+  or Forge as the reason for a question. Two questions in one message
+  get answers that are hard to tell apart, so ask them one at a time.
+  When several parts' questions are pending, offer to take the answers
+  for all of them in one message; when the user gives complete answers
+  together, use them and ask only about the ones that are missing or
+  unclear.
 - **Only confirmed answers count.** Facts you infer from the user's
   description are suggestions: show them and let the user confirm.
   Research findings are never answers until the user confirms them.
@@ -43,6 +47,9 @@ command prints bounded JSON.
 
 ## Procedure
 
+Before writing a decision record or a `select` input for the first
+time, read [references/inputs.md](references/inputs.md) for their shapes.
+
 1. **Existing contract first.** If `.harness/decisions/` already holds a
    record for this idea, run `scripts/forge.py prepare-contract --decision
    <record>`, with `--revision` when it records accepted requirements, and
@@ -50,7 +57,10 @@ command prints bounded JSON.
    idea, say the contract is empty.
 2. **Goal and picture.** Ask what the idea should achieve, for whom, and
    how the user will know it works. Record the user's own description of
-   how it should work word for word.
+   how it should work word for word. When the user names an existing
+   skill, plugin or tool to reuse, record it in `research_candidates`
+   with its name and source, and its `part_id` once parts exist, so
+   research checks its fit, license and maintenance.
 3. **Whole-idea questions,** asked once: targets, reach, hosting plan and
    repository visibility, and whether an agent opens pull requests, runs
    without permission prompts (the agent's prompts, not questions a skill
@@ -105,7 +115,12 @@ command prints bounded JSON.
    where it lives as `skill_home`: `repository` for
    `.agents/skills/<name>`, `plugin` for `skills/<name>` beside a
    plugin's `plugin.json`. Ask the user to confirm the home; leave it out
-   when they cannot, and verification reports it as unresolved. Offer the full assessment of all ten mechanisms as
+   when they cannot, and verification reports it as unresolved. Pin the
+   reuse `source` to the commit whose files are reused: a branch or a
+   version number is not a pin. When the skill runs code outside its
+   directory, such as a plugin's shared scripts, ask which files and
+   directories it depends on and record them in `reuse.dependencies`;
+   verification reviews them with the skill. Offer the full assessment of all ten mechanisms as
    detail: ruled out (with the conflicting requirement and its source),
    not preferred, or unresolved (with the facts that were not needed to
    decide). Say "ruled out" only where the output does. For each

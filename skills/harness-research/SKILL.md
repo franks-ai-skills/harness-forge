@@ -39,9 +39,12 @@ root, which downloads Forge's pinned packages from PyPI once.
 
 ## Procedure
 
-1. **Brief.** Build the brief from the decision record: the goals, the
-   user's picture, targets, reach, and the parts with their confirmed
-   answers. Nothing else from the conversation or repository goes in.
+1. **Brief.** Forge builds the brief from the decision record: the
+   goals, the user's picture, targets, reach, the parts with their
+   confirmed answers, and the reuse candidates the user named
+   (`research_candidates`). Nothing else from the conversation or
+   repository goes in. A named candidate is checked like any other: its
+   fit, license and maintenance stay open until research shows them.
 2. **Survey pass** (from harness-intake, before the split, on the
    confirmed record of the whole idea, which has no parts yet): what
    people already do in the idea's domain, existing skills, plugins or
@@ -64,7 +67,8 @@ root, which downloads Forge's pinned packages from PyPI once.
    finding and keeps only findings that pass both checks. Show the dropped
    ones and why. What the workers' isolation does not guarantee is in
    [references/contract.md](references/contract.md).
-5. **Present and accept.** Show kept findings grouped by pass and part,
+5. **Present and accept.** Before writing the files for `accept`, read
+   [references/inputs.md](references/inputs.md) for their shapes. Show kept findings grouped by pass and part,
    each with its source and quote. Then ask, one requirement at a time,
    whether to accept, edit or reject it. Word a `must-not` rule as the
    forbidden behavior itself ("the skill asks the user a question while
@@ -100,11 +104,13 @@ drift with its source, quote and support result, and offer:
   <repository> --rule <rule id> --finding <id> --run-id <run> --out
   <file>` searches the KB's open issues and proposes a comment on the
   one that names the rule, or a new issue. Show the exact text and ask
-  `Approve` or `Decline`, then run `scripts/forge.py publish-issue
-  --root <repository> --proposal <file> --relay <file>` with a relay of
-  the answer (`choice` approve, decline or pending, `displayed_digest`,
-  `run_id`). Nothing is filed without approval, and no answer here
-  unblocks a part.
+  `Approve` or `Decline`, then write a relay of the answer (`choice`
+  approve, decline or pending, `displayed_digest`, `run_id`). Filing
+  changes a public tracker, so the user starts it: give them the exact
+  command `python3 <plugin root>/scripts/forge.py publish-issue --root
+  <repository> --proposal <file> --relay <file>` to run themselves, and
+  never run `publish-issue` yourself, also not after an approval. Nothing
+  is filed without approval, and no answer here unblocks a part.
 - **Adopt the correction.** Write the user's change as JSON
   (`rule_id`, `finding_id`, `reason`, and either the full new `rule` or
   `"retired": true`) and run `scripts/forge.py override --root
