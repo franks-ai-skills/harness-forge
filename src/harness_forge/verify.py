@@ -428,8 +428,11 @@ def prepare_run(
                                             "rule_kind": rule.kind, "statement": rule.statement,
                                             "applicability": rule.applicability, "severity": rule.severity})
         if in_scope and part_kind(part) in ("build", "local-reuse"):
+            # The goal's outside share, which the report shows apart: the reviewer judges the files' share.
+            controls = [control["control"] for control in part["outside_controls"] if control["required_for_goal"]]
             run.judged_requests.append({"kind": "goal", "part_id": part_id, "goal": part["goal"],
-                                        "requirement_ids": [rule.id for rule in idea.get(part_id, [])]})
+                                        "requirement_ids": [rule.id for rule in idea.get(part_id, [])],
+                                        **({"outside_controls": controls} if controls else {})})
     return run
 
 
@@ -453,7 +456,8 @@ def review_request(run: VerificationRun, request_id: str) -> dict:
         "rules": [{"part_id": r["part_id"], "rule_id": r["rule_id"], "statement": r["statement"],
                    "rule_kind": r["rule_kind"], "applicability": r["applicability"]}
                   for r in run.judged_requests if r["kind"] == "rule"],
-        "goals": [{"part_id": r["part_id"], "goal": r["goal"], "requirement_ids": r["requirement_ids"]}
+        "goals": [{"part_id": r["part_id"], "goal": r["goal"], "requirement_ids": r["requirement_ids"],
+                   **({"outside_controls": r["outside_controls"]} if "outside_controls" in r else {})}
                   for r in run.judged_requests if r["kind"] == "goal"],
         "decision_digest": run.decision_digest,
         # The confirmed facts a rule's judgment can depend on, such as the targets a flag is needed for.

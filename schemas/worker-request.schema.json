@@ -236,6 +236,16 @@
                         "maxLength": 200
                       },
                       "uniqueItems": true
+                    },
+                    "outside_controls": {
+                      "type": "array",
+                      "items": {
+                        "type": "string",
+                        "pattern": "^[a-z0-9][a-z0-9-]*$",
+                        "maxLength": 200
+                      },
+                      "minItems": 1,
+                      "uniqueItems": true
                     }
                   },
                   "additionalProperties": false,
