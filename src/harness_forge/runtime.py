@@ -717,15 +717,16 @@ def _take_rollout(stdout: str, environment: Mapping[str, str]) -> tuple[str | No
     found = sorted((Path(home) / "sessions").glob(f"*/*/*/rollout-*-{thread_id}.jsonl"))
     if len(found) != 1:
         return thread_id, None, None
+    text, problem = None, None
     try:
-        text = found[0].read_text(encoding="utf-8")
-    except OSError:
-        text = None
+        text = found[0].read_bytes().decode("utf-8")
+    except (OSError, UnicodeDecodeError) as error:
+        problem = f"the case's session rollout could not be read: {error}"
     try:
         found[0].unlink()
     except OSError as error:
         return thread_id, None, f"the case's session rollout could not be deleted: {error}"
-    return thread_id, text, None
+    return thread_id, text, problem
 
 
 # The not-run reasons that say Codex cannot observe the outcome, not that the case was skipped: a Codex run

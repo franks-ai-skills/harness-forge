@@ -69,6 +69,14 @@ class TakeRolloutTest(unittest.TestCase):
         self.assertFalse(own.exists())
         self.assertTrue(other.exists(), "another session's file is never read or deleted")
 
+    def test_an_unreadable_rollout_is_still_deleted_and_reported(self):
+        own = self.sessions / f"rollout-2026-10-21T10-00-59-{THREAD}.jsonl"
+        own.write_bytes(rollout("/w").encode() + b"\xe2\x82")
+        thread, text, problem = _take_rollout(STREAM, {"CODEX_HOME": str(self.home)})
+        self.assertEqual((thread, text), (THREAD, None))
+        self.assertIn("could not be read", problem)
+        self.assertFalse(own.exists())
+
     def test_no_thread_or_no_file_reads_nothing(self):
         self.assertEqual(_take_rollout("not json\n", {"CODEX_HOME": str(self.home)}), (None, None, None))
         self.assertEqual(_take_rollout(STREAM, {"CODEX_HOME": str(self.home)}), (THREAD, None, None))

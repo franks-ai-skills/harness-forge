@@ -264,6 +264,11 @@ class PrecedenceTest(unittest.TestCase):
         result = self.finish_plugin(record, {**files, "src/lib/core.py": b"STEPS = 4\n"}, run)
         self.assertNotEqual(result.harness_result, "verified")
 
+    def test_a_file_added_under_a_declared_directory_invalidates_the_part(self):
+        record, files, _, run = self.plugin_reuse(dependencies=["src/lib"], extra=self.HELPERS)
+        result = self.finish_plugin(record, {**files, "src/lib/extra.py": b"STEPS = 5\n"}, run)
+        self.assertNotEqual(result.harness_result, "verified")
+
     def test_a_declared_dependency_without_files_is_an_error(self):
         with self.assertRaisesRegex(ValueError, "declared dependency src/missing has no files"):
             self.plugin_reuse(dependencies=["src/missing"], extra=self.HELPERS)
@@ -279,6 +284,7 @@ class PrecedenceTest(unittest.TestCase):
                 self.assertEqual("dependencies" in data["part_map"], bool(dependencies))
                 again, _ = earlier_run(render_report(run, [result]))
                 self.assertEqual(again.part_dependencies, run.part_dependencies)
+                self.assertEqual(again.part_dependency_roots, run.part_dependency_roots)
 
     def test_a_reused_skill_outside_agents_skills_needs_its_home(self):
         for idea_facts in ({}, {"skill_home": "repository"}, {"skill_home": False}):

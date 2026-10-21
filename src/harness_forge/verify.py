@@ -368,6 +368,8 @@ def prepare_run(
         dependencies = [path for path in dependency_paths(part, files) if path not in owned]
         if dependencies:
             run.part_dependencies[part_id] = dependencies
+            # A file added under a declared directory later belongs to the part too.
+            run.part_dependency_roots[part_id] = sorted({path.rstrip("/") for path in part["reuse"]["dependencies"]})
             owned += dependencies
         run.part_files[part_id] = owned
         if directory:
