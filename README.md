@@ -291,3 +291,42 @@ exact `SKILL.md`, and deletes the file. It reads no other session file.
 This shows that the instructions reached the model, not that the
 procedure ran. It is off by default, no test or reference case depends
 on it, and it will be removed.
+
+## Outside controls
+
+- `codeowners-agent-config` (part A): recommended, not verified. Precaution; availability available. It works as a gate only when:
+  - Workflow, scanner and policy files that define a gate are under code owners or come from outside the repository at a pinned ref, and CODEOWNERS owns itself (`outside.ci.workflow-protected`)
+  - A CODEOWNERS entry names an owner for every file that configures the agent, including `.agents/`, `.claude/`, `CLAUDE.md`, `.mcp.json`, `.codex/`, `AGENTS.md`, `AGENTS.override.md`, `.devcontainer/`, the CI workflow files and the CODEOWNERS file itself, and the branch rule requires code-owner review (`outside.codeowners.agent-config`)
+  - It targets the real refs and resources it protects, such as the default and release branches and tags or the production accounts (`outside.gate.real-refs`)
+  - Its configuration is checked periodically, because gate configuration drifts silently (`outside.gate.periodic-verification`)
+- `outer-isolation` (part A): recommended, not verified. Precaution; availability available. It works as a gate only when:
+  - No broader credential or channel the agent can reach, such as a personal token or a metadata endpoint, bypasses the control (`outside.gate.no-broader-bypass`)
+  - It targets the real refs and resources it protects, such as the default and release branches and tags or the production accounts (`outside.gate.real-refs`)
+  - Its configuration is checked periodically, because gate configuration drifts silently (`outside.gate.periodic-verification`)
+- `codeowners-agent-config` (part B): recommended, not verified. Precaution; availability available. It works as a gate only when:
+  - Workflow, scanner and policy files that define a gate are under code owners or come from outside the repository at a pinned ref, and CODEOWNERS owns itself (`outside.ci.workflow-protected`)
+  - A CODEOWNERS entry names an owner for every file that configures the agent, including `.agents/`, `.claude/`, `CLAUDE.md`, `.mcp.json`, `.codex/`, `AGENTS.md`, `AGENTS.override.md`, `.devcontainer/`, the CI workflow files and the CODEOWNERS file itself, and the branch rule requires code-owner review (`outside.codeowners.agent-config`)
+  - It targets the real refs and resources it protects, such as the default and release branches and tags or the production accounts (`outside.gate.real-refs`)
+  - Its configuration is checked periodically, because gate configuration drifts silently (`outside.gate.periodic-verification`)
+- `outer-isolation` (part B): recommended, not verified. Precaution; availability available. It works as a gate only when:
+  - No broader credential or channel the agent can reach, such as a personal token or a metadata endpoint, bypasses the control (`outside.gate.no-broader-bypass`)
+  - It targets the real refs and resources it protects, such as the default and release branches and tags or the production accounts (`outside.gate.real-refs`)
+  - Its configuration is checked periodically, because gate configuration drifts silently (`outside.gate.periodic-verification`)
+- `codeowners-agent-config` (part C): recommended, not verified. Precaution; availability available. It works as a gate only when:
+  - Workflow, scanner and policy files that define a gate are under code owners or come from outside the repository at a pinned ref, and CODEOWNERS owns itself (`outside.ci.workflow-protected`)
+  - A CODEOWNERS entry names an owner for every file that configures the agent, including `.agents/`, `.claude/`, `CLAUDE.md`, `.mcp.json`, `.codex/`, `AGENTS.md`, `AGENTS.override.md`, `.devcontainer/`, the CI workflow files and the CODEOWNERS file itself, and the branch rule requires code-owner review (`outside.codeowners.agent-config`)
+  - It targets the real refs and resources it protects, such as the default and release branches and tags or the production accounts (`outside.gate.real-refs`)
+  - Its configuration is checked periodically, because gate configuration drifts silently (`outside.gate.periodic-verification`)
+- `outer-isolation` (part C): recommended, not verified. Precaution; availability available. It works as a gate only when:
+  - No broader credential or channel the agent can reach, such as a personal token or a metadata endpoint, bypasses the control (`outside.gate.no-broader-bypass`)
+  - It targets the real refs and resources it protects, such as the default and release branches and tags or the production accounts (`outside.gate.real-refs`)
+  - Its configuration is checked periodically, because gate configuration drifts silently (`outside.gate.periodic-verification`)
+- `codeowners-agent-config` (part D): recommended, not verified. Precaution; availability available. It works as a gate only when:
+  - Workflow, scanner and policy files that define a gate are under code owners or come from outside the repository at a pinned ref, and CODEOWNERS owns itself (`outside.ci.workflow-protected`)
+  - A CODEOWNERS entry names an owner for every file that configures the agent, including `.agents/`, `.claude/`, `CLAUDE.md`, `.mcp.json`, `.codex/`, `AGENTS.md`, `AGENTS.override.md`, `.devcontainer/`, the CI workflow files and the CODEOWNERS file itself, and the branch rule requires code-owner review (`outside.codeowners.agent-config`)
+  - It targets the real refs and resources it protects, such as the default and release branches and tags or the production accounts (`outside.gate.real-refs`)
+  - Its configuration is checked periodically, because gate configuration drifts silently (`outside.gate.periodic-verification`)
+- `outer-isolation` (part D): recommended, not verified. Precaution; availability available. It works as a gate only when:
+  - No broader credential or channel the agent can reach, such as a personal token or a metadata endpoint, bypasses the control (`outside.gate.no-broader-bypass`)
+  - It targets the real refs and resources it protects, such as the default and release branches and tags or the production accounts (`outside.gate.real-refs`)
+  - Its configuration is checked periodically, because gate configuration drifts silently (`outside.gate.periodic-verification`)
