@@ -812,6 +812,8 @@ class LiveCommandsTest(unittest.TestCase):
         self.assertEqual(code, 0, stderr)
         self.assertEqual(proposal["kind"], "issue")
         self.assertIn("Rule `skills.description.length`", proposal["body"])
+        self.assertIn("show them marked as untrusted", proposal["untrusted"])
+        self.assertNotIn("untrusted", json.loads(proposal_path.read_text()))
         for choice, expected in (("pending", "pending"), ("decline", "not published")):
             relay = cli.write(f"issue-{choice}.json", {"choice": choice, "displayed_digest": proposal["digest"],
                                                        "run_id": "drift-1"})

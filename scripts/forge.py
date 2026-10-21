@@ -1122,7 +1122,8 @@ def _drift_issue(arguments: argparse.Namespace) -> int:
         Path(arguments.out).write_text(json.dumps(proposal, indent=2), encoding="utf-8")
     except OSError as error:
         raise _InvalidInput(str(error)) from error
-    emit({"command": "drift-issue", **proposal})
+    # The proposal file stays as approved and filed; only the output carries the note.
+    emit({"command": "drift-issue", **proposal, "untrusted": UNTRUSTED_NOTE})
     return 0
 
 
