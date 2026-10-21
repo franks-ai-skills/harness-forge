@@ -7,7 +7,7 @@ from pathlib import Path
 from harness_forge.build_skill import plan_skill
 from harness_forge.contracts import confirm_contract, render_contract
 from harness_forge.documents import canonical_digest
-from harness_forge.documents import load_document
+from harness_forge.documents import load_document, validate
 from harness_forge.models import Confirmation, Decision, RuntimeResult, Rule
 from harness_forge.verify import bound_inputs, exclusion_token, finish_run, prepare_run, review_request, validate_review
 from tests.builders import EVIDENCE, decision, part
@@ -125,6 +125,16 @@ class PrecedenceTest(unittest.TestCase):
     def test_the_reviewer_sees_the_parts_links(self):
         inputs = review_request(Scenario(skill_decision()).run, "review-1")["inputs"]
         self.assertEqual(inputs["links"], [{"path": f".claude/skills/{NAME}", "target": f"../../.agents/skills/{NAME}"}])
+
+    def test_the_reviewer_sees_the_goals_outside_share(self):
+        def goal(controls):
+            run = Scenario(skill_decision(outside_controls=controls)).run
+            request = review_request(run, "review-1")
+            validate(request, "worker-request")
+            return request["inputs"]["goals"][0]
+        self.assertEqual(goal([README_CONTROL, GATE])["outside_controls"], ["event-gate"])
+        self.assertNotIn("outside_controls", goal([README_CONTROL]), "a precaution is not the goal's share")
+        self.assertNotIn("outside_controls", goal([]))
 
     def test_failed_build_is_not_met_even_with_outside_dependencies(self):
         scenario = Scenario(skill_decision(outside_controls=[README_CONTROL, GATE]),
