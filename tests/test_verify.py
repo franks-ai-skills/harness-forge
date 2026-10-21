@@ -269,6 +269,12 @@ class PrecedenceTest(unittest.TestCase):
         result = self.finish_plugin(record, {**files, "src/lib/extra.py": b"STEPS = 5\n"}, run)
         self.assertNotEqual(result.harness_result, "verified")
 
+    def test_a_root_whose_files_the_skill_owns_still_binds_new_files(self):
+        record, files, _, run = self.plugin_reuse(dependencies=["skills"])
+        self.assertNotIn("A", run.part_dependencies)
+        result = self.finish_plugin(record, {**files, "skills/shared.py": b"X = 1\n"}, run)
+        self.assertNotEqual(result.harness_result, "verified")
+
     def test_a_declared_dependency_without_files_is_an_error(self):
         with self.assertRaisesRegex(ValueError, "declared dependency src/missing has no files"):
             self.plugin_reuse(dependencies=["src/missing"], extra=self.HELPERS)

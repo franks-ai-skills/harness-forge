@@ -366,10 +366,12 @@ def prepare_run(
         # Bound and reviewed with the skill, but never checked as skill files.
         checked = list(owned)
         dependencies = [path for path in dependency_paths(part, files) if path not in owned]
+        declared = (part.get("reuse") or {}).get("dependencies")
+        if declared:
+            # A file added under a declared path later belongs to the part too, whoever owns the files now.
+            run.part_dependency_roots[part_id] = sorted({path.rstrip("/") for path in declared})
         if dependencies:
             run.part_dependencies[part_id] = dependencies
-            # A file added under a declared directory later belongs to the part too.
-            run.part_dependency_roots[part_id] = sorted({path.rstrip("/") for path in part["reuse"]["dependencies"]})
             owned += dependencies
         run.part_files[part_id] = owned
         if directory:
