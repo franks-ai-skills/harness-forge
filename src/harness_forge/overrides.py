@@ -162,9 +162,10 @@ def check_override(override: dict, pinned: list[Rule], *, kb_version: str, catal
                 if errors:
                     problems.append(f"invalid params for {new.checker}: {errors[0]}")
         params_valid = not any(problem.startswith("invalid params") for problem in problems)
-        control = (new.params.get("implies") or {}).get("control") if params_valid and isinstance(new.params, dict) \
-            else None
-        if new.checker == "selection.match" and isinstance(control, dict):
+        implies = new.params.get("implies") if params_valid and new.checker == "selection.match" \
+            and isinstance(new.params, dict) else None
+        control = implies.get("control") if isinstance(implies, dict) else None
+        if isinstance(control, dict):
             # Verification judges exactly a control's listed conditions; one that names no rule would go unjudged.
             unknown = [rule_id for rule_id in control.get("prerequisites", []) if rule_id not in by_id]
             if unknown:

@@ -135,6 +135,8 @@ class ValidationTest(unittest.TestCase):
         checked = check(override(rule=typo, rule_id=protection.id))
         self.assertEqual(checked["status"], "invalid")
         self.assertIn("the new rule's control lists outside.gate.typo, which is not a pinned rule", checked["problems"])
+        other = check(override(rule={**RAISED, "checker": "skills.unknown", "params": {"implies": "bad"}}))
+        self.assertIn("skills.unknown is not a catalog checker", other["problems"], "another checker's params stay data")
 
     def test_after_a_kb_update_it_proposes_removal_or_asks(self):
         differs = check(override(), kb_version="0.2.0")
