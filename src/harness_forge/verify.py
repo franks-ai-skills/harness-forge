@@ -17,6 +17,7 @@ import copy
 import hashlib
 import posixpath
 import re
+from collections.abc import Mapping
 from dataclasses import asdict
 
 from harness_forge.checks import REGISTRY
@@ -89,6 +90,19 @@ def skill_home(part: dict) -> str | None:
     if reuse.get("skill_home"):
         return reuse["skill_home"]
     return "repository" if reuse["path"].startswith(".agents/skills/") else None
+
+
+def dependency_paths(part: dict, files: Mapping[str, bytes]) -> list[str]:
+    """The files of the part's declared ``reuse.dependencies``: code or data its skill runs from outside its
+    directory, such as a plugin's shared scripts. A declared path without files is an error, not skipped."""
+    declared = [path.rstrip("/") for path in (part.get("reuse") or {}).get("dependencies", [])]
+    found = []
+    for entry in declared:
+        matches = [path for path in files if path == entry or path.startswith(entry + "/")]
+        if not matches:
+            raise ValueError(f"part {part['id']}: the declared dependency {entry} has no files")
+        found += matches
+    return sorted(set(found))
 
 
 def plugin_manifests(directory: str) -> list[str]:
@@ -349,6 +363,16 @@ def prepare_run(
             owned += [path for path in plugin_manifests(directory) if path in files]
         if part["outside_controls"] and README in files:
             owned.append(README)
+        # Bound and reviewed with the skill, but never checked as skill files.
+        checked = list(owned)
+        dependencies = [path for path in dependency_paths(part, files) if path not in owned]
+        declared = (part.get("reuse") or {}).get("dependencies")
+        if declared:
+            # A file added under a declared path later belongs to the part too, whoever owns the files now.
+            run.part_dependency_roots[part_id] = sorted({path.rstrip("/") for path in declared})
+        if dependencies:
+            run.part_dependencies[part_id] = dependencies
+            owned += dependencies
         run.part_files[part_id] = owned
         if directory:
             run.part_dirs[part_id] = directory
@@ -373,7 +397,7 @@ def prepare_run(
         facts.pop("skill_home", None)
         if home:
             facts["skill_home"] = home
-        part_files = {path: files[path] for path in owned}
+        part_files = {path: files[path] for path in checked}
         if part_kind(part) == "remote-reuse":
             continue
         for rule in _rules_for(part, rules, idea):
@@ -418,8 +442,10 @@ def review_request(run: VerificationRun, request_id: str) -> dict:
     """
     requested = {request["part_id"] for request in run.judged_requests}
     paths = sorted({path for part_id in requested for path in run.part_files.get(part_id, [])})
+    dependencies = {path for part_id in requested for path in run.part_dependencies.get(part_id, [])}
     inputs = {
-        "files": [{"path": path, "sha256": run.frozen_inputs["files"][path]} for path in paths],
+        "files": [{"path": path, "sha256": run.frozen_inputs["files"][path],
+                   **({"role": "dependency"} if path in dependencies else {})} for path in paths],
         # The repository's links for these parts, such as .claude/skills/<name>: a link is not a staged file.
         "links": [{"path": link, "target": run.frozen_inputs["symlinks"][link]}
                   for link in sorted({link for part_id in requested for link in run.part_links.get(part_id, [])})

@@ -111,6 +111,14 @@ def _consistency_problem(record: dict) -> str | None:
         return f"facts.target_set {facts['target_set']!r} contradicts targets {sorted(targets)}"
     if "reach" in facts and facts["reach"] != record["reach"]:
         return f"facts.reach {facts['reach']!r} contradicts reach {record['reach']!r}"
+    parts = {part["id"] for part in record["parts"]}
+    for part in record["parts"]:
+        reuse = part.get("reuse") or {}
+        if reuse.get("dependencies") and not reuse.get("path"):
+            return f"part {part['id']} declares dependencies of a reused skill that is not in the repository"
+    for candidate in record.get("research_candidates", []):
+        if "part_id" in candidate and candidate["part_id"] not in parts:
+            return f"research candidate {candidate['name']!r} names the unknown part {candidate['part_id']!r}"
     return None
 
 
@@ -132,7 +140,9 @@ def _part_text(part: dict) -> list[str]:
         lines.append(f"  Reused artifact: {reuse['name']} from {reuse['source']}; license {reuse['license']}; "
                      f"maintenance {reuse['maintenance']}; form {reuse.get('variant') or 'not recorded'}; "
                      f"local path {reuse.get('path') or 'none, not available locally'}"
-                     + (f"; skill home {reuse['skill_home']}" if reuse.get("skill_home") else ""))
+                     + (f"; skill home {reuse['skill_home']}" if reuse.get("skill_home") else "")
+                     + (f"; reviewed dependencies {', '.join(reuse['dependencies'])}" if reuse.get("dependencies")
+                        else ""))
     if part["outside_controls"]:
         lines.append("  Outside controls (recommended, not verified):")
         for control in part["outside_controls"]:
@@ -259,6 +269,9 @@ def render_contract(
         "drift_decisions": [dict(entry) for entry in decision.record.get("drift_decisions", [])],
         "worker_policy": worker_policy,
     }
+    # Only a record that names candidates binds them, so earlier contracts keep their digests.
+    if decision.record.get("research_candidates"):
+        content["research_candidates"] = [dict(candidate) for candidate in decision.record["research_candidates"]]
     digest = canonical_digest(content)
 
     record = decision.record
@@ -266,7 +279,12 @@ def render_contract(
     lines = [f"Contract for: {record['idea']}", f"Goals: {'; '.join(record['goals'])}",
              f"Picture: {record['picture']}", f"Targets: {', '.join(record['targets'])}",
              f"Reach: {record['reach']}; hosting: {hosting['platform']}, {hosting['plan']} plan, {hosting['visibility']}",
-             f"Facts: {_pairs(record['facts'])}", ""]
+             f"Facts: {_pairs(record['facts'])}"]
+    if record.get("research_candidates"):
+        lines.append("Reuse candidates to research: " + "; ".join(
+            f"{c['name']} from {c['source']}" + (f" (part {c['part_id']})" if "part_id" in c else "")
+            for c in record["research_candidates"]))
+    lines.append("")
     for part in parts:
         lines += _part_text(part) + [""]
     lines.append(f"Accepted Idea KB revision: {'sha256 ' + revision_digest if revision_digest else 'none yet'}")

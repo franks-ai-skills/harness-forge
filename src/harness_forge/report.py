@@ -37,6 +37,11 @@ def report_data(run: VerificationRun, results: list[PartResult]) -> dict:
         "part_map": {"files": dict(run.part_files), "dirs": dict(run.part_dirs), "links": dict(run.part_links),
                      "requirement_parts": list(run.requirement_parts)},
     }
+    # Only a run with declared dependencies records them, so earlier reports keep their exact form.
+    if run.part_dependencies:
+        data["part_map"]["dependencies"] = dict(run.part_dependencies)
+    if run.part_dependency_roots:
+        data["part_map"]["dependency_roots"] = dict(run.part_dependency_roots)
     validate(data, "report")
     return data
 

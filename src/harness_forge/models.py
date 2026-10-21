@@ -223,6 +223,8 @@ class VerificationRun:
     part_files: dict[str, list[str]] = field(default_factory=dict)
     part_dirs: dict[str, str] = field(default_factory=dict)
     part_links: dict[str, list[str]] = field(default_factory=dict)
+    part_dependencies: dict[str, list[str]] = field(default_factory=dict)  # of part_files, those outside the skill
+    part_dependency_roots: dict[str, list[str]] = field(default_factory=dict)  # the declared paths they come from
     requirement_parts: list[str] = field(default_factory=list)
     rule_index: dict[str, dict] = field(default_factory=dict)
     worker_evidence: list[dict] = field(default_factory=list)

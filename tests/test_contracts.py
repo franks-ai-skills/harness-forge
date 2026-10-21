@@ -13,6 +13,8 @@ from harness_forge.verify import prepare_run
 from harness_forge.models import Confirmation
 from tests.builders import EVIDENCE, decision, part, revision
 
+NAMED = [{"name": "repro-steps", "source": "https://example.com/repro-steps", "part_id": "A"}]
+
 OVERRIDE = {
     "rule_id": "skills.description.concise", "pinned_kb_version": "0.1.0", "retired": True,
     "reason": "The team prefers longer descriptions.", "date": "2026-10-09", "link": "pending",
@@ -283,3 +285,23 @@ class PrepareContractCliTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class ResearchCandidateTest(unittest.TestCase):
+    def test_named_candidates_are_shown_and_bound(self):
+        plain = render_contract(decision(), None, [], worker_evidence=EVIDENCE)
+        named = render_contract(decision(research_candidates=NAMED), None, [], worker_evidence=EVIDENCE)
+        self.assertNotIn("research_candidates", plain.content, "a record without candidates keeps its digest")
+        self.assertNotEqual(plain.digest, named.digest)
+        self.assertIn("Reuse candidates to research: repro-steps from https://example.com/repro-steps (part A)",
+                      named.text)
+
+    def test_a_candidate_for_an_unknown_part_is_refused(self):
+        with self.assertRaisesRegex(ValueError, "unknown part 'Z'"):
+            render_contract(decision(research_candidates=[{**NAMED[0], "part_id": "Z"}]), None, [])
+
+    def test_dependencies_need_a_reused_skill_in_the_repository(self):
+        reuse = {"name": "x", "source": "https://example.com/x", "license": "MIT", "maintenance": "maintained",
+                 "dependencies": ["scripts"]}
+        with self.assertRaisesRegex(ValueError, "not in the repository"):
+            render_contract(decision(part("A", "Reuse x", outcome="reuse", reuse=reuse)), None, [])

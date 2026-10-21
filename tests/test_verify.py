@@ -206,15 +206,16 @@ class PrecedenceTest(unittest.TestCase):
                                    revision=REVISION, kb_version="0.1.0", worker_evidence=EVIDENCE)
         assert_result(self, scenario.finish()["A"], "verified", "met by the verified build")
 
-    def plugin_reuse(self, home="plugin", path=f"skills/{NAME}", idea_facts=None):
+    def plugin_reuse(self, home="plugin", path=f"skills/{NAME}", idea_facts=None, dependencies=None, extra=None):
         """Forge's own case: a reused skill shipped in a plugin, skills/<name>/ beside the plugin's plugin.json."""
         reuse = {"name": NAME, "source": "https://example.com/repro", "license": "MIT", "maintenance": "maintained",
-                 "path": path, **({"skill_home": home} if home else {})}
+                 "path": path, **({"skill_home": home} if home else {}),
+                 **({"dependencies": dependencies} if dependencies else {})}
         record = skill_decision(outcome="reuse", reuse=reuse)
         record.record["facts"].update(idea_facts or {})
         built, _ = build_files(skill_decision())
         files = {path.replace(f".agents/skills/{NAME}/", f"skills/{NAME}/"): data for path, data in built.items()}
-        files.update({"README.md": readme(record), "plugin.json": b'{"name": "repro-tools"}\n'})
+        files.update({"README.md": readme(record), "plugin.json": b'{"name": "repro-tools"}\n', **(extra or {})})
         contract = render_contract(record, REVISION, [], worker_evidence=EVIDENCE)
         relay = {"choice": "confirm", "displayed_digest": contract.digest, "part_ids": ["A"], "run_id": "run-1"}
         run = prepare_run(record, files, RULES, confirm_contract(contract, relay, run_id="run-1"), symlinks={},
@@ -242,6 +243,54 @@ class PrecedenceTest(unittest.TestCase):
     def test_a_plugin_path_with_a_trailing_slash_binds_the_same_manifest(self):
         _, _, _, run = self.plugin_reuse(path=f"skills/{NAME}/")
         self.assertIn("plugin.json", run.part_files["A"])
+
+    HELPERS = {"scripts/tool.py": b"print('checklist')\n", "src/lib/core.py": b"STEPS = 3\n"}
+
+    def test_declared_plugin_dependencies_are_bound_and_reviewed_but_not_checked_as_skill_files(self):
+        record, files, contract, run = self.plugin_reuse(dependencies=["scripts/tool.py", "src/lib/"],
+                                                         extra=self.HELPERS)
+        self.assertEqual(run.part_dependencies["A"], ["scripts/tool.py", "src/lib/core.py"])
+        self.assertTrue({"scripts/tool.py", "src/lib/core.py"} <= set(run.part_files["A"]))
+        self.assertIn("reviewed dependencies scripts/tool.py, src/lib/", contract.text)
+        roles = {entry["path"]: entry.get("role") for entry in review_request(run, "review-1")["inputs"]["files"]}
+        self.assertEqual(roles["scripts/tool.py"], "dependency")
+        self.assertIsNone(roles[f"skills/{NAME}/SKILL.md"])
+        checked = {result.rule_id: result.reason for result in run.static_results}
+        self.assertEqual(checked["skills.body.size"], "1 skill(s) checked", "a helper is never checked as a skill")
+        assert_result(self, self.finish_plugin(record, files, run), "verified", "met by the verified build")
+
+    def test_a_changed_dependency_invalidates_the_part(self):
+        record, files, _, run = self.plugin_reuse(dependencies=["src/lib"], extra=self.HELPERS)
+        result = self.finish_plugin(record, {**files, "src/lib/core.py": b"STEPS = 4\n"}, run)
+        self.assertNotEqual(result.harness_result, "verified")
+
+    def test_a_file_added_under_a_declared_directory_invalidates_the_part(self):
+        record, files, _, run = self.plugin_reuse(dependencies=["src/lib"], extra=self.HELPERS)
+        result = self.finish_plugin(record, {**files, "src/lib/extra.py": b"STEPS = 5\n"}, run)
+        self.assertNotEqual(result.harness_result, "verified")
+
+    def test_a_root_whose_files_the_skill_owns_still_binds_new_files(self):
+        record, files, _, run = self.plugin_reuse(dependencies=["skills"])
+        self.assertNotIn("A", run.part_dependencies)
+        result = self.finish_plugin(record, {**files, "skills/shared.py": b"X = 1\n"}, run)
+        self.assertNotEqual(result.harness_result, "verified")
+
+    def test_a_declared_dependency_without_files_is_an_error(self):
+        with self.assertRaisesRegex(ValueError, "declared dependency src/missing has no files"):
+            self.plugin_reuse(dependencies=["src/missing"], extra=self.HELPERS)
+
+    def test_dependencies_survive_the_report_and_only_runs_with_them_record_them(self):
+        from harness_forge.report import render_report, report_data
+        from harness_forge.scope import earlier_run
+        for dependencies in (None, ["src/lib"]):
+            with self.subTest(dependencies=dependencies):
+                record, files, _, run = self.plugin_reuse(dependencies=dependencies, extra=self.HELPERS)
+                result = self.finish_plugin(record, files, run)
+                data = report_data(run, [result])
+                self.assertEqual("dependencies" in data["part_map"], bool(dependencies))
+                again, _ = earlier_run(render_report(run, [result]))
+                self.assertEqual(again.part_dependencies, run.part_dependencies)
+                self.assertEqual(again.part_dependency_roots, run.part_dependency_roots)
 
     def test_a_reused_skill_outside_agents_skills_needs_its_home(self):
         for idea_facts in ({}, {"skill_home": "repository"}, {"skill_home": False}):

@@ -80,7 +80,9 @@ def affected_parts(run: VerificationRun, current: dict, owners: VerificationRun 
         for owner in maps:
             for part_id, owned in owner.part_files.items():
                 prefix = owner.part_dirs.get(part_id)
+                roots = owner.part_dependency_roots.get(part_id, [])
                 if (path in owned or (prefix and path.startswith(prefix + "/"))
+                        or any(path == root or path.startswith(root + "/") for root in roots)
                         or path in owner.part_links.get(part_id, [])):
                     affected.add(part_id)
     return affected
@@ -145,6 +147,8 @@ def earlier_run(report_text: str) -> tuple[VerificationRun, dict[str, dict]]:
                           contract_digest=data["contract_digest"] or "", applicable_rules={},
                           frozen_inputs=data["bound_inputs"], confirmed_parts=list(data["confirmed_parts"]),
                           part_files=part_map["files"], part_dirs=part_map["dirs"], part_links=part_map["links"],
+                          part_dependencies=part_map.get("dependencies", {}),
+                          part_dependency_roots=part_map.get("dependency_roots", {}),
                           requirement_parts=part_map["requirement_parts"])
     # Its runtime evidence, inventory included, stays with any result a Review keeps.
     run.runtime_results = [RuntimeResult(**item) for item in data["runtime_results"]]
