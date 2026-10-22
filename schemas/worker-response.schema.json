@@ -122,8 +122,11 @@
                       ]
                     },
                     "requirement_id": {
-                      "description": "In a re-check only: the requirement whose lost source this finding checks.",
-                      "type": "string",
+                      "description": "In a re-check, the requirement whose lost source this finding checks; otherwise null.",
+                      "type": [
+                        "string",
+                        "null"
+                      ],
                       "maxLength": 200
                     }
                   },

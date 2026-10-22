@@ -7,7 +7,8 @@ Derived from Forge's own schemas but structural only (types, enums, required
 fields, no extra fields), because the CLIs accept a subset of JSON Schema
 and Codex wants every property required. Forge still validates the answer
 against its full schema afterwards. A research finding leaves its id, pass,
-part and brief digest to Forge, which knows them for the brief it sent.
+part and brief digest to Forge, which knows them for the brief it sent, and
+adds the requirement a re-check finding is for.
 """
 
 from __future__ import annotations
@@ -34,5 +35,7 @@ def output_schema(role: str) -> dict:
     if role == "research":
         finding = dict(schemas["research"]["$defs"]["finding"])
         finding["properties"] = {name: item for name, item in finding["properties"].items() if name not in _STAMPED}
+        # Every property is required, so a finding names its re-check requirement, or null outside a re-check.
+        finding["properties"]["requirement_id"] = {"type": ["string", "null"]}
         return _structural({"type": "object", "properties": {"findings": {"type": "array", "items": finding}}})
     return _structural(schemas["source-support" if role == "source-support" else "review"])

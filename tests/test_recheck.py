@@ -4,8 +4,9 @@ import tempfile
 import unittest
 from pathlib import Path
 
+from harness_forge.adapters.output import output_schema
 from harness_forge.contracts import load_decision, write_decision
-from harness_forge.documents import load_document
+from harness_forge.documents import _schemas, load_document, schema_errors
 from harness_forge.fetch import FetchError
 from harness_forge.research import load_revision
 from tests.test_cli_live import Cli
@@ -51,7 +52,7 @@ def other_finding(**changes):
                       "context": OTHER_PAGE, **changes})
 
 
-class RecheckTest(unittest.TestCase):
+class RecheckCase(unittest.TestCase):
     """A new deep pass that misses earlier sources, then a re-check limited to them."""
 
     def setUp(self):
@@ -105,6 +106,7 @@ class RecheckTest(unittest.TestCase):
         code, _, stderr = self.research("--write")
         self.assertEqual(code, 0, stderr)
 
+class RecheckTest(RecheckCase):
     def test_a_lost_source_is_named_with_the_re_check(self):
         self.accepted_then_lost()
         code, _, stderr = self.accept(PLATFORM, VERSION, SECRETS)
@@ -214,6 +216,59 @@ class RecheckTest(unittest.TestCase):
         self.assertEqual(code, 0, stderr)
         self.assertEqual([f["source"] for f in output["kept"]], [VERSIONS])
         self.assertIn("only a re-check binds findings to requirements", output["dropped"][0]["reason"])
+
+
+class EnforcedRunner(ResearchRunner):
+    """A research worker held to the output schema the CLIs enforce, as a real worker is."""
+
+    def __call__(self, command, *, cwd, env, stdin, timeout):
+        if stdin and "```json" in stdin and staged_request(stdin)["role"] == "research":
+            errors = schema_errors({"findings": self.findings}, output_schema("research"))
+            if errors:
+                raise AssertionError(f"the enforced output schema refuses this answer: {errors}")
+        return super().__call__(command, cwd=cwd, env=env, stdin=stdin, timeout=timeout)
+
+
+class EnforcedSchemaTest(RecheckCase):
+    """The re-check through a worker that can only answer what `--json-schema` / `--output-schema` allow."""
+
+    def setUp(self):
+        super().setUp()
+        self.runner = EnforcedRunner([{**f, "requirement_id": None}
+                                      for f in (finding(), versions_finding(), notes_finding())])
+        self.cli.module.RUNNER = self.runner
+
+    def test_the_enforced_schema_lets_every_finding_name_its_requirement_or_none(self):
+        item = output_schema("research")["properties"]["findings"]["items"]
+        self.assertIn("requirement_id", item["required"])
+        self.assertEqual(item["properties"]["requirement_id"]["type"], ["string", "null"])
+        # What the CLI lets a worker answer is exactly what Forge accepts from it.
+        response = _schemas()[0]["worker-response"]
+        research = next(branch["then"] for branch in response["allOf"]
+                        if branch["if"]["properties"].get("role", {}).get("const") == "research")
+        accepted = research["properties"]["output"]["properties"]["findings"]["items"]["properties"]
+        self.assertEqual(set(item["properties"]), set(accepted))
+
+    def test_ordinary_and_re_check_passes_work_through_the_enforced_schema(self):
+        code, _, stderr = self.research("--write")
+        self.assertEqual(code, 0, stderr)
+        code, _, stderr = self.accept(PLATFORM, VERSION, SECRETS)
+        self.assertEqual(code, 0, stderr)
+        self.runner.findings = [{**other_finding(), "requirement_id": None}]
+        code, output, stderr = self.research("--write")
+        self.assertEqual((code, len(output["kept"])), (0, 1), stderr)
+        self.runner.findings = [{**finding(), "requirement_id": PLATFORM["id"]},
+                                {**versions_finding(), "requirement_id": VERSION["id"]},
+                                {**notes_finding(), "requirement_id": SECRETS["id"]},
+                                {**versions_finding(), "requirement_id": None}]
+        self.fetched.clear()
+        code, output, stderr = self.research("--write", "--recheck")
+        self.assertEqual(code, 0, stderr)
+        self.assertTrue(all(item["re_supported"] for item in output["recheck"]), output["recheck"])
+        self.assertEqual([d["reason"] for d in output["dropped"]], ["the re-check finding names no requirement"])
+        self.assertEqual(self.fetched, [SOURCE, VERSIONS, NOTES], "a finding without a requirement is never fetched")
+        code, _, stderr = self.accept(PLATFORM, VERSION, SECRETS)
+        self.assertEqual(code, 0, stderr)
 
 
 if __name__ == "__main__":
