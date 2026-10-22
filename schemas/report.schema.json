@@ -191,6 +191,44 @@
         "$ref": "urn:harness-forge:schema:worker-evidence"
       }
     },
+    "review_attempts": {
+      "description": "Present only when the first review reply was rejected: each review launch and its outcome.",
+      "type": "array",
+      "minItems": 2,
+      "maxItems": 2,
+      "items": {
+        "type": "object",
+        "properties": {
+          "attempt": {
+            "enum": [
+              1,
+              2
+            ]
+          },
+          "outcome": {
+            "enum": [
+              "rejected",
+              "accepted",
+              "failed"
+            ]
+          },
+          "error": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 20000
+          },
+          "evidence": {
+            "$ref": "urn:harness-forge:schema:worker-evidence"
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "attempt",
+          "outcome",
+          "evidence"
+        ]
+      }
+    },
     "worker_violations": {
       "type": "array",
       "items": {

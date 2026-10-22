@@ -43,6 +43,15 @@ def _binding_problem(requirement_id: str | None, source: str, lost: dict[str, li
     return None
 
 
+def _keep_rejected_review(diagnostics: Diagnostics | None, run_id: str, attempt: int, request_id: str,
+                          output: dict, error: str) -> None:
+    """The rejected reply goes to the run's diagnostics outside the repository; failing to keep it changes nothing."""
+    if diagnostics is None:
+        return
+    diagnostics.open(run_id)
+    diagnostics.keep("review", f"attempt-{attempt}", {"request_id": request_id, "error": error, "output": output})
+
+
 def _brief_problem(brief, contract: Contract) -> bool:
     """Whether the brief holds anything other than the confirmed contract shows."""
     content = contract.content
@@ -176,20 +185,38 @@ def verify_live(
     review = ReviewResponse(run_id=run.run_id, verdicts=[], goal_verdicts=[])
     observations = []
     if any(request["kind"] == "rule" or request["kind"] == "goal" for request in run.judged_requests):
-        request = review_request(run, f"review-{run.run_id}")
-        staged = {entry["path"]: files[entry["path"]] for entry in request["inputs"]["files"]}
-        response = run_worker(request, harness, contract=contract, confirmation=confirmation,
-                              worker_evidence=worker_evidence, runner=runner, environ=environ, files=staged,
-                              login_answer=login_answer)
-        observations.append(response["evidence"])
-        if response["status"] == "completed":
+        # A completed reply that validation rejects gets one fresh reviewer with the same request; nothing else
+        # is retried, and a second failure leaves both in the violations.
+        attempts, problems = [], []
+        for attempt, request_id in enumerate((f"review-{run.run_id}", f"review-{run.run_id}-retry"), start=1):
+            request = review_request(run, request_id)
+            staged = {entry["path"]: files[entry["path"]] for entry in request["inputs"]["files"]}
+            response = run_worker(request, harness, contract=contract, confirmation=confirmation,
+                                  worker_evidence=worker_evidence, runner=runner, environ=environ, files=staged,
+                                  login_answer=login_answer)
+            observations.append(response["evidence"])
+            retry = " on retry" if attempt > 1 else ""
+            if response["status"] != "completed":
+                # Out of scope voids the verdicts; any other failure leaves none, and the report says why.
+                attempts.append({"attempt": attempt, "outcome": "failed",
+                                 "error": response["reason"] or "the worker did not complete",
+                                 "evidence": response["evidence"]})
+                problems.append(f"review worker{retry}: {response['reason']}")
+                break
             try:
                 review = validate_review(run, response["output"])
             except ValueError as error:
-                run.worker_violations.append(f"review output rejected: {error}")
-        else:
-            # Out of scope voids the verdicts; any other failure leaves none, and the report says why.
-            run.worker_violations.append(f"review worker: {response['reason']}")
+                attempts.append({"attempt": attempt, "outcome": "rejected", "error": str(error),
+                                 "evidence": response["evidence"]})
+                problems.append(f"review output rejected{retry}: {error}")
+                _keep_rejected_review(diagnostics, run.run_id, attempt, request_id, response["output"], str(error))
+                continue
+            attempts.append({"attempt": attempt, "outcome": "accepted", "evidence": response["evidence"]})
+            problems = []
+            break
+        run.worker_violations += problems
+        if attempts[0]["outcome"] == "rejected":
+            run.review_attempts = attempts
     runtime = []
     # A Review run tests the parts in its scope; a kept part's earlier result stands for its runtime tests.
     built = {part["id"] for part in run.parts if part_kind(part) in ("build", "local-reuse")
