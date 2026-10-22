@@ -239,6 +239,20 @@ class LiveCommandsTest(unittest.TestCase):
         self.assertTrue((self.root / ".harness/reports/repro.md").exists())
         self.assertEqual(runner.roles, ["research", "source-support", "review", "baseline", "baseline", "runtime", "runtime", "runtime"])
 
+    def test_verify_keeps_runtime_diagnostics_outside_the_repository(self):
+        cli, arguments = self.build_ready(ResearchRunner([finding()]))
+        with tempfile.TemporaryDirectory(prefix="forge-home-") as home:
+            cli.module.ENVIRON = {**PARENT, "HARNESS_FORGE_HOME": home}
+            code, output, stderr = cli("verify", *arguments)
+            self.assertEqual(code, 0, stderr)
+            self.assertEqual(output["diagnostics_problems"], [])
+            kept = Path(output["diagnostics"])
+            self.assertEqual(kept.parent, Path(home) / "diagnostics")
+            cases = [item["id"] for item in yaml.safe_load((FORGE / "evals/smoke/vertical.yaml").read_text())["cases"]]
+            self.assertEqual(sorted(path.name for path in (kept / "cases").iterdir()), sorted(cases))
+            self.assertEqual(sorted(path.name for path in (kept / "baselines").iterdir()), ["bundled", "user"])
+            self.assertNotIn(home, (self.root / ".harness/reports/repro.md").read_text(encoding="utf-8"))
+
     def test_a_decision_edited_during_review_is_not_verified(self):
         decision = self.decision
 

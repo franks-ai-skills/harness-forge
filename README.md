@@ -174,6 +174,22 @@ plugin's `plugin.json`) gets its static checks and review, but its
 runtime cases report `not-run` in both harnesses: a plugin skill loads
 through plugin installation, which the throwaway workspace does not do.
 
+`verify` keeps each launch's raw output, so a result can be looked at
+after the throwaway workspace is gone. The directory is
+`diagnostics/<time>-<run id>-<random>/` in Forge's data directory (see
+[Forge's Python environment](#forges-python-environment)), never inside
+the repository, and `verify` prints it as `diagnostics`. Each case has
+`cases/<case id>/` and Claude Code's two skill-listing launches have
+`baselines/`, each with `launch.json` (command, prompt as sent,
+workspace path, the hashes of the workspace's files, exit or timeout,
+outcome and reason) and the `stdout.txt` and `stderr.txt` of a launch
+that ran. They hold the model's output and the case prompts; Forge
+never deletes them, so delete them when you are done. What could not be
+written is listed as `diagnostics_problems`; results do not depend on it.
+When a skill-listing launch fails, the affected cases name which launch
+failed and how (exit status, timeout, an error the harness reported, or
+no listing); the harness's own message stays in the diagnostics.
+
 ## Markdown reading
 
 Forge reads Markdown to find headings and sections, to skip code when it
