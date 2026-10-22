@@ -184,8 +184,9 @@ the repository, and `verify` prints it as `diagnostics`. Each case has
 workspace path, the hashes of the workspace's files, exit or timeout,
 outcome and reason) and the `stdout.txt` and `stderr.txt` of a launch
 that ran. They hold the model's output and the case prompts; Forge
-never deletes them, so delete them when you are done. What could not be
-written is listed as `diagnostics_problems`; results do not depend on it.
+never deletes them, so delete them when you are done. The first few
+problems with writing them are listed as `diagnostics_problems`, their
+number as `diagnostics_problem_count`; results do not depend on them.
 When a skill-listing launch fails, the affected cases name which launch
 failed and how (exit status, timeout, an error the harness reported, or
 no listing); the harness's own message stays in the diagnostics.

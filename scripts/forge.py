@@ -1345,7 +1345,9 @@ def _verify(arguments: argparse.Namespace) -> int:
           "judged_parts": sorted(scope) if scope is not None else sorted(every), "kept_parts": sorted(kept),
           "worker_violations": list(run.worker_violations), "written": written,
           "diagnostics": str(diagnostics.directory) if diagnostics.directory else None,
-          "diagnostics_problems": diagnostics.problems})
+          # Bounded, so that diagnostics that could not be written never crowd out the results.
+          "diagnostics_problems": [problem[:300] for problem in diagnostics.problems[:5]],
+          "diagnostics_problem_count": len(diagnostics.problems)})
     return 1 if any(part["harness_result"] == "not verified" for part in parts) else 0
 
 

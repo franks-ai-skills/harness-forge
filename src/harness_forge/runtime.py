@@ -126,18 +126,27 @@ def _listed_skills(runner: Runner, environ: Mapping[str, str], *, bundled: bool,
     of an empty listing; the cause is then a fixed phrase, never the harness's own text, which only the
     diagnostics keep."""
     command = _claude_command([], bundled=bundled)
-    launch = {"harness": "claude-code", "command": command, "stdin": BASELINE_PROMPT, "timeout": timeout}
-    name = "bundled" if bundled else "user"
     with tempfile.TemporaryDirectory(prefix="forge-baseline-", dir=workspace_root) as temporary:
+        launch = {"harness": "claude-code", "command": command, "cwd": temporary, "stdin": BASELINE_PROMPT,
+                  "timeout": timeout, "workspace": {"files": {}, "fixtures": {}, "links": {}}}
+        completed = None
         try:
             completed = runner(command, cwd=temporary, env=worker_environment(environ, "claude-code"),
                                stdin=BASELINE_PROMPT, timeout=timeout)
+            skills, cause = _listing(completed, timeout)
         except OSError as error:
-            if diagnostics:
-                diagnostics.keep("baselines", name, {**launch, "cwd": temporary, "error": str(error)})
-            return None, "could not start"
+            # The error names local paths: only the diagnostics keep it.
+            launch["error"] = str(error)
+            skills, cause = None, "could not start"
         if diagnostics:
-            diagnostics.keep("baselines", name, {**launch, "cwd": temporary}, completed)
+            diagnostics.keep("baselines", "bundled" if bundled else "user",
+                             {**launch, "outcome": "listed" if skills is not None else "unknown", "reason": cause},
+                             completed)
+    return skills, cause
+
+
+def _listing(completed: Completed, timeout: int) -> tuple[set[str] | None, str]:
+    """A skill-listing launch's skills and how it ended, in Forge's own words."""
     if completed.timed_out:
         return None, f"timed out after {timeout} s"
     if completed.returncode != 0:

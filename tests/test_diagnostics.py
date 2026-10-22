@@ -101,9 +101,28 @@ class DiagnosticsTest(unittest.TestCase):
         self.assertNotIn("/home/someone", result.reason)
         user, directory = self.kept(diagnostics, "baselines", "user")
         self.assertEqual((user["returncode"], user["stdin"]), (1, BASELINE_PROMPT))
+        self.assertEqual((user["outcome"], user["reason"], user["workspace"]["files"]), ("unknown", "exited with 1", {}))
+        self.assertEqual(self.kept(diagnostics, "baselines", "bundled")[0]["outcome"], "listed")
         self.assertEqual((directory / "stderr.txt").read_text(encoding="utf-8"), "usage limit at /home/someone")
         self.assertTrue((diagnostics.directory / "baselines" / "bundled" / "stdout.txt").is_file())
         self.assertEqual(self.kept(diagnostics, "cases", "bundled")[0]["reason"], result.reason)
+
+    def test_a_listing_launch_that_could_not_start_keeps_its_error_out_of_the_reason(self):
+        class Missing(FakeRunner):
+            def __call__(self, command, *, cwd, env, stdin, timeout):
+                if stdin == BASELINE_PROMPT:
+                    raise FileNotFoundError(f"no claude in {cwd}")
+                return super().__call__(command, cwd=cwd, env=env, stdin=stdin, timeout=timeout)
+
+        diagnostics = Diagnostics(self.home)
+        (result,), _ = self.run_cases("claude-code", None, runner=Missing(worker=claude_run()), baseline_skills=None,
+                                      diagnostics=diagnostics)
+        self.assertEqual(result.result, "not-run")
+        self.assertTrue(result.reason.endswith("the launch with bundled skills could not start"), result.reason)
+        launch, directory = self.kept(diagnostics, "baselines", "bundled")
+        self.assertIn("no claude in", launch["error"])
+        self.assertEqual((launch["outcome"], launch["reason"]), ("unknown", "could not start"))
+        self.assertFalse((directory / "stdout.txt").exists())
 
     def test_unwritable_diagnostics_never_change_a_result(self):
         Path(self.temporary.name, "file").write_text("not a directory", encoding="utf-8")
