@@ -152,7 +152,7 @@
     "schemas/rules.schema.json": "78185f1b1bbc61ecaa4f833816d44de2bcf8fdd27daa3941726b4e4e65ae88df",
     "schemas/selection.schema.json": "6abf9545b2a4ae06b3cee232c20556a2395f15839fba56439a41ad4980af44c8"
   },
-  "kb_commit": "4aca369ec3f8b351e4da00dc4fc532403864b42d",
+  "kb_commit": "b875cf3607044f849cbc2965c63b769d8902e6f3",
   "kb_version": "0.1.0",
   "migration": {
     "files": {
