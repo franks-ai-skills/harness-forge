@@ -1,9 +1,9 @@
 briefs:
   A: a4caa874666701f4ae242cef1b15745d8f64fda3ad33ea176a4f2d01f551f1ad
-  B: 1d9ee7543c7fae2412f5368eb1c2bb30c6856c7dd7c52a11481891cc89294c8d
-  C: 9650f80197a98d87b96bb9d7374353804e87eba1540680ed55a5759bfe389e93
+  B: 6c9a2ab871655ed1bd4cf9b0a85a4fe5c3cd840f5c8bc11fb588865725f6bea1
+  C: dcd846c92c5814992476ed5ef9d2d225dce62e52f2c3d499e2c050c3430bfb1c
   D: 55fac8bc3f8d8afb13b0439d802d351c93f671b58926abaa7f77e27882901725
-digest: 67d19a3b6dbe58f9816d9ae3d9d980aa1b14ba4c85d97ace670177a32c81cbc3
+digest: a223b25929c34ac1a15df84121274f8dc59536e1403ae79f1e667c04cc56e335
 rules:
 - part_id: A
   rule:
@@ -89,176 +89,6 @@ rules:
     sources:
     - https://arxiv.org/abs/2601.10338
     contested: false
-- part_id: B
-  rule:
-    id: idea.forge-self-verify.b.no-own-pick
-    concept: idea
-    kind: must-not
-    severity: error
-    check: judged
-    statement: The skill recommends a mechanism other than the one scripts/forge.py select returned for
-      the part's confirmed answers
-    applies_to:
-      harnesses:
-      - claude-code
-      - codex
-    evidence: Practitioner
-    sources:
-    - https://raw.githubusercontent.com/franks-ai-skills/harness-forge/5ff7fc0282a8c8890838ccd7a8178e3a9356977d/skills/harness-intake/SKILL.md
-    contested: false
-- part_id: B
-  rule:
-    id: idea.forge-self-verify.b.proposed-until-confirmed
-    concept: idea
-    kind: must-not
-    severity: error
-    check: judged
-    statement: The skill treats a part, answer or contract as confirmed before the user explicitly confirms
-      it in the session
-    applies_to:
-      harnesses:
-      - claude-code
-      - codex
-    evidence: Practitioner
-    sources:
-    - https://cognitect.com/blog/2011/11/15/documenting-architecture-decisions
-    contested: false
-- part_id: B
-  rule:
-    id: idea.forge-self-verify.b.simplest-result
-    concept: idea
-    kind: should
-    severity: warning
-    check: judged
-    statement: When the selection's outcome builds nothing or uses a simpler mechanism, the skill presents
-      it as a complete result and does not steer the user toward building a skill.
-    applies_to:
-      harnesses:
-      - claude-code
-      - codex
-    evidence: Vendor
-    sources:
-    - https://www.anthropic.com/engineering/building-effective-agents
-    contested: false
-- part_id: B
-  rule:
-    id: idea.forge-self-verify.b.untrusted-separate
-    concept: idea
-    kind: must
-    severity: error
-    check: judged
-    statement: The skill keeps research findings and repository records separate from the user's own answers
-      and presents them only as suggestions until the user confirms them
-    applies_to:
-      harnesses:
-      - claude-code
-      - codex
-    evidence: Advisory
-    sources:
-    - https://genai.owasp.org/llmrisk/llm01-prompt-injection/
-    contested: false
-- part_id: C
-  rule:
-    id: idea.forge-self-verify.c.research-never-decides
-    concept: idea
-    kind: must-not
-    severity: error
-    check: judged
-    statement: The skill records a research finding as a user answer, a part, a reuse decision or an accepted
-      requirement without the user confirming it
-    applies_to:
-      harnesses:
-      - claude-code
-      - codex
-    evidence: Practitioner
-    sources:
-    - https://raw.githubusercontent.com/franks-ai-skills/harness-forge/5ff7fc0282a8c8890838ccd7a8178e3a9356977d/skills/harness-research/SKILL.md
-    contested: false
-- part_id: C
-  rule:
-    id: idea.forge-self-verify.c.page-text-not-instructions
-    concept: idea
-    kind: must-not
-    severity: error
-    check: judged
-    statement: The skill passes fetched page text on as instructions to the agent or to a worker
-    applies_to:
-      harnesses:
-      - claude-code
-      - codex
-    evidence: Advisory
-    sources:
-    - https://raw.githubusercontent.com/franks-ai-skills/harness-forge/5ff7fc0282a8c8890838ccd7a8178e3a9356977d/skills/harness-research/SKILL.md
-    - https://genai.owasp.org/llmrisk/llm01-prompt-injection/
-    contested: false
-- part_id: C
-  rule:
-    id: idea.forge-self-verify.c.untrusted-marked
-    concept: idea
-    kind: must
-    severity: error
-    check: judged
-    statement: The skill keeps fetched content separate from the user's own input and marks it as untrusted
-      wherever it shows it.
-    applies_to:
-      harnesses:
-      - claude-code
-      - codex
-    evidence: Advisory
-    sources:
-    - https://genai.owasp.org/llmrisk/llm01-prompt-injection/
-    contested: false
-- part_id: C
-  rule:
-    id: idea.forge-self-verify.c.user-files-issues
-    concept: idea
-    kind: must-not
-    severity: error
-    check: judged
-    statement: The skill files an issue or a comment on a public tracker itself, also after the user approved
-      the text
-    applies_to:
-      harnesses:
-      - claude-code
-      - codex
-    evidence: Advisory
-    sources:
-    - https://genai.owasp.org/llmrisk/llm01-prompt-injection/
-    contested: false
-- part_id: C
-  rule:
-    id: idea.forge-self-verify.c.citation-precision
-    concept: idea
-    kind: must
-    severity: error
-    check: judged
-    statement: Every finding the skill shows cites a source whose quote was found in the fetched page
-      and was judged to support the claim
-    applies_to:
-      harnesses:
-      - claude-code
-      - codex
-    evidence: Research
-    sources:
-    - https://arxiv.org/abs/2304.09848
-    contested: false
-- part_id: C
-  rule:
-    id: idea.forge-self-verify.c.separate-judgment
-    concept: idea
-    kind: should
-    severity: warning
-    check: judged
-    statement: The skill has each finding's support judged by a worker separate from the one that found
-      it
-    applies_to:
-      harnesses:
-      - claude-code
-      - codex
-    evidence: Research
-    sources:
-    - https://arxiv.org/abs/2602.23452
-    contested: false
 - part_id: D
   rule:
     id: idea.forge-self-verify.d.not-run-not-pass
@@ -326,4 +156,175 @@ rules:
     evidence: Advisory
     sources:
     - https://genai.owasp.org/llmrisk/llm01-prompt-injection/
+    contested: false
+- part_id: B
+  rule:
+    id: idea.forge-self-verify.b.no-own-pick
+    concept: idea
+    kind: must-not
+    severity: error
+    check: judged
+    statement: The skill recommends a mechanism other than the one scripts/forge.py select returned for
+      the part's confirmed answers
+    applies_to:
+      harnesses:
+      - claude-code
+      - codex
+    evidence: Practitioner
+    sources:
+    - https://raw.githubusercontent.com/franks-ai-skills/harness-forge/52945080be005a8929d7fedd6fa961d7a7d657f0/skills/harness-intake/SKILL.md
+    contested: false
+- part_id: B
+  rule:
+    id: idea.forge-self-verify.b.proposed-until-confirmed
+    concept: idea
+    kind: must-not
+    severity: error
+    check: judged
+    statement: The skill treats a part, answer or contract as confirmed before the user explicitly confirms
+      it in the session
+    applies_to:
+      harnesses:
+      - claude-code
+      - codex
+    evidence: Practitioner
+    sources:
+    - https://raw.githubusercontent.com/franks-ai-skills/harness-forge/52945080be005a8929d7fedd6fa961d7a7d657f0/skills/harness-intake/SKILL.md
+    contested: false
+- part_id: B
+  rule:
+    id: idea.forge-self-verify.b.untrusted-separate
+    concept: idea
+    kind: must
+    severity: error
+    check: judged
+    statement: The skill keeps research findings and repository records separate from the user's own answers
+      and presents them only as suggestions until the user confirms them
+    applies_to:
+      harnesses:
+      - claude-code
+      - codex
+    evidence: Practitioner
+    sources:
+    - https://raw.githubusercontent.com/franks-ai-skills/harness-forge/52945080be005a8929d7fedd6fa961d7a7d657f0/skills/harness-intake/SKILL.md
+    contested: false
+- part_id: B
+  rule:
+    id: idea.forge-self-verify.b.one-question
+    concept: idea
+    kind: should
+    severity: warning
+    check: judged
+    statement: The skill asks the user one question per message, in the user's terms, unless the user
+      is offered to answer several parts' pending questions in one message
+    applies_to:
+      harnesses:
+      - claude-code
+      - codex
+    evidence: Practitioner
+    sources:
+    - https://raw.githubusercontent.com/franks-ai-skills/harness-forge/52945080be005a8929d7fedd6fa961d7a7d657f0/skills/harness-intake/SKILL.md
+    contested: false
+- part_id: B
+  rule:
+    id: idea.forge-self-verify.b.no-leading-questions
+    concept: idea
+    kind: must-not
+    severity: warning
+    check: judged
+    statement: The skill words a question so that it suggests which answer to give, beyond marking the
+      option the selection recommends as recommended
+    applies_to:
+      harnesses:
+      - claude-code
+      - codex
+    evidence: Practitioner
+    sources:
+    - https://www.nngroup.com/articles/leading-questions/
+    contested: false
+- part_id: C
+  rule:
+    id: idea.forge-self-verify.c.page-text-not-instructions
+    concept: idea
+    kind: must-not
+    severity: error
+    check: judged
+    statement: The skill passes fetched page text on as instructions to the agent or to a worker
+    applies_to:
+      harnesses:
+      - claude-code
+      - codex
+    evidence: Advisory
+    sources:
+    - https://genai.owasp.org/llmrisk/llm01-prompt-injection/
+    - https://arxiv.org/abs/2302.12173
+    contested: false
+- part_id: C
+  rule:
+    id: idea.forge-self-verify.c.untrusted-marked
+    concept: idea
+    kind: must
+    severity: error
+    check: judged
+    statement: The skill keeps fetched content separate from the user's own input and marks it as untrusted
+      wherever it shows it.
+    applies_to:
+      harnesses:
+      - claude-code
+      - codex
+    evidence: Advisory
+    sources:
+    - https://genai.owasp.org/llmrisk/llm01-prompt-injection/
+    - https://arxiv.org/abs/2302.12173
+    contested: false
+- part_id: C
+  rule:
+    id: idea.forge-self-verify.c.user-files-issues
+    concept: idea
+    kind: must-not
+    severity: error
+    check: judged
+    statement: The skill files an issue or a comment on a public tracker itself, also after the user approved
+      the text
+    applies_to:
+      harnesses:
+      - claude-code
+      - codex
+    evidence: Advisory
+    sources:
+    - https://genai.owasp.org/llmrisk/llm01-prompt-injection/
+    contested: false
+- part_id: C
+  rule:
+    id: idea.forge-self-verify.c.citation-precision
+    concept: idea
+    kind: must
+    severity: error
+    check: judged
+    statement: Every finding the skill shows cites a source whose quote was found in the fetched page
+      and was judged to support the claim
+    applies_to:
+      harnesses:
+      - claude-code
+      - codex
+    evidence: Research
+    sources:
+    - https://arxiv.org/abs/2402.15089
+    contested: false
+- part_id: C
+  rule:
+    id: idea.forge-self-verify.c.separate-judgment
+    concept: idea
+    kind: should
+    severity: warning
+    check: judged
+    statement: The skill has each finding's support judged by a worker separate from the one that found
+      it
+    applies_to:
+      harnesses:
+      - claude-code
+      - codex
+    evidence: Research
+    sources:
+    - https://arxiv.org/abs/2602.23452
     contested: false
