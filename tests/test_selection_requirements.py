@@ -87,6 +87,7 @@ VARIED = {
             "run-unattended", "one-step"],
     "every_time": ["always", "usually"],
     "irreversible": [True, False],
+    "side_effects": [False, True],
     "trigger": ["user", "model", "event"],
     "own_context": [True, False],
     "own_model": [True, False],
@@ -124,6 +125,8 @@ def requirements(facts: dict) -> dict[str, str]:
         add({"instructions", "skills", "commands", "subagents", "automation", "mcp"}, "must hold every time")
     if facts["irreversible"]:
         add(MODEL_STARTED, "the model must not start an irreversible action on its own")
+    if facts["side_effects"]:
+        add(MODEL_STARTED, "the model must not decide when to change external state")
     if facts["own_context"]:
         add({"instructions", "skills", "commands"}, "needs its own context")
     event, effect = facts["hook_event"], facts["hook_effect"]
@@ -165,6 +168,8 @@ def combinations(**limits):
             continue  # only integrations ask about external systems
         if not facts["own_context"] and facts["own_model"] != varied["own_model"][0]:
             continue  # own_model refines own_context only
+        if facts["irreversible"] and facts["side_effects"] != varied["side_effects"][0]:
+            continue  # an irreversible action already rules out what side effects rule out
         yield from with_sources(facts)
 
 
@@ -258,7 +263,8 @@ class HookSweepTest(unittest.TestCase):
             for values in itertools.product(["always", "usually"], ALL_EVENTS, EFFECTS, HARNESSES, [True, False],
                                             [(True, True), (True, False), (False, False)]):
                 every_time, event, effect, target_set, script_checkable, (own_context, own_model) = values
-                base = {"job": job, "every_time": every_time, "irreversible": False, "trigger": trigger,
+                base = {"job": job, "every_time": every_time, "irreversible": False, "side_effects": False,
+                        "trigger": trigger,
                         "own_context": own_context, "own_model": own_model, "script_checkable": script_checkable,
                         "hook_event": event, "hook_effect": effect, "external_system": "none",
                         "target_set": target_set}
@@ -280,7 +286,8 @@ class HookSweepTest(unittest.TestCase):
 
 class ReportedBypassesTest(unittest.TestCase):
     def base(self, **changes):
-        facts = {"job": "procedure", "every_time": "usually", "irreversible": False, "trigger": "model",
+        facts = {"job": "procedure", "every_time": "usually", "irreversible": False, "side_effects": False,
+                 "trigger": "model",
                  "own_context": False, "own_model": False, "script_checkable": False, "hook_event": "PreToolUse",
                  "hook_effect": "prevent", "external_system": "none", "target_set": "both"}
         return {**facts, **changes}
@@ -317,6 +324,30 @@ class ReportedBypassesTest(unittest.TestCase):
             entry = next(entry for entry in actual.assessment if entry["concept"] == "hooks")
             self.assertEqual(entry["state"], "ruled out")
             self.assertTrue(any("Claude Code only" in reason for reason in entry["reasons"]), entry["reasons"])
+
+    def test_a_model_started_external_change_has_no_standalone_mechanism(self):
+        actual = run(self.base(side_effects=True))
+        self.assertEqual((actual.outcome, actual.mechanism), ("nothing-fits", None))
+        self.assertTrue(actual.no_standalone_mechanism)
+        for concept in ("skills", "instructions", "subagents", "commands"):
+            self.assertEqual(self.states(actual)[concept], "ruled out", concept)
+        self.assertEqual([control["id"] for control in actual.controls], ["codeowners-agent-config"])
+
+    def test_a_user_started_external_change_is_a_command_without_an_outside_gate(self):
+        actual = run(self.base(side_effects=True, trigger="user"))
+        self.assertEqual((actual.outcome, actual.mechanism), ("harness-only", "commands"))
+        self.assertIn("selection.mechanism.user-procedure", actual.rule_ids)
+        self.assertNotIn("instructions", [a["concept"] for a in actual.alternatives])
+        self.assertEqual(self.states(actual)["skills"], "ruled out")
+        self.assertNotIn("compromise-resistant-gate", [control["id"] for control in actual.controls])
+
+    def test_side_effects_are_asked_when_they_decide(self):
+        facts = {k: v for k, v in self.base().items() if k != "side_effects"}
+        self.assertEqual(run(facts).pending_question, "side_effects")
+
+    def test_working_tree_output_stays_a_model_invoked_skill(self):
+        actual = run(self.base())
+        self.assertEqual((actual.outcome, actual.mechanism), ("harness-only", "skills"))
 
     def test_codex_subagent_is_no_way_around_the_irreversible_exclusion(self):
         actual = run(self.base(irreversible=True, own_context=True, target_set="codex"))

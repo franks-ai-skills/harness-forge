@@ -35,6 +35,7 @@ pages:
       rules:
       - skills.invocation.side-effects-user-invoked
       - skills.invocation.both-flags
+      - selection.eligibility.side-effects-skills
   - section: pointer-in-the-instruction-file-plus-skill
     items:
     - text: Pointer or compressed index for knowledge whose omission is silent
@@ -98,6 +99,7 @@ pages:
       - skills.invocation.side-effects-user-invoked
       - skills.invocation.both-flags
       - skills.inputs.from-message
+      - selection.eligibility.side-effects-skills
     - text: 9. Write evals first and test triggering and behavior separately
       status: not-a-rule
       reason: 'Process advice; not observable in the built files. Forge''s runtime activation tests are

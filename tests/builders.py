@@ -20,7 +20,8 @@ FACTS = {"target_set": "both", "reach": "repository", "plan_controls": "availabl
 
 # Every answer selection needs for a model-started procedure skill, as the Codex trial confirmed them.
 ANSWERS = {"job": "procedure", "event_without_agent": False, "must_survive_compromise": "not-required",
-           "who_disables": "contributor", "every_time": "usually", "irreversible": False, "own_context": False,
+           "who_disables": "contributor", "every_time": "usually", "irreversible": False, "side_effects": False,
+           "own_context": False,
            "trigger": "model", "external_system": "none"}
 
 

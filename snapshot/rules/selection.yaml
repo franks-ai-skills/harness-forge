@@ -93,6 +93,11 @@ facts:
   values:
   - true
   - false
+- id: side_effects
+  scope: part
+  values:
+  - true
+  - false
 - id: early_feedback
   scope: part
   values:
@@ -283,6 +288,11 @@ questions:
   - usually
 - id: irreversible
   text: Is the action irreversible, about money, or does it publish or disclose data?
+  choices:
+  - true
+  - false
+- id: side_effects
+  text: Does this part change external state, such as committing, pushing, deploying, editing an issue or sending a message, or require timing the model should not choose? Ordinary working-tree output prepared for user review does not count.
   choices:
   - true
   - false
@@ -769,12 +779,16 @@ rules:
   checker: selection.match
   params:
     when:
-      eq:
-      - irreversible
-      - true
+      any:
+      - eq:
+        - irreversible
+        - true
+      - eq:
+        - side_effects
+        - true
     implies:
       excludes: skills
-  statement: The model must not decide on its own to run an irreversible or publishing procedure, so a model-invoked skill does not fit
+  statement: The model must not decide on its own to run an irreversible, publishing or side-effecting procedure, or one whose timing it should not choose, so a model-invoked skill does not fit
   applies_to:
     harnesses:
     - claude-code
@@ -783,6 +797,7 @@ rules:
   sources:
   - docs/overview.md#commands
   - docs/guide/skills.md#user-invoked-skill
+  - docs/best-practices/skills.md#8-make-side-effecting-skills-user-invoked-in-both-leads
   contested: false
 - id: selection.eligibility.must-hold-mcp
   concept: selection
@@ -1405,12 +1420,16 @@ rules:
   checker: selection.match
   params:
     when:
-      eq:
-      - irreversible
-      - true
+      any:
+      - eq:
+        - irreversible
+        - true
+      - eq:
+        - side_effects
+        - true
     implies:
       excludes: instructions
-  statement: Instructions are context the model acts on by its own decision, so they cannot keep it from starting an irreversible or publishing procedure on its own
+  statement: Instructions are context the model acts on by its own decision, so they cannot keep it from starting an irreversible, publishing or side-effecting procedure, or one whose timing it should not choose, on its own
   applies_to:
     harnesses:
     - claude-code
@@ -1428,12 +1447,16 @@ rules:
   checker: selection.match
   params:
     when:
-      eq:
-      - irreversible
-      - true
+      any:
+      - eq:
+        - irreversible
+        - true
+      - eq:
+        - side_effects
+        - true
     implies:
       excludes: subagents
-  statement: Delegation starts on the model's decision, or on instructions or a skill it follows, so a subagent cannot keep an irreversible or publishing procedure from starting without the user
+  statement: Delegation starts on the model's decision, or on instructions or a skill it follows, so a subagent cannot keep an irreversible, publishing or side-effecting procedure, or one whose timing it should not choose, from starting without the user
   applies_to:
     harnesses:
     - claude-code
@@ -1901,6 +1924,9 @@ rules:
           - user
         - eq:
           - irreversible
+          - true
+        - eq:
+          - side_effects
           - true
     implies:
       concept: commands

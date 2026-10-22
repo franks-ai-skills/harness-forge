@@ -55,8 +55,8 @@ parts:
   goal: Write a reproduction checklist from an approved bug report
   status: decided
   answers: {job: procedure, event_without_agent: false, must_survive_compromise: not-required,
-            who_disables: contributor, every_time: usually, irreversible: false, trigger: model,
-            own_context: false, external_system: none}
+            who_disables: contributor, every_time: usually, irreversible: false, side_effects: false,
+            trigger: model, own_context: false, external_system: none}
   outcome: harness-only
   recommended: skills
   chosen: skills

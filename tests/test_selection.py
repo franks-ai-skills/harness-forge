@@ -142,7 +142,8 @@ class QuestionsTest(unittest.TestCase):
         whole_idea = CASES["concept-skills"]["whole_idea"]
         declared = {fact["id"]: fact["values"] for fact in SELECTION["facts"]}
         partial = {"job": "procedure", "trigger": "model", "own_context": False, "event_without_agent": False,
-                   "must_survive_compromise": "not-required", "who_disables": "contributor", "irreversible": False}
+                   "must_survive_compromise": "not-required", "who_disables": "contributor", "irreversible": False,
+                   "side_effects": False}
         remaining = ["every_time", "early_feedback", "external_system", "script_checkable"]
         results = set()
         for values in itertools.product(*(declared[fact] for fact in remaining)):
