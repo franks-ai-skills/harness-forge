@@ -35,6 +35,8 @@ from harness_forge.contracts import (  # noqa: E402
     RELAY_KEYS, confirm_contract, load_decision, render_contract, resolve_goal_conflict, update_readme,
     write_decision,
 )
+from harness_forge.diagnostics import Diagnostics  # noqa: E402
+from harness_forge.environment import forge_home  # noqa: E402
 from harness_forge.documents import (  # noqa: E402
     schema_errors, schema_named, canonical_digest, load_document, parse_json, safe_path, split_frontmatter, validate, validate_kb,
 )
@@ -1306,13 +1308,16 @@ def _verify(arguments: argparse.Namespace) -> int:
     selection_rules = effective_rules(_selection_rules(), overrides, approval["confirmation"])
     failures, conflicts = selection_failures(decision, selection_rules, domains=_domains(_selection_document()))
     cited = selection_citations(decision, selection_rules)
+    # Each runtime launch's raw output, outside the repository, for a later look at a result.
+    diagnostics = Diagnostics(forge_home(_environ()) / "diagnostics", root)
     try:
         run, results = verify_live(decision, files, symlinks, rules, revision,
                                    arguments.harness, **approval, overrides=overrides, scope=scope,
                                    scope_label=label, kept=kept, cited=cited, recorded_drift=drift,
                                    cases=cases, runner=RUNNER, environ=_environ(), kb_version=manifest["kb_version"],
                                    login_answer=arguments.login_answer, collect=lambda: _current_inputs(arguments, root, drift, overrides, cases),
-                                   confirmed_exclusions=exclusions, drift=unresolved, selection=failures)
+                                   confirmed_exclusions=exclusions, drift=unresolved, selection=failures,
+                                   diagnostics=diagnostics)
     except ValueError as error:
         raise _InvalidInput(str(error)) from error
     # A kept part's runtime results stand as its runtime evidence, attributed to the run that produced them.
@@ -1338,7 +1343,11 @@ def _verify(arguments: argparse.Namespace) -> int:
           "drift": _drift_report(drift, decision, overrides,
                                  open_blocking_drift(drift, decision, overrides, affecting_rules(run, cited))),
           "judged_parts": sorted(scope) if scope is not None else sorted(every), "kept_parts": sorted(kept),
-          "worker_violations": list(run.worker_violations), "written": written})
+          "worker_violations": list(run.worker_violations), "written": written,
+          "diagnostics": str(diagnostics.directory) if diagnostics.directory else None,
+          # Bounded, so that diagnostics that could not be written never crowd out the results.
+          "diagnostics_problems": [problem[:300] for problem in diagnostics.problems[:5]],
+          "diagnostics_problem_count": len(diagnostics.problems)})
     return 1 if any(part["harness_result"] == "not verified" for part in parts) else 0
 
 

@@ -407,10 +407,15 @@ class RuntimeTest(unittest.TestCase):
                 events[0].pop(key)
             return "\n".join(json.dumps(event) for event in events) + "\n"
 
-        for name, answer in (("failed", Completed(1, "", "error", False)),
-                             ("timed out", Completed(None, "", "", True)),
-                             ("no init event", Completed(0, stream_without("init"), "", False)),
-                             ("no skills listed", Completed(0, stream_without("skills"), "", False))):
+        limit = claude_run(skills=(), skill_call=None) + json.dumps(
+            {"type": "result", "is_error": True, "result": "Usage limit reached for /home/someone"}) + "\n"
+        for name, answer, cause in (("failed", Completed(1, "", "error", False), "exited with 1"),
+                                    ("timed out", Completed(None, "", "", True), "timed out after 600 s"),
+                                    ("no init event", Completed(0, stream_without("init"), "", False),
+                                     "listed no skills field"),
+                                    ("no skills listed", Completed(0, stream_without("skills"), "", False),
+                                     "listed no skills field"),
+                                    ("error result", Completed(0, limit, "", False), "reported an error")):
             class Probe(FakeRunner):
                 def __call__(self, command, *, cwd, env, stdin, timeout):
                     result = super().__call__(command, cwd=cwd, env=env, stdin=stdin, timeout=timeout)
@@ -424,9 +429,11 @@ class RuntimeTest(unittest.TestCase):
                 runner = Probe(worker=claude_run(skills=(NAME, "my-personal")))
                 result = self.run_cases("claude-code", None, runner=runner, baseline_skills=None)[0][0]
                 self.assertEqual(result.result, "not-run", result.reason)
-                # A usage limit stops these launches too: the reason names the launch, not the skills.
+                # A usage limit stops these launches too: the reason names the launch and how it ended, in
+                # Forge's own words; the harness's text, which can name local paths, stays out of the report.
                 self.assertEqual(result.reason, "unavailable: an empty Claude Code launch failed, timed out or listed "
-                                                "no skills, so Forge cannot tell bundled skills from the user's")
+                                                "no skills, so Forge cannot tell bundled skills from the user's: the "
+                                                f"launch with bundled skills off {cause}")
                 self.assertEqual(len(runner.worker_calls), 2, "no case launches")
 
     def test_a_claude_read_of_the_candidates_skill_md_counts_as_activation(self):

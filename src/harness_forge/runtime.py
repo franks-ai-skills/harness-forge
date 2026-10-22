@@ -15,6 +15,7 @@ competing skill makes its activation test `not-run`.
 
 from __future__ import annotations
 
+import functools
 import hashlib
 import json
 import os
@@ -24,13 +25,14 @@ import shlex
 import tempfile
 from dataclasses import replace
 from pathlib import Path
-from typing import Iterable, Mapping
+from typing import Callable, Iterable, Mapping
 
 
 from harness_forge.access import inside, tool_paths
 from harness_forge.adapters import codex
 from harness_forge.adapters.base import Completed, Runner, preflight, run_command, worker_environment
 from harness_forge.checks.common import frontmatter
+from harness_forge.diagnostics import Diagnostics
 from harness_forge.documents import fold_name, load_document, parse_yaml, safe_path
 from harness_forge.models import RuntimeResult, VerificationRun
 from harness_forge.verify import skill_home
@@ -118,19 +120,61 @@ BASELINE_PROMPT = "Reply with OK."
 
 
 def _listed_skills(runner: Runner, environ: Mapping[str, str], *, bundled: bool, timeout: int,
-                   workspace_root: str | None) -> set[str] | None:
-    """The skills one tool-less launch with the runtime cases' settings lists in an empty workspace;
-    None when the launch failed or listed no skills field, which is no evidence of an empty listing."""
+                   workspace_root: str | None, diagnostics: Diagnostics | None = None) -> tuple[set[str] | None, str]:
+    """The skills one tool-less launch with the runtime cases' settings lists in an empty workspace, and how
+    the launch ended. None when it failed, reported an error or listed no skills field, which is no evidence
+    of an empty listing; the cause is then a fixed phrase, never the harness's own text, which only the
+    diagnostics keep."""
+    command = _claude_command([], bundled=bundled)
     with tempfile.TemporaryDirectory(prefix="forge-baseline-", dir=workspace_root) as temporary:
-        completed = runner(_claude_command([], bundled=bundled), cwd=temporary,
-                           env=worker_environment(environ, "claude-code"), stdin=BASELINE_PROMPT, timeout=timeout)
-    if completed.returncode != 0 or completed.timed_out:
-        return None
-    for event in _events(completed.stdout):
+        launch = {"harness": "claude-code", "command": command, "cwd": temporary, "stdin": BASELINE_PROMPT,
+                  "timeout": timeout, "workspace": {"files": {}, "fixtures": {}, "links": {}}}
+        completed = None
+        try:
+            completed = runner(command, cwd=temporary, env=worker_environment(environ, "claude-code"),
+                               stdin=BASELINE_PROMPT, timeout=timeout)
+            skills, cause = _listing(completed, timeout)
+        except OSError as error:
+            # The error names local paths: only the diagnostics keep it.
+            launch["error"] = str(error)
+            skills, cause = None, "could not start"
+        if diagnostics:
+            diagnostics.keep("baselines", "bundled" if bundled else "user",
+                             {**launch, "outcome": "listed" if skills is not None else "unknown", "reason": cause},
+                             completed)
+    return skills, cause
+
+
+def _listing(completed: Completed, timeout: int) -> tuple[set[str] | None, str]:
+    """A skill-listing launch's skills and how it ended, in Forge's own words."""
+    if completed.timed_out:
+        return None, f"timed out after {timeout} s"
+    if completed.returncode != 0:
+        return None, f"exited with {completed.returncode}"
+    events = _events(completed.stdout)
+    if any(event.get("type") == "result" and event.get("is_error") is True for event in events):
+        return None, "reported an error"
+    for event in events:
         if event.get("type") == "system" and event.get("subtype") == "init":
             skills = event.get("skills")
-            return {str(skill) for skill in skills} if isinstance(skills, list) else None
-    return None
+            if isinstance(skills, list):
+                return {str(skill) for skill in skills}, "listed its skills"
+    return None, "listed no skills field"
+
+
+def baseline_origins(runner: Runner, environ: Mapping[str, str], *, timeout: int = RUNTIME_TIMEOUT,
+                     workspace_root: str | None = None,
+                     diagnostics: Diagnostics | None = None) -> tuple[set[str], set[str] | None, str | None]:
+    """claude_skill_origins with, when the origins are unknown, which launch failed and how."""
+    listed, cause = _listed_skills(runner, environ, bundled=True, timeout=timeout, workspace_root=workspace_root,
+                                   diagnostics=diagnostics)
+    if listed is None:
+        return set(), None, f"the launch with bundled skills {cause}"
+    user, cause = _listed_skills(runner, environ, bundled=False, timeout=timeout, workspace_root=workspace_root,
+                                 diagnostics=diagnostics)
+    if user is None:
+        return set(), None, f"the launch with bundled skills off {cause}"
+    return listed - user, user, None
 
 
 def claude_skill_origins(runner: Runner, environ: Mapping[str, str], *, timeout: int = RUNTIME_TIMEOUT,
@@ -140,11 +184,8 @@ def claude_skill_origins(runner: Runner, environ: Mapping[str, str], *, timeout:
 
     When either launch shows no listing, the origins are unknown: (set(), None), and nothing is exempt.
     """
-    listed = _listed_skills(runner, environ, bundled=True, timeout=timeout, workspace_root=workspace_root)
-    user = _listed_skills(runner, environ, bundled=False, timeout=timeout, workspace_root=workspace_root)
-    if listed is None or user is None:
-        return set(), None
-    return listed - user, user
+    bundled, user, _ = baseline_origins(runner, environ, timeout=timeout, workspace_root=workspace_root)
+    return bundled, user
 
 
 # A plugin skill loads through plugin installation, which the throwaway workspace does not perform.
@@ -155,11 +196,13 @@ UNKNOWN_ORIGINS = ("unavailable: an empty Claude Code launch failed, timed out o
                    "tell bundled skills from the user's")
 
 
-def shadowing(name: str, user_skills: set[str] | None, bundled: Iterable[str] = ()) -> str | None:
-    """Why a case of the skill ``name`` cannot run: unknown skill origins, or a user-level or bundled skill of
-    its name. A bundled one answers the candidate's Skill call or /name also when the candidate did not load."""
+def shadowing(name: str, user_skills: set[str] | None, bundled: Iterable[str] = (),
+              cause: str | None = None) -> str | None:
+    """Why a case of the skill ``name`` cannot run: unknown skill origins, with the failed launch's ``cause``
+    when known, or a user-level or bundled skill of its name. A bundled one answers the candidate's Skill call
+    or /name also when the candidate did not load."""
     if user_skills is None:
-        return UNKNOWN_ORIGINS
+        return f"{UNKNOWN_ORIGINS}: {cause}" if cause else UNKNOWN_ORIGINS
     if name in user_skills:
         return f"unavailable: a user-level skill named {name} takes precedence over the candidate"
     if name in bundled:
@@ -747,6 +790,7 @@ def activation_case(
     permitted: list[str], fixtures: Mapping[str, str], *, runner: Runner, environ: Mapping[str, str],
     baseline: set[str], timeout: int = RUNTIME_TIMEOUT, workspace_root: str | None = None, slash: bool = False,
     links: Mapping[str, str] | None = None, off: Iterable[str] = (),
+    keep: Callable[[dict, Completed | None], None] | None = None,
 ) -> tuple[str, str, str | None, str]:
     """Run one prompt in a throwaway workspace holding ``files``; judge whether ``target`` activated.
 
@@ -761,13 +805,26 @@ def activation_case(
     invocation (``slash``) may load the skill without a tool call; Claude
     then replays the prompt, which shows its expansion of a resolved /name.
     With no observed signal the case is not-run. ``off`` names the user-level skills
-    turned off for Claude; one the case still lists competes.
+    turned off for Claude; one the case still lists competes. ``keep`` receives
+    each outcome with the launch's context and, when it ran, its output, while
+    the workspace still exists.
     """
     name = target.rsplit("/", 1)[-1]
     companions = {directory.rsplit("/", 1)[-1] for directory in skill_dirs} - {name}
+    launch = {"harness": harness, "target": target, "timeout": timeout, "workspace": {
+        "files": {path: hashlib.sha256(data).hexdigest() for path, data in sorted(files.items())},
+        "fixtures": {path: hashlib.sha256(text.encode()).hexdigest() for path, text in sorted(fixtures.items())},
+        "links": dict(sorted((links or {}).items()))}}
+
+    def done(result: tuple[str, str, str | None, str], completed: Completed | None = None, **context):
+        if keep is not None:
+            keep({**launch, **context, "outcome": result[0], "reason": result[1], "observed_activation": result[2]},
+                 completed)
+        return result
+
     problem = _staging_problem(harness, files, fixtures, skill_dirs, links)
     if problem:
-        return "error", problem, None, "not observable"
+        return done(("error", problem, None, "not observable"))
     with tempfile.TemporaryDirectory(prefix="forge-runtime-", dir=workspace_root) as temporary:
         workspace = Path(temporary)
         for path, data in files.items():
@@ -781,7 +838,7 @@ def activation_case(
         # Whatever names a file system folds together, the candidate must still hold its frozen bytes.
         changed = [path for path, data in files.items() if safe_path(workspace, path).read_bytes() != data]
         if changed:
-            return "error", f"a fixture replaced the candidate file {changed[0]}", None, "not observable"
+            return done(("error", f"a fixture replaced the candidate file {changed[0]}", None, "not observable"))
         if harness == "claude-code":
             wanted = links if links is not None else {f".claude/skills/{d.rsplit('/', 1)[-1]}": f"../../{d}"
                                                       for d in skill_dirs}
@@ -802,20 +859,23 @@ def activation_case(
         if rollout_wanted:
             command.remove("--ephemeral")
         environment = worker_environment(environ, harness)
+        context = {"command": command, "cwd": str(workspace), "stdin": prompt}
         try:
             completed = runner(command, cwd=str(workspace), env=environment, stdin=prompt, timeout=timeout)
         except OSError as error:
-            return "not-run", f"unavailable: the harness could not start: {error}", None, "not observable"
+            # The error names local paths: only the diagnostics keep it.
+            return done(("not-run", "unavailable: the harness could not start", None, "not observable"),
+                        **context, error=str(error))
         rollout = None
         if rollout_wanted:
             thread_id, text, problem = _take_rollout(completed.stdout, environment)
             if problem:
-                return "error", problem, None, "not observable"
+                return done(("error", problem, None, "not observable"), completed, **context)
             if text is not None:
                 rollout = (text, thread_id)
         # Judged while the workspace and its links exist, so paths resolve where the harness found them.
-        return judge_run(harness, completed, files, target, workspace, baseline | companions, expected, permitted,
-                         slash=slash, timeout=timeout, rollout=rollout)
+        return done(judge_run(harness, completed, files, target, workspace, baseline | companions, expected,
+                              permitted, slash=slash, timeout=timeout, rollout=rollout), completed, **context)
 
 
 def judge_run(harness: str, completed: Completed, files: Mapping[str, bytes], target: str, workspace: Path | None,
@@ -862,7 +922,7 @@ def run_skill_runtime(
     run: VerificationRun, harness: str, cases: list[dict], *, files: Mapping[str, bytes], runner: Runner = run_command,
     environ: Mapping[str, str] | None = None, login_answer: str | None = None,
     baseline_skills: set[str] | frozenset | None = None, timeout: int = RUNTIME_TIMEOUT,
-    workspace_root: str | None = None,
+    workspace_root: str | None = None, diagnostics: Diagnostics | None = None,
 ) -> list[RuntimeResult]:
     """One RuntimeResult per case, bound to the run and the part's frozen files.
 
@@ -871,7 +931,8 @@ def run_skill_runtime(
     own settings (claude_skill_origins), and a personal or managed skill
     with the candidate's name, which takes precedence, stops its cases.
     Every other skill that launch lists without the bundled ones is turned
-    off for each case; one that stays listed competes.
+    off for each case; one that stays listed competes. ``diagnostics`` keeps
+    each launch's output under the run's id, for a later look at a result.
     """
     if harness not in run.targets:
         raise ValueError(f"{harness} is not a target of this run")
@@ -896,12 +957,15 @@ def run_skill_runtime(
     checked = preflight(harness, "review", runner=runner, environ=environ, login_answer=login_answer)
     plugin_parts = {part["id"] for part in run.parts if skill_home(part) == "plugin"}
     user_skills: set[str] | None = set()
+    cause = None
+    if diagnostics is not None:
+        diagnostics.open(run.run_id)
     if baseline_skills is None:
         # Two launches tell Claude's bundled skills from the user's; only a case that runs needs them.
         launches = any(test_case["part_id"] not in plugin_parts for test_case in cases)
-        baseline_skills, user_skills = (
-            claude_skill_origins(runner, environ, timeout=timeout, workspace_root=workspace_root)
-            if harness == "claude-code" and checked["available"] and launches else (set(), set()))
+        baseline_skills, user_skills, cause = (
+            baseline_origins(runner, environ, timeout=timeout, workspace_root=workspace_root, diagnostics=diagnostics)
+            if harness == "claude-code" and checked["available"] and launches else (set(), set(), None))
     results = []
     for test_case in cases:
         directory = run.part_dirs[test_case["part_id"]]
@@ -923,6 +987,13 @@ def run_skill_runtime(
             *[f"{path} sha256 {hashlib.sha256(text.encode()).hexdigest()}" for path, text in sorted(fixtures.items())],
         ])
 
+        def stopped(outcome: str, reason: str) -> RuntimeResult:
+            # A case that never launched: its diagnostics say why.
+            if diagnostics is not None:
+                diagnostics.keep("cases", test_case["id"], {"harness": harness, "target": directory,
+                                                            "outcome": outcome, "reason": reason})
+            return result(outcome, reason)
+
         def result(outcome: str, reason: str, activation: str | None = None,
                    inventory: str = "not observable") -> RuntimeResult:
             built = RuntimeResult(run_id=run.run_id, part_id=test_case["part_id"], case_id=test_case["id"],
@@ -935,22 +1006,23 @@ def run_skill_runtime(
             return built if problem is None else replace(built, result="error", reason=f"inconsistent: {problem}")
 
         if not checked["available"]:
-            results.append(result("not-run", f"unavailable: {checked['reason']}"))
+            results.append(stopped("not-run", f"unavailable: {checked['reason']}"))
             continue
         if test_case["part_id"] in plugin_parts:
-            results.append(result("not-run", PLUGIN_RUNTIME))
+            results.append(stopped("not-run", PLUGIN_RUNTIME))
             continue
         stop = case_preflight(harness, test_case, directory, staged, links)
         if stop:
-            results.append(result(*stop))
+            results.append(stopped(*stop))
             continue
-        blocked = shadowing(directory.rsplit("/", 1)[-1], user_skills, baseline_skills)
+        blocked = shadowing(directory.rsplit("/", 1)[-1], user_skills, baseline_skills, cause)
         if blocked:
-            results.append(result("not-run", blocked))
+            results.append(stopped("not-run", blocked))
             continue
+        keep = None if diagnostics is None else functools.partial(diagnostics.keep, "cases", test_case["id"])
         outcome, reason, activation, inventory = activation_case(
             harness, staged, [directory], directory, prompt, test_case["expected"], permitted, fixtures,
             runner=runner, environ=environ, baseline=set(baseline_skills), timeout=timeout,
-            workspace_root=workspace_root, links=links, off=user_skills or (), slash=invoked)
+            workspace_root=workspace_root, links=links, off=user_skills or (), slash=invoked, keep=keep)
         results.append(result(outcome, reason, activation, inventory))
     return results

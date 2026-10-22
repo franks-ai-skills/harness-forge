@@ -22,6 +22,7 @@ from harness_forge.research import (
     _normalized, finding_problem, make_brief, match_support, research_request, source_rejection, support_request,
     worker_finding,
 )
+from harness_forge.diagnostics import Diagnostics
 from harness_forge.runtime import run_skill_runtime
 from harness_forge.verify import bound_inputs, finish_run, part_kind, prepare_run, review_request, validate_review
 
@@ -125,7 +126,7 @@ def verify_live(
     selection: dict[str, list[dict]] | None = None, overrides: list[dict] | tuple = (),
     scope: set[str] | None = None, scope_label: str = "Extensive review (rarely needed)",
     kept: dict[str, dict] | None = None, cited: dict[str, list[str]] | None = None,
-    recorded_drift: list[dict] | tuple = (),
+    recorded_drift: list[dict] | tuple = (), diagnostics: Diagnostics | None = None,
 ):
     """Static checks, a fresh review worker, runtime cases, then results in the design's precedence.
 
@@ -169,7 +170,7 @@ def verify_live(
     part_cases = [case for case in cases if case["part_id"] in built]
     if part_cases and harness in run.targets:
         runtime = run_skill_runtime(run, harness, part_cases, files=files, runner=runner, environ=environ,
-                                    login_answer=login_answer)
+                                    login_answer=login_answer, diagnostics=diagnostics)
     try:
         current_files, current_links, current_decision, current_revision = (
             collect() if collect else (files, symlinks, decision, revision))
