@@ -19,6 +19,7 @@ import yaml
 
 from harness_forge.checks.skills import NAME, PLACEHOLDER
 from harness_forge.contracts import KIND_LABELS, confirmation_problem
+from harness_forge.documents import canonical_digest
 from harness_forge.models import AcceptedRevision, Confirmation, Decision, PartResult, Rule
 
 TEMPLATES = Path(__file__).resolve().parents[2] / "templates" / "skill"
@@ -157,13 +158,20 @@ def plan_skill(
         # rarely needs, by number (skills.references.load-conditions).
         items = [f"{number}. `{rule['id']}` ({KIND_LABELS[rule['kind']].lower()}): {', '.join(rule['sources'])}"
                  for number, rule in enumerate(accepted, 1)]
-        planned[f"{base}/references/requirements.md"] = _template("requirements.md.tmpl", digest=revision.digest,
-                                                                  items="\n".join(items))
+        planned[f"{base}/references/requirements.md"] = _template(
+            "requirements.md.tmpl", digest=part_requirements_digest(revision, part_id), part=part_id,
+            items="\n".join(items))
     if user_only:
         planned[f"{base}/agents/openai.yaml"] = _template("openai.yaml.tmpl")
     if "claude-code" in decision.record["targets"]:
         planned[f".claude/skills/{name}"] = SymlinkTarget(f"../../.agents/skills/{name}")
     return planned
+
+
+def part_requirements_digest(revision: AcceptedRevision, part_id: str) -> str:
+    """The part's own accepted requirements and brief: another part's acceptance leaves it unchanged."""
+    entries = [entry for entry in revision.rules if entry["part_id"] == part_id]
+    return canonical_digest({"brief": revision.brief_digests[part_id], "rules": entries})
 
 
 def _skill_name(planned: dict[str, str]) -> str:
