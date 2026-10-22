@@ -409,6 +409,62 @@ class LiveCommandsTest(unittest.TestCase):
         self.assertEqual(code, 2)
         self.assertIn("researched for another brief", stderr)
 
+    def test_the_contract_shows_whether_each_parts_research_is_for_its_current_brief(self):
+        cli = Cli(ResearchRunner([finding()]), self.root)
+        _, workers, _ = cli("workers", "--harness", "claude-code")
+        evidence = cli.write("workers.json", workers)
+        rules = self.root / ".harness/research/repro.rules.yaml"
+
+        def contract():
+            extra = ("--revision", rules) if rules.exists() else ()
+            code, output, stderr = cli("prepare-contract", "--decision", self.decision, "--evidence", evidence, *extra)
+            self.assertEqual(code, 0, stderr)
+            (state,) = output["research"]
+            self.assertEqual(state["part_id"], "A")
+            return output["digest"], state
+
+        def deep(run_id):
+            extra = ("--revision", rules) if rules.exists() else ()
+            code, _, stderr = cli("research", "--decision", self.decision, "--pass", "deep", "--part", "A", "--harness",
+                                  "claude-code", "--evidence", evidence, "--relay",
+                                  cli.confirm(self.decision, run_id, *extra), "--root", self.root, "--slug", "repro",
+                                  "--write", *extra)
+            self.assertEqual(code, 0, stderr)
+
+        digest, state = contract()
+        self.assertEqual((state["accepted"], state["deep_research"]), ("none", "none"))
+        self.assertIn("run the deep pass for part A", state["next"])
+        deep("intake-1")
+        unchanged, state = contract()
+        self.assertEqual((state["accepted"], state["deep_research"]), ("none", "current"))
+        self.assertIn("accept part A's requirements", state["next"])
+        self.assertEqual(unchanged, digest, "research freshness is guidance, not part of the contract")
+
+        proposed = cli.write("proposed.json", {"requirements": []})
+        code, _, stderr = cli("accept", "--decision", self.decision, "--part", "A", "--proposed", proposed,
+                              "--choices", cli.write("choices.json", {}), "--root", self.root, "--slug", "repro")
+        self.assertEqual(code, 0, stderr)
+        _, state = contract()
+        self.assertEqual((state["accepted"], state["deep_research"]), ("current", "current"))
+        record = self.root / ".harness/research/repro.md"
+        kept = record.rename(record.with_name("repro.kept"))
+        _, state = contract()
+        self.assertEqual((state["accepted"], state["deep_research"]), ("current", "none"))
+        self.assertTrue(state["next"].startswith("nothing"), "build and verify accept current requirements")
+        kept.rename(record)
+
+        text = Path(self.decision).read_text(encoding="utf-8")
+        Path(self.decision).write_text(text.replace("goal: Write a reproduction checklist when asked",
+                                                    "goal: Write a security vulnerability report"), encoding="utf-8")
+        digest, state = contract()
+        self.assertEqual((state["accepted"], state["deep_research"]), ("stale", "none"))
+        self.assertIn("run the deep pass for part A", state["next"])
+        deep("intake-2")
+        unchanged, state = contract()
+        self.assertEqual((state["accepted"], state["deep_research"]), ("stale", "current"))
+        self.assertIn("accept part A's requirements again", state["next"])
+        self.assertEqual(unchanged, digest)
+
     def test_an_override_file_applies_only_with_a_new_confirmation(self):
         cli, arguments = self.build_ready(ResearchRunner([finding()]))
         overrides = self.root / ".harness/overrides"

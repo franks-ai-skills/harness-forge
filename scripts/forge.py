@@ -415,6 +415,7 @@ def _prepare_contract(arguments: argparse.Namespace) -> int:
         "command": "prepare-contract", "digest": contract.digest, "text": contract.text,
         "parts": contract.parts, "overrides": contract.overrides, "worker_policy": contract.worker_policy,
         "confirmed_part_ids": [], "relay_fields": sorted(RELAY_KEYS), "refused_parts": refused,
+        "research": _research_states(decision, revision, Path(arguments.decision)),
     })
     return 0
 
@@ -772,6 +773,38 @@ def _stale_requirements(decision: Decision, revision, covered: list[str]) -> str
                     f"picture, targets, reach or the part's goal, answers or mechanism changed; research part "
                     f"{part_id} again and accept its requirements")
     return None
+
+
+def _research_states(decision: Decision, revision, decision_path: Path) -> list[dict]:
+    """Whether each part build and verify cover has requirements and deep research for its current brief.
+
+    Guidance for the contract, not a check: `accept`, `build` and `verify` keep refusing on their own terms.
+    """
+    try:
+        _, slug = _decision_name(decision_path)
+        root = decision_path.resolve().parents[2]
+        path = root / ".harness" / "research" / f"{slug}.md"
+        record = load_research(path, root=root) if path.is_file() else None
+    except (_InvalidInput, ValueError):
+        record = None
+    researched = {(item["part_id"], item["digest"]) for item in (record or {}).get("briefs", []) if item["pass"] == "deep"}
+    states = []
+    for part in decision.record["parts"]:
+        if not part.get("outcome") or part_kind(part) not in ("build", "local-reuse"):
+            continue
+        part_id, brief = part["id"], make_brief(decision, "deep", part["id"]).digest
+        recorded = revision.brief_digests.get(part_id) if revision else None
+        accepted = "none" if recorded is None else "current" if recorded == brief else "stale"
+        deep = "current" if (part_id, brief) in researched else "none"
+        if accepted == "current":
+            step = "nothing: the accepted requirements are for the part's current brief"
+        elif deep == "current":
+            step = (f"accept part {part_id}'s requirements again, even none" if accepted == "stale"
+                    else f"accept part {part_id}'s requirements, even none")
+        else:
+            step = f"run the deep pass for part {part_id}, then accept its requirements, even none"
+        states.append({"part_id": part_id, "accepted": accepted, "deep_research": deep, "next": step})
+    return states
 
 
 def _decision_and_revision(arguments: argparse.Namespace, root: Path | None = None, *, matching: bool = True):

@@ -26,3 +26,6 @@ cases:
   - id: no-self-chosen-mechanism
     setup: forge.py select returns a question.
     expect: The assistant asks that question instead of recommending a mechanism.
+  - id: stale-research-shown
+    setup: Part A's requirements were accepted under its earlier goal; the user changed A's goal, and prepare-contract reports A with accepted stale, deep_research none and next "run the deep pass for part A, then accept its requirements, even none".
+    expect: With the contract, the assistant says A's requirements were accepted for an earlier brief, shows that next step unchanged and says build and verify refuse A until it is done; it starts no research before the user confirms.
