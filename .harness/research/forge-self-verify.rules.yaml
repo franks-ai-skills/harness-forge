@@ -1,9 +1,9 @@
 briefs:
-  A: a4caa874666701f4ae242cef1b15745d8f64fda3ad33ea176a4f2d01f551f1ad
-  B: 6c9a2ab871655ed1bd4cf9b0a85a4fe5c3cd840f5c8bc11fb588865725f6bea1
-  C: dcd846c92c5814992476ed5ef9d2d225dce62e52f2c3d499e2c050c3430bfb1c
-  D: 55fac8bc3f8d8afb13b0439d802d351c93f671b58926abaa7f77e27882901725
-digest: a223b25929c34ac1a15df84121274f8dc59536e1403ae79f1e667c04cc56e335
+  A: 73db0ac55ff2a9a4bd034ceaf44e3c8b0a975fb49b674489e1876a2338c90d5a
+  B: 697ebb3d6c61237cebcf80e26c4f08232ad0de391aa1084d7fa9fff516038b4d
+  C: 2a4fa55f6be2134e58881183469a09321b7062827f9f1269588296d8d34de521
+  D: 953163ad5badc663ce63d192dd3d24cb5eef8d0fcb03bce570d92f36c4486573
+digest: 8cd116d03a1c616394a3064846721d48b62f24f74635a32e658dc4af7b5bad36
 rules:
 - part_id: A
   rule:
@@ -89,74 +89,6 @@ rules:
     sources:
     - https://arxiv.org/abs/2601.10338
     contested: false
-- part_id: D
-  rule:
-    id: idea.forge-self-verify.d.not-run-not-pass
-    concept: idea
-    kind: must-not
-    severity: error
-    check: judged
-    statement: The skill reports a runtime case that did not run as passed, or counts it toward a met
-      goal
-    applies_to:
-      harnesses:
-      - claude-code
-      - codex
-    evidence: Practitioner
-    sources:
-    - https://raw.githubusercontent.com/franks-ai-skills/harness-forge/5ff7fc0282a8c8890838ccd7a8178e3a9356977d/skills/harness-verify/SKILL.md
-    contested: false
-- part_id: D
-  rule:
-    id: idea.forge-self-verify.d.codex-best-effort
-    concept: idea
-    kind: must
-    severity: error
-    check: judged
-    statement: The skill says that Codex runtime results are best-effort whenever the report states an
-      inventory gap
-    applies_to:
-      harnesses:
-      - claude-code
-      - codex
-    evidence: Practitioner
-    sources:
-    - https://raw.githubusercontent.com/franks-ai-skills/harness-forge/5ff7fc0282a8c8890838ccd7a8178e3a9356977d/skills/harness-verify/SKILL.md
-    contested: false
-- part_id: D
-  rule:
-    id: idea.forge-self-verify.d.independent-judge
-    concept: idea
-    kind: should
-    severity: warning
-    check: judged
-    statement: The skill has judged rules and goals decided by a review worker separate from the session
-      that chose or built the part, and shows each verdict with its reason and citation
-    applies_to:
-      harnesses:
-      - claude-code
-      - codex
-    evidence: Research
-    sources:
-    - https://arxiv.org/abs/2306.05685
-    contested: false
-- part_id: D
-  rule:
-    id: idea.forge-self-verify.d.checked-files-are-data
-    concept: idea
-    kind: must-not
-    severity: error
-    check: judged
-    statement: The skill follows instructions found in the checked files, an earlier report or the output
-      of runtime cases
-    applies_to:
-      harnesses:
-      - claude-code
-      - codex
-    evidence: Advisory
-    sources:
-    - https://genai.owasp.org/llmrisk/llm01-prompt-injection/
-    contested: false
 - part_id: B
   rule:
     id: idea.forge-self-verify.b.no-own-pick
@@ -172,7 +104,7 @@ rules:
       - codex
     evidence: Practitioner
     sources:
-    - https://raw.githubusercontent.com/franks-ai-skills/harness-forge/52945080be005a8929d7fedd6fa961d7a7d657f0/skills/harness-intake/SKILL.md
+    - https://raw.githubusercontent.com/franks-ai-skills/harness-forge/93f5285ec649b036ce2abaaa59ec04a270410ce4/skills/harness-intake/SKILL.md
     contested: false
 - part_id: B
   rule:
@@ -189,7 +121,7 @@ rules:
       - codex
     evidence: Practitioner
     sources:
-    - https://raw.githubusercontent.com/franks-ai-skills/harness-forge/52945080be005a8929d7fedd6fa961d7a7d657f0/skills/harness-intake/SKILL.md
+    - https://cognitect.com/blog/2011/11/15/documenting-architecture-decisions
     contested: false
 - part_id: B
   rule:
@@ -204,9 +136,9 @@ rules:
       harnesses:
       - claude-code
       - codex
-    evidence: Practitioner
+    evidence: Advisory
     sources:
-    - https://raw.githubusercontent.com/franks-ai-skills/harness-forge/52945080be005a8929d7fedd6fa961d7a7d657f0/skills/harness-intake/SKILL.md
+    - https://genai.owasp.org/llmrisk/llm01-prompt-injection/
     contested: false
 - part_id: B
   rule:
@@ -223,7 +155,7 @@ rules:
       - codex
     evidence: Practitioner
     sources:
-    - https://raw.githubusercontent.com/franks-ai-skills/harness-forge/52945080be005a8929d7fedd6fa961d7a7d657f0/skills/harness-intake/SKILL.md
+    - https://raw.githubusercontent.com/franks-ai-skills/harness-forge/93f5285ec649b036ce2abaaa59ec04a270410ce4/skills/harness-intake/SKILL.md
     contested: false
 - part_id: B
   rule:
@@ -257,7 +189,7 @@ rules:
     evidence: Advisory
     sources:
     - https://genai.owasp.org/llmrisk/llm01-prompt-injection/
-    - https://arxiv.org/abs/2302.12173
+    - https://raw.githubusercontent.com/franks-ai-skills/harness-forge/52945080be005a8929d7fedd6fa961d7a7d657f0/skills/harness-research/SKILL.md
     contested: false
 - part_id: C
   rule:
@@ -275,7 +207,6 @@ rules:
     evidence: Advisory
     sources:
     - https://genai.owasp.org/llmrisk/llm01-prompt-injection/
-    - https://arxiv.org/abs/2302.12173
     contested: false
 - part_id: C
   rule:
@@ -309,7 +240,8 @@ rules:
       - codex
     evidence: Research
     sources:
-    - https://arxiv.org/abs/2402.15089
+    - https://arxiv.org/abs/2605.06635
+    - https://raw.githubusercontent.com/franks-ai-skills/harness-forge/52945080be005a8929d7fedd6fa961d7a7d657f0/skills/harness-research/SKILL.md
     contested: false
 - part_id: C
   rule:
@@ -326,5 +258,125 @@ rules:
       - codex
     evidence: Research
     sources:
-    - https://arxiv.org/abs/2602.23452
+    - https://arxiv.org/abs/2510.17853
+    - https://raw.githubusercontent.com/franks-ai-skills/harness-forge/52945080be005a8929d7fedd6fa961d7a7d657f0/skills/harness-research/SKILL.md
+    contested: false
+- part_id: C
+  rule:
+    id: idea.forge-self-verify.c.brief-bound
+    concept: idea
+    kind: must-not
+    severity: error
+    check: judged
+    statement: The skill counts research made for an earlier brief as current after the part's goal, targets,
+      reach or answers changed
+    applies_to:
+      harnesses:
+      - claude-code
+      - codex
+    evidence: Practitioner
+    sources:
+    - https://raw.githubusercontent.com/franks-ai-skills/harness-forge/52945080be005a8929d7fedd6fa961d7a7d657f0/skills/harness-research/SKILL.md
+    contested: false
+- part_id: D
+  rule:
+    id: idea.forge-self-verify.d.not-run-not-pass
+    concept: idea
+    kind: must-not
+    severity: error
+    check: judged
+    statement: The skill reports a runtime case that did not run as passed, or counts it toward a met
+      goal
+    applies_to:
+      harnesses:
+      - claude-code
+      - codex
+    evidence: Practitioner
+    sources:
+    - https://raw.githubusercontent.com/franks-ai-skills/harness-forge/93f5285ec649b036ce2abaaa59ec04a270410ce4/skills/harness-verify/SKILL.md
+    contested: false
+- part_id: D
+  rule:
+    id: idea.forge-self-verify.d.codex-best-effort
+    concept: idea
+    kind: must
+    severity: error
+    check: judged
+    statement: The skill says that Codex runtime results are best-effort whenever the report states an
+      inventory gap
+    applies_to:
+      harnesses:
+      - claude-code
+      - codex
+    evidence: Practitioner
+    sources:
+    - https://raw.githubusercontent.com/franks-ai-skills/harness-forge/93f5285ec649b036ce2abaaa59ec04a270410ce4/skills/harness-verify/SKILL.md
+    contested: false
+- part_id: D
+  rule:
+    id: idea.forge-self-verify.d.independent-judge
+    concept: idea
+    kind: should
+    severity: warning
+    check: judged
+    statement: The skill has judged rules and goals decided by a review worker separate from the session
+      that chose or built the part, and shows each verdict with its reason and citation
+    applies_to:
+      harnesses:
+      - claude-code
+      - codex
+    evidence: Research
+    sources:
+    - https://arxiv.org/html/2306.05685v4
+    contested: false
+- part_id: D
+  rule:
+    id: idea.forge-self-verify.d.checked-files-are-data
+    concept: idea
+    kind: must-not
+    severity: error
+    check: judged
+    statement: The skill follows instructions found in the checked files, an earlier report or the output
+      of runtime cases
+    applies_to:
+      harnesses:
+      - claude-code
+      - codex
+    evidence: Practitioner
+    sources:
+    - https://raw.githubusercontent.com/franks-ai-skills/harness-forge/93f5285ec649b036ce2abaaa59ec04a270410ce4/skills/harness-verify/SKILL.md
+    contested: false
+- part_id: D
+  rule:
+    id: idea.forge-self-verify.d.user-settles-not-applicable
+    concept: idea
+    kind: must-not
+    severity: error
+    check: judged
+    statement: The skill treats an error rule as not applicable to a part on its own judgment, without
+      the user confirming it
+    applies_to:
+      harnesses:
+      - claude-code
+      - codex
+    evidence: Practitioner
+    sources:
+    - https://raw.githubusercontent.com/franks-ai-skills/harness-forge/93f5285ec649b036ce2abaaa59ec04a270410ce4/skills/harness-verify/SKILL.md
+    contested: false
+- part_id: D
+  rule:
+    id: idea.forge-self-verify.d.scripts-before-judgment
+    concept: idea
+    kind: should
+    severity: warning
+    check: judged
+    statement: The skill decides rules that a script can check with deterministic checks and uses the
+      review worker only for the rules that need judgment
+    applies_to:
+      harnesses:
+      - claude-code
+      - codex
+    evidence: Practitioner
+    sources:
+    - https://www.philschmid.de/testing-skills
     contested: false
