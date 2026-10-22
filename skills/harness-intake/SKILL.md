@@ -101,10 +101,9 @@ time, read [references/inputs.md](references/inputs.md) for their shapes.
    While the output names a `question`, ask exactly that question and run
    `select` again. Stop when it returns an outcome. A note or comment
    added to a public tracker publishes it, also when the issue already
-   exists. Before asking who starts a procedure that changes external
-   state, such as posting, labeling, closing or pushing, say that a
-   skill the model can start fails `skills.invocation.side-effects-user-invoked`
-   at verification, whatever the selection gives.
+   exists, so it answers `irreversible`. Any other change to external
+   state, such as labeling, closing or pushing, and timing the model
+   should not choose answer `side_effects`.
 7. **Recommendation.** For each part show, from the `select` output:
    the outcome and the recommended mechanism, with its `variant` when
    the output names one (such as a hook's handler), and the rules that

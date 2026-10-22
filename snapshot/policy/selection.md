@@ -62,6 +62,7 @@ mechanism description each exclusion rests on.
 | --- | --- | --- |
 | Must hold every time | instructions, skills, commands, subagents, automation, MCP | Each depends on a model decision or applies outside the tool call |
 | Irreversible, about money, or publishes or discloses data | instructions, skills, subagents | The model would decide on its own to start it; delegation starts on the model's decision or on instructions or a skill it follows, in both harnesses |
+| Changes external state, such as a commit, a push, a deploy, an issue edit or a message, or needs timing the model should not choose | instructions, skills, subagents | The same: the model would decide on its own when to start it. Unlike an irreversible action, a reversible change needs no outside gate |
 | Needs its own context, other tools or another model | instructions, skills, commands | They run in the session's own context; a subagent can use a skill |
 | Needs judgment, or a model of its own, for Codex or both harnesses | hooks | Portable handlers are commands and MCP tool calls; prompt and agent hooks are Claude Code only |
 | Needs judgment or a model of its own, at an event where a prompt or agent verdict has no effect | hooks | Such a verdict takes effect only at eleven events; elsewhere the handler does not run or, at `PermissionRequest` and `PermissionDenied`, its `ok: false` has no effect |
@@ -123,7 +124,7 @@ harnesses the event must allow the effect in each.
 | 6 | `selection.mechanism.event-procedure` | A procedure an event starts runs where events are handled: a hook at that event. |
 | 7 | `selection.mechanism.event-procedure-unattended` | A schedule or CI event starts an unattended run instead; offered as the alternative to a hook. |
 | 8 | `selection.mechanism.guidance` | Standing guidance is what instruction files are for. |
-| 9 | `selection.mechanism.user-procedure` | A procedure the user starts, or one with irreversible effects, is a user-invoked skill before a model-invoked one. |
+| 9 | `selection.mechanism.user-procedure` | A procedure the user starts, or one with irreversible effects, other side effects or timing the model should not choose, is a user-invoked skill before a model-invoked one. |
 | 10 | `selection.mechanism.procedure` | A recurring procedure needed only sometimes is a skill: cheap until used. |
 | 11 | `selection.mechanism.procedure-as-instructions` | Instructions can carry a procedure too, at a cost in every session; offered as the alternative to a skill. |
 | 12 | `selection.mechanism.setting` | A harness setting belongs to configuration. |

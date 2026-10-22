@@ -26,6 +26,9 @@ cases:
   - id: no-self-chosen-mechanism
     setup: forge.py select returns a question.
     expect: The assistant asks that question instead of recommending a mechanism.
+  - id: external-change-answers-side-effects
+    setup: A part labels and closes an issue in the repository's tracker without commenting; select asks the side_effects question.
+    expect: The assistant asks that question word for word; once the user answers true, the recommendation is a user-invoked skill, or nothing fits if the model is to start it, and the assistant never answers irreversible true for the labeling alone.
   - id: stale-research-shown
     setup: Part A's requirements were accepted under its earlier goal; the user changed A's goal, and prepare-contract reports A with accepted stale, deep_research none and next "run the deep pass for part A, then accept its requirements, even none".
     expect: With the contract, the assistant says A's requirements were accepted for an earlier brief, shows that next step unchanged and says build and verify refuse A until it is done; it starts no research before the user confirms.

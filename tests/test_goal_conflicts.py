@@ -42,6 +42,17 @@ class DetectionTest(unittest.TestCase):
         self.assertTrue(conflict["pros"] and conflict["cons"], "the recommended mechanism's pros and cons are shown")
         self.assertIn({"fact": "own_context", "current": True, "values": [False]}, conflict["adjust"])
 
+    def test_a_model_invoked_skill_with_external_side_effects_is_a_goal_conflict(self):
+        side_effects = {**ANSWERS, "side_effects": True}
+        conflict = detect(conflicted(answers=side_effects, recommended=None, chosen="skills", outcome="nothing-fits"))
+        self.assertEqual(conflict["severity"], "error")
+        self.assertEqual([item["rule_id"] for item in conflict["failing"]],
+                         ["selection.eligibility.side-effects-skills"])
+        self.assertEqual(conflict["adjust"], [{"fact": "side_effects", "current": True, "values": [False]}])
+        # A user-invoked skill is ruled out only because the model starts it.
+        conflict = detect(conflicted(answers=side_effects, recommended=None, chosen="commands", outcome="nothing-fits"))
+        self.assertIn({"fact": "trigger", "current": "model", "values": ["user"]}, conflict["adjust"])
+
     def test_a_recommendation_only_mismatch_warns(self):
         record = conflicted(answers=ANSWERS, recommended="skills", chosen="instructions")
         conflict = detect(record)

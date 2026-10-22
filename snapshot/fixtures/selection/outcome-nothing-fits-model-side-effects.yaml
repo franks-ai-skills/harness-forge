@@ -1,0 +1,29 @@
+# Selection case outcome-nothing-fits-model-side-effects (synthetic answers):
+# the model should start a procedure that changes external state.
+whole_idea:
+  target_set: both
+  reach: repository
+  plan_controls: available
+  opens_prs: false
+  bypass_mode: false
+  untrusted_repo: false
+  lethal_trifecta: false
+answers:
+  event_without_agent: false
+  must_survive_compromise: not-required
+  who_disables: contributor
+  every_time: usually
+  irreversible: false
+  side_effects: true
+  early_feedback: false
+  trigger: model
+  own_context: false
+  external_system: none
+  script_checkable: false
+  job: procedure
+candidates: []
+expected:
+  outcome: nothing-fits
+  mechanism: null
+  controls:
+  - codeowners-agent-config

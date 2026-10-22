@@ -13,6 +13,7 @@ answers:
   who_disables: contributor
   every_time: usually
   irreversible: false
+  side_effects: false
   early_feedback: false
   trigger: model
   own_context: false
