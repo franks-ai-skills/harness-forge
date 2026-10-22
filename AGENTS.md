@@ -23,3 +23,13 @@ Run tests with the locked dependencies, as in
 `python3 -m venv .venv`, install `requirements.lock` with
 `--require-hashes --only-binary :all:`, then
 `.venv/bin/python -m unittest discover -s tests -t . -v`.
+
+Changes reach `main` only through a pull request, merged with a merge
+commit (the only method this repository allows). Keep the PR
+description in step with what the PR contains. Merge only after the
+repository's required checks (the test suite above) pass and an
+independent review of the latest pushed head
+finds the PR ready; a push after that review needs a new one. The
+owner's AI agents (Claude implementing, Codex planning and reviewing)
+follow the working mode in
+[playground's AGENTS.md](https://github.com/franks-ai-skills/playground/blob/ai-stuff/AGENTS.md#working-mode-claude-and-codex-owner-2026-10-22).
