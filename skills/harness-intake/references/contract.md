@@ -30,6 +30,17 @@ unanswered goal conflict. Show them, offer only the other parts for
 confirmation, and fix each refused part with `select` (or the
 goal-conflict question) before it is confirmed.
 
+`research` says, for each part to build or reuse in place, whether its
+accepted requirements (`accepted`) and its deep research
+(`deep_research`) are for the part's current brief. `stale` means the
+requirements were accepted for an earlier brief: the idea's goals,
+picture, targets or reach, or the part's goal, answers or mechanism
+changed since. Show each entry whose fields are not both `current`
+with its `next`, unchanged, and say that build and verify refuse the
+part until that is done. Research is not part of the contract: confirming it
+starts no research, and the deep pass and acceptance come after the
+confirmation.
+
 ## How to ask
 
 Ask one multiple-choice question with exactly two options, `Confirm` and

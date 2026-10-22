@@ -160,7 +160,8 @@ time, read [references/inputs.md](references/inputs.md) for their shapes.
    notes outside them.
 10. **Confirm the contract.** Render it with `prepare-contract` and ask
     for confirmation as [references/contract.md](references/contract.md)
-    describes. Unconfirmed parts stay pending.
+    describes, including which parts need research or acceptance again
+    after an edit. Unconfirmed parts stay pending.
 
 ## Outcomes
 
