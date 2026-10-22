@@ -76,12 +76,13 @@ Answer with one JSON object in this shape; the CLI enforces it:
 ```json
 {"findings": [{"claim": "...", "source": "https://...", "fetched": "YYYY-MM-DD",
   "quote": "one sentence from the page", "context": "the sentence before, the quote, the sentence after",
-  "source_role": "primary"}]}
+  "source_role": "primary", "requirement_id": null}]}
 ```
 
 - `quote`: one sentence, copied exactly from the fetched page.
 - `context`: the quote together with the sentences around it, copied
   exactly. It must contain the quote.
+- `requirement_id`: null, except in a re-check.
 - `claim`: only what the quote, read in its context, states. A separate
   worker judges each claim against its quote and context alone, and
   rejects a claim wider than its quote. Several points need several

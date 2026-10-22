@@ -567,7 +567,8 @@ class StructuredOutputTest(unittest.TestCase):
 
     def test_the_research_worker_leaves_ids_and_brief_fields_to_forge(self):
         finding = output_schema("research")["properties"]["findings"]["items"]
-        self.assertEqual(sorted(finding["properties"]), ["claim", "context", "fetched", "quote", "source", "source_role"])
+        self.assertEqual(sorted(finding["properties"]), ["claim", "context", "fetched", "quote", "requirement_id", "source",
+                                                    "source_role"])
 
     def test_claude_structured_output_is_the_answer(self):
         request, files, verdicts = review_case()
