@@ -46,7 +46,7 @@ from harness_forge.overrides import (  # noqa: E402
 )
 from harness_forge.report import render_report, write_report  # noqa: E402
 from harness_forge.research import (  # noqa: E402
-    _BLOCKING_DRIFT, _catalog, accept_requirements, drift_category, drift_digest, drift_state, finding_problem,
+    _BLOCKING_DRIFT, UNTRUSTED_NOTE, _catalog, accept_requirements, drift_category, drift_digest, drift_state, finding_problem,
     load_research, load_revision, source_rejection,
     make_brief, merge_revision,
     UnassignedRevision, dangling_drift, record_drift, supported_findings, write_research, write_revision,
@@ -865,7 +865,7 @@ def _research(arguments: argparse.Namespace) -> int:
     emit({"command": "research", "status": result["status"], "reason": result["reason"],
           # Drift whose finding this pass replaced: record it again from a current finding, which supersedes it.
           "dangling_drift": dangling,
-          "brief_digest": result["brief"]["digest"],
+          "brief_digest": result["brief"]["digest"], "untrusted": UNTRUSTED_NOTE,
           "kept": [{key: f[key] for key in ("id", "claim", "source", "quote")} for f in result["kept"]],
           "dropped": result["dropped"], "worker_evidence": result["worker_evidence"], "written": written})
     return 0 if result["status"] == "completed" else 1
@@ -1065,7 +1065,8 @@ def _record_drift(arguments: argparse.Namespace) -> int:
                                                                                                 arguments.finding))
     superseded = [item["finding_id"] for item in record["drift"] if item not in updated["drift"]
                   and item["finding_id"] != arguments.finding]
-    emit({"command": "drift", "entry": entry, "blocking": entry["category"] in _BLOCKING_DRIFT,
+    emit({"command": "drift", "entry": entry, "untrusted": UNTRUSTED_NOTE,
+          "blocking": entry["category"] in _BLOCKING_DRIFT,
           "superseded": superseded})
     return 0
 
@@ -1121,7 +1122,8 @@ def _drift_issue(arguments: argparse.Namespace) -> int:
         Path(arguments.out).write_text(json.dumps(proposal, indent=2), encoding="utf-8")
     except OSError as error:
         raise _InvalidInput(str(error)) from error
-    emit({"command": "drift-issue", **proposal})
+    # The proposal file stays as approved and filed; only the output carries the note.
+    emit({"command": "drift-issue", **proposal, "untrusted": UNTRUSTED_NOTE})
     return 0
 
 
