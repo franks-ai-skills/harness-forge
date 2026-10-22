@@ -12,10 +12,10 @@ Status: version 0.1.0, published on 2026-10-16 together with its
 knowledge base, [agent-harness-kb](https://github.com/franks-ai-skills/agent-harness-kb).
 The workflow passes its
 automated live runs in Claude Code and Codex from a local checkout. The
-installation procedures below were tested in throwaway locations, and an
-installed copy ran the whole workflow in Claude Code; runs from an
-installed plugin in Codex follow with the reference runs. No harness is
-supported for general use yet.
+installation procedures below were tested in throwaway locations. An
+installed copy ran the whole workflow in Claude Code, and Codex ran its
+reference sessions from the plugin installed from a local marketplace.
+No harness is supported for general use yet.
 
 ## Installation
 
