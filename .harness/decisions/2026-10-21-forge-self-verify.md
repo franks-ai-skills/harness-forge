@@ -44,10 +44,10 @@ research_candidates:
   source: https://github.com/franks-ai-skills/harness-forge/tree/5ff7fc0282a8c8890838ccd7a8178e3a9356977d/skills/build-skill
   part_id: A
 - name: harness-intake
-  source: https://github.com/franks-ai-skills/harness-forge/tree/5ff7fc0282a8c8890838ccd7a8178e3a9356977d/skills/harness-intake
+  source: https://github.com/franks-ai-skills/harness-forge/tree/52945080be005a8929d7fedd6fa961d7a7d657f0/skills/harness-intake
   part_id: B
 - name: harness-research
-  source: https://github.com/franks-ai-skills/harness-forge/tree/5ff7fc0282a8c8890838ccd7a8178e3a9356977d/skills/harness-research
+  source: https://github.com/franks-ai-skills/harness-forge/tree/52945080be005a8929d7fedd6fa961d7a7d657f0/skills/harness-research
   part_id: C
 - name: harness-verify
   source: https://github.com/franks-ai-skills/harness-forge/tree/5ff7fc0282a8c8890838ccd7a8178e3a9356977d/skills/harness-verify
@@ -174,11 +174,16 @@ parts:
     prerequisites:
     - outside.ci.workflow-protected
     - outside.codeowners.agent-config
+    - outside.gate.no-broader-bypass
+    - outside.gate.plan-enforced
+    - outside.merge.no-agent-bypass
+    - outside.merge.requester-cannot-approve
     availability: available
     required_for_goal: false
   - control: outer-isolation
     prerequisites:
     - outside.gate.no-broader-bypass
+    - outside.merge.no-agent-bypass
     availability: available
     required_for_goal: false
   reuse:
@@ -323,16 +328,21 @@ parts:
     prerequisites:
     - outside.ci.workflow-protected
     - outside.codeowners.agent-config
+    - outside.gate.no-broader-bypass
+    - outside.gate.plan-enforced
+    - outside.merge.no-agent-bypass
+    - outside.merge.requester-cannot-approve
     availability: available
     required_for_goal: false
   - control: outer-isolation
     prerequisites:
     - outside.gate.no-broader-bypass
+    - outside.merge.no-agent-bypass
     availability: available
     required_for_goal: false
   reuse:
     name: harness-intake
-    source: https://github.com/franks-ai-skills/harness-forge/tree/5ff7fc0282a8c8890838ccd7a8178e3a9356977d/skills/harness-intake
+    source: https://github.com/franks-ai-skills/harness-forge/tree/52945080be005a8929d7fedd6fa961d7a7d657f0/skills/harness-intake
     license: AGPL-3.0-only
     maintenance: maintained
     path: skills/harness-intake
@@ -471,16 +481,21 @@ parts:
     prerequisites:
     - outside.ci.workflow-protected
     - outside.codeowners.agent-config
+    - outside.gate.no-broader-bypass
+    - outside.gate.plan-enforced
+    - outside.merge.no-agent-bypass
+    - outside.merge.requester-cannot-approve
     availability: available
     required_for_goal: false
   - control: outer-isolation
     prerequisites:
     - outside.gate.no-broader-bypass
+    - outside.merge.no-agent-bypass
     availability: available
     required_for_goal: false
   reuse:
     name: harness-research
-    source: https://github.com/franks-ai-skills/harness-forge/tree/5ff7fc0282a8c8890838ccd7a8178e3a9356977d/skills/harness-research
+    source: https://github.com/franks-ai-skills/harness-forge/tree/52945080be005a8929d7fedd6fa961d7a7d657f0/skills/harness-research
     license: AGPL-3.0-only
     maintenance: maintained
     path: skills/harness-research
@@ -620,11 +635,16 @@ parts:
     prerequisites:
     - outside.ci.workflow-protected
     - outside.codeowners.agent-config
+    - outside.gate.no-broader-bypass
+    - outside.gate.plan-enforced
+    - outside.merge.no-agent-bypass
+    - outside.merge.requester-cannot-approve
     availability: available
     required_for_goal: false
   - control: outer-isolation
     prerequisites:
     - outside.gate.no-broader-bypass
+    - outside.merge.no-agent-bypass
     availability: available
     required_for_goal: false
   reuse:
@@ -654,27 +674,27 @@ research:
   survey_digest: null
   deep_digests: {}
 accepted_revision:
-  digest: 67d19a3b6dbe58f9816d9ae3d9d980aa1b14ba4c85d97ace670177a32c81cbc3
+  digest: a223b25929c34ac1a15df84121274f8dc59536e1403ae79f1e667c04cc56e335
   rule_ids:
   - idea.forge-self-verify.a.no-silent-overwrite
   - idea.forge-self-verify.a.only-accepted-requirements
   - idea.forge-self-verify.a.records-are-data
   - idea.forge-self-verify.a.built-not-verified
   - idea.forge-self-verify.a.scripts-only-when-needed
+  - idea.forge-self-verify.d.not-run-not-pass
+  - idea.forge-self-verify.d.codex-best-effort
+  - idea.forge-self-verify.d.independent-judge
+  - idea.forge-self-verify.d.checked-files-are-data
   - idea.forge-self-verify.b.no-own-pick
   - idea.forge-self-verify.b.proposed-until-confirmed
-  - idea.forge-self-verify.b.simplest-result
   - idea.forge-self-verify.b.untrusted-separate
-  - idea.forge-self-verify.c.research-never-decides
+  - idea.forge-self-verify.b.one-question
+  - idea.forge-self-verify.b.no-leading-questions
   - idea.forge-self-verify.c.page-text-not-instructions
   - idea.forge-self-verify.c.untrusted-marked
   - idea.forge-self-verify.c.user-files-issues
   - idea.forge-self-verify.c.citation-precision
   - idea.forge-self-verify.c.separate-judgment
-  - idea.forge-self-verify.d.not-run-not-pass
-  - idea.forge-self-verify.d.codex-best-effort
-  - idea.forge-self-verify.d.independent-judge
-  - idea.forge-self-verify.d.checked-files-are-data
 survey_findings_used:
 - F5
 - F7
