@@ -23,7 +23,7 @@ from dataclasses import asdict
 from harness_forge.checks import REGISTRY
 from harness_forge.checks.links import PLUGIN_MANIFESTS
 from harness_forge.checks.runner import evaluate_applicability, run_check
-from harness_forge.contracts import confirmation_problem, part_ids_problem
+from harness_forge.contracts import confirmation_problem, effective_prerequisites, part_ids_problem
 from harness_forge.documents import canonical_digest, fold_name, validate
 from harness_forge.models import (
     AcceptedRevision, CheckResult, Confirmation, Decision, PartResult, ReviewResponse, Rule, RuntimeResult,
@@ -125,7 +125,11 @@ def _rules_for(part: dict, rules: list[Rule], idea: dict[str, list[Rule]]) -> li
         selected += [rule for rule in rules if rule.concept in ("skills", "security")]
         selected += idea.get(part["id"], [])
     if part["outside_controls"]:
-        selected += [rule for rule in rules if rule.concept == "outside"]
+        # A gate condition is judged where a control lists it, so its applicability follows the selection. A
+        # script rule, or one whose applicability is judged from the part's context, holds for every control.
+        listed = {rule_id for control in part["outside_controls"] for rule_id in effective_prerequisites(control)}
+        selected += [rule for rule in rules if rule.concept == "outside"
+                     and (rule.id in listed or rule.check == "script" or rule.applicability == "judged")]
     return selected
 
 
@@ -465,7 +469,13 @@ def review_request(run: VerificationRun, request_id: str) -> dict:
                     "facts": dict(run.whole_idea["facts"]),
                     "parts": [{"part_id": part["id"], "goal": part["goal"], "answers": dict(part["answers"]),
                                "outcome": part["outcome"], "mechanism": part["chosen"],
-                               "reuse": dict(part["reuse"]) if part.get("reuse") else None}
+                               "reuse": dict(part["reuse"]) if part.get("reuse") else None,
+                               # Which gate conditions each control needs: the reviewer judges a condition
+                               # against every control that lists it.
+                               "outside_controls": [{"control": control["control"],
+                                                     "required_for_goal": control["required_for_goal"],
+                                                     "prerequisites": effective_prerequisites(control)}
+                                                    for control in part["outside_controls"]]}
                               for part in run.parts if part["id"] in requested]},
     }
     request = {"role": "review", "run_id": run.run_id, "request_id": request_id,
