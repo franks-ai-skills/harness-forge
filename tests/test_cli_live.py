@@ -446,6 +446,12 @@ class LiveCommandsTest(unittest.TestCase):
         self.assertEqual(code, 0, stderr)
         _, state = contract()
         self.assertEqual((state["accepted"], state["deep_research"]), ("current", "current"))
+        record = self.root / ".harness/research/repro.md"
+        kept = record.rename(record.with_name("repro.kept"))
+        _, state = contract()
+        self.assertEqual((state["accepted"], state["deep_research"]), ("current", "none"))
+        self.assertTrue(state["next"].startswith("nothing"), "build and verify accept current requirements")
+        kept.rename(record)
 
         text = Path(self.decision).read_text(encoding="utf-8")
         Path(self.decision).write_text(text.replace("goal: Write a reproduction checklist when asked",

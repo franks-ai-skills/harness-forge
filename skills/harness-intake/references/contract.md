@@ -35,9 +35,9 @@ accepted requirements (`accepted`) and its deep research
 (`deep_research`) are for the part's current brief. `stale` means the
 requirements were accepted for an earlier brief: the idea's goals,
 picture, targets or reach, or the part's goal, answers or mechanism
-changed since. Show each entry whose fields are not both `current`
-with its `next`, unchanged, and say that build and verify refuse the
-part until that is done. Research is not part of the contract: confirming it
+changed since. Show each entry whose `accepted` is not `current` with
+its `next`, unchanged, and say that build and verify refuse the part
+until that is done. Research is not part of the contract: confirming it
 starts no research, and the deep pass and acceptance come after the
 confirmation.
 
