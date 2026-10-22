@@ -36,6 +36,8 @@ class ReviewReplies(ScriptedRunner):
         output = json.loads(json.loads(answer.stdout.splitlines()[-1])["result"])
         if plan == "duplicate":
             output["verdicts"].append(dict(output["verdicts"][0]))
+        elif plan == "duplicate-surrogate":
+            output["verdicts"].append({**output["verdicts"][0], "reason": "\ud800"})
         elif plan == "unknown":
             output["verdicts"][0] = {**output["verdicts"][0], "rule_id": "skills.no-such-rule"}
         elif plan == "write":
@@ -123,6 +125,14 @@ class ReviewRetryTest(unittest.TestCase):
         self.assertEqual(runner.roles.count("review"), 1)
         self.assertEqual(run.review_attempts, [])
         self.assertNotIn("review_attempts", report_data(run, [part]))
+
+    def test_a_rejected_reply_with_text_that_is_not_unicode_is_kept_and_retried(self):
+        diagnostics = Diagnostics(Path(self.home.name))
+        run, part = self.verify(ReviewReplies("duplicate-surrogate", "ok"), diagnostics)
+        self.assertEqual(part.harness_result, "verified", part.rule_results)
+        self.assertEqual([a["outcome"] for a in run.review_attempts], ["rejected", "accepted"])
+        kept = json.loads((diagnostics.directory / "review" / "attempt-1" / "launch.json").read_text(encoding="utf-8"))
+        self.assertEqual(kept["output"]["verdicts"][-1]["reason"], "\ud800")
 
     def test_diagnostics_that_cannot_be_written_never_change_the_verdicts(self):
         blocked = Path(self.home.name) / "file"

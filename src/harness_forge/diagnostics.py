@@ -60,7 +60,8 @@ class Diagnostics:
                 (target / "stdout.txt").write_text(completed.stdout, encoding="utf-8", errors="replace")
                 (target / "stderr.txt").write_text(completed.stderr, encoding="utf-8", errors="replace")
                 launch = {**launch, "returncode": completed.returncode, "timed_out": completed.timed_out}
+            # A lone surrogate in worker output stays readable as its JSON escape instead of failing the write.
             (target / "launch.json").write_text(json.dumps(launch, indent=2, ensure_ascii=False, default=str),
-                                                encoding="utf-8")
-        except OSError as error:
+                                                encoding="utf-8", errors="backslashreplace")
+        except (OSError, ValueError) as error:
             self.problems.append(f"{kind}/{name}: {error}")
