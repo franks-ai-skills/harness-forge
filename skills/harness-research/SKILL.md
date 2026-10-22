@@ -62,7 +62,9 @@ root, which downloads Forge's pinned packages from PyPI once.
 4. **Check every finding.** Run `scripts/forge.py research --decision
    <record> --root <repository> --pass survey|deep [--part <id>]
    --harness <this harness> --evidence <workers output> --relay <relay>
-   --slug <slug> --write`. It launches the research worker, fetches each
+   --slug <slug> --write`, adding `--revision
+   .harness/research/<slug>.rules.yaml` once the decision records
+   accepted requirements. It launches the research worker, fetches each
    cited source itself, launches a fresh source-support worker per quoted
    finding and keeps only findings that pass both checks. Show the dropped
    ones and why. What the workers' isolation does not guarantee is in
@@ -85,6 +87,19 @@ root, which downloads Forge's pinned packages from PyPI once.
    `dropped_parts`: requirements of parts the decision no longer has,
    or, when an older revision named no single part, every other part it
    held. Tell the user, and accept each remaining dropped part again.
+   When `accept` refuses a requirement the user accepted before because
+   a new deep pass lost its source, do not run the whole pass again: run
+   `scripts/forge.py research --decision <record> --root <repository>
+   --pass deep --part <id> --recheck --revision
+   .harness/research/<slug>.rules.yaml --harness <this harness>
+   --evidence <workers output> --relay <relay> --slug <slug> --write`.
+   It checks only the lost sources of that part's accepted requirements
+   and keeps the pass's other findings. Show each requirement's kind and statement
+   beside the findings bound to it, marked as untrusted, and the sources
+   that stayed unsupported. `re_supported` means only that every source
+   has a kept finding again; whether the findings justify the
+   requirement is the user's choice, so ask to accept, edit or reject it
+   again.
 6. **Incompatible goal.** If the deep pass shows the chosen mechanism
    cannot meet the part's goal, stop and return to harness-intake with a
    concrete alternative instead of building.

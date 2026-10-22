@@ -51,7 +51,8 @@ from harness_forge.research import (  # noqa: E402
     _BLOCKING_DRIFT, UNTRUSTED_NOTE, _catalog, accept_requirements, drift_category, drift_digest, drift_state, finding_problem,
     load_research, load_revision, source_rejection,
     make_brief, merge_revision,
-    UnassignedRevision, dangling_drift, record_drift, supported_findings, write_research, write_revision,
+    UnassignedRevision, dangling_drift, provenance_sources, recheck_targets, record_drift, write_research,
+    write_revision,
 )
 from harness_forge.runtime import load_cases  # noqa: E402
 from harness_forge.workflow import research_pass, verify_live  # noqa: E402
@@ -877,15 +878,18 @@ def _research(arguments: argparse.Namespace) -> int:
     if part_id is None and unconfirmed:
         raise _InvalidInput(f"the survey brief holds part {', '.join(unconfirmed)}, which is not confirmed in this "
                             "session; confirm every part before the survey")
+    targets = _recheck_targets(decision, existing, revision, part_id) if arguments.recheck else None
     try:
         result = research_pass(decision, arguments.pass_name, part_id, arguments.harness, **approval,
                                run_id=approval["confirmation"].run_id, runner=RUNNER, environ=_environ(), fetch=FETCH,
-                               login_answer=arguments.login_answer,
+                               login_answer=arguments.login_answer, recheck=targets,
                                # Every id the record ever issued, dropped findings' support entries included.
                                existing_ids=list(dict.fromkeys([finding["id"] for finding in existing["findings"]]
                                                                + [entry["finding_id"] for entry in existing["support"]])))
     except ValueError as error:
         raise _InvalidInput(str(error)) from error
+    if targets is not None:
+        return _recheck(arguments, root, existing, targets, result)
     written = None
     if arguments.write and result["status"] == "completed":
         same = lambda brief: (brief["pass"], brief["part_id"]) == (arguments.pass_name, part_id)  # noqa: E731
@@ -906,6 +910,51 @@ def _research(arguments: argparse.Namespace) -> int:
     return 0 if result["status"] == "completed" else 1
 
 
+def _has_deep_brief(record: dict | None, part_id: str, brief: str) -> bool:
+    return record is not None and any(item["pass"] == "deep" and item["part_id"] == part_id and item["digest"] == brief
+                                      for item in record["briefs"])
+
+
+def _recheck_targets(decision: Decision, existing: dict, revision, part_id: str | None) -> list[dict]:
+    """The recorded requirements of the part whose sources its current deep research no longer supports."""
+    if part_id is None:
+        raise _InvalidInput("--recheck needs --pass deep and --part")
+    if revision is None or not any(entry["part_id"] == part_id for entry in revision.rules):
+        raise _InvalidInput(f"there are no accepted requirements of part {part_id} to re-check")
+    brief = make_brief(decision, "deep", part_id).digest
+    if not _has_deep_brief(existing, part_id, brief):
+        raise _InvalidInput(f"there is no deep research for part {part_id} under its current brief; run the deep "
+                            "pass before re-checking its earlier requirements")
+    targets = recheck_targets(revision, part_id, provenance_sources(existing, part_id, brief))
+    if not targets:
+        raise _InvalidInput(f"every source of part {part_id}'s accepted requirements has a kept finding of its current "
+                            "deep research; there is nothing to re-check")
+    return targets
+
+
+def _recheck(arguments: argparse.Namespace, root: Path, existing: dict, targets: list[dict], result: dict) -> int:
+    """A re-check's findings join the part's current deep research; the revision changes only through accept."""
+    record = {**existing, "findings": existing["findings"] + result["kept"],
+              "support": existing["support"] + result["support"]}
+    written = None
+    if arguments.write and result["status"] == "completed":
+        body = "Findings grouped by pass and part are in the frontmatter; dropped findings are not kept.\n"
+        written = str(write_research(root, record, body))
+    sources = provenance_sources(record, arguments.part, result["brief"]["digest"])
+    kept = [{"id": f["id"], "requirement_id": result["bindings"][f["id"]], "source": f["source"], "claim": f["claim"],
+             "quote": f["quote"]} for f in result["kept"]]
+    # Source-level, as accept checks it; whether the findings justify the requirement is the user's choice.
+    summary = [{"requirement_id": target["requirement_id"], "kind": target["kind"], "statement": target["statement"],
+                "re_supported": all(source in sources for source in target["sources"]),
+                "sources": [{"source": source, "findings": [item for item in kept if item["source"] == source]}
+                            for source in target["sources"]]}
+               for target in targets]
+    emit({"command": "research", "status": result["status"], "reason": result["reason"],
+          "brief_digest": result["brief"]["digest"], "untrusted": UNTRUSTED_NOTE, "recheck": summary,
+          "dropped": result["dropped"], "worker_evidence": result["worker_evidence"], "written": written})
+    return 0 if result["status"] == "completed" else 1
+
+
 def _provenance_problem(root: Path, slug: str, part_id: str, brief: str, accepted) -> str | None:
     """Accepted requirements rest on the part's current deep research: its brief, and its kept findings' sources."""
     path = root / ".harness" / "research" / f"{slug}.md"
@@ -913,20 +962,16 @@ def _provenance_problem(root: Path, slug: str, part_id: str, brief: str, accepte
         record = load_research(path, root=root) if path.is_file() else None
     except ValueError as error:
         return str(error)
-    if record is None or not any(item["pass"] == "deep" and item["part_id"] == part_id and item["digest"] == brief
-                                 for item in record["briefs"]):
+    if not _has_deep_brief(record, part_id, brief):
         return (f"there is no deep research for part {part_id} under its current brief; run the deep pass before "
                 "accepting its requirements, even none")
-    supported = supported_findings(record)
-    # Only findings of this brief that passed both checks, and that the source policy still allows.
-    sources = {finding["source"] for finding in record["findings"]
-               if finding["pass"] == "deep" and finding["part_id"] == part_id and finding["brief_digest"] == brief
-               and finding["id"] in supported and source_rejection(finding["source"]) is None}
+    sources = provenance_sources(record, part_id, brief)
     for entry in accepted.rules:
         for source in entry["rule"]["sources"]:
             if source not in sources:
                 return (f"{entry['rule']['id']} cites {source}, which no kept finding of part {part_id}'s deep "
-                        "research has")
+                        "research has; if the user accepted it before, `research --recheck` checks its lost "
+                        "sources again")
     return None
 
 
@@ -1466,6 +1511,8 @@ def build_parser() -> argparse.ArgumentParser:
     research.add_argument("--part", help="the part of a deep pass")
     research.add_argument("--slug", required=True)
     research.add_argument("--write", action="store_true", help="merge into .harness/research/<slug>.md")
+    research.add_argument("--recheck", action="store_true",
+                          help="deep pass: check only the lost sources of the part's accepted requirements again")
     research.set_defaults(handler=_research)
     accept.add_argument("--part", required=True)
     accept.add_argument("--proposed", required=True, help="JSON with the proposed requirements as idea rules")

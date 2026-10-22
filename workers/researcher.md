@@ -36,6 +36,16 @@ do not research it, and do not cite harness documentation for it.
   check its fit, license and maintenance state too. Propose each requirement as a
   rule with id `idea.<slug>.<part>.<name>`, `check: judged`, or
   `check: script` with a checker id from the brief's checker list.
+- **Re-check,** when `inputs` hold `recheck`: research nothing else.
+  Each entry is a requirement the user accepted earlier (its id, kind and
+  statement) with the sources it lost. Fetch each listed source and
+  return findings from that page about the requirement's subject, each
+  with `"requirement_id"` set to the entry's id and `source` set to one
+  of that entry's sources. A `must-not` statement names the forbidden
+  behavior; a source rarely states it, so quote what the page says on
+  that subject instead. Return no finding for a source that says
+  nothing on it. Forge drops any finding for another requirement or
+  source before it fetches anything.
 
 ## Source rules
 

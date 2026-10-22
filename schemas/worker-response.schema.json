@@ -120,6 +120,11 @@
                         "practitioner",
                         "trade-press"
                       ]
+                    },
+                    "requirement_id": {
+                      "description": "In a re-check only: the requirement whose lost source this finding checks.",
+                      "type": "string",
+                      "maxLength": 200
                     }
                   },
                   "additionalProperties": false,
