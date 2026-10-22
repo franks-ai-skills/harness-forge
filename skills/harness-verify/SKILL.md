@@ -28,13 +28,10 @@ root, which downloads Forge's pinned packages from PyPI once.
 - **Scripts decide first and cannot be overruled.** The review worker
   judges only the rules the run requests; it never sees or changes
   script results.
-- **Verified has a narrow meaning:** every applicable rule has a result,
-  no error rule failed or stayed unresolved, no goal conflict or open
-  security or compatibility drift remains, the goal verdict is met,
-  executed runtime tests passed, a built skill's explicit activation was
-  observed, and no bound input changed. It never
-  means outside controls are configured, and it never certifies worker
-  isolation; the report always says `not-certified`.
+- **Verified has a narrow meaning.** Read
+  [references/contract.md](references/contract.md) before explaining a
+  result. It never means outside controls are configured, and it never
+  certifies worker isolation; the report always says `not-certified`.
 - **Runtime tests are reported separately.** Without them the report
   says `none run`; an unavailable test is listed with its reason and
   never counts as a pass. Codex reports no inventory of the skills,
