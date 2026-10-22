@@ -42,6 +42,9 @@ def report_data(run: VerificationRun, results: list[PartResult]) -> dict:
         data["part_map"]["dependencies"] = dict(run.part_dependencies)
     if run.part_dependency_roots:
         data["part_map"]["dependency_roots"] = dict(run.part_dependency_roots)
+    # Only a run whose first review reply was rejected records its attempts.
+    if run.review_attempts:
+        data["review_attempts"] = [dict(attempt) for attempt in run.review_attempts]
     validate(data, "report")
     return data
 
@@ -78,6 +81,12 @@ def render_report(run: VerificationRun, results: list[PartResult]) -> str:
                          f"unknowns: {'; '.join(evidence['unknowns']) or 'none recorded'}")
     else:
         lines.append("- No worker ran in this run.")
+    for attempt in run.review_attempts:
+        if attempt["outcome"] == "rejected":
+            lines.append(f"- Review reply {attempt['attempt']} was rejected"
+                         + (" and the review ran once more" if attempt["attempt"] == 1 else "")
+                         + f": {_one_line(attempt['error'])}. The rejected reply is kept with the run's diagnostics, "
+                         "not in this report.")
     for violation in run.worker_violations:
         lines.append(f"- Observed out-of-scope action: {violation}. Its output was discarded.")
     lines.append("")

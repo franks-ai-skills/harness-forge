@@ -230,6 +230,7 @@ class VerificationRun:
     worker_evidence: list[dict] = field(default_factory=list)
     approved_workers: tuple[str, ...] = ()  # digests of approved configurations; immutable
     worker_violations: list[str] = field(default_factory=list)
+    review_attempts: list[dict] = field(default_factory=list)  # set only when a review reply was rejected
     kb_version: str = ""
     scope: str = "Extensive review (rarely needed)"
     tool_versions: dict[str, str] = field(default_factory=dict)
