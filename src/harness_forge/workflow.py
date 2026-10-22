@@ -32,6 +32,17 @@ def _next_ids(existing: list[str], count: int) -> list[str]:
     return [f"F{start + offset}" for offset in range(count)]
 
 
+def _binding_problem(requirement_id: str | None, source: str, lost: dict[str, list[str]]) -> str | None:
+    """Why a re-check finding does not check a lost source of the requirement it names, if it does not."""
+    if requirement_id is None:
+        return "the re-check finding names no requirement"
+    if requirement_id not in lost:
+        return f"{requirement_id} is not a requirement to re-check"
+    if source not in lost[requirement_id]:
+        return f"{source} is not a source {requirement_id} lost"
+    return None
+
+
 def _brief_problem(brief, contract: Contract) -> bool:
     """Whether the brief holds anything other than the confirmed contract shows."""
     content = contract.content
@@ -48,6 +59,7 @@ def research_pass(
     confirmation: Confirmation | None, worker_evidence: list[dict] | tuple, run_id: str,
     runner: Runner = run_command, environ: Mapping[str, str] | None = None,
     fetch: Callable[[str], str] = fetch_text, login_answer: str | None = None, existing_ids: list[str] | tuple = (),
+    recheck: list[dict] | None = None,
 ) -> dict:
     """One pass: the research worker, Forge's own fetch and quote check, then a support worker per quoted finding.
 
@@ -55,6 +67,10 @@ def research_pass(
     one record, and adds the pass, part and brief digest it sent.
     A support worker runs only for findings whose quote the page contains;
     sources the policy rejects are never fetched.
+    ``recheck`` limits a deep pass to earlier requirements' lost sources:
+    each finding must name one of those requirements and one of its lost
+    sources, or it is dropped before any fetch. ``bindings`` maps each
+    finding that passed this filter to its requirement.
     """
     environ = os.environ if environ is None else environ
     brief = make_brief(decision, pass_name, part_id)
@@ -69,15 +85,26 @@ def research_pass(
                          "or a part's goal, answers or mechanism; confirm the current contract")
     approval = {"contract": contract, "confirmation": confirmation, "worker_evidence": worker_evidence,
                 "runner": runner, "environ": environ, "login_answer": login_answer}
-    request = research_request(brief, run_id, f"{pass_name}-{(part_id or 'idea').lower()}")
+    request = research_request(brief, run_id, f"{'recheck' if recheck else pass_name}-{(part_id or 'idea').lower()}",
+                               recheck)
     response = run_worker(request, harness, **approval)
     result = {"status": response["status"], "reason": response.get("reason"),
               "brief": {"pass": pass_name, "part_id": part_id, "digest": brief.digest},
-              "kept": [], "dropped": [], "support": [], "worker_evidence": [response["evidence"]]}
+              "kept": [], "dropped": [], "support": [], "bindings": {}, "worker_evidence": [response["evidence"]]}
     if response["status"] != "completed":
         return result
+    lost = {target["requirement_id"]: target["sources"] for target in recheck or []}
     raw = response["output"]["findings"]
     for item, new_id in zip(raw, _next_ids(list(existing_ids), len(raw))):
+        item = dict(item)
+        requirement_id = item.pop("requirement_id", None)
+        binding_problem = _binding_problem(requirement_id, item["source"], lost) if recheck else (
+            "only a re-check binds findings to requirements" if requirement_id is not None else None)
+        if binding_problem:
+            result["dropped"].append({"id": new_id, "reason": binding_problem})
+            continue
+        if recheck:
+            result["bindings"][new_id] = requirement_id
         finding = worker_finding(item, brief, new_id)
         try:
             canonical_json(finding.to_dict())

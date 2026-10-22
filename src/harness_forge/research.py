@@ -75,9 +75,11 @@ def make_brief(decision: Decision, pass_name: str, part_id: str | None) -> Resea
     return ResearchBrief(pass_name=pass_name, part_id=part_id, content=content, digest=canonical_digest(content))
 
 
-def research_request(brief: ResearchBrief, run_id: str, request_id: str) -> dict:
-    """The research worker's request: the approved brief and nothing else."""
+def research_request(brief: ResearchBrief, run_id: str, request_id: str, recheck: list[dict] | None = None) -> dict:
+    """The research worker's request: the approved brief and, for a re-check, the requirements' lost sources."""
     inputs = {"pass": brief.pass_name, "part_id": brief.part_id, "brief": brief.content, "brief_digest": brief.digest}
+    if recheck:
+        inputs["recheck"] = recheck
     request = {"role": "research", "run_id": run_id, "request_id": request_id,
                "input_digest": canonical_digest(inputs), "inputs": inputs}
     validate(request, "worker-request")
@@ -413,6 +415,29 @@ def supported_findings(record: dict) -> dict[str, dict]:
     return {entry["finding_id"]: findings[entry["finding_id"]] for entry in record["support"]
             if entry["quote_check"] == "pass" and entry["verdict"] == "supported" and entry["finding_id"] in findings
             and entry.get("finding_digest") == canonical_digest(findings[entry["finding_id"]])}
+
+
+def provenance_sources(record: dict, part_id: str, brief: str) -> set[str]:
+    """Sources that give a part's requirements provenance: kept findings of its current deep brief.
+
+    Only findings that passed both checks and whose source the policy still allows.
+    """
+    supported = supported_findings(record)
+    return {finding["source"] for finding in record["findings"]
+            if finding["pass"] == "deep" and finding["part_id"] == part_id and finding["brief_digest"] == brief
+            and finding["id"] in supported and source_rejection(finding["source"]) is None}
+
+
+def recheck_targets(revision: AcceptedRevision, part_id: str, sources: set[str]) -> list[dict]:
+    """A part's accepted requirements whose sources lack provenance, each with only the sources it lost."""
+    targets = []
+    for entry in revision.rules:
+        rule = entry["rule"]
+        lost = [source for source in rule["sources"] if source not in sources]
+        if entry["part_id"] == part_id and lost:
+            targets.append({"requirement_id": rule["id"], "kind": rule["kind"], "statement": rule["statement"],
+                            "sources": lost})
+    return targets
 
 
 def _check_record(record: dict, where: str) -> None:
