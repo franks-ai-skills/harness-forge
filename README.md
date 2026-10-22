@@ -12,10 +12,12 @@ Status: version 0.1.0, published on 2026-10-16 together with its
 knowledge base, [agent-harness-kb](https://github.com/franks-ai-skills/agent-harness-kb).
 The workflow passes its
 automated live runs in Claude Code and Codex from a local checkout. The
-installation procedures below were tested in throwaway locations, and an
-installed copy ran the whole workflow in Claude Code; runs from an
-installed plugin in Codex follow with the reference runs. No harness is
-supported for general use yet.
+installation procedures below were tested in throwaway locations. An
+installed copy ran the whole workflow in Claude Code. Codex ran its
+reference sessions on 2026-10-18 from the plugin installed from a local
+marketplace, and their re-verification on 2026-10-21 from a checkout,
+because the installed copy was out of date. No harness is supported for
+general use yet.
 
 ## Installation
 
@@ -306,8 +308,9 @@ session rollout in `$CODEX_HOME/sessions` (default `~/.codex/sessions`),
 credits "instructions injected" when Codex recorded the candidate's
 exact `SKILL.md`, and deletes the file. It reads no other session file.
 This shows that the instructions reached the model, not that the
-procedure ran. It is off by default, no test or reference case depends
-on it, and it will be removed.
+procedure ran. It is off by default; only the 2026-10-21 Codex
+re-verification of the bug-intake reference used it, and it will be
+removed.
 
 ## Outside controls
 
