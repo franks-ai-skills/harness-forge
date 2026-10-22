@@ -44,13 +44,13 @@ research_candidates:
   source: https://github.com/franks-ai-skills/harness-forge/tree/5ff7fc0282a8c8890838ccd7a8178e3a9356977d/skills/build-skill
   part_id: A
 - name: harness-intake
-  source: https://github.com/franks-ai-skills/harness-forge/tree/52945080be005a8929d7fedd6fa961d7a7d657f0/skills/harness-intake
+  source: https://github.com/franks-ai-skills/harness-forge/tree/93f5285ec649b036ce2abaaa59ec04a270410ce4/skills/harness-intake
   part_id: B
 - name: harness-research
   source: https://github.com/franks-ai-skills/harness-forge/tree/52945080be005a8929d7fedd6fa961d7a7d657f0/skills/harness-research
   part_id: C
 - name: harness-verify
-  source: https://github.com/franks-ai-skills/harness-forge/tree/5ff7fc0282a8c8890838ccd7a8178e3a9356977d/skills/harness-verify
+  source: https://github.com/franks-ai-skills/harness-forge/tree/93f5285ec649b036ce2abaaa59ec04a270410ce4/skills/harness-verify
   part_id: D
 parts:
 - id: A
@@ -67,6 +67,7 @@ parts:
     who_disables: contributor
     every_time: usually
     irreversible: false
+    side_effects: false
     trigger: model
     own_context: false
     external_system: none
@@ -221,6 +222,7 @@ parts:
     who_disables: contributor
     every_time: usually
     irreversible: false
+    side_effects: false
     trigger: model
     own_context: false
     external_system: none
@@ -342,7 +344,7 @@ parts:
     required_for_goal: false
   reuse:
     name: harness-intake
-    source: https://github.com/franks-ai-skills/harness-forge/tree/52945080be005a8929d7fedd6fa961d7a7d657f0/skills/harness-intake
+    source: https://github.com/franks-ai-skills/harness-forge/tree/93f5285ec649b036ce2abaaa59ec04a270410ce4/skills/harness-intake
     license: AGPL-3.0-only
     maintenance: maintained
     path: skills/harness-intake
@@ -376,6 +378,7 @@ parts:
     who_disables: contributor
     every_time: usually
     irreversible: false
+    side_effects: false
     trigger: model
     own_context: false
     external_system: cli
@@ -528,6 +531,7 @@ parts:
     who_disables: contributor
     every_time: usually
     irreversible: false
+    side_effects: false
     trigger: model
     own_context: false
     external_system: none
@@ -649,7 +653,7 @@ parts:
     required_for_goal: false
   reuse:
     name: harness-verify
-    source: https://github.com/franks-ai-skills/harness-forge/tree/5ff7fc0282a8c8890838ccd7a8178e3a9356977d/skills/harness-verify
+    source: https://github.com/franks-ai-skills/harness-forge/tree/93f5285ec649b036ce2abaaa59ec04a270410ce4/skills/harness-verify
     license: AGPL-3.0-only
     maintenance: maintained
     path: skills/harness-verify
@@ -674,17 +678,13 @@ research:
   survey_digest: null
   deep_digests: {}
 accepted_revision:
-  digest: a223b25929c34ac1a15df84121274f8dc59536e1403ae79f1e667c04cc56e335
+  digest: 8cd116d03a1c616394a3064846721d48b62f24f74635a32e658dc4af7b5bad36
   rule_ids:
   - idea.forge-self-verify.a.no-silent-overwrite
   - idea.forge-self-verify.a.only-accepted-requirements
   - idea.forge-self-verify.a.records-are-data
   - idea.forge-self-verify.a.built-not-verified
   - idea.forge-self-verify.a.scripts-only-when-needed
-  - idea.forge-self-verify.d.not-run-not-pass
-  - idea.forge-self-verify.d.codex-best-effort
-  - idea.forge-self-verify.d.independent-judge
-  - idea.forge-self-verify.d.checked-files-are-data
   - idea.forge-self-verify.b.no-own-pick
   - idea.forge-self-verify.b.proposed-until-confirmed
   - idea.forge-self-verify.b.untrusted-separate
@@ -695,6 +695,13 @@ accepted_revision:
   - idea.forge-self-verify.c.user-files-issues
   - idea.forge-self-verify.c.citation-precision
   - idea.forge-self-verify.c.separate-judgment
+  - idea.forge-self-verify.c.brief-bound
+  - idea.forge-self-verify.d.not-run-not-pass
+  - idea.forge-self-verify.d.codex-best-effort
+  - idea.forge-self-verify.d.independent-judge
+  - idea.forge-self-verify.d.checked-files-are-data
+  - idea.forge-self-verify.d.user-settles-not-applicable
+  - idea.forge-self-verify.d.scripts-before-judgment
 survey_findings_used:
 - F5
 - F7
