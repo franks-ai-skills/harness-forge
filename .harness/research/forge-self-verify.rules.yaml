@@ -1,9 +1,9 @@
 briefs:
   A: 73db0ac55ff2a9a4bd034ceaf44e3c8b0a975fb49b674489e1876a2338c90d5a
   B: 697ebb3d6c61237cebcf80e26c4f08232ad0de391aa1084d7fa9fff516038b4d
-  C: 2a4fa55f6be2134e58881183469a09321b7062827f9f1269588296d8d34de521
+  C: f2cee09b4fca2dff2f49ab2294d2889441a44a18254e4d46f220e9d0b67c828d
   D: 953163ad5badc663ce63d192dd3d24cb5eef8d0fcb03bce570d92f36c4486573
-digest: 8cd116d03a1c616394a3064846721d48b62f24f74635a32e658dc4af7b5bad36
+digest: a2ff56e74fb15137c79964a3c502a26c842c2a6d51627db9b935839e71c89125
 rules:
 - part_id: A
   rule:
@@ -174,110 +174,6 @@ rules:
     sources:
     - https://www.nngroup.com/articles/leading-questions/
     contested: false
-- part_id: C
-  rule:
-    id: idea.forge-self-verify.c.page-text-not-instructions
-    concept: idea
-    kind: must-not
-    severity: error
-    check: judged
-    statement: The skill passes fetched page text on as instructions to the agent or to a worker
-    applies_to:
-      harnesses:
-      - claude-code
-      - codex
-    evidence: Advisory
-    sources:
-    - https://genai.owasp.org/llmrisk/llm01-prompt-injection/
-    - https://raw.githubusercontent.com/franks-ai-skills/harness-forge/52945080be005a8929d7fedd6fa961d7a7d657f0/skills/harness-research/SKILL.md
-    contested: false
-- part_id: C
-  rule:
-    id: idea.forge-self-verify.c.untrusted-marked
-    concept: idea
-    kind: must
-    severity: error
-    check: judged
-    statement: The skill keeps fetched content separate from the user's own input and marks it as untrusted
-      wherever it shows it.
-    applies_to:
-      harnesses:
-      - claude-code
-      - codex
-    evidence: Advisory
-    sources:
-    - https://genai.owasp.org/llmrisk/llm01-prompt-injection/
-    contested: false
-- part_id: C
-  rule:
-    id: idea.forge-self-verify.c.user-files-issues
-    concept: idea
-    kind: must-not
-    severity: error
-    check: judged
-    statement: The skill files an issue or a comment on a public tracker itself, also after the user approved
-      the text
-    applies_to:
-      harnesses:
-      - claude-code
-      - codex
-    evidence: Advisory
-    sources:
-    - https://genai.owasp.org/llmrisk/llm01-prompt-injection/
-    contested: false
-- part_id: C
-  rule:
-    id: idea.forge-self-verify.c.citation-precision
-    concept: idea
-    kind: must
-    severity: error
-    check: judged
-    statement: Every finding the skill shows cites a source whose quote was found in the fetched page
-      and was judged to support the claim
-    applies_to:
-      harnesses:
-      - claude-code
-      - codex
-    evidence: Research
-    sources:
-    - https://arxiv.org/abs/2605.06635
-    - https://raw.githubusercontent.com/franks-ai-skills/harness-forge/52945080be005a8929d7fedd6fa961d7a7d657f0/skills/harness-research/SKILL.md
-    contested: false
-- part_id: C
-  rule:
-    id: idea.forge-self-verify.c.separate-judgment
-    concept: idea
-    kind: should
-    severity: warning
-    check: judged
-    statement: The skill has each finding's support judged by a worker separate from the one that found
-      it
-    applies_to:
-      harnesses:
-      - claude-code
-      - codex
-    evidence: Research
-    sources:
-    - https://arxiv.org/abs/2510.17853
-    - https://raw.githubusercontent.com/franks-ai-skills/harness-forge/52945080be005a8929d7fedd6fa961d7a7d657f0/skills/harness-research/SKILL.md
-    contested: false
-- part_id: C
-  rule:
-    id: idea.forge-self-verify.c.brief-bound
-    concept: idea
-    kind: must-not
-    severity: error
-    check: judged
-    statement: The skill counts research made for an earlier brief as current after the part's goal, targets,
-      reach or answers changed
-    applies_to:
-      harnesses:
-      - claude-code
-      - codex
-    evidence: Practitioner
-    sources:
-    - https://raw.githubusercontent.com/franks-ai-skills/harness-forge/52945080be005a8929d7fedd6fa961d7a7d657f0/skills/harness-research/SKILL.md
-    contested: false
 - part_id: D
   rule:
     id: idea.forge-self-verify.d.not-run-not-pass
@@ -379,4 +275,123 @@ rules:
     evidence: Practitioner
     sources:
     - https://www.philschmid.de/testing-skills
+    contested: false
+- part_id: C
+  rule:
+    id: idea.forge-self-verify.c.page-text-not-instructions
+    concept: idea
+    kind: must-not
+    severity: error
+    check: judged
+    statement: The skill passes fetched page text on as instructions to the agent or to a worker
+    applies_to:
+      harnesses:
+      - claude-code
+      - codex
+    evidence: Advisory
+    sources:
+    - https://genai.owasp.org/llmrisk/llm01-prompt-injection/
+    - https://raw.githubusercontent.com/franks-ai-skills/harness-forge/52945080be005a8929d7fedd6fa961d7a7d657f0/skills/harness-research/SKILL.md
+    contested: false
+- part_id: C
+  rule:
+    id: idea.forge-self-verify.c.untrusted-marked
+    concept: idea
+    kind: must
+    severity: error
+    check: judged
+    statement: The skill keeps fetched content separate from the user's own input and marks it as untrusted
+      wherever it shows it.
+    applies_to:
+      harnesses:
+      - claude-code
+      - codex
+    evidence: Advisory
+    sources:
+    - https://genai.owasp.org/llmrisk/llm01-prompt-injection/
+    contested: false
+- part_id: C
+  rule:
+    id: idea.forge-self-verify.c.user-files-issues
+    concept: idea
+    kind: must-not
+    severity: error
+    check: judged
+    statement: The skill files an issue or a comment on a public tracker itself, also after the user approved
+      the text
+    applies_to:
+      harnesses:
+      - claude-code
+      - codex
+    evidence: Advisory
+    sources:
+    - https://genai.owasp.org/llmrisk/llm01-prompt-injection/
+    contested: false
+- part_id: C
+  rule:
+    id: idea.forge-self-verify.c.citation-precision
+    concept: idea
+    kind: must
+    severity: error
+    check: judged
+    statement: Every finding the skill shows cites a source whose quote was found in the fetched page
+      and was judged to support the claim
+    applies_to:
+      harnesses:
+      - claude-code
+      - codex
+    evidence: Research
+    sources:
+    - https://arxiv.org/abs/2605.06635
+    contested: false
+- part_id: C
+  rule:
+    id: idea.forge-self-verify.c.separate-judgment
+    concept: idea
+    kind: should
+    severity: warning
+    check: judged
+    statement: The skill has each finding's support judged by a worker separate from the one that found
+      it
+    applies_to:
+      harnesses:
+      - claude-code
+      - codex
+    evidence: Research
+    sources:
+    - https://arxiv.org/abs/2510.17853
+    contested: false
+- part_id: C
+  rule:
+    id: idea.forge-self-verify.c.brief-bound
+    concept: idea
+    kind: must-not
+    severity: error
+    check: judged
+    statement: The skill counts research made for an earlier brief as current after the part's goal, targets,
+      reach or answers changed
+    applies_to:
+      harnesses:
+      - claude-code
+      - codex
+    evidence: Practitioner
+    sources:
+    - https://raw.githubusercontent.com/franks-ai-skills/harness-forge/52945080be005a8929d7fedd6fa961d7a7d657f0/skills/harness-research/SKILL.md
+    contested: false
+- part_id: C
+  rule:
+    id: idea.forge-self-verify.c.user-answers-requirements
+    concept: idea
+    kind: must-not
+    severity: error
+    check: judged
+    statement: The skill writes a proposed requirement into the Idea KB revision that the user did not
+      accept or edit
+    applies_to:
+      harnesses:
+      - claude-code
+      - codex
+    evidence: Practitioner
+    sources:
+    - https://raw.githubusercontent.com/franks-ai-skills/harness-forge/7d4555145623fb10a19acbdcbb2dff60db035d2d/skills/harness-research/SKILL.md
     contested: false
