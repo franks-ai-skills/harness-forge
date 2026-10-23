@@ -30,7 +30,7 @@ hosting:
   platform: github
   plan: free
   visibility: public
-kb_version: 0.1.0
+kb_version: 0.2.0
 facts:
   target_set: both
   reach: public
