@@ -78,12 +78,57 @@ class SnapshotPinTest(unittest.TestCase):
         self.kb = Path(self._directory.name) / "kb"
         shutil.copytree(FORGE / "tests" / "fixtures" / "minimal-kb", self.kb)
         (self.kb / "kb-manifest.json").write_text(json.dumps({"kb_version": "0.0.1", "migration": None}) + "\n")
+        (self.kb / "CHANGELOG.md").write_text("# Changelog\n\n## 0.0.1 (2026-10-23)\n\n- First.\n", encoding="utf-8")
         git(self.kb, "init", "-q")
-        git(self.kb, "add", ".")
-        git(self.kb, "-c", "user.name=t", "-c", "user.email=t@example.invalid", "commit", "-q", "-m", "kb")
+        self.commit("kb")
+        git(self.kb, "tag", "v0.0.1")
 
     def tearDown(self):
         self._directory.cleanup()
+
+    def commit(self, message: str) -> None:
+        git(self.kb, "add", ".")
+        git(self.kb, "-c", "user.name=t", "-c", "user.email=t@example.invalid", "-c", "commit.gpgsign=false",
+            "commit", "-q", "-m", message)
+
+    def assert_refused(self, message: str) -> None:
+        with self.assertRaisesRegex(ValueError, message):
+            self.tool.pin_snapshot(self.kb, Path(self._directory.name) / "refused")
+        self.assertFalse((Path(self._directory.name) / "refused").exists())
+
+    def test_annotated_release_tag_pins(self):
+        git(self.kb, "tag", "-d", "v0.0.1")
+        git(self.kb, "-c", "user.name=t", "-c", "user.email=t@example.invalid", "tag", "-a", "v0.0.1", "-m", "0.0.1")
+        manifest = self.tool.pin_snapshot(self.kb, Path(self._directory.name) / "one")
+        self.assertEqual((manifest["kb_version"], manifest["kb_commit"]), ("0.0.1", git(self.kb, "rev-parse", "HEAD").strip()))
+
+    def test_untagged_checkout_is_refused(self):
+        git(self.kb, "tag", "-d", "v0.0.1")
+        self.assert_refused(r"kb_version 0\.0\.1 has no release tag v0\.0\.1")
+
+    def test_tag_of_another_version_is_refused(self):
+        git(self.kb, "tag", "-d", "v0.0.1")
+        git(self.kb, "tag", "v0.0.2")
+        self.assert_refused(r"no release tag v0\.0\.1")
+
+    def test_commit_after_the_release_is_refused(self):
+        (self.kb / "README.md").write_text("# KB\n", encoding="utf-8")
+        self.commit("after the release")
+        self.assert_refused(r"HEAD [0-9a-f]{7} is not v0\.0\.1 \([0-9a-f]{7}\)")
+
+    def test_unfinished_changelog_section_is_refused(self):
+        git(self.kb, "tag", "-d", "v0.0.1")
+        (self.kb / "CHANGELOG.md").write_text("# Changelog\n\n## 0.0.1 (unreleased)\n\n- First.\n", encoding="utf-8")
+        self.commit("unreleased")
+        git(self.kb, "tag", "v0.0.1")
+        self.assert_refused(r"CHANGELOG\.md has no dated section '## 0\.0\.1 \(YYYY-MM-DD\)'")
+
+    def test_missing_changelog_is_refused(self):
+        git(self.kb, "tag", "-d", "v0.0.1")
+        git(self.kb, "rm", "-q", "CHANGELOG.md")
+        self.commit("no changelog")
+        git(self.kb, "tag", "v0.0.1")
+        self.assert_refused(r"has no committed CHANGELOG\.md")
 
     def test_pin_is_reproducible_from_the_same_commit(self):
         first = self.tool.pin_snapshot(self.kb, Path(self._directory.name) / "one")
@@ -96,8 +141,7 @@ class SnapshotPinTest(unittest.TestCase):
 
     def test_uncommitted_kb_changes_are_refused(self):
         (self.kb / "rules" / "skills.yaml").write_text("[]\n", encoding="utf-8")
-        with self.assertRaises(ValueError):
-            self.tool.pin_snapshot(self.kb, Path(self._directory.name) / "dirty")
+        self.assert_refused("uncommitted changes in the snapshot paths")
 
 
 class CoverageCompletenessTest(unittest.TestCase):

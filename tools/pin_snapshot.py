@@ -9,7 +9,9 @@
         the recorded inventory.
     python tools/pin_snapshot.py --pin --kb <KB> --out snapshot
         Copy the KB's committed docs, rules, schemas, policy, catalog and
-        fixtures into the snapshot with per-file hashes.
+        fixtures into the snapshot with per-file hashes. The KB checkout
+        must be a release: HEAD tagged v<kb_version>, with a dated
+        CHANGELOG.md section for that version.
 """
 
 from __future__ import annotations
@@ -114,14 +116,33 @@ def migrate(playground: Path, kb: Path) -> dict:
     }
 
 
+def check_release(kb: Path, version: str) -> None:
+    """Refuse a KB checkout whose HEAD is not the released version ``version`` (the KB's CHANGELOG.md policy)."""
+    tag = f"v{version}"
+    head = git(kb, "rev-parse", "HEAD").strip()
+    try:
+        released = git(kb, "rev-parse", "--verify", "--quiet", f"refs/tags/{tag}^{{commit}}").strip()
+    except ValueError:
+        raise ValueError(f"{kb}: kb_version {version} has no release tag {tag}; pin only a released KB version") from None
+    if released != head:
+        raise ValueError(f"{kb}: HEAD {head[:7]} is not {tag} ({released[:7]}); check out the release to pin it")
+    try:
+        changelog = git(kb, "show", "HEAD:CHANGELOG.md")
+    except ValueError:
+        raise ValueError(f"{kb}: {tag} has no committed CHANGELOG.md") from None
+    if not re.search(rf"^## {re.escape(version)} \(\d{{4}}-\d{{2}}-\d{{2}}\)$", changelog, re.M):
+        raise ValueError(f"{kb}: CHANGELOG.md has no dated section '## {version} (YYYY-MM-DD)' for {tag}")
+
+
 def pin_snapshot(kb: Path, destination: Path) -> dict:
-    """Copy the KB's committed snapshot paths and return their manifest."""
+    """Copy the snapshot paths of the KB release checked out at ``kb`` and return their manifest."""
     kb, destination = Path(kb), Path(destination)
     if git(kb, "status", "--porcelain", "--", *SNAPSHOT_PATHS).strip():
         raise ValueError(f"{kb} has uncommitted changes in the snapshot paths")
     if destination.exists() and any(destination.iterdir()):
         raise ValueError(f"{destination} is not empty")
     source_manifest = json.loads((kb / "kb-manifest.json").read_text(encoding="utf-8"))
+    check_release(kb, source_manifest["kb_version"])
     files = {}
     for relative in sorted(git(kb, "ls-files", "-z", "--", *SNAPSHOT_PATHS).split("\0")):
         if not relative or relative == "kb-manifest.json":
