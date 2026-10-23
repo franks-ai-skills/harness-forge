@@ -28,7 +28,6 @@ if str(ROOT / "src") not in sys.path:
 
 from harness_forge import environment  # noqa: E402
 
-MINIMUM_PYTHON = (3, 11)
 INSTALL_TIMEOUT = 600
 
 
@@ -96,8 +95,8 @@ def setup(root: Path, environ, *, run=_run, create=_create, wheelhouse: Path | N
     wheelhouse = Path(wheelhouse).absolute() if wheelhouse is not None else None
     if environment.complete(root, target):
         return {"ok": True, "existing": True, "environment": str(target)}
-    if sys.version_info < MINIMUM_PYTHON:
-        return _failure(target, f"Python {'.'.join(map(str, MINIMUM_PYTHON))} or newer is needed")
+    if sys.version_info < environment.MINIMUM_PYTHON:
+        return _failure(target, f"Python {'.'.join(map(str, environment.MINIMUM_PYTHON))} or newer is needed")
     lock = lock_path(target)
     try:
         target.parent.mkdir(parents=True, exist_ok=True)

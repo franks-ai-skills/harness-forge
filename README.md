@@ -70,7 +70,9 @@ when set; `%LOCALAPPDATA%\harness-forge` on Windows; `HARNESS_FORGE_HOME`
 overrides all three). It installs exactly the wheels pinned with hashes
 in `requirements.lock`, downloaded from PyPI once, and runs no build
 code. It changes no user configuration. Later `forge.py` commands switch
-to that environment by themselves. A plugin update with a new lock gets
+to that environment by themselves. If that environment stops working,
+for example after its Python was upgraded, `forge.py` names the setup
+command again, which rebuilds it. A plugin update with a new lock gets
 a new environment; delete the directory to remove it.
 
 Without network access, download the wheels elsewhere with
