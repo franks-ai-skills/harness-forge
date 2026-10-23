@@ -1,9 +1,9 @@
 briefs:
   A: 73db0ac55ff2a9a4bd034ceaf44e3c8b0a975fb49b674489e1876a2338c90d5a
   B: 697ebb3d6c61237cebcf80e26c4f08232ad0de391aa1084d7fa9fff516038b4d
-  C: f2cee09b4fca2dff2f49ab2294d2889441a44a18254e4d46f220e9d0b67c828d
+  C: d213eb08f63aee4921a32a907cc4100b810e6dc1b0ae8298d396cfe3971d66c5
   D: 953163ad5badc663ce63d192dd3d24cb5eef8d0fcb03bce570d92f36c4486573
-digest: a2ff56e74fb15137c79964a3c502a26c842c2a6d51627db9b935839e71c89125
+digest: d57c0a8922498e9adeb1d67a1ca1cc971c50bab9b63365dc64d13ae032ce4a1e
 rules:
 - part_id: A
   rule:
@@ -393,5 +393,22 @@ rules:
       - codex
     evidence: Practitioner
     sources:
-    - https://raw.githubusercontent.com/franks-ai-skills/harness-forge/7d4555145623fb10a19acbdcbb2dff60db035d2d/skills/harness-research/SKILL.md
+    - https://raw.githubusercontent.com/franks-ai-skills/harness-forge/8b9bb9111a81c77d8ea7fbd92346a93f1916726b/skills/harness-research/SKILL.md
+    contested: false
+- part_id: C
+  rule:
+    id: idea.forge-self-verify.c.validated-format
+    concept: idea
+    kind: should
+    severity: warning
+    check: judged
+    statement: The skill shows a worker's findings only after deterministic code checked that they follow
+      a fixed format naming each finding's source and quote
+    applies_to:
+      harnesses:
+      - claude-code
+      - codex
+    evidence: Advisory
+    sources:
+    - https://genai.owasp.org/llmrisk/llm01-prompt-injection/
     contested: false

@@ -47,7 +47,7 @@ research_candidates:
   source: https://github.com/franks-ai-skills/harness-forge/tree/93f5285ec649b036ce2abaaa59ec04a270410ce4/skills/harness-intake
   part_id: B
 - name: harness-research
-  source: https://github.com/franks-ai-skills/harness-forge/tree/7d4555145623fb10a19acbdcbb2dff60db035d2d/skills/harness-research
+  source: https://github.com/franks-ai-skills/harness-forge/tree/8b9bb9111a81c77d8ea7fbd92346a93f1916726b/skills/harness-research
   part_id: C
 - name: harness-verify
   source: https://github.com/franks-ai-skills/harness-forge/tree/93f5285ec649b036ce2abaaa59ec04a270410ce4/skills/harness-verify
@@ -498,7 +498,7 @@ parts:
     required_for_goal: false
   reuse:
     name: harness-research
-    source: https://github.com/franks-ai-skills/harness-forge/tree/7d4555145623fb10a19acbdcbb2dff60db035d2d/skills/harness-research
+    source: https://github.com/franks-ai-skills/harness-forge/tree/8b9bb9111a81c77d8ea7fbd92346a93f1916726b/skills/harness-research
     license: AGPL-3.0-only
     maintenance: maintained
     path: skills/harness-research
@@ -678,7 +678,7 @@ research:
   survey_digest: null
   deep_digests: {}
 accepted_revision:
-  digest: a2ff56e74fb15137c79964a3c502a26c842c2a6d51627db9b935839e71c89125
+  digest: d57c0a8922498e9adeb1d67a1ca1cc971c50bab9b63365dc64d13ae032ce4a1e
   rule_ids:
   - idea.forge-self-verify.a.no-silent-overwrite
   - idea.forge-self-verify.a.only-accepted-requirements
@@ -703,6 +703,7 @@ accepted_revision:
   - idea.forge-self-verify.c.separate-judgment
   - idea.forge-self-verify.c.brief-bound
   - idea.forge-self-verify.c.user-answers-requirements
+  - idea.forge-self-verify.c.validated-format
 survey_findings_used:
 - F5
 - F7
