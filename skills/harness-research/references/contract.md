@@ -1,14 +1,20 @@
 # Research workers and their limits
 
-Read this before launching research or source-support workers.
+Read this before telling the user what the research and source-support
+workers may do, what their isolation does not guarantee, or why
+`scripts/forge.py research` discarded a worker's output. The script
+launches and checks the workers; never launch one yourself or run one
+again with wider permissions.
 
-## Launching
+## How the script runs them
 
 Each worker is a new, independent CLI process of the user's harness, not a
-native subagent and not this conversation. Stage only its role request
-(`request.json`, also shown in its prompt, since research and support
-workers have no file tools) in an empty temporary directory, start it
-with the restrictions for its role, and read its single JSON output.
+native subagent and not this conversation. The script stages the worker's
+role request in a fresh temporary directory, adding the CLI's
+output-schema file where required. It also shows the request in the
+worker's prompt because research and support workers have no file tools.
+It starts the worker with its role's restrictions and reads its single
+JSON output.
 
 | Role | Allowed | Restricted to |
 | --- | --- | --- |
@@ -19,14 +25,14 @@ with the restrictions for its role, and read its single JSON output.
 
 Under Forge's `best-effort-v1` worker policy, these restrictions are
 configured, not certified: complete tool absence and context, file and
-network isolation are not guaranteed. Record each worker's configured
-controls, observed tools and unknowns as worker evidence. A worker that
-is seen acting outside its role fails its run, and its output is
+network isolation are not guaranteed. The script records each worker's
+configured controls, observed tools and unknowns as worker evidence. A
+worker seen acting outside its role fails its run, and its output is
 discarded. An unproven restriction alone does not fail the run.
 
-## Output handling
+## Discarded output
 
-Validate every response against Forge's worker-response schema before
-using it. Malformed output, a missing verdict, a duplicate or unknown
-finding id, or a verdict for another finding drops the affected finding;
-never retry with wider permissions.
+The script checks every response against Forge's worker-response schema.
+A research worker that fails or answers outside the schema yields no
+findings. A support reply that is malformed, has no verdict, holds a
+duplicate verdict or one for another finding drops its finding.
