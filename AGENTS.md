@@ -24,6 +24,16 @@ Run tests with the locked dependencies, as in
 `--require-hashes --only-binary :all:`, then
 `.venv/bin/python -m unittest discover -s tests -t . -v`.
 
+Pin the knowledge base only from a release: `tools/pin_snapshot.py
+--pin` refuses a KB checkout that is not the commit tagged
+`v<kb_version>`. Every Forge release raises the version in
+`.claude-plugin/plugin.json`, `plugin.json`,
+`.claude-plugin/marketplace.json` and `pyproject.toml` and adds a dated
+section to [CHANGELOG.md](CHANGELOG.md); installed copies stay on their
+cached version until it changes. After the merge, tag the merge commit
+`harness-forge--v<version>` and create a GitHub release from its
+changelog section. Never move a release tag.
+
 Changes reach `main` only through a pull request, merged with a merge
 commit (the only method this repository allows). Keep the PR
 description in step with what the PR contains. Merge only after the
