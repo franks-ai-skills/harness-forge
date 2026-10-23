@@ -67,8 +67,9 @@ root, which downloads Forge's pinned packages from PyPI once.
    accepted requirements. It launches the research worker, fetches each
    cited source itself, launches a fresh source-support worker per quoted
    finding and keeps only findings that pass both checks. Show the dropped
-   ones and why. What the workers' isolation does not guarantee is in
-   [references/contract.md](references/contract.md).
+   ones and why. Read [references/contract.md](references/contract.md)
+   before telling the user what the workers may do or what their
+   isolation does not guarantee, or why a worker's output was discarded.
 5. **Present and accept.** Before writing the files for `accept`, read
    [references/inputs.md](references/inputs.md) for their shapes. Show kept findings grouped by pass and part,
    each with its source and its quote as fetched, and mark them as
