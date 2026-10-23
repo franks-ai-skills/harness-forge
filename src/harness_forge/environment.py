@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import hashlib
 import os
+import subprocess
 import sys
 from pathlib import Path
 from typing import Mapping
@@ -24,6 +25,8 @@ HOME_VARIABLE = "HARNESS_FORGE_HOME"
 # Set when forge.py switches to the environment, so the switched process never switches again.
 ACTIVE_VARIABLE = "HARNESS_FORGE_ENVIRONMENT"
 MARKER = "forge-environment-complete"
+MINIMUM_PYTHON = (3, 11)
+START_TIMEOUT = 30
 
 
 def lock_digest(root: Path) -> str:
@@ -49,12 +52,28 @@ def python_of(directory: Path) -> Path:
     return directory / ("Scripts/python.exe" if sys.platform == "win32" else "bin/python")
 
 
-def complete(root: Path, directory: Path) -> bool:
+def starts(python: Path) -> bool:
+    """Whether the environment's Python runs and is new enough; one whose base interpreter was removed cannot start."""
+    check = f"import sys; sys.exit(sys.version_info < {MINIMUM_PYTHON})"
+    try:
+        completed = subprocess.run([str(python), "-I", "-c", check], stdin=subprocess.DEVNULL, capture_output=True,
+                                   timeout=START_TIMEOUT)
+    except (OSError, subprocess.SubprocessError):
+        return False
+    return completed.returncode == 0
+
+
+def _built(root: Path, directory: Path) -> bool:
+    """The marker for this lock is written and the environment's Python exists."""
     try:
         return (directory / MARKER).read_text(encoding="utf-8") == lock_digest(root) and \
             python_of(directory).exists()
     except OSError:
         return False
+
+
+def complete(root: Path, directory: Path) -> bool:
+    return _built(root, directory) and starts(python_of(directory))
 
 
 def setup_command(root: Path) -> str:
@@ -63,15 +82,18 @@ def setup_command(root: Path) -> str:
 
 def decide(root: Path, prefix: str, environ: Mapping[str, str]) -> tuple[str, str | None]:
     """("run", None) inside Forge's environment or the checkout's development .venv; ("exec", python) when the
-    environment exists; otherwise ("missing", setup command)."""
+    environment exists; ("broken", setup command) when it exists but its Python no longer starts; otherwise
+    ("missing", setup command)."""
     directory = environment_dir(root, environ)
     current = Path(prefix).resolve()
     switched = environ.get(ACTIVE_VARIABLE) == str(directory)
     if switched or current in (directory.resolve(), (root / ".venv").resolve()):
         return "run", None
-    if complete(root, directory):
+    if not _built(root, directory):
+        return "missing", setup_command(root)
+    if starts(python_of(directory)):
         return "exec", str(python_of(directory))
-    return "missing", setup_command(root)
+    return "broken", setup_command(root)
 
 
 def ensure(root: Path, script: str, argv: list[str]) -> None:
@@ -82,6 +104,12 @@ def ensure(root: Path, script: str, argv: list[str]) -> None:
     if decision == "exec":
         os.environ[ACTIVE_VARIABLE] = str(environment_dir(root, os.environ))
         os.execv(detail, [detail, script, *argv])
+    if decision == "broken":
+        print(f"forge.py: the Forge environment is not set up: the one in {environment_dir(root, os.environ)} no "
+              f"longer starts, for example because the Python it was built from was removed or upgraded. Setup "
+              f"rebuilds it and installs Forge's pinned Python packages from PyPI again. Ask the user before "
+              f"running: {detail}", file=sys.stderr)
+        raise SystemExit(2)
     print(f"forge.py: the Forge environment is not set up. It installs Forge's pinned Python packages from PyPI "
           f"once, into {environment_dir(root, os.environ)}. Ask the user before running: {detail}",
           file=sys.stderr)

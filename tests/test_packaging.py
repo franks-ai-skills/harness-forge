@@ -64,6 +64,17 @@ def fake_environment(root: Path, environ: dict) -> Path:
     return directory
 
 
+def broken_environment(root: Path, environ: dict) -> Path:
+    """A finished Forge environment whose python exits at once, as one does after its base interpreter is gone."""
+    directory = environment.environment_dir(root, environ)
+    python = environment.python_of(directory)
+    python.parent.mkdir(parents=True)
+    python.write_text("#!/bin/sh\nexit 1\n", encoding="utf-8")
+    python.chmod(0o755)
+    (directory / environment.MARKER).write_text(environment.lock_digest(root), encoding="utf-8")
+    return directory
+
+
 def install_copy(destination: Path) -> Path:
     """What a marketplace install with source "./" copies: the repository's tracked files."""
     for relative in tracked():
@@ -256,6 +267,49 @@ class EnvironmentTest(unittest.TestCase):
     def test_another_virtual_environment_does_not_count(self):
         self.assertEqual(environment.decide(FORGE, str(self.home / "venv"), self.environ)[0], "missing")
 
+    def test_an_environment_whose_python_no_longer_starts_is_broken(self):
+        """Its base interpreter was removed, e.g. by a Homebrew upgrade: the marker alone does not make it finished."""
+        directory = broken_environment(FORGE, self.environ)
+        self.assertFalse(environment.complete(FORGE, directory))
+        decision, detail = environment.decide(FORGE, "/some/other/python", self.environ)
+        self.assertEqual(decision, "broken")
+        self.assertIn(str(FORGE / "scripts" / "setup.py"), detail)
+
+    def test_a_finished_marker_without_python_counts_as_missing(self):
+        directory = environment.environment_dir(FORGE, self.environ)
+        directory.mkdir(parents=True)
+        (directory / environment.MARKER).write_text(environment.lock_digest(FORGE), encoding="utf-8")
+        self.assertEqual(environment.decide(FORGE, "/some/other/python", self.environ)[0], "missing")
+
+    def test_a_python_that_cannot_be_run_does_not_start(self):
+        def times_out(*arguments, **options):
+            raise subprocess.TimeoutExpired(arguments[0], environment.START_TIMEOUT)
+
+        def fails(*arguments, **options):
+            raise PermissionError("not executable")
+
+        for run in (times_out, fails):
+            original = environment.subprocess.run
+            environment.subprocess.run = run
+            try:
+                self.assertFalse(environment.starts(Path(sys.executable)), run.__name__)
+            finally:
+                environment.subprocess.run = original
+        self.assertTrue(environment.starts(Path(sys.executable)))
+
+    def test_forge_with_a_broken_environment_names_the_setup_command(self):
+        base = Path(getattr(sys, "_base_executable", sys.executable))
+        broken_environment(FORGE, self.environ)
+        completed = subprocess.run([str(base), "-I", str(FORGE / "scripts" / "forge.py"), "validate-kb", "--kb",
+                                    str(FORGE / "snapshot")], capture_output=True, text=True, timeout=60,
+                                   env={**os.environ, **self.environ})
+        self.assertEqual(completed.returncode, 2)
+        self.assertEqual(completed.stdout, "")
+        self.assertIn("scripts/setup.py", completed.stderr)
+        self.assertIn("not set up", completed.stderr)
+        self.assertIn("no longer starts", completed.stderr)
+        self.assertIn("ask the user", completed.stderr.lower())
+
     def test_forge_started_outside_its_environment_reports_setup(self):
         base = Path(getattr(sys, "_base_executable", sys.executable))
         completed = subprocess.run([str(base), "-I", str(FORGE / "scripts" / "forge.py"), "validate-kb", "--kb",
@@ -287,7 +341,7 @@ def load_setup():
 def fake_venv(path):
     python = environment.python_of(path)
     python.parent.mkdir(parents=True)
-    python.touch()
+    python.symlink_to(sys.executable)
 
 
 class SetupTest(unittest.TestCase):
@@ -385,6 +439,18 @@ class SetupTest(unittest.TestCase):
         self.assertEqual(environment.decide(FORGE, "/x", self.environ)[0], "exec")
         again = self.setup.setup(FORGE, self.environ, run=self.runner(install=1), create=None)
         self.assertTrue(again["ok"] and again["existing"], "an existing environment is reused")
+
+    def test_setup_rebuilds_an_environment_whose_python_no_longer_starts(self):
+        broken_environment(FORGE, self.environ)
+        (self.target / "left-over").write_text("old", encoding="utf-8")
+        created = []
+        result = self.setup.setup(FORGE, self.environ, run=self.runner(),
+                                  create=lambda path: (created.append(path), fake_venv(path)))
+        self.assertTrue(result["ok"] and not result["existing"], result)
+        self.assertEqual(Path(result["environment"]).resolve(), self.target.resolve())
+        self.assertEqual([path.resolve() for path in created], [self.target.resolve()])
+        self.assertFalse((self.target / "left-over").exists(), "the broken environment is replaced, not reused")
+        self.assertEqual(environment.decide(FORGE, "/x", self.environ)[0], "exec")
 
     def test_a_running_setup_is_left_alone(self):
         self.target.parent.mkdir(parents=True, exist_ok=True)
