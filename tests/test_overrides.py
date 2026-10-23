@@ -22,6 +22,7 @@ PINNED = [Rule.from_dict(rule) for name in ("skills", "security", "outside-contr
           for rule in load_document(SNAPSHOT / "rules" / f"{name}.yaml", "rules")]
 PINNED += [Rule.from_dict(rule) for rule in load_document(SNAPSHOT / "rules" / "selection.yaml", "selection")["rules"]]
 KB_VERSION = json.loads((SNAPSHOT / "kb-manifest.json").read_text(encoding="utf-8"))["kb_version"]
+LATER = "99.0.0"  # a KB release after the pinned one
 FINDING = finding(source="https://docs.example-vendor.com/skills/limits", quote="Descriptions may be 2048 characters.",
                   context="Limits. Descriptions may be 2048 characters. Names stay short.").to_dict()
 RESEARCH = [{"slug": "repro", "search_mode": "live", "briefs": [], "findings": [FINDING],
@@ -139,14 +140,14 @@ class ValidationTest(unittest.TestCase):
         self.assertIn("skills.unknown is not a catalog checker", other["problems"], "another checker's params stay data")
 
     def test_after_a_kb_update_it_proposes_removal_or_asks(self):
-        differs = check(override(), kb_version="0.2.0")
+        differs = check(override(), kb_version=LATER)
         self.assertEqual((differs["status"], differs["kb_comparison"]), ("kb-updated", "differs"))
         self.assertIn("ask whether to keep the override", differs["problems"][0])
         updated = [Rule.from_dict(RAISED) if rule.id == LENGTH.id else rule for rule in PINNED]
-        incorporated = check(override(), pinned=updated, kb_version="0.2.0")
+        incorporated = check(override(), pinned=updated, kb_version=LATER)
         self.assertEqual(incorporated["kb_comparison"], "incorporated")
         self.assertIn("propose removing the override", incorporated["problems"][0])
-        gone = check(override(), pinned=[rule for rule in PINNED if rule.id != LENGTH.id], kb_version="0.2.0")
+        gone = check(override(), pinned=[rule for rule in PINNED if rule.id != LENGTH.id], kb_version=LATER)
         self.assertEqual(gone["kb_comparison"], "removed")
 
 

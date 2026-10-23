@@ -144,6 +144,32 @@ class SnapshotPinTest(unittest.TestCase):
         self.assert_refused("uncommitted changes in the snapshot paths")
 
 
+@unittest.skipUnless((KB / "kb-manifest.json").is_file(), "needs the sibling agent-harness-kb checkout")
+class SnapshotProvenanceTest(unittest.TestCase):
+    """The pinned snapshot is the KB release its manifest names, whatever the sibling has checked out."""
+
+    def test_snapshot_is_the_release_its_manifest_names(self):
+        tool = load_tool()
+        pinned = json.loads((FORGE / "snapshot" / "kb-manifest.json").read_text(encoding="utf-8"))
+        tag = f"v{pinned['kb_version']}"
+        tags = git(KB, "tag", "--list", "v*").split()
+        if not tags:
+            self.skipTest("the sibling KB checkout has no release tags, so the pin cannot be compared with its release")
+        self.assertIn(tag, tags, f"the sibling KB has release tags, but not {tag}")
+        commit = git(KB, "rev-parse", "--verify", f"refs/tags/{tag}^{{commit}}").strip()
+        self.assertEqual(pinned["kb_commit"], commit)
+        released = json.loads(git(KB, "show", f"{commit}:kb-manifest.json"))
+        self.assertEqual(released["kb_version"], pinned["kb_version"])
+        files = set(git(KB, "ls-tree", "-r", "--name-only", commit, "--", *tool.SNAPSHOT_PATHS).split()) - {"kb-manifest.json"}
+        self.assertEqual(set(pinned["files"]), files)
+        for relative, digest in pinned["files"].items():
+            with self.subTest(file=relative):
+                data = subprocess.run(["git", "-C", str(KB), "show", f"{commit}:{relative}"], check=True,
+                                      capture_output=True).stdout
+                self.assertEqual(tool.sha256(data), digest)
+                self.assertEqual(tool.sha256((FORGE / "snapshot" / relative).read_bytes()), digest)
+
+
 class CoverageCompletenessTest(unittest.TestCase):
     def setUp(self):
         sys.path.insert(0, str(FORGE / "src"))

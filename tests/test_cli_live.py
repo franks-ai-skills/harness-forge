@@ -23,6 +23,7 @@ from tests.test_verify import skill_decision
 from tests.test_workflow import ResearchRunner, fetch_page, finding
 
 FORGE = Path(__file__).resolve().parents[1]
+KB_VERSION = json.loads((FORGE / "snapshot" / "kb-manifest.json").read_text(encoding="utf-8"))["kb_version"]
 
 
 class NotApplicableRunner(ResearchRunner):
@@ -499,7 +500,8 @@ class LiveCommandsTest(unittest.TestCase):
         overrides = self.root / ".harness/overrides"
         overrides.mkdir(parents=True)
         research = load_document(self.root / ".harness/research/repro.md", "research")
-        override = {**OVERRIDE, "drift": {"finding": research["findings"][0], "support_verdict": "supported"}}
+        override = {**OVERRIDE, "pinned_kb_version": KB_VERSION,
+                    "drift": {"finding": research["findings"][0], "support_verdict": "supported"}}
         (overrides / "skills.description.concise.yaml").write_text(yaml.safe_dump(override), encoding="utf-8")
         code, output, stderr = cli("prepare-contract", "--decision", self.decision, "--revision",
                                    self.root / ".harness/research/repro.rules.yaml")
@@ -574,7 +576,7 @@ class LiveCommandsTest(unittest.TestCase):
         code, output, stderr = cli("override", "--root", self.root, "--input", request, "--write")
         self.assertEqual(code, 0, stderr)
         path = self.root / ".harness/overrides/skills.description.concise.yaml"
-        path.write_text(path.read_text(encoding="utf-8").replace("pinned_kb_version: 0.1.0",
+        path.write_text(path.read_text(encoding="utf-8").replace(f"pinned_kb_version: {KB_VERSION}",
                                                                  "pinned_kb_version: 0.0.9"), encoding="utf-8")
         code, output, _ = cli("overrides", "--root", self.root)
         self.assertEqual(code, 1)
@@ -711,7 +713,8 @@ class LiveCommandsTest(unittest.TestCase):
 
         def add_override():
             research = load_document(root / ".harness/research/repro.md", "research")
-            override = {**OVERRIDE, "drift": {"finding": research["findings"][0], "support_verdict": "supported"}}
+            override = {**OVERRIDE, "pinned_kb_version": KB_VERSION,
+                        "drift": {"finding": research["findings"][0], "support_verdict": "supported"}}
             (root / ".harness/overrides").mkdir(parents=True, exist_ok=True)
             (root / ".harness/overrides/skills.description.concise.yaml").write_text(yaml.safe_dump(override),
                                                                                      encoding="utf-8")
