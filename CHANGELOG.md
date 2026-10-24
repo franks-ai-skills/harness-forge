@@ -4,9 +4,13 @@ The version is `version` in `.claude-plugin/plugin.json`, `plugin.json`,
 `.claude-plugin/marketplace.json` and `pyproject.toml`, which
 `tests/test_packaging.py` keeps equal. Claude Code keeps an installed
 plugin on its cached copy until that version changes, and Codex keys
-its plugin cache by it, so every release raises it. A release is the merge commit tagged
-`harness-forge--v<version>`, with a GitHub release whose notes are its
-section here. Release tags are never moved.
+its plugin cache by it, so every release raises it. A release is the
+merge commit tagged `v<version>` with git, with a GitHub release whose
+notes are its section here. Release tags are never moved. A Claude
+Code plugin that depends on Forge with a version range resolves it
+against tags named `harness-forge--v<version>` (`claude plugin tag`
+creates that format); Forge adds such a tag on the same commit only
+once it supports such dependencies.
 
 ## 0.2.0 (2026-10-24)
 
@@ -72,8 +76,8 @@ after 0.1.0.
 
 ## 0.1.0 (2026-10-16)
 
-First release, published with agent-harness-kb 0.1.0. Tagged
-`harness-forge--v0.1.0` afterwards at `05dd37b`, the publication commit.
+First release, published with agent-harness-kb 0.1.0. Tagged `v0.1.0`
+afterwards at `05dd37b`, the publication commit.
 
 - The plugin for Claude Code and Codex: harness-intake, harness-research,
   build-skill and harness-verify, run through the vendors' CLIs with
