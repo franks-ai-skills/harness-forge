@@ -243,7 +243,7 @@ class EnforcedSchemaTest(RecheckCase):
         self.assertIn("requirement_id", item["required"])
         self.assertEqual(item["properties"]["requirement_id"]["type"], ["string", "null"])
         # What the CLI lets a worker answer is exactly what Forge accepts from it.
-        response = _schemas()[0]["worker-response"]
+        response = _schemas()["worker-response"]
         research = next(branch["then"] for branch in response["allOf"]
                         if branch["if"]["properties"].get("role", {}).get("const") == "research")
         accepted = research["properties"]["output"]["properties"]["findings"]["items"]["properties"]

@@ -13,7 +13,7 @@ adds the requirement a re-check finding is for.
 
 from __future__ import annotations
 
-from harness_forge.documents import _schemas
+from harness_forge.documents import schema_named
 
 _KEPT = ("type", "properties", "required", "additionalProperties", "items", "enum")
 _STAMPED = ("id", "pass", "part_id", "brief_digest")
@@ -31,11 +31,10 @@ def _structural(schema: dict) -> dict:
 
 
 def output_schema(role: str) -> dict:
-    schemas = _schemas()[0]
     if role == "research":
-        finding = dict(schemas["research"]["$defs"]["finding"])
+        finding = dict(schema_named("research")["definitions"]["finding"])
         finding["properties"] = {name: item for name, item in finding["properties"].items() if name not in _STAMPED}
         # Every property is required, so a finding names its re-check requirement, or null outside a re-check.
         finding["properties"]["requirement_id"] = {"type": ["string", "null"]}
         return _structural({"type": "object", "properties": {"findings": {"type": "array", "items": finding}}})
-    return _structural(schemas["source-support" if role == "source-support" else "review"])
+    return _structural(schema_named("source-support" if role == "source-support" else "review"))

@@ -29,10 +29,18 @@ Every schema Forge compiles, its own and each knowledge-base checker's
 parameter schema, must pass all of these, or Forge refuses it with the
 reason before any code is generated:
 
-1. **Draft-07 metaschema**, validated with formats on, so `pattern` and
-   `patternProperties` keys must be valid regular expressions.
+1. **Draft-07 only.** `$schema`, when present, is Draft-07's and stands
+   only at the root; Forge compiles every schema as Draft-07 (otherwise
+   fastjsonschema picks its generator from `$schema`, and a schema
+   declaring Draft-04 would be checked against Draft-07's metaschema but
+   validated by Draft-04's rules). The schema must satisfy the Draft-07
+   metaschema, validated with formats on, so `pattern` and
+   `patternProperties` keys must be valid regular expressions. The
+   metaschema is the trusted bootstrap input: the bundled copy of the file
+   json-schema.org serves, pinned by sha256 in `vendor/manifest.json`.
 2. **Draft-07 vocabulary only:** every keyword of every schema object is
-   a Draft-07 keyword. This rejects `$defs`, `prefixItems` and typos
+   a Draft-07 keyword. Only schema positions are checked, not literal
+   objects under `const`, `enum`, `default` or `examples`. This rejects `$defs`, `prefixItems` and typos
    that would otherwise be ignored.
 3. **No `{` or `}` in property names** in `properties`, `required` and
    `dependencies`, because of the runtime formatting above.

@@ -6,7 +6,9 @@
 Every document Forge reads goes through ``load_document``: a size and
 nesting limit, a strict YAML loader (no YAML 1.1 booleans, timestamps,
 duplicate keys, aliases or Python tags) and a closed JSON Schema with no
-remote references.
+remote references. Schemas are Draft-07, validated with the bundled
+fastjsonschema; packaging/fastjsonschema-audit.md says why every schema
+passes ``schema_problem`` before it is compiled.
 """
 
 from __future__ import annotations
@@ -15,6 +17,7 @@ import hashlib
 import html
 import importlib
 import json
+import math
 import re
 import types
 import unicodedata
@@ -22,16 +25,16 @@ from functools import lru_cache
 from pathlib import Path
 from typing import Any
 
+import fastjsonschema
 import yaml
-from jsonschema import Draft202012Validator
-from jsonschema.exceptions import SchemaError
 from markdown_it import MarkdownIt
 from markdown_it import helpers as _helpers
 from markdown_it.helpers.parse_link_destination import _Result
 from markdown_it.rules_block.lheading import lheading as _lheading_rule
 from markdown_it.rules_block.paragraph import paragraph as _paragraph_rule
 from markdown_it.rules_inline.html_inline import isLinkClose, isLinkOpen
-from referencing import Registry, Resource
+
+from harness_forge.bundle import VENDOR
 
 MAX_DOCUMENT_BYTES = 1024 * 1024
 MAX_DEPTH = 32
@@ -39,6 +42,13 @@ MAX_ERRORS = 50
 
 SCHEMA_DIR = Path(__file__).resolve().parents[2] / "schemas"
 SCHEMA_PREFIX = "urn:harness-forge:schema:"
+DRAFT7 = "http://json-schema.org/draft-07/schema#"
+_DRAFT7_IDS = (DRAFT7, "http://json-schema.org/draft-07/schema")
+_VALIDATION_ERRORS = (fastjsonschema.JsonSchemaValueException, fastjsonschema.JsonSchemaValuesException)
+# Keywords whose value is a subschema, a list of subschemas or a map of names to subschemas.
+_SUBSCHEMA = ("items", "additionalItems", "contains", "additionalProperties", "propertyNames", "if", "then",
+              "else", "not", "allOf", "anyOf", "oneOf")
+_SUBSCHEMA_MAPS = ("properties", "patternProperties", "definitions")
 KB_SCHEMAS = ("rule", "rules", "predicate", "catalog", "selection", "coverage")
 
 _AMBIGUOUS_BOOL = re.compile(r"^(?:y|Y|yes|Yes|YES|n|N|no|No|NO|on|On|ON|off|Off|OFF)$")
@@ -136,44 +146,162 @@ def split_frontmatter(text: str) -> tuple[str, str]:
 
 
 @lru_cache(maxsize=1)
-def _schemas() -> tuple[dict[str, dict], Registry]:
+def _metaschema() -> tuple[dict, Any]:
+    """The bundled Draft-07 metaschema and its validator; formats on, so regular expressions are checked."""
+    meta = parse_json((VENDOR / "draft-07.schema.json").read_text(encoding="utf-8"))
+    return meta, fastjsonschema.compile(meta, use_default=False, use_formats=True)
+
+
+def _finite(value: Any) -> bool:
+    if isinstance(value, float):
+        return math.isfinite(value)
+    children = value.values() if isinstance(value, dict) else value if isinstance(value, list) else ()
+    return all(_finite(child) for child in children)
+
+
+def schema_problem(schema: Any, *, own_ids: frozenset[str] | None = None) -> str | None:
+    """Why ``schema`` must not be compiled, or None (packaging/fastjsonschema-audit.md).
+
+    ``own_ids`` is set only for Forge's own schemas, which alone may declare
+    ``$id``; references must name one of Forge's schema ids or a local
+    ``#`` fragment.
+    """
+    meta, check = _metaschema()
+    try:
+        check(schema)
+    except _VALIDATION_ERRORS as error:
+        return "not a valid Draft-07 schema: " + "; ".join(_messages(error)[:3])
+    if not _finite(schema):
+        return "a number in the schema is not finite"
+    if isinstance(schema, dict) and schema.get("$schema", DRAFT7) not in _DRAFT7_IDS:
+        return f"$schema {schema['$schema']!r} is not Draft-07; Forge validates Draft-07 only"
+    ids = own_ids if own_ids is not None else frozenset(_schemas_by_id())
+    vocabulary = set(meta["properties"])
+    problems: list[str] = []
+
+    def walk(node: Any, where: str) -> None:
+        if not isinstance(node, dict):
+            return
+        unknown = sorted(set(node) - vocabulary)
+        if unknown:
+            problems.append(f"{where}: keywords outside Draft-07: {', '.join(unknown)}")
+        if where != "(root)" and "$schema" in node:
+            problems.append(f"{where}: $schema is allowed only at the root")
+        if "$id" in node and own_ids is None:
+            problems.append(f"{where}: only Forge's own schemas declare $id")
+        reference = node.get("$ref")
+        if isinstance(reference, str) and not reference.startswith("#") and reference.split("#", 1)[0] not in ids:
+            problems.append(f"{where}: $ref {reference!r} is not one of Forge's schemas")
+        dependencies = node.get("dependencies", {})
+        names = [*node.get("properties", {}), *node.get("required", []), *dependencies,
+                 *(name for value in dependencies.values() if isinstance(value, list) for name in value)]
+        braced = sorted({name for name in names if "{" in name or "}" in name})
+        if braced:
+            problems.append(f"{where}: property names must not contain braces: {', '.join(map(repr, braced))}")
+        for key in _SUBSCHEMA:
+            value = node.get(key)
+            for index, child in enumerate(value) if isinstance(value, list) else ((None, value),):
+                walk(child, f"{where}/{key}" + (f"/{index}" if index is not None else ""))
+        for key in _SUBSCHEMA_MAPS:
+            for name, child in node.get(key, {}).items():
+                walk(child, f"{where}/{key}/{name}")
+        for name, child in dependencies.items():
+            walk(child, f"{where}/dependencies/{name}")
+
+    walk(schema, "(root)")
+    return problems[0] if problems else None
+
+
+@lru_cache(maxsize=1)
+def _schemas_by_id() -> dict[str, dict]:
     schemas = {}
     for path in sorted(SCHEMA_DIR.glob("*.schema.json")):
         schema = parse_json(path.read_text(encoding="utf-8"))
-        Draft202012Validator.check_schema(schema)
         name = path.name.removesuffix(".schema.json")
         if schema.get("$id") != SCHEMA_PREFIX + name:
             raise RuntimeError(f"{path.name}: $id must be {SCHEMA_PREFIX + name}")
-        schemas[name] = schema
-    registry = Registry().with_resources(
-        (schema["$id"], Resource.from_contents(schema)) for schema in schemas.values()
-    )
-    return schemas, registry
+        schemas[schema["$id"]] = schema
+    ids = frozenset(schemas)
+    for schema_id, schema in schemas.items():
+        problem = schema_problem(schema, own_ids=ids)
+        if problem:
+            raise RuntimeError(f"{schema_id}: {problem}")
+    return schemas
+
+
+def _schemas() -> dict[str, dict]:
+    return {schema_id.removeprefix(SCHEMA_PREFIX): schema for schema_id, schema in _schemas_by_id().items()}
 
 
 def schema_names() -> list[str]:
-    return sorted(_schemas()[0])
+    return sorted(_schemas())
 
 
 def schema_named(name: str) -> dict:
     """One Forge schema, for checking a value against a part of it."""
-    return _schemas()[0][name]
+    return _schemas()[name]
+
+
+class _LocalOnly(dict):
+    """fastjsonschema's reference handlers: every URI scheme is claimed, so it never falls back to
+    urllib.request.urlopen, and only Forge's own schema ids resolve."""
+
+    def __contains__(self, scheme: object) -> bool:
+        return True
+
+    def __getitem__(self, scheme: str):
+        return _resolve_schema
+
+
+def _resolve_schema(uri: str) -> dict:
+    schema = _schemas_by_id().get(uri.split("#", 1)[0])
+    if schema is None:
+        raise ValueError(f"schema reference {uri!r} is not one of Forge's schemas")
+    # fastjsonschema's resolver rewrites the references of what it is given, so it gets a copy.
+    return json.loads(json.dumps(schema))
+
+
+@lru_cache(maxsize=256)
+def _compiled(canonical: str):
+    schema = json.loads(canonical)  # a fresh object: compiling rewrites its references
+    own = frozenset(_schemas_by_id()) if isinstance(schema, dict) and schema.get("$id") in _schemas_by_id() else None
+    problem = schema_problem(schema, own_ids=own)
+    if problem:
+        raise ValueError(f"schema refused: {problem}")
+    if isinstance(schema, dict):
+        # fastjsonschema picks its generator from $schema and defaults to a later draft: pin Draft-07.
+        schema = {**schema, "$schema": DRAFT7}
+    try:
+        return fastjsonschema.compile(schema, handlers=_LocalOnly(), use_default=False, use_formats=False,
+                                      fast_fail=False)
+    except Exception as error:  # fastjsonschema raises several types for schemas it cannot compile
+        raise ValueError(f"schema cannot be compiled: {type(error).__name__}: {str(error)[:300]}") from error
+
+
+def _messages(error: Exception) -> list[str]:
+    """``location: message`` lines, location relative to the checked value (``(root)`` for itself)."""
+    lines = set()
+    for item in getattr(error, "errors", None) or [error]:
+        name = getattr(item, "name", None) or "data"
+        location = (name[4:] if name.startswith("data") else name).lstrip(".") or "(root)"
+        message = str(getattr(item, "message", item))
+        message = message[len(name):].strip() if message.startswith(name) else message
+        lines.add(f"{location}: {message[:300]}")
+    return sorted(lines)
 
 
 def schema_errors(value: Any, schema: dict) -> list[str]:
-    validator = Draft202012Validator(schema, registry=_schemas()[1])
-    messages = []
-    for error in sorted(validator.iter_errors(value), key=lambda e: list(e.absolute_path)):
-        location = "/".join(str(part) for part in error.absolute_path) or "(root)"
-        messages.append(f"{location}: {error.message[:300]}")
-        if len(messages) >= MAX_ERRORS:
-            break
-    return messages
+    validator = _compiled(json.dumps(schema, sort_keys=True))
+    try:
+        validator(value)
+    except _VALIDATION_ERRORS as error:
+        return _messages(error)[:MAX_ERRORS]
+    return []
 
 
 def validate(value: Any, schema: str) -> None:
     """Raise ValueError unless ``value`` satisfies the named Forge schema."""
-    schemas = _schemas()[0]
+    schemas = _schemas()
     if schema not in schemas:
         raise ValueError(f"unknown schema {schema!r}")
     messages = schema_errors(value, schemas[schema])
@@ -223,7 +351,7 @@ def load_document(path: Path, schema: str, *, root: Path | None = None) -> Any:
     ``root``, when given, must contain the resolved path.
     """
     path = Path(path)
-    if schema not in _schemas()[0]:
+    if schema not in _schemas():
         raise ValueError(f"unknown schema {schema!r}")
     text = _read_bounded(path, root)
     suffix = path.suffix.lower()
@@ -360,10 +488,9 @@ def validate_kb(root: Path) -> list[str]:
     for checker in catalog["checkers"]:
         if checker["id"] in checkers:
             check.error(f"checks/catalog.yaml: duplicate checker id {checker['id']}")
-        try:
-            Draft202012Validator.check_schema(checker["params"])
-        except SchemaError as error:
-            check.error(f"checks/catalog.yaml: {checker['id']}: invalid params schema: {error.message[:200]}")
+        problem = schema_problem(checker["params"])
+        if problem:
+            check.error(f"checks/catalog.yaml: {checker['id']}: invalid params schema: {problem[:200]}")
             continue
         checkers[checker["id"]] = checker
 
