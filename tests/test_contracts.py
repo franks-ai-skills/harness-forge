@@ -9,6 +9,7 @@ from pathlib import Path
 import yaml
 
 from harness_forge.contracts import confirm_contract, load_decision, render_contract, write_decision
+from harness_forge.documents import validate
 from harness_forge.verify import prepare_run
 from harness_forge.models import Confirmation
 from tests.builders import EVIDENCE, decision, part, revision
@@ -296,6 +297,60 @@ class ResearchCandidateTest(unittest.TestCase):
         self.assertNotEqual(plain.digest, named.digest)
         self.assertIn("Reuse candidates to research: repro-steps from https://example.com/repro-steps (part A)",
                       named.text)
+
+    def test_survey_candidates_are_shown_and_bound_when_recorded(self):
+        found = [{"name": "repro-steps", "source": "https://example.com/repro-steps", "finding_ids": ["F1"],
+                  "choice": "inspiration"},
+                 {"name": "bug-kit", "source": "https://example.com/bug-kit", "finding_ids": ["F3", "F4"],
+                  "choice": "discard"}]
+        plain = render_contract(decision(), None, [], worker_evidence=EVIDENCE)
+        none = render_contract(decision(survey_candidates=[]), None, [], worker_evidence=EVIDENCE)
+        some = render_contract(decision(survey_candidates=found), None, [], worker_evidence=EVIDENCE)
+        self.assertNotIn("survey_candidates", plain.content, "a record without the field keeps its digest")
+        self.assertNotIn("Existing solutions", plain.text)
+        self.assertEqual(none.content["survey_candidates"], [])
+        self.assertNotEqual(plain.digest, none.digest, "an empty list is recorded and bound")
+        self.assertIn("Existing solutions from the survey: none found", none.text)
+        self.assertIn("repro-steps from https://example.com/repro-steps: explore for inspiration (its ideas are "
+                      "considered; it is not a blueprint and nothing is copied); bug-kit from "
+                      "https://example.com/bug-kit: discarded", some.text)
+        self.assertNotEqual(none.digest, some.digest)
+
+    def test_a_candidate_to_investigate_is_queued_for_research(self):
+        source = "https://example.com/repro-steps"
+        found = [{"name": "repro-steps", "source": source, "finding_ids": ["F1"], "choice": "investigate"}]
+        with self.assertRaisesRegex(ValueError, "not in research_candidates"):
+            render_contract(decision(survey_candidates=found), None, [])
+        queued = render_contract(decision(survey_candidates=found,
+                                          research_candidates=[{"name": "repro-steps", "source": source}]), None, [])
+        self.assertIn("repro-steps from https://example.com/repro-steps: investigate for reuse", queued.text)
+
+    def test_a_candidate_no_longer_investigated_leaves_the_research_queue(self):
+        source = "https://example.com/repro-steps"
+        user_named = {"name": "other-tool", "source": "https://example.com/other"}
+        for choice in ("inspiration", "discard"):
+            found = [{"name": "repro-steps", "source": source, "finding_ids": ["F1"], "choice": choice}]
+            with self.assertRaisesRegex(ValueError, f"chosen for {choice} but is still in research_candidates"):
+                render_contract(decision(survey_candidates=found,
+                                         research_candidates=[{"name": "repro-steps", "source": source}, user_named]),
+                                None, [])
+            kept = render_contract(decision(survey_candidates=found, research_candidates=[user_named]), None, [])
+            self.assertIn("Reuse candidates to research: other-tool", kept.text, "a user-named candidate stays")
+
+    def test_a_survey_candidate_is_listed_once(self):
+        entry = {"name": "repro-steps", "source": "https://example.com/a", "finding_ids": ["F1"], "choice": "discard"}
+        with self.assertRaisesRegex(ValueError, "listed twice"):
+            render_contract(decision(survey_candidates=[entry, {**entry, "source": "https://example.com/b"}]),
+                            None, [])
+
+    def test_survey_candidate_fields_are_bounded(self):
+        entry = {"name": "repro-steps", "source": "https://example.com/a", "finding_ids": ["F1"], "choice": "discard"}
+        validate({**decision().record, "survey_candidates": [entry]}, "decision")
+        for broken in ({**entry, "finding_ids": []}, {**entry, "finding_ids": ["F1", "F1"]},
+                       {**entry, "choice": "reuse"}, {**entry, "source": "http://example.com/a"},
+                       {k: v for k, v in entry.items() if k != "finding_ids"}, {**entry, "extra": 1}):
+            with self.assertRaises(ValueError, msg=broken):
+                validate({**decision().record, "survey_candidates": [broken]}, "decision")
 
     def test_a_candidate_for_an_unknown_part_is_refused(self):
         with self.assertRaisesRegex(ValueError, "unknown part 'Z'"):
