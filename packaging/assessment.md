@@ -1,8 +1,50 @@
 # Runtime dependency distribution
 
-Status: decided on 2026-10-09 (plan task T3). Default: **(c) one-time
-isolated setup from a hashed lock**. The YAML formats and JSON Schema
-Draft 2020-12 stay as designed.
+Status: **bundled pure-Python dependencies**, decided by the project owner
+on 2026-10-24 (#56). This replaces the decision of 2026-10-09 below,
+which is kept as the historical record; its setup script, lock file and
+reproduce commands no longer exist.
+
+## Decision of 2026-10-24: bundle everything, validate with fastjsonschema
+
+A hands-on run showed that asking mid-conversation to download packages
+for an unnamed "planning tool" was not something an outside user could
+judge (#46). Only `rpds-py`, which `jsonschema` 4.26.0 and `referencing`
+import directly, kept the dependencies from shipping as plain files. An
+evaluation
+([playground, plans/2026-10-24-fastjsonschema-evaluation.md](https://github.com/franks-ai-skills/playground/blob/5c576b0/plans/2026-10-24-fastjsonschema-evaluation.md))
+found fastjsonschema 2.22.2 compatible on Forge's records once the
+schemas move to Draft-07, with a workaround for a reference-scope bug
+and safeguards for schema checking and reference resolution. The owner
+decided to adopt it, which reverses two points below: the schemas change
+from Draft 2020-12 to Draft-07 to ease packaging, and no setup step
+remains.
+
+- `vendor/` holds pure-Python PyYAML 6.0.3 (its optional libyaml
+  extension is left out; Forge's strict loader already used the
+  pure-Python `SafeLoader`), markdown-it-py 4.2.0, mdurl 0.1.2,
+  fastjsonschema 2.22.2 and the Draft-07 metaschema, with their licences.
+  `vendor/manifest.json` pins every source by URL and sha256 and lists
+  every bundled file's sha256. `tools/vendor.py` rebuilds and checks it;
+  `.gitattributes` keeps the files byte-exact.
+- Importing `harness_forge` puts `vendor/` first on the import path and
+  refuses a bundled package already imported from elsewhere.
+  `forge.py` checks Python and the whole bundle with the standard library
+  before importing anything bundled; on a problem it prints what is wrong
+  and how to repair it, and downloads nothing.
+- The 18 schemas are Draft-07 and name themselves with absolute
+  references. Every schema passes the restrictions in
+  [fastjsonschema-audit.md](fastjsonschema-audit.md) before it is
+  compiled.
+- Validation is stricter in one way: an anchored pattern no longer
+  accepts a trailing newline (#51).
+- Tested on macOS arm64 with CPython 3.14 only.
+
+The sections below record the decision of 2026-10-09.
+
+Status then: decided on 2026-10-09 (plan task T3). Default: **(c)
+one-time isolated setup from a hashed lock**. The YAML formats and JSON
+Schema Draft 2020-12 stay as designed.
 
 ## Requirement
 
