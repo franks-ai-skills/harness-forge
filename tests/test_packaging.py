@@ -137,6 +137,23 @@ class InstalledCopyTest(unittest.TestCase):
                                        env={**os.environ, **home})
             self.assertEqual(completed.returncode, 0, completed.stderr)
 
+    def test_hash_checked_files_survive_a_checkout_that_converts_line_endings(self):
+        # vendor/, snapshot/ and schemas/ are compared byte for byte, so git must not convert them (.gitattributes).
+        with tempfile.TemporaryDirectory(prefix="forge-clone-") as directory:
+            clone = Path(directory) / "clone"
+            subprocess.run(["git", "-c", "core.autocrlf=true", "clone", "--quiet", "--local", "--no-checkout",
+                            str(FORGE), str(clone)], check=True, timeout=120)
+            subprocess.run(["git", "-c", "core.autocrlf=true", "-C", str(clone), "checkout", "--quiet",
+                            subprocess.run(["git", "rev-parse", "HEAD"], cwd=FORGE, capture_output=True, text=True,
+                                           check=True).stdout.strip()], check=True, timeout=120)
+            for tree in ("vendor", "snapshot", "schemas"):
+                for path in sorted((clone / tree).rglob("*")):
+                    if path.is_file():
+                        relative = path.relative_to(clone).as_posix()
+                        committed = subprocess.run(["git", "show", f"HEAD:{relative}"], cwd=FORGE, capture_output=True,
+                                                   check=True).stdout
+                        self.assertEqual(path.read_bytes(), committed, relative)
+
     def test_published_files_name_no_owner_setup(self):
         if not PERSONAL_MARKERS.exists():
             self.skipTest("the owner's publication check needs the local personal-markers.txt")
