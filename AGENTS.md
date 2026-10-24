@@ -31,8 +31,11 @@ Pin the knowledge base only from a release: `tools/pin_snapshot.py
 `.claude-plugin/marketplace.json` and `pyproject.toml` and adds a dated
 section to [CHANGELOG.md](CHANGELOG.md); installed copies stay on their
 cached version until it changes. After the merge, tag the merge commit
-`harness-forge--v<version>` and create a GitHub release from its
-changelog section. Never move a release tag.
+`v<version>` with git and create a GitHub release from its changelog
+section. Never move a release tag. Add a `harness-forge--v<version>`
+tag, the format Claude Code resolves plugin dependency ranges against,
+only once Forge supports Claude Code plugins that depend on it with a
+version range.
 
 Changes reach `main` only through a pull request, merged with a merge
 commit (the only method this repository allows). Keep the PR
