@@ -56,32 +56,31 @@ local-path marketplace makes Codex copy the whole directory into its
 plugin cache, including ignored files such as a virtual environment or
 private evidence.
 
-### Forge's Python environment
+### Dependencies
 
-Forge validates its records with `jsonschema` and `PyYAML`. The first
-`scripts/forge.py` command, run by a skill, stops and names the setup
-command; the skill asks you before running it:
+Forge needs Python 3.11 or newer and nothing else: its runtime
+dependencies ship inside the plugin in `vendor/`, so it downloads and
+installs nothing. Each skill first runs `python3 scripts/forge.py
+environment`, which checks the Python version and every bundled file
+against `vendor/manifest.json` with only the standard library. When
+something is missing or changed, Forge says what and stops; reinstall or
+update the plugin. The check confirms the bundle matches its manifest;
+it does not authenticate who published it.
 
-```sh
-python3 <plugin root>/scripts/setup.py
-```
+| Dependency | Version | Licence | What Forge uses it for |
+| --- | --- | --- | --- |
+| [PyYAML](https://pyyaml.org/) | 6.0.3 | MIT | Reading and writing Forge's YAML records and the knowledge-base rules (pure-Python loader) |
+| [markdown-it-py](https://github.com/executablebooks/markdown-it-py) | 4.2.0 | MIT | Reading Markdown (CommonMark) |
+| [mdurl](https://github.com/executablebooks/mdurl) | 0.1.2 | MIT | URL handling for markdown-it-py |
+| [fastjsonschema](https://github.com/horejsek/python-fastjsonschema) | 2.22.2 | BSD-3-Clause | Validating records and inputs against Forge's JSON Schemas (Draft-07) |
+| [JSON Schema Draft-07 metaschema](https://json-schema.org/draft-07/schema) | draft-07 | BSD-3-Clause | Checking every schema before it is compiled |
 
-It creates a virtual environment in Forge's own data directory,
-`~/.local/share/harness-forge/env-<lock digest>/` (`$XDG_DATA_HOME`
-when set; `%LOCALAPPDATA%\harness-forge` on Windows; `HARNESS_FORGE_HOME`
-overrides all three). It installs exactly the wheels pinned with hashes
-in `requirements.lock`, downloaded from PyPI once, and runs no build
-code. It changes no user configuration. Later `forge.py` commands switch
-to that environment by themselves. If that environment stops working,
-for example after its Python was upgraded, `forge.py` names the setup
-command again, which rebuilds it. A plugin update with a new lock gets
-a new environment; delete the directory to remove it.
-
-Without network access, download the wheels elsewhere with
-`pip download --require-hashes --only-binary :all: -r requirements.lock -d wheelhouse`
-and run `python3 scripts/setup.py --wheelhouse wheelhouse`. The tested
-and expected platforms are in
-[packaging/assessment.md](packaging/assessment.md#supported-environments).
+Their licences are in `vendor/licenses/`; `vendor/manifest.json` names
+each source and its sha256. Tested on macOS arm64 with CPython 3.14 only;
+the bundle is pure Python, but other platforms and Python versions are
+untested. [packaging/assessment.md](packaging/assessment.md) records the
+decision and [packaging/fastjsonschema-audit.md](packaging/fastjsonschema-audit.md)
+the restrictions Forge applies to every schema it compiles.
 
 ## Worker isolation limitations
 
@@ -182,9 +181,10 @@ through plugin installation, which the throwaway workspace does not do.
 
 `verify` keeps each launch's raw output, so a result can be looked at
 after the throwaway workspace is gone. The directory is
-`diagnostics/<time>-<run id>-<random>/` in Forge's data directory (see
-[Forge's Python environment](#forges-python-environment)), never inside
-the repository, and `verify` prints it as `diagnostics`. Each case has
+`diagnostics/<time>-<run id>-<random>/` in Forge's data directory
+(`~/.local/share/harness-forge/`, `$XDG_DATA_HOME/harness-forge` when
+set, `%LOCALAPPDATA%\harness-forge` on Windows; `HARNESS_FORGE_HOME`
+overrides all three), never inside the repository, and `verify` prints it as `diagnostics`. Each case has
 `cases/<case id>/` and Claude Code's two skill-listing launches have
 `baselines/`, each with `launch.json` (command, prompt as sent,
 workspace path, the hashes of the workspace's files, exit or timeout,

@@ -14,6 +14,9 @@ once it supports such dependencies.
 
 ## Unreleased
 
+Pins agent-harness-kb 0.4.0: its schema copies are Draft-07, and it
+carries 0.3.0's plugin release-tag guidance.
+
 ### Selection and intake
 
 - harness-intake and harness-research present proposed goals, inferred
@@ -28,6 +31,19 @@ once it supports such dependencies.
   optional `survey_candidates` and shown in the contract. Then the other
   findings are presented with the goal, design choice or safeguard each
   suggests, and the user adopts all, some or none (#45).
+
+### Dependencies
+
+- Forge's runtime dependencies ship inside the plugin in `vendor/`:
+  pure-Python PyYAML, markdown-it-py, mdurl and fastjsonschema, and the
+  Draft-07 metaschema. Nothing is downloaded: `scripts/setup.py`,
+  `requirements.lock` and the switch to a Forge environment are gone.
+  Each skill first runs `forge.py environment`, which checks Python and
+  the bundle and names what to repair (#56, #46).
+- Validation uses fastjsonschema instead of jsonschema; the schemas are
+  Draft-07, and every schema passes the restrictions in
+  `packaging/fastjsonschema-audit.md` before it is compiled. An anchored
+  pattern no longer accepts a trailing newline (#56).
 
 ### Verification
 

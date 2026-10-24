@@ -107,8 +107,8 @@ Do not use it when:
    - Evidence: [Vendor] ([plugin dependencies](https://code.claude.com/docs/en/plugin-dependencies)); the granularity rule is an inference in the [research notes](../research-notes/agent-harness-best-practices/mcp-plugins.md).
 3. **Set `version` explicitly, in one place, and bump it on every release.**
    - Why: Claude Code users stay on their cached copy until the string changes; Codex keys its cache by version. If `version` is set in both `plugin.json` and the marketplace entry, `plugin.json` silently wins.
-   - How: bump in the manifest; tag releases `<plugin>--v<version>`. Alternative in Claude Code: omit `version` everywhere to track commits.
-   - Evidence: [Vendor] ([Host a marketplace](https://code.claude.com/docs/en/plugins/host-marketplace); [Codex Build plugins](https://developers.openai.com/codex/plugins/build.md)).
+   - How: bump in the manifest. Updates follow the version, so ordinary marketplace updates impose no tag-naming requirement. Tag releases `<plugin>--v<version>` (`claude plugin tag`) when other Claude Code plugins depend on yours with a version range, since those ranges resolve against such tags. Alternative in Claude Code: omit `version` everywhere to track commits.
+   - Evidence: [Vendor] ([Host a marketplace](https://code.claude.com/docs/en/plugins/host-marketplace); [plugin dependencies](https://code.claude.com/docs/en/plugins/dependencies); [Codex Build plugins](https://developers.openai.com/codex/plugins/build.md)).
 4. **Pin dependency ranges and third-party sources; keep auto-update off for marketplaces you do not control.**
    - Why: "If that release renames an MCP tool your plugin calls, your plugin breaks." Auto-update can replace files you reviewed, and background updates use stored git credentials without prompting.
    - How: `~2.1.0` ranges for patches only; `ref`/`sha` on entries, `sha256` on archive sources; Codex `codex plugin marketplace add owner/repo --ref <ref>`; pin MCP packages inside the plugin (see [MCP](mcp.md)).
@@ -174,7 +174,7 @@ deployment evaluation.
 - **Admin policy:** `/status` shows "Enterprise managed settings"; add a blocked marketplace and confirm it is refused.
 - **Codex:** `codex plugin marketplace list`, `/plugins`, `/hooks`; start a new session and confirm skills and tools load.
 - **Dual-harness repository:** `claude plugin validate` plus a real `codex plugin marketplace add` against the same repository.
-- **Release:** the version changed in both manifests and a `<plugin>--v<version>` tag exists.
+- **Release:** the version changed in both manifests; if other plugins depend on yours with a version range, a `<plugin>--v<version>` tag exists.
 - **Audit:** Claude Code emits OTel events `claude_code.plugin_installed` and `plugin_loaded`.
 
 Checklist:

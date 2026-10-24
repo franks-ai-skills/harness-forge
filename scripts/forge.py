@@ -17,10 +17,15 @@ _SOURCE = str(Path(__file__).resolve().parents[1] / "src")
 if _SOURCE not in sys.path:
     sys.path.insert(0, _SOURCE)
 if __name__ == "__main__":
-    # Before the locked packages are imported: continue, switch to the Forge environment, or name its setup.
-    from harness_forge.environment import ensure  # noqa: E402
+    # Before anything bundled is imported: Python and the bundle in vendor/ must be usable. Nothing is downloaded.
+    from harness_forge import bundle  # noqa: E402
 
-    ensure(Path(__file__).resolve().parents[1], str(Path(__file__).resolve()), sys.argv[1:])
+    _problems = bundle.problems()
+    if _problems:
+        print(json.dumps({"command": sys.argv[1] if len(sys.argv) > 1 else None, "ok": False,
+                          "problems": [problem[:300] for problem in _problems[:20]], "problem_count": len(_problems),
+                          "repair": bundle.repair(_problems)}))
+        raise SystemExit(2)
 
 from dataclasses import asdict  # noqa: E402
 
@@ -104,6 +109,20 @@ def emit(payload: dict) -> None:
         if not errors:
             raise _InvalidInput(f"output of {size} bytes exceeds the {MAX_OUTPUT_BYTES}-byte bound")
         errors = errors[: len(errors) // 2]
+
+
+def _environment(arguments: argparse.Namespace) -> int:
+    """What the bundle check found, with the bundled dependencies; the check itself ran before any import."""
+    from harness_forge import bundle
+
+    found = bundle.problems()
+    packages = [{key: package[key] for key in ("name", "version", "license", "purpose")}
+                for package in bundle.manifest()["packages"]]
+    emit({"command": "environment", "ok": not found, "python": ".".join(map(str, sys.version_info[:3])),
+          "problems": found[:20], "repair": bundle.repair(found) if found else None,
+          "bundled_files": len(bundle.expected_files()), "dependencies": packages,
+          "loaded_from": {name: origin for name, origin in bundle.origins().items() if origin}})
+    return 0 if not found else 2
 
 
 def _validate_kb(arguments: argparse.Namespace) -> int:
@@ -1399,6 +1418,8 @@ def _verify(arguments: argparse.Namespace) -> int:
 def build_parser() -> argparse.ArgumentParser:
     parser = _Parser(prog="forge.py", description=__doc__)
     commands = parser.add_subparsers(dest="command", required=True, parser_class=_Parser)
+    environment = commands.add_parser("environment", help="check Python and the bundled dependencies")
+    environment.set_defaults(handler=_environment)
     validate = commands.add_parser("validate-kb", help="validate a Harness KB checkout or snapshot")
     validate.add_argument("--kb", required=True, help="KB root directory")
     validate.set_defaults(handler=_validate_kb)

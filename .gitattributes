@@ -1,0 +1,6 @@
+# Checked byte for byte: vendor/ against vendor/manifest.json, snapshot/ against
+# snapshot/kb-manifest.json, and schemas/ against the knowledge base's copies.
+# No line-ending conversion, whatever core.autocrlf says.
+vendor/** -text
+snapshot/** -text
+schemas/** -text

@@ -18,11 +18,11 @@ new implementation checks need their own evidence.
 Use Conventional Commits and record AI attribution as final-paragraph
 `Assisted-by: <model> (code generation)` or `(code review)` trailers.
 
-Run tests with the locked dependencies, as in
-[packaging/assessment.md](packaging/assessment.md#reproduce):
-`python3 -m venv .venv`, install `requirements.lock` with
-`--require-hashes --only-binary :all:`, then
-`.venv/bin/python -m unittest discover -s tests -t . -v`.
+Run tests with any Python 3.11 or newer and no installed packages, so
+only the standard library and the bundle in `vendor/` are used:
+`python3 -I -S -m unittest discover -s tests -t . -v`. Change a bundled
+dependency only in `vendor/manifest.json` and run `tools/vendor.py
+--refresh`; `tools/vendor.py --check` verifies the bundle offline.
 
 Pin the knowledge base only from a release: `tools/pin_snapshot.py
 --pin` refuses a KB checkout that is not the commit tagged

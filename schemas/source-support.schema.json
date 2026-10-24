@@ -1,5 +1,5 @@
 {
-  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$schema": "http://json-schema.org/draft-07/schema#",
   "$id": "urn:harness-forge:schema:source-support",
   "title": "Source-support verdicts, one per finding",
   "type": "object",
@@ -39,7 +39,7 @@
   "required": [
     "verdicts"
   ],
-  "$defs": {
+  "definitions": {
     "verdict": {
       "type": "object",
       "properties": {

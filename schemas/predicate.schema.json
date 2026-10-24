@@ -1,5 +1,5 @@
 {
-  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$schema": "http://json-schema.org/draft-07/schema#",
   "$id": "urn:harness-forge:schema:predicate",
   "title": "Closed fact predicate: all/any/not/eq/in over declared facts",
   "oneOf": [
@@ -9,7 +9,7 @@
         "all": {
           "type": "array",
           "items": {
-            "$ref": "#"
+            "$ref": "urn:harness-forge:schema:predicate#"
           },
           "minItems": 1
         }
@@ -25,7 +25,7 @@
         "any": {
           "type": "array",
           "items": {
-            "$ref": "#"
+            "$ref": "urn:harness-forge:schema:predicate#"
           },
           "minItems": 1
         }
@@ -39,7 +39,7 @@
       "type": "object",
       "properties": {
         "not": {
-          "$ref": "#"
+          "$ref": "urn:harness-forge:schema:predicate#"
         }
       },
       "additionalProperties": false,
@@ -52,7 +52,7 @@
       "properties": {
         "eq": {
           "type": "array",
-          "prefixItems": [
+          "items": [
             {
               "type": "string",
               "pattern": "^[a-z][a-z0-9_]*$",
@@ -66,8 +66,8 @@
               ]
             }
           ],
-          "items": false,
-          "minItems": 2
+          "minItems": 2,
+          "additionalItems": false
         }
       },
       "additionalProperties": false,
@@ -80,7 +80,7 @@
       "properties": {
         "in": {
           "type": "array",
-          "prefixItems": [
+          "items": [
             {
               "type": "string",
               "pattern": "^[a-z][a-z0-9_]*$",
@@ -99,8 +99,8 @@
               "uniqueItems": true
             }
           ],
-          "items": false,
-          "minItems": 2
+          "minItems": 2,
+          "additionalItems": false
         }
       },
       "additionalProperties": false,

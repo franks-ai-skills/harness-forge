@@ -105,8 +105,8 @@ Evidence labels: **[Vendor]** vendor guidance. **[Empirical]** a study or measur
 
 - **Practice:** set a semver `version` and bump it with every release; set it in one place.
 - **Why:** "users stay on their cached copy until the string changes". Codex keys its cache directory by version, and a semver `version` "enables marketplace updates". If `version` is set in both `plugin.json` and the marketplace entry, `plugin.json` silently wins.
-- **How:** bump in the manifest; for dual-harness plugins keep `name`, `version` and `description` identical in `.claude-plugin/plugin.json` and root `plugin.json`. Tag releases `<plugin>--v<version>`. Alternative in Claude Code: omit `version` everywhere to track commits.
-- **Evidence:** [Vendor] ([Host and maintain a marketplace](https://code.claude.com/docs/en/plugins/host-marketplace); [Codex Build plugins](https://developers.openai.com/codex/plugins/build.md)).
+- **How:** bump in the manifest; for dual-harness plugins keep `name`, `version` and `description` identical in `.claude-plugin/plugin.json` and root `plugin.json`. Updates follow the version: Claude Code gives users "a new copy only when the plugin's computed version differs from the one they have", so ordinary marketplace updates impose no tag-naming requirement. Claude Code resolves git-backed plugin dependency ranges against `<plugin>--v<version>` tags, the format `claude plugin tag` creates: "If you maintain a plugin that other plugins depend on with a version constraint, tag its releases so those constraints can resolve". Any tag can still serve as a `ref` that holds users on one version. Alternative in Claude Code: omit `version` everywhere to track commits.
+- **Evidence:** [Vendor] ([Host and maintain a marketplace](https://code.claude.com/docs/en/plugins/host-marketplace); [Claude Code plugin dependencies](https://code.claude.com/docs/en/plugins/dependencies); [Codex Build plugins](https://developers.openai.com/codex/plugins/build.md)).
 
 ### 4. Pin dependencies and third-party sources
 
@@ -226,7 +226,7 @@ No plugin supply-chain incident (as opposed to MCP package incidents) was found 
 - **Admin policy (Claude Code):** `/status` shows "Enterprise managed settings"; try adding a blocked marketplace and confirm it is refused.
 - **Codex:** `codex plugin marketplace list`, `/plugins`, `/hooks` for trust; start a new session and confirm skills and tools load.
 - **Dual-harness repository:** `claude plugin validate` plus a real `codex plugin marketplace add` against the same repository.
-- **Release:** confirm the version changed in both manifests and a `<plugin>--v<version>` tag exists.
+- **Release:** confirm the version changed in both manifests; if other plugins depend on yours with a version range, confirm a `<plugin>--v<version>` tag exists.
 
 ## Checklist
 

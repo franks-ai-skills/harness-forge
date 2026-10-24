@@ -10,10 +10,12 @@ confirmed, and reports two results per part: the harness result for
 what was built, and the goal result.
 
 `scripts/forge.py` is in the Forge plugin root, two directories above
-this skill's folder. Run it with `python3`: it switches to Forge's own
-Python environment. If it stops because that environment is not set up,
-ask the user before running `python3 scripts/setup.py` from the plugin
-root, which downloads Forge's pinned packages from PyPI once.
+this skill's folder. Run it with `python3`; its dependencies ship with
+the plugin, so it downloads and installs nothing. **Before anything else
+in this skill,** run `python3 scripts/forge.py environment` from the
+plugin root. If it reports `"ok": false`, tell the user plainly that
+Forge cannot run here, list each problem it names with its `repair`
+instruction, and stop; never install or download anything yourself.
 
 ## Rules that are easy to get wrong
 
