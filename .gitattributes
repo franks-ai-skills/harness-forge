@@ -1,0 +1,2 @@
+# The bundle is checked byte for byte against vendor/manifest.json: no line-ending conversion.
+vendor/** -text
