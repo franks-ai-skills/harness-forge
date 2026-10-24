@@ -1,37 +1,88 @@
 {
-  "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "urn:harness-forge:conformance:rule-like",
+  "$schema": "http://json-schema.org/draft-07/schema#",
   "title": "Rule-like conformance fixture (not the production rule schema)",
   "type": "object",
   "properties": {
-    "id": {"$ref": "#/$defs/ruleId"},
-    "applicability": {"enum": ["script", "judged"]},
-    "severity": {"enum": ["error", "warning", "info"]},
-    "since": {"type": "string"},
-    "check": {"$ref": "#/$defs/check"}
+    "id": {
+      "$ref": "#/definitions/ruleId"
+    },
+    "applicability": {
+      "enum": [
+        "script",
+        "judged"
+      ]
+    },
+    "severity": {
+      "enum": [
+        "error",
+        "warning",
+        "info"
+      ]
+    },
+    "since": {
+      "type": "string"
+    },
+    "check": {
+      "$ref": "#/definitions/check"
+    }
   },
-  "required": ["id", "applicability", "severity"],
+  "required": [
+    "id",
+    "applicability",
+    "severity"
+  ],
   "allOf": [
     {
-      "if": {"properties": {"applicability": {"const": "script"}}},
-      "then": {"required": ["check"]},
-      "else": {"not": {"required": ["check"]}}
+      "if": {
+        "properties": {
+          "applicability": {
+            "const": "script"
+          }
+        }
+      },
+      "then": {
+        "required": [
+          "check"
+        ]
+      },
+      "else": {
+        "not": {
+          "required": [
+            "check"
+          ]
+        }
+      }
     }
   ],
-  "unevaluatedProperties": false,
-  "$defs": {
-    "ruleId": {"type": "string", "pattern": "^[a-z][a-z0-9-]*(\\.[a-z0-9-]+)+$"},
+  "additionalProperties": false,
+  "definitions": {
+    "ruleId": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9-]*(\\.[a-z0-9-]+)+$"
+    },
     "check": {
       "type": "object",
       "properties": {
-        "checker": {"enum": ["skills.frontmatter-name", "skills.body-size"]},
+        "checker": {
+          "enum": [
+            "skills.frontmatter-name",
+            "skills.body-size"
+          ]
+        },
         "params": {
           "type": "object",
-          "properties": {"max_lines": {"type": "integer", "minimum": 1}},
+          "properties": {
+            "max_lines": {
+              "type": "integer",
+              "minimum": 1
+            }
+          },
           "additionalProperties": false
         }
       },
-      "required": ["checker"],
+      "required": [
+        "checker"
+      ],
       "additionalProperties": false
     }
   }

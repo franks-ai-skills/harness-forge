@@ -1,5 +1,5 @@
 {
-  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$schema": "http://json-schema.org/draft-07/schema#",
   "$id": "urn:harness-forge:schema:override",
   "title": "Repository rule override (.harness/overrides/<rule-id>.yaml)",
   "type": "object",
@@ -23,7 +23,7 @@
       "type": "object",
       "properties": {
         "finding": {
-          "$ref": "urn:harness-forge:schema:research#/$defs/finding"
+          "$ref": "urn:harness-forge:schema:research#/definitions/finding"
         },
         "support_verdict": {
           "const": "supported"

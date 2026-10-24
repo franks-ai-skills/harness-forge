@@ -1,5 +1,5 @@
 {
-  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$schema": "http://json-schema.org/draft-07/schema#",
   "$id": "urn:harness-forge:schema:report",
   "title": "Verification report data",
   "type": "object",
@@ -176,7 +176,7 @@
     "parts": {
       "type": "array",
       "items": {
-        "$ref": "#/$defs/part_result"
+        "$ref": "urn:harness-forge:schema:report#/definitions/part_result"
       }
     },
     "runtime_results": {
@@ -437,7 +437,7 @@
     "file_hashes",
     "symlinks"
   ],
-  "$defs": {
+  "definitions": {
     "part_result": {
       "type": "object",
       "properties": {

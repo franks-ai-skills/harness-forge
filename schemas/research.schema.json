@@ -1,5 +1,5 @@
 {
-  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$schema": "http://json-schema.org/draft-07/schema#",
   "$id": "urn:harness-forge:schema:research",
   "title": "Research record frontmatter (.harness/research/<slug>.md)",
   "type": "object",
@@ -53,7 +53,7 @@
     "findings": {
       "type": "array",
       "items": {
-        "$ref": "#/$defs/finding"
+        "$ref": "urn:harness-forge:schema:research#/definitions/finding"
       }
     },
     "support": {
@@ -166,7 +166,7 @@
     "support",
     "drift"
   ],
-  "$defs": {
+  "definitions": {
     "finding": {
       "type": "object",
       "properties": {
