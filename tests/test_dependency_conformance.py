@@ -182,6 +182,21 @@ class SchemaConformanceTest(unittest.TestCase):
         self.assertNotEqual(schema_errors({"x": 2}, {"properties": {"x": {"const": 1}}}), [])
         self.assertEqual(schema_errors({"x": 1}, {"properties": {"x": {"const": 1}}}), [])
 
+    def test_a_schema_that_names_a_forge_id_is_not_trusted_as_forges(self):
+        forged = {**documents.schema_named("rule"), "properties": {"{x}": {}}}
+        self.assertIsNotNone(schema_problem(forged))
+        with self.assertRaisesRegex(ValueError, "schema refused"):
+            schema_errors({}, forged)
+        self.assertEqual(schema_errors({}, {**documents.schema_named("predicate")}) != [], True,
+                         "the registered schema itself stays trusted")
+
+    def test_non_string_keys_are_refused_clearly(self):
+        for schema in ({"properties": {7: {"type": "string"}}}, {"enum": [{1: "a"}]}):
+            with self.subTest(schema):
+                self.assertIn("schema object keys must be strings", schema_problem(schema))
+                with self.assertRaisesRegex(ValueError, "keys must be strings"):
+                    schema_errors({}, schema)
+
     def test_literal_objects_are_not_checked_as_schemas(self):
         self.assertIsNone(schema_problem({"const": {"$defs": 1, "{x}": 2}, "enum": [{"prefixItems": []}],
                                           "default": {"$id": "x"}, "examples": [{"unknown": 1}]}))

@@ -159,6 +159,23 @@ def _finite(value: Any) -> bool:
     return all(_finite(child) for child in children)
 
 
+def _non_string_key(value: Any) -> Any:
+    """The first mapping key that is not a string; YAML allows them, JSON Schema does not."""
+    if isinstance(value, dict):
+        for key, child in value.items():
+            if not isinstance(key, str):
+                return key
+            found = _non_string_key(child)
+            if found is not None:
+                return found
+    elif isinstance(value, list):
+        for child in value:
+            found = _non_string_key(child)
+            if found is not None:
+                return found
+    return None
+
+
 def schema_problem(schema: Any, *, own_ids: frozenset[str] | None = None) -> str | None:
     """Why ``schema`` must not be compiled, or None (packaging/fastjsonschema-audit.md).
 
@@ -166,6 +183,9 @@ def schema_problem(schema: Any, *, own_ids: frozenset[str] | None = None) -> str
     ``$id``; references must name one of Forge's schema ids or a local
     ``#`` fragment.
     """
+    keys = _non_string_key(schema)
+    if keys is not None:
+        return f"schema object keys must be strings, found {keys!r}"
     meta, check = _metaschema()
     try:
         check(schema)
@@ -264,7 +284,10 @@ def _resolve_schema(uri: str) -> dict:
 @lru_cache(maxsize=256)
 def _compiled(canonical: str):
     schema = json.loads(canonical)  # a fresh object: compiling rewrites its references
-    own = frozenset(_schemas_by_id()) if isinstance(schema, dict) and schema.get("$id") in _schemas_by_id() else None
+    registered = _schemas_by_id().get(schema.get("$id")) if isinstance(schema, dict) else None
+    # Only Forge's registered schema itself is treated as Forge's own; naming its $id is not enough.
+    own = frozenset(_schemas_by_id()) if registered is not None and \
+        json.dumps(registered, sort_keys=True) == canonical else None
     problem = schema_problem(schema, own_ids=own)
     if problem:
         raise ValueError(f"schema refused: {problem}")
@@ -291,6 +314,9 @@ def _messages(error: Exception) -> list[str]:
 
 
 def schema_errors(value: Any, schema: dict) -> list[str]:
+    keys = _non_string_key(schema)
+    if keys is not None:
+        raise ValueError(f"schema refused: schema object keys must be strings, found {keys!r}")
     validator = _compiled(json.dumps(schema, sort_keys=True))
     try:
         validator(value)
