@@ -29,6 +29,15 @@ once it supports such dependencies.
   findings are presented with the goal, design choice or safeguard each
   suggests, and the user adopts all, some or none (#45).
 
+### Verification
+
+- The review worker judges each requested requirement and the goal
+  against every procedure step, exception and output instruction, and
+  checks that a closed list of allowed actions covers what the procedure
+  requires and the phase it governs; its verdicts are a static
+  assessment. Unexecuted reviewer cases from three such contradictions
+  are in `evals/harness-verify/review-consistency.yaml` (#57).
+
 ## 0.2.0 (2026-10-24)
 
 Pins agent-harness-kb 0.2.0, the first KB version tagged as a release
