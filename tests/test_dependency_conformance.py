@@ -191,7 +191,8 @@ class SchemaConformanceTest(unittest.TestCase):
                          "the registered schema itself stays trusted")
 
     def test_non_string_keys_are_refused_clearly(self):
-        for schema in ({"properties": {7: {"type": "string"}}}, {"enum": [{1: "a"}]}):
+        for schema in ({"properties": {7: {"type": "string"}}}, {"enum": [{1: "a"}]},
+                       {"properties": {None: {"type": "string"}}}, {"const": {None: 1}}):
             with self.subTest(schema):
                 self.assertIn("schema object keys must be strings", schema_problem(schema))
                 with self.assertRaisesRegex(ValueError, "keys must be strings"):

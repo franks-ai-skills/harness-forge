@@ -127,10 +127,13 @@ class ClosedRulesTest(unittest.TestCase):
             self.assertTrue(validate_kb(root))
 
     def test_a_params_schema_with_a_non_string_key_is_an_error_not_a_crash(self):
-        with KbCopy() as root:
-            replace_in(root / "checks/catalog.yaml", "max_chars: {type: integer, minimum: 1}", "7: {type: integer}")
-            errors = validate_kb(root)
-        self.assertTrue(any("invalid params schema: schema object keys must be strings" in e for e in errors), errors)
+        for key in ("7", "null", "~"):
+            with self.subTest(key), KbCopy() as root:
+                replace_in(root / "checks/catalog.yaml", "max_chars: {type: integer, minimum: 1}",
+                           f"{key}: {{type: integer}}")
+                errors = validate_kb(root)
+            self.assertTrue(any("invalid params schema: schema object keys must be strings" in e for e in errors),
+                            errors)
 
     def test_selection_predicates_use_declared_facts(self):
         with KbCopy() as root:

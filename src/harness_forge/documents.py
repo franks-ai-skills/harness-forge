@@ -159,21 +159,24 @@ def _finite(value: Any) -> bool:
     return all(_finite(child) for child in children)
 
 
+_NO_KEY = object()
+
+
 def _non_string_key(value: Any) -> Any:
-    """The first mapping key that is not a string; YAML allows them, JSON Schema does not."""
+    """The first mapping key that is not a string, such as YAML's null or 7, else _NO_KEY."""
     if isinstance(value, dict):
         for key, child in value.items():
             if not isinstance(key, str):
                 return key
             found = _non_string_key(child)
-            if found is not None:
+            if found is not _NO_KEY:
                 return found
     elif isinstance(value, list):
         for child in value:
             found = _non_string_key(child)
-            if found is not None:
+            if found is not _NO_KEY:
                 return found
-    return None
+    return _NO_KEY
 
 
 def schema_problem(schema: Any, *, own_ids: frozenset[str] | None = None) -> str | None:
@@ -184,7 +187,7 @@ def schema_problem(schema: Any, *, own_ids: frozenset[str] | None = None) -> str
     ``#`` fragment.
     """
     keys = _non_string_key(schema)
-    if keys is not None:
+    if keys is not _NO_KEY:
         return f"schema object keys must be strings, found {keys!r}"
     meta, check = _metaschema()
     try:
@@ -315,7 +318,7 @@ def _messages(error: Exception) -> list[str]:
 
 def schema_errors(value: Any, schema: dict) -> list[str]:
     keys = _non_string_key(schema)
-    if keys is not None:
+    if keys is not _NO_KEY:
         raise ValueError(f"schema refused: schema object keys must be strings, found {keys!r}")
     validator = _compiled(json.dumps(schema, sort_keys=True))
     try:
