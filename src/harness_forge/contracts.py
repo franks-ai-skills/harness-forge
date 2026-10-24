@@ -120,6 +120,20 @@ def _consistency_problem(record: dict) -> str | None:
     for candidate in record.get("research_candidates", []):
         if "part_id" in candidate and candidate["part_id"] not in parts:
             return f"research candidate {candidate['name']!r} names the unknown part {candidate['part_id']!r}"
+    # A survey candidate kept for reuse investigation is researched only through research_candidates;
+    # one kept for inspiration or discarded must not stay queued there.
+    queued = {(candidate["name"], candidate["source"]) for candidate in record.get("research_candidates", [])}
+    names = set()
+    for candidate in record.get("survey_candidates", []):
+        if candidate["name"] in names:
+            return f"survey candidate {candidate['name']!r} is listed twice"
+        names.add(candidate["name"])
+        key = (candidate["name"], candidate["source"])
+        if candidate["choice"] == "investigate" and key not in queued:
+            return f"survey candidate {candidate['name']!r} is to be investigated but is not in research_candidates"
+        if candidate["choice"] != "investigate" and key in queued:
+            return (f"survey candidate {candidate['name']!r} was chosen for {candidate['choice']} "
+                    "but is still in research_candidates")
     return None
 
 
@@ -273,6 +287,9 @@ def render_contract(
     # Only a record that names candidates binds them, so earlier contracts keep their digests.
     if decision.record.get("research_candidates"):
         content["research_candidates"] = [dict(candidate) for candidate in decision.record["research_candidates"]]
+    # Bound whenever recorded, also empty; a record from before the field keeps its digest.
+    if "survey_candidates" in decision.record:
+        content["survey_candidates"] = [dict(candidate) for candidate in decision.record["survey_candidates"]]
     digest = canonical_digest(content)
 
     record = decision.record
@@ -285,6 +302,10 @@ def render_contract(
         lines.append("Reuse candidates to research: " + "; ".join(
             f"{c['name']} from {c['source']}" + (f" (part {c['part_id']})" if "part_id" in c else "")
             for c in record["research_candidates"]))
+    if "survey_candidates" in record:
+        lines.append("Existing solutions from the survey: " + ("; ".join(
+            f"{c['name']} from {c['source']}: {SURVEY_CHOICES[c['choice']]}" for c in record["survey_candidates"])
+            or "none found"))
     lines.append("")
     for part in parts:
         lines += _part_text(part) + [""]
@@ -537,9 +558,20 @@ def new_part_id(decision: Decision) -> str:
     raise ValueError("all part letters are used")
 
 
+SURVEY_CHOICES = {
+    "investigate": "investigate for reuse (fit, license and maintenance still to be checked)",
+    "inspiration": "explore for inspiration (its ideas are considered; it is not a blueprint and nothing is copied)",
+    "discard": "discarded",
+}
+SURVEY_CANDIDATE_QUESTION = {
+    "id": "survey_candidates",
+    "text": "Should this existing skill, plugin or tool be investigated for reuse, explored for inspiration, "
+            "or discarded?",
+    "choices": ["investigate", "inspiration", "discard"],
+}
 SURVEY_QUESTION = {
-    "id": "survey_findings_used", "text": "Which survey findings should the intake use before splitting the idea?",
-    "choices": ["use the findings listed above", "use none of them"],
+    "id": "survey_findings_used", "text": "Which proposals drawn from the survey findings should shape the idea?",
+    "choices": ["use the proposals listed above", "use some of them", "use none of them"],
 }
 SPLIT_QUESTION = {
     "id": "split_confirmed", "text": "Is this split into parts right, or should parts be combined, split or added?",
@@ -550,8 +582,10 @@ SPLIT_QUESTION = {
 def next_intake_question(decision: Decision, selection: dict) -> dict | None:
     """Exactly one next question, or None when every part is decided.
 
-    Order: whole-idea questions, survey use, split confirmation, then
-    each part's deciding questions.
+    Order: whole-idea questions, the survey's existing solutions, survey
+    use, split confirmation, then each part's deciding questions. A record
+    that settled survey use before candidates were recorded is not asked
+    about them again.
     """
     record = decision.record
     facts = record["facts"]
@@ -560,6 +594,8 @@ def next_intake_question(decision: Decision, selection: dict) -> dict | None:
         if fact["scope"] == "idea" and question["id"] not in facts:
             return {"part_id": None, **question}
     if "survey_findings_used" not in record:
+        if "survey_candidates" not in record:
+            return {"part_id": None, **SURVEY_CANDIDATE_QUESTION}
         return {"part_id": None, **SURVEY_QUESTION}
     if record.get("split_confirmed") is not True:
         return {"part_id": None, **SPLIT_QUESTION}

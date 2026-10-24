@@ -45,10 +45,21 @@ user names for reuse, with `part_id` once parts exist. Research then
 checks its fit, license and maintenance; it is a candidate, not a
 decision. Leave the field out when the user names none.
 
-After the split, each part records its confirmed answers and what
+After the survey, `survey_candidates` records each existing solution
+it found and the user's choice for it (`investigate`, `inspiration` or
+`discard`; an empty list when it found none), and `survey_findings_used`
+the findings behind the adopted proposals. A candidate to investigate is
+also in `research_candidates`; one kept for inspiration or discarded is
+not. After the split, each part records its confirmed answers and what
 `select` returned:
 
 ```yaml
+survey_candidates:
+- name: repro-steps
+  source: https://github.com/example-org/skills/tree/main/skills/repro-steps
+  finding_ids: [F1]
+  choice: investigate
+survey_findings_used: [F2, F4]
 parts:
 - id: A
   slug: repro-checklist

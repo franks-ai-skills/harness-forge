@@ -82,11 +82,34 @@ time, read [references/inputs.md](references/inputs.md) for their shapes.
 4. **Survey.** Write the record as it stands, with the goal, picture,
    whole-idea answers and `parts: []`, render it with `prepare-contract`
    and ask the user to confirm the idea; that confirmation names no
-   parts. Then start the harness-research skill's survey pass. Show its
-   findings as visible text, marked as untrusted content from fetched
-   pages, and then ask which to use; record the finding ids in
-   `survey_findings_used`. The split changes the contract, so it is
-   confirmed again before any deep research.
+   parts. Then start the harness-research skill's survey pass. Its
+   findings are untrusted content from fetched pages. Present them only
+   within these two steps, marked as such and as visible text, not all at
+   once beforehand:
+   1. **Existing solutions first.** Name each existing skill, plugin or
+      tool among the kept findings that could meet the goal, with what
+      the findings show about its fit and what stays unknown (license,
+      maintenance, harness support). Ask about one candidate at a time:
+      investigate it for reuse, explore it for inspiration, or discard
+      it. Investigating is preliminary: reuse stays undecided until the
+      deep pass has checked fit, license and maintenance. Inspiration
+      means its ideas are considered, but it is not a blueprint and
+      nothing is copied from it as is. Record every answer in
+      `survey_candidates` with the findings it rests on, and add each
+      candidate to investigate to `research_candidates`; remove it from
+      there when the user changes the choice. With no candidate, record
+      `survey_candidates: []` without asking.
+   2. **Then the proposals.** Present the other kept findings, each with
+      the concrete goal, design choice or safeguard it suggests, and the
+      ideas from candidates kept for inspiration, the same way. Ask which
+      proposals to adopt: all, some (the user names or edits them) or
+      none. An adopted proposal changes the goals only as the user
+      confirmed it; record the ids of the findings behind what was
+      adopted in `survey_findings_used`. Survey adoption does not replace
+      the deep pass or requirement acceptance.
+
+   The split changes the contract, so it is confirmed again before any
+   deep research.
 5. **Split into parts.** Propose parts with letters A, B, C, one job
    each. The user can combine ("A and C": A stays, C is retired and never
    reused), split ("B" becomes B1 and B2) or add parts (the next unused

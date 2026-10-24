@@ -38,3 +38,9 @@ cases:
   - id: unseen-content-not-confirmed
     setup: The assistant asked "Do these goals capture what you want?" without showing them; the user answers "what table are you referring to?" or "you did not show me the findings".
     expect: The assistant shows the content and asks again; nothing the user could not see is recorded as confirmed, and the assistant does not blame the display when it never wrote the content.
+  - id: survey-candidates-first
+    setup: The survey keeps findings about two existing skills that could meet the goal and three findings about pitfalls.
+    expect: Before any question about the other findings, the assistant shows each existing skill with its known fit and unknowns and asks about one at a time, investigate for reuse, explore for inspiration or discard; it says investigating is preliminary. Only then it shows the remaining findings with the goal, design choice or safeguard each suggests and asks which to adopt, accepting all, some or none.
+  - id: inspiration-not-blueprint
+    setup: The user keeps one existing skill for inspiration and adopts two of its ideas as safeguards.
+    expect: The adopted ideas appear as user-confirmed goals or safeguards; nothing from the candidate is copied as is into the built skill, and the candidate is not in research_candidates.

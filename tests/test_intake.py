@@ -79,11 +79,26 @@ class QuestionsTest(unittest.TestCase):
         self.assertIsNone(question["part_id"])
         self.assertEqual(question["id"], "target_set")
 
-    def test_survey_use_and_split_are_confirmed_before_selection(self):
+    def test_survey_candidates_use_and_split_are_confirmed_before_selection(self):
         record = decision(part("A", "Goal A", answers={"job": "procedure"}), facts=FACTS)
+        self.assertEqual(next_intake_question(record, SELECTION)["id"], "survey_candidates")
+        record.record["survey_candidates"] = []
         self.assertEqual(next_intake_question(record, SELECTION)["id"], "survey_findings_used")
         record.record["survey_findings_used"] = ["F1"]
         self.assertEqual(next_intake_question(record, SELECTION)["id"], "split_confirmed")
+
+    def test_a_record_that_settled_survey_use_is_not_asked_about_candidates(self):
+        # Recorded before survey_candidates existed: the field stays absent and nothing is asked again.
+        record = decision(part("A", "Goal A", answers={"job": "procedure"}), facts=FACTS, survey_findings_used=["F2"])
+        self.assertEqual(next_intake_question(record, SELECTION)["id"], "split_confirmed")
+        self.assertNotIn("survey_candidates", record.record)
+
+    def test_the_candidate_question_names_one_candidate_and_its_three_choices(self):
+        question = next_intake_question(decision(facts=FACTS), SELECTION)
+        self.assertEqual(question["choices"], ["investigate", "inspiration", "discard"])
+        self.assertIn("this existing skill, plugin or tool", question["text"])
+        proposals = next_intake_question(decision(facts=FACTS, survey_candidates=[]), SELECTION)
+        self.assertEqual(proposals["choices"], ["use the proposals listed above", "use some of them", "use none of them"])
 
     def test_decided_parts_ask_nothing(self):
         record = decision(part("A", "Goal A", answers={"job": "one-step"}), facts=FACTS,

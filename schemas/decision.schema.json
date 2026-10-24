@@ -589,6 +589,48 @@
       },
       "minItems": 1
     },
+    "survey_candidates": {
+      "description": "Existing solutions the survey found and what the user chose for each; an empty list records that it found none.",
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200
+          },
+          "source": {
+            "type": "string",
+            "pattern": "^https://[^\\s]+$",
+            "maxLength": 2000
+          },
+          "finding_ids": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "pattern": "^F[0-9]+$"
+            },
+            "minItems": 1,
+            "uniqueItems": true
+          },
+          "choice": {
+            "enum": [
+              "investigate",
+              "inspiration",
+              "discard"
+            ]
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "name",
+          "source",
+          "finding_ids",
+          "choice"
+        ]
+      }
+    },
     "split_confirmed": {
       "type": "boolean"
     },
