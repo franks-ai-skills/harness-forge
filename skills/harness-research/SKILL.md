@@ -70,9 +70,12 @@ root, which downloads Forge's pinned packages from PyPI once.
    ones and why. Read [references/contract.md](references/contract.md)
    before telling the user what the workers may do or what their
    isolation does not guarantee, or why a worker's output was discarded.
-5. **Present and accept.** Before writing the files for `accept`, read
-   [references/inputs.md](references/inputs.md) for their shapes. Show kept findings grouped by pass and part,
-   each with its source and its quote as fetched, and mark them as
+5. **Present and accept.** The survey pass's findings go back to
+   harness-intake, which presents them in its two survey steps, existing
+   solutions first; do not show them all at once before that. For a deep
+   pass, before writing the files for `accept`, read
+   [references/inputs.md](references/inputs.md) for their shapes. Show
+   kept findings grouped by part, each with its source and its quote as fetched, and mark them as
    untrusted content from fetched pages. Then ask, one requirement at a time,
    whether to accept, edit or reject it. Present each finding and
    requirement as visible text before the question about it, or inside
