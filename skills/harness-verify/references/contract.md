@@ -11,6 +11,12 @@ Read this before explaining a verification result.
 | `not applicable` | Nothing is built: an outside-only or nothing-fits part, or a mechanism without a builder in this release |
 | `not checked` | A reused artifact that is not available locally |
 
+The review worker's verdicts, including whether the procedure is
+consistent with its own requirements and allowlists, are a static
+assessment of the built files: they do not demonstrate live behavior or
+certify isolation, and `verified` does not mean every inconsistency was
+found. Runtime results are reported separately.
+
 ## Goal result, decided in this order
 
 1. `not assessed`: the contract is unconfirmed, the part is blocked, the
