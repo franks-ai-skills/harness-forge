@@ -12,6 +12,17 @@ against tags named `harness-forge--v<version>` (`claude plugin tag`
 creates that format); Forge adds such a tag on the same commit only
 once it supports such dependencies.
 
+## Unreleased
+
+### Selection and intake
+
+- harness-intake and harness-research present proposed goals, inferred
+  answers, findings and requirements as visible text before asking
+  about them, ask each inferred fact separately, and ask again when the
+  user did not see the content (#44).
+- `tools/transcript_checks.py` flags questions in a recorded Claude Code
+  session whose content may not have been shown, for review (#44).
+
 ## 0.2.0 (2026-10-24)
 
 Pins agent-harness-kb 0.2.0, the first KB version tagged as a release
