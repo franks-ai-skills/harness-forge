@@ -61,11 +61,15 @@ def _human(event: dict, blocks: list[dict]) -> bool:
     return bool(text) and not text.startswith(SYNTHETIC)
 
 
-def _questions(call: dict) -> list[str]:
-    questions = call.get("input", {}).get("questions")
-    if not isinstance(questions, list):
-        return []
-    return [str(question.get("question", "")) for question in questions if isinstance(question, dict)]
+def _questions(call: dict) -> list[str] | None:
+    """The question strings of an AskUserQuestion call, or None when its input has another shape."""
+    arguments = call.get("input")
+    questions = arguments.get("questions") if isinstance(arguments, dict) else None
+    if not isinstance(questions, list) or not questions:
+        return None
+    if not all(isinstance(question, dict) and isinstance(question.get("question"), str) for question in questions):
+        return None
+    return [question["question"] for question in questions]
 
 
 def question_visibility(lines: list[str]) -> dict:
@@ -80,7 +84,10 @@ def question_visibility(lines: list[str]) -> dict:
         except json.JSONDecodeError:
             problems.append(f"line {number}: not JSON")
             continue
-        if not isinstance(event, dict) or event.get("type") not in ("user", "assistant"):
+        if not isinstance(event, dict):
+            problems.append(f"line {number}: not a JSON object")
+            continue
+        if event.get("type") not in ("user", "assistant"):
             continue
         if event.get("isSidechain") or event.get("parent_tool_use_id"):
             continue
@@ -99,6 +106,9 @@ def question_visibility(lines: list[str]) -> dict:
             elif block.get("type") == "tool_use" and block.get("name") == "AskUserQuestion":
                 asked.add(block.get("id"))
                 questions = _questions(block)
+                if questions is None:
+                    problems.append(f"line {number}: AskUserQuestion input without a list of questions")
+                    continue
                 visible = sum(len(part.strip()) for part in window)
                 found = {"line": number, "question": (questions or [""])[0][:200], "visible_chars": visible}
                 if len(questions) > 1:

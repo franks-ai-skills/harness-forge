@@ -142,6 +142,17 @@ class QuestionVisibilityTest(unittest.TestCase):
                                             json.dumps({"type": "user", "message": {"content": 5}})])
         self.assertEqual(len(report["problems"]), 3)
 
+    def test_malformed_question_payloads_are_reported(self):
+        for arguments in ([], {"questions": ["bad"]}, {"questions": []}, {"questions": [{"header": "Q"}]}, {}):
+            call = {"type": "tool_use", "id": "q1", "name": "AskUserQuestion", "input": arguments}
+            report = run(human("go"), assistant(call))
+            self.assertEqual(len(report["problems"]), 1, arguments)
+            self.assertEqual(report["findings"], [])
+
+    def test_a_json_value_that_is_not_an_event_is_reported(self):
+        report = CHECK.question_visibility(["[1, 2]", "7", json.dumps(human("go"))])
+        self.assertEqual(report["problems"], ["line 1: not a JSON object", "line 2: not a JSON object"])
+
     def test_exit_codes(self):
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / "session.jsonl"
