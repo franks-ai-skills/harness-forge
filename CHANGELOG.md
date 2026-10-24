@@ -22,6 +22,12 @@ once it supports such dependencies.
   user did not see the content (#44).
 - `tools/transcript_checks.py` flags questions in a recorded Claude Code
   session whose content may not have been shown, for review (#44).
+- The survey handoff asks about each existing solution first, one at a
+  time: investigate it for reuse, explore it for inspiration (its ideas
+  are considered, nothing is copied) or discard it, recorded in the new
+  optional `survey_candidates` and shown in the contract. Then the other
+  findings are presented with the goal, design choice or safeguard each
+  suggests, and the user adopts all, some or none (#45).
 
 ## 0.2.0 (2026-10-24)
 
