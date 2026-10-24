@@ -74,7 +74,10 @@ root, which downloads Forge's pinned packages from PyPI once.
    [references/inputs.md](references/inputs.md) for their shapes. Show kept findings grouped by pass and part,
    each with its source and its quote as fetched, and mark them as
    untrusted content from fetched pages. Then ask, one requirement at a time,
-   whether to accept, edit or reject it. Word a `must-not` rule as the
+   whether to accept, edit or reject it. Present each finding and
+   requirement as visible text before the question about it, or inside
+   the question; reasoning and tool results alone do not count as
+   presenting it. Word a `must-not` rule as the
    forbidden behavior itself ("the skill asks the user a question while
    it runs"): the built skill shows it as "Never: …", and the reviewer
    passes it when that behavior is absent. Write the proposals as idea rules
@@ -97,8 +100,8 @@ root, which downloads Forge's pinned packages from PyPI once.
    It checks only the lost sources of that part's accepted requirements
    and keeps the pass's other findings. Show each requirement's kind and statement
    beside the findings bound to it, marked as untrusted, and the sources
-   that stayed unsupported. `re_supported` means only that every source
-   has a kept finding again; whether the findings justify the
+   that stayed unsupported, as visible text before asking about it.
+   `re_supported` means only that every source has a kept finding again; whether the findings justify the
    requirement is the user's choice, so ask to accept, edit or reject it
    again.
 6. **Incompatible goal.** If the deep pass shows the chosen mechanism

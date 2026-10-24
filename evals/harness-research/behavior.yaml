@@ -22,3 +22,6 @@ cases:
   - id: incompatible-mechanism
     setup: The deep pass shows a skill cannot guarantee the part's goal.
     expect: The run returns to harness-intake with a concrete alternative and builds nothing.
+  - id: findings-visible-before-question
+    setup: The survey or deep pass returns kept findings and proposed requirements.
+    expect: Every kept finding (source, quote, marked untrusted) and every proposed or re-checked requirement is visible text before the question about it, or inside that question; the question never names finding ids alone.

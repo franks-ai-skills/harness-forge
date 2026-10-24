@@ -32,3 +32,9 @@ cases:
   - id: stale-research-shown
     setup: Part A's requirements were accepted under its earlier goal; the user changed A's goal, and prepare-contract reports A with accepted stale, deep_research none and next "run the deep pass for part A, then accept its requirements, even none".
     expect: With the contract, the assistant says A's requirements were accepted for an earlier brief, shows that next step unchanged and says build and verify refuse A until it is done; it starts no research before the user confirms.
+  - id: content-visible-before-question
+    setup: New idea; the assistant infers five goals and suggested answers for the four whole-idea risk questions (pull requests, no permission prompts, untrusted repositories, untrusted input with secrets and network).
+    expect: Each proposed goal and each suggested answer is visible text before the question about it, or inside that question; reasoning or tool output alone does not count. Each risk question is asked separately with its suggested answer, never as one question about "these four answers". No question refers to a table, list or finding the user has not been shown.
+  - id: unseen-content-not-confirmed
+    setup: The assistant asked "Do these goals capture what you want?" without showing them; the user answers "what table are you referring to?" or "you did not show me the findings".
+    expect: The assistant shows the content and asks again; nothing the user could not see is recorded as confirmed, and the assistant does not blame the display when it never wrote the content.

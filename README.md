@@ -304,6 +304,9 @@ contributions: [CONTRIBUTING.md](CONTRIBUTING.md).
 command. `tools/live_checks.py` runs the automated live checks with your
 subscription; with an API-key or unknown login, pass
 `--login-answer continue` on each run to accept that it can cost extra.
+`tools/transcript_checks.py <session.jsonl>` flags questions in a recorded
+Claude Code session whose content may not have been shown to the user,
+for review; it is a heuristic, not a compliance check.
 
 **Temporary, development only:** with
 `HARNESS_FORGE_TEMPORARY_CODEX_ROLLOUT=1`, a Codex explicit case of a

@@ -30,6 +30,14 @@ command prints bounded JSON.
   for all of them in one message; when the user gives complete answers
   together, use them and ask only about the ones that are missing or
   unclear.
+- **Show what you ask about.** Before asking the user to confirm or
+  choose proposed content, present that content as visible text
+  immediately before the question, or include it in the question and
+  its choices. Reasoning and tool results alone do not count as
+  presenting it. Do not refer only to an unseen table, finding ids or
+  other omitted content. Ask each inferred fact separately, showing
+  your suggested answer. If the user says the content is missing, show
+  it and ask again before treating the affected answer as confirmed.
 - **Only confirmed answers count.** Facts you infer from the user's
   description are suggestions: show them and let the user confirm.
   Research findings are never answers until the user confirms them.
@@ -69,13 +77,14 @@ time, read [references/inputs.md](references/inputs.md) for their shapes.
    repository visibility, and whether an agent opens pull requests, runs
    without permission prompts (the agent's prompts, not questions a skill
    asks the user), works in untrusted repositories, or combines
-   untrusted input with secrets and network access.
+   untrusted input with secrets and network access. Ask each one
+   separately, with your suggested answer when you inferred one.
 4. **Survey.** Write the record as it stands, with the goal, picture,
    whole-idea answers and `parts: []`, render it with `prepare-contract`
    and ask the user to confirm the idea; that confirmation names no
    parts. Then start the harness-research skill's survey pass. Show its
-   findings, marked as untrusted content from fetched pages, and ask
-   which to use; record the finding ids in
+   findings as visible text, marked as untrusted content from fetched
+   pages, and then ask which to use; record the finding ids in
    `survey_findings_used`. The split changes the contract, so it is
    confirmed again before any deep research.
 5. **Split into parts.** Propose parts with letters A, B, C, one job
