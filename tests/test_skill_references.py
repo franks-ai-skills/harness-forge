@@ -54,9 +54,12 @@ class IntakeInputsTest(unittest.TestCase):
         self.assertIn("Reuse candidates to research", render_contract(record, None, []).text)
 
     def test_the_part_entry_completes_a_valid_record(self):
-        record = self.record().record
-        record.update(yaml.safe_load(self.blocks[1][1]))
-        validate(record, "decision")
+        decision = self.record()
+        decision.record.update(yaml.safe_load(self.blocks[1][1]))
+        validate(decision.record, "decision")
+        # The survey candidate to investigate is the one research_candidates names.
+        self.assertIn("repro-steps from https://github.com/example-org/skills/tree/main/skills/repro-steps: "
+                      "investigate for reuse", render_contract(decision, None, []).text)
 
     def test_the_select_input_is_accepted(self):
         path = self.root / "select.json"
