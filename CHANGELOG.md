@@ -14,6 +14,9 @@ once it supports such dependencies.
 
 ## Unreleased
 
+Pins agent-harness-kb 0.4.0: its schema copies are Draft-07, and it
+carries 0.3.0's plugin release-tag guidance.
+
 ### Selection and intake
 
 - harness-intake and harness-research present proposed goals, inferred
