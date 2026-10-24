@@ -1,4 +1,4 @@
-"""The plugin package: manifests, skills, runtime files, snapshot identity and the Forge environment."""
+"""The plugin package: manifests, skills, runtime files, snapshot identity and the bundled dependencies."""
 
 import hashlib
 import json
@@ -11,15 +11,19 @@ import tomllib
 import unittest
 from pathlib import Path
 
-from harness_forge import environment
+from harness_forge import bundle, environment
 
 FORGE = Path(__file__).resolve().parents[1]
 SKILLS = {"harness-intake", "harness-research", "build-skill", "harness-verify"}
 AGENT_PLUGINS_SCHEMA = "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json"
 # What the four skills need at run time; tests, tools, evals and packaging notes are development files.
-RUNTIME = ("scripts/forge.py", "scripts/setup.py", "src/harness_forge/__init__.py", "snapshot/kb-manifest.json",
-           "schemas", "templates/skill", "workers/researcher.md", "workers/source-support.md", "workers/reviewer.md",
-           "requirements.lock", "LICENSE", "LICENSE-OUTPUT-EXCEPTION", "README.md")
+RUNTIME = ("scripts/forge.py", "src/harness_forge/__init__.py", "src/harness_forge/bundle.py",
+           "snapshot/kb-manifest.json", "schemas", "templates/skill", "workers/researcher.md",
+           "workers/source-support.md", "workers/reviewer.md", "vendor/manifest.json", "vendor/draft-07.schema.json",
+           "vendor/yaml", "vendor/markdown_it", "vendor/mdurl", "vendor/fastjsonschema", "vendor/licenses", "LICENSE",
+           "LICENSE-OUTPUT-EXCEPTION", "README.md")
+# Run with no site-packages, so only the standard library and the bundle can be imported.
+BARE_PYTHON = (sys.executable, "-I", "-S")
 # Components that run code when a harness installs or loads a plugin.
 EXECUTABLE_COMPONENTS = ("hooks", "hooks.json", ".mcp.json", "mcp.json", ".lsp.json", "bin", "monitors",
                          "settings.json")
@@ -49,30 +53,6 @@ def snapshot_digest(root: Path) -> str:
     for path in sorted(p for p in (root / "snapshot").rglob("*") if p.is_file()):
         digest.update(path.relative_to(root).as_posix().encode() + b"\0" + path.read_bytes() + b"\0")
     return digest.hexdigest()
-
-
-def fake_environment(root: Path, environ: dict) -> Path:
-    """A finished Forge environment whose python is the checkout's development interpreter, which can import
-    Forge's locked packages; the real one comes from scripts/setup.py."""
-    directory = environment.environment_dir(root, environ)
-    python = environment.python_of(directory)
-    python.parent.mkdir(parents=True)
-    # A wrapper, not a symlink: a symlinked interpreter would not find the development environment's packages.
-    python.write_text(f'#!/bin/sh\nexec "{FORGE / ".venv" / "bin" / "python"}" "$@"\n', encoding="utf-8")
-    python.chmod(0o755)
-    (directory / environment.MARKER).write_text(environment.lock_digest(root), encoding="utf-8")
-    return directory
-
-
-def broken_environment(root: Path, environ: dict) -> Path:
-    """A finished Forge environment whose python exits at once, as one does after its base interpreter is gone."""
-    directory = environment.environment_dir(root, environ)
-    python = environment.python_of(directory)
-    python.parent.mkdir(parents=True)
-    python.write_text("#!/bin/sh\nexit 1\n", encoding="utf-8")
-    python.chmod(0o755)
-    (directory / environment.MARKER).write_text(environment.lock_digest(root), encoding="utf-8")
-    return directory
 
 
 def install_copy(destination: Path) -> Path:
@@ -125,12 +105,13 @@ class SkillInventoryTest(unittest.TestCase):
         for name in skill_names:
             self.assertEqual(frontmatter_name(FORGE / "skills" / name), name)
 
-    def test_every_skill_says_how_forge_finds_its_environment(self):
+    def test_every_skill_checks_the_bundle_first_and_downloads_nothing(self):
         for name in SKILLS:
             text = (FORGE / "skills" / name / "SKILL.md").read_text(encoding="utf-8")
-            self.assertIn("python3", text, name)
-            self.assertIn("scripts/setup.py", text, name)
-            self.assertNotIn("environment's Python", text, name)
+            self.assertIn("python3 scripts/forge.py environment", text, name)
+            self.assertLess(text.index("scripts/forge.py environment"), text.index("## Procedure"), name)
+            for gone in ("scripts/setup.py", "PyPI", "requirements.lock"):
+                self.assertNotIn(gone, text, name)
 
 
 class InstalledCopyTest(unittest.TestCase):
@@ -143,7 +124,6 @@ class InstalledCopyTest(unittest.TestCase):
         with tempfile.TemporaryDirectory(prefix="forge-install-") as directory:
             installed = install_copy(Path(directory) / "harness-forge")
             home = {environment.HOME_VARIABLE: str(Path(directory) / "home")}
-            fake_environment(installed, home)
             installed_snapshot_digest = snapshot_digest(installed)
             source_snapshot_digest = snapshot_digest(FORGE)
             self.assertEqual(installed_snapshot_digest, source_snapshot_digest)
@@ -151,7 +131,7 @@ class InstalledCopyTest(unittest.TestCase):
             for relative, digest in manifest["files"].items():
                 data = (installed / "snapshot" / relative).read_bytes()
                 self.assertEqual(hashlib.sha256(data).hexdigest(), digest, relative)
-            completed = subprocess.run([sys.executable, str(installed / "scripts" / "forge.py"), "validate-kb",
+            completed = subprocess.run([*BARE_PYTHON, str(installed / "scripts" / "forge.py"), "validate-kb",
                                         "--kb", str(installed / "snapshot")],
                                        cwd=directory, capture_output=True, text=True, timeout=120,
                                        env={**os.environ, **home})
@@ -211,292 +191,129 @@ class OutputExceptionTest(unittest.TestCase):
             self.assertNotIn(b"Generated Output Exception", data, path)
 
 
-class EnvironmentTest(unittest.TestCase):
-    def setUp(self):
-        self.temporary = tempfile.TemporaryDirectory(prefix="forge-home-")
-        self.home = Path(self.temporary.name)
-        self.environ = {environment.HOME_VARIABLE: str(self.home)}
-
-    def tearDown(self):
-        self.temporary.cleanup()
-
-    def make_environment(self, *, complete=True) -> Path:
-        directory = environment.environment_dir(FORGE, self.environ)
-        python = environment.python_of(directory)
-        python.parent.mkdir(parents=True)
-        python.symlink_to(sys.executable)
-        if complete:
-            (directory / environment.MARKER).write_text(environment.lock_digest(FORGE), encoding="utf-8")
-        return directory
-
-    def test_the_environment_is_keyed_by_the_lock(self):
-        directory = environment.environment_dir(FORGE, self.environ)
-        self.assertEqual(directory.parent, self.home)
-        self.assertEqual(directory.name, "env-" + environment.lock_digest(FORGE))
-        self.assertEqual(environment.lock_digest(FORGE),
-                         hashlib.sha256((FORGE / "requirements.lock").read_bytes()).hexdigest()[:16])
-
+class DataDirectoryTest(unittest.TestCase):
     def test_the_default_home_is_a_user_data_directory(self):
-        self.assertEqual(environment.forge_home({"HOME": "/h"}, platform="darwin"),
-                         Path("/h/.local/share/harness-forge"))
-        self.assertEqual(environment.forge_home({"HOME": "/h", "XDG_DATA_HOME": "/x"}, platform="linux"),
-                         Path("/x/harness-forge"))
-        self.assertEqual(environment.forge_home({"LOCALAPPDATA": "C:/L"}, platform="win32"),
-                         Path("C:/L/harness-forge"))
+        self.assertEqual(environment.forge_home({"HOME": "/home/u"}, platform="linux"),
+                         Path("/home/u/.local/share/harness-forge"))
+        self.assertEqual(environment.forge_home({"HOME": "/home/u", "XDG_DATA_HOME": "/data"}, platform="linux"),
+                         Path("/data/harness-forge"))
+        self.assertEqual(environment.forge_home({environment.HOME_VARIABLE: "/forge"}), Path("/forge"))
 
-    def test_without_an_environment_forge_names_the_setup_command(self):
-        decision, detail = environment.decide(FORGE, "/some/other/python", self.environ)
-        self.assertEqual(decision, "missing")
-        self.assertIn(str(FORGE / "scripts" / "setup.py"), detail)
 
-    def test_an_unfinished_environment_counts_as_missing(self):
-        self.make_environment(complete=False)
-        self.assertEqual(environment.decide(FORGE, "/some/other/python", self.environ)[0], "missing")
+def vendor_copy(destination: Path) -> Path:
+    shutil.copytree(bundle.VENDOR, destination, ignore=shutil.ignore_patterns("__pycache__"))
+    return destination
 
-    def test_a_finished_environment_runs_forge(self):
-        directory = self.make_environment()
-        self.assertEqual(environment.decide(FORGE, "/some/other/python", self.environ),
-                         ("exec", str(environment.python_of(directory))))
-        self.assertEqual(environment.decide(FORGE, str(directory), self.environ), ("run", None))
-        switched = {**self.environ, environment.ACTIVE_VARIABLE: str(directory)}
-        self.assertEqual(environment.decide(FORGE, "/some/other/python", switched), ("run", None))
 
-    def test_the_checkout_development_environment_runs_forge(self):
-        self.assertEqual(environment.decide(FORGE, str(FORGE / ".venv"), self.environ), ("run", None))
+class BundleTest(unittest.TestCase):
+    def test_the_bundle_matches_its_manifest(self):
+        self.assertEqual(bundle.problems(), [])
+        completed = subprocess.run([*BARE_PYTHON, str(FORGE / "tools" / "vendor.py"), "--check"], cwd=FORGE,
+                                   capture_output=True, text=True, timeout=60)
+        self.assertEqual(completed.returncode, 0, completed.stdout + completed.stderr)
+        self.assertTrue(json.loads(completed.stdout)["ok"])
 
-    def test_another_virtual_environment_does_not_count(self):
-        self.assertEqual(environment.decide(FORGE, str(self.home / "venv"), self.environ)[0], "missing")
+    def test_missing_changed_and_extra_files_are_named(self):
+        with tempfile.TemporaryDirectory(prefix="forge-vendor-") as directory:
+            vendor = vendor_copy(Path(directory) / "vendor")
+            (vendor / "yaml" / "reader.py").unlink()
+            (vendor / "fastjsonschema" / "draft07.py").write_text("raise SystemExit", encoding="utf-8")
+            (vendor / "mdurl" / "extra.py").write_text("", encoding="utf-8")
+            (vendor / "yaml" / "__pycache__").mkdir(exist_ok=True)
+            (vendor / "yaml" / "__pycache__" / "x.pyc").write_bytes(b"")
+            self.assertEqual(bundle.problems(vendor=vendor), [
+                "vendor/fastjsonschema/draft07.py differs from the manifest",
+                "vendor/yaml/reader.py is missing",
+                "vendor/mdurl/extra.py is not part of the bundle"])
+            (vendor / "manifest.json").unlink()
+            self.assertIn("vendor/manifest.json is missing", bundle.problems(vendor=vendor)[0])
 
-    def test_an_environment_whose_python_no_longer_starts_is_broken(self):
-        """Its base interpreter was removed, e.g. by a Homebrew upgrade: the marker alone does not make it finished."""
-        directory = broken_environment(FORGE, self.environ)
-        self.assertFalse(environment.complete(FORGE, directory))
-        decision, detail = environment.decide(FORGE, "/some/other/python", self.environ)
-        self.assertEqual(decision, "broken")
-        self.assertIn(str(FORGE / "scripts" / "setup.py"), detail)
+    def test_stray_compiled_files_links_and_broken_manifests_are_named(self):
+        with tempfile.TemporaryDirectory(prefix="forge-vendor-") as directory:
+            vendor = vendor_copy(Path(directory) / "vendor")
+            (vendor / "yaml" / "evil.pyc").write_bytes(b"importable without source")
+            (vendor / "mdurl" / "linked").symlink_to(vendor / "yaml")
+            found = bundle.problems(vendor=vendor)
+            self.assertIn("vendor/yaml/evil.pyc is not part of the bundle", found)
+            self.assertIn("vendor/mdurl/linked is a link, which the bundle never contains", found)
+            for broken in ("[]", '{"files": []}', '{"files": {"a.py": 5}}', "{not json"):
+                (vendor / "manifest.json").write_text(broken, encoding="utf-8")
+                (problem,) = bundle.problems(vendor=vendor, check_python=False)
+                self.assertTrue(problem.startswith("vendor/manifest.json is missing or unreadable"), broken)
 
-    def test_a_finished_marker_without_python_counts_as_missing(self):
-        directory = environment.environment_dir(FORGE, self.environ)
-        directory.mkdir(parents=True)
-        (directory / environment.MARKER).write_text(environment.lock_digest(FORGE), encoding="utf-8")
-        self.assertEqual(environment.decide(FORGE, "/some/other/python", self.environ)[0], "missing")
-
-    def test_a_python_that_cannot_be_run_does_not_start(self):
-        def times_out(*arguments, **options):
-            raise subprocess.TimeoutExpired(arguments[0], environment.START_TIMEOUT)
-
-        def fails(*arguments, **options):
-            raise PermissionError("not executable")
-
-        for run in (times_out, fails):
-            original = environment.subprocess.run
-            environment.subprocess.run = run
+    @unittest.skipIf(hasattr(os, "geteuid") and os.geteuid() == 0, "root reads every file")
+    def test_an_unreadable_file_is_named_not_raised(self):
+        with tempfile.TemporaryDirectory(prefix="forge-vendor-") as directory:
+            vendor = vendor_copy(Path(directory) / "vendor")
+            target = vendor / "yaml" / "reader.py"
+            target.chmod(0)
             try:
-                self.assertFalse(environment.starts(Path(sys.executable)), run.__name__)
+                self.assertEqual(bundle.problems(vendor=vendor, check_python=False)[0][:42],
+                                 "vendor/yaml/reader.py cannot be read (Perm")
             finally:
-                environment.subprocess.run = original
-        self.assertTrue(environment.starts(Path(sys.executable)))
+                target.chmod(0o644)
 
-    def test_forge_with_a_broken_environment_names_the_setup_command(self):
-        base = Path(getattr(sys, "_base_executable", sys.executable))
-        broken_environment(FORGE, self.environ)
-        completed = subprocess.run([str(base), "-I", str(FORGE / "scripts" / "forge.py"), "validate-kb", "--kb",
-                                    str(FORGE / "snapshot")], capture_output=True, text=True, timeout=60,
-                                   env={**os.environ, **self.environ})
-        self.assertEqual(completed.returncode, 2)
-        self.assertEqual(completed.stdout, "")
-        self.assertIn("scripts/setup.py", completed.stderr)
-        self.assertIn("not set up", completed.stderr)
-        self.assertIn("no longer starts", completed.stderr)
-        self.assertIn("ask the user", completed.stderr.lower())
+    def test_activation_moves_vendor_to_the_front(self):
+        script = ("import sys; sys.path.append(sys.argv[2]); sys.path.insert(0, sys.argv[1]); import harness_forge; "
+                  "print(sys.path.index(sys.argv[2]), sys.path.count(sys.argv[2]))")
+        completed = subprocess.run([*BARE_PYTHON, "-c", script, str(FORGE / "src"), str(bundle.VENDOR)],
+                                   capture_output=True, text=True, timeout=60)
+        self.assertEqual(completed.stdout.split(), ["0", "1"], completed.stderr)
 
-    def test_forge_started_outside_its_environment_reports_setup(self):
-        base = Path(getattr(sys, "_base_executable", sys.executable))
-        completed = subprocess.run([str(base), "-I", str(FORGE / "scripts" / "forge.py"), "validate-kb", "--kb",
-                                    str(FORGE / "snapshot")], capture_output=True, text=True, timeout=60,
-                                   env={**os.environ, **self.environ})
-        self.assertEqual(completed.returncode, 2)
-        self.assertEqual(completed.stdout, "")
-        self.assertIn("scripts/setup.py", completed.stderr)
-        self.assertIn("ask the user", completed.stderr.lower())
+    def test_an_old_python_is_named(self):
+        found = bundle.problems(version=(3, 10, 14))
+        self.assertEqual(found, ["Python 3.10.14 is too old; Forge needs Python 3.11 or newer"])
+        self.assertIn("Python 3.11 or newer", bundle.repair(found))
+        self.assertIn("Reinstall or update", bundle.repair(["vendor/yaml/reader.py is missing"]))
 
-    def test_forge_started_outside_its_environment_switches_to_it(self):
-        base = Path(getattr(sys, "_base_executable", sys.executable))
-        fake_environment(FORGE, self.environ)
-        completed = subprocess.run([str(base), "-I", str(FORGE / "scripts" / "forge.py"), "validate-kb", "--kb",
-                                    str(FORGE / "snapshot")], capture_output=True, text=True, timeout=120,
-                                   env={**os.environ, **self.environ})
+    def test_forge_stops_on_a_damaged_bundle_without_downloading(self):
+        with tempfile.TemporaryDirectory(prefix="forge-install-") as directory:
+            installed = install_copy(Path(directory) / "harness-forge")
+            (installed / "vendor" / "yaml" / "reader.py").unlink()
+            completed = subprocess.run([*BARE_PYTHON, str(installed / "scripts" / "forge.py"), "environment"],
+                                       cwd=directory, capture_output=True, text=True, timeout=60)
+        self.assertEqual(completed.returncode, 2, completed.stderr)
+        report = json.loads(completed.stdout)
+        self.assertEqual((report["command"], report["ok"]), ("environment", False))
+        self.assertEqual(report["problems"], ["vendor/yaml/reader.py is missing"])
+        self.assertIn("Reinstall or update the Harness Forge plugin", report["repair"])
+
+    def test_the_environment_command_reports_the_bundled_dependencies(self):
+        completed = subprocess.run([*BARE_PYTHON, str(FORGE / "scripts" / "forge.py"), "environment"],
+                                   cwd=FORGE, capture_output=True, text=True, timeout=60)
         self.assertEqual(completed.returncode, 0, completed.stderr)
+        report = json.loads(completed.stdout)
+        self.assertTrue(report["ok"])
+        self.assertEqual([d["name"] for d in report["dependencies"]],
+                         ["PyYAML", "markdown-it-py", "mdurl", "fastjsonschema", "JSON Schema Draft-07 metaschema"])
+        self.assertEqual(report["bundled_files"], len(bundle.expected_files()))
 
+    def test_bundled_packages_come_from_vendor(self):
+        script = ("import sys; sys.path.insert(0, sys.argv[1]); import harness_forge, json; "
+                  "from harness_forge import bundle, documents; print(json.dumps(bundle.origins()))")
+        completed = subprocess.run([*BARE_PYTHON, "-c", script, str(FORGE / "src")], capture_output=True, text=True,
+                                   timeout=60)
+        self.assertEqual(completed.returncode, 0, completed.stderr)
+        for name, origin in json.loads(completed.stdout).items():
+            self.assertTrue(Path(origin).resolve().is_relative_to(bundle.VENDOR), (name, origin))
 
-def load_setup():
-    sys.path.insert(0, str(FORGE / "scripts"))
-    try:
-        import setup
-    finally:
-        sys.path.remove(str(FORGE / "scripts"))
-    return setup
+    def test_a_package_imported_before_forge_from_elsewhere_is_refused(self):
+        with tempfile.TemporaryDirectory(prefix="forge-shadow-") as directory:
+            (Path(directory) / "yaml").mkdir()
+            (Path(directory) / "yaml" / "__init__.py").write_text("", encoding="utf-8")
+            script = ("import sys; sys.path.insert(0, sys.argv[1]); import yaml; sys.path.insert(0, sys.argv[2]); "
+                      "import harness_forge")
+            completed = subprocess.run([*BARE_PYTHON, "-c", script, directory, str(FORGE / "src")],
+                                       capture_output=True, text=True, timeout=60)
+        self.assertNotEqual(completed.returncode, 0)
+        self.assertIn("yaml was imported from", completed.stderr)
+        self.assertIn("Forge uses only its bundled copy in vendor/", completed.stderr)
 
-
-def fake_venv(path):
-    python = environment.python_of(path)
-    python.parent.mkdir(parents=True)
-    python.symlink_to(sys.executable)
-
-
-class SetupTest(unittest.TestCase):
-    def setUp(self):
-        self.setup = load_setup()
-        self.temporary = tempfile.TemporaryDirectory(prefix="forge-setup-")
-        self.environ = {environment.HOME_VARIABLE: self.temporary.name, "PIP_TARGET": "/elsewhere",
-                        "PIP_CONFIG_FILE": "/elsewhere/pip.conf", "PATH": os.environ.get("PATH", "")}
-        self.target = environment.environment_dir(FORGE, self.environ)
-        self.calls = []
-
-    def tearDown(self):
-        self.temporary.cleanup()
-
-    def runner(self, *, install=0, imports=0):
-        def run(command, **options):
-            self.calls.append({"command": command, "env": options.get("env"), "cwd": options.get("cwd"),
-                               "locked": self.setup.lock_path(self.target).exists(), "target": self.target.exists()})
-            code = install if "install" in command else imports
-            return subprocess.CompletedProcess(command, code, "", "" if code == 0 else "failed")
-        return run
-
-    def test_setup_installs_exactly_the_locked_wheels_with_pip_isolated(self):
-        python = Path("/env/bin/python")
-        self.assertEqual(self.setup.install_command(python, FORGE / "requirements.lock"),
-                         [str(python), "-I", "-m", "pip", "--isolated", "--no-input", "install", "--require-hashes",
-                          "--only-binary", ":all:", "--no-deps", "-r", str(FORGE / "requirements.lock")])
-        offline = self.setup.install_command(python, FORGE / "requirements.lock", wheelhouse=Path("/w"))
-        self.assertEqual(offline[offline.index("--find-links") - 1:offline.index("--find-links") + 2],
-                         ["--no-index", "--find-links", "/w"])
-
-    def test_pip_settings_from_the_environment_never_reach_the_install(self):
-        result = self.setup.setup(FORGE, self.environ, run=self.runner(), create=fake_venv)
-        self.assertTrue(result["ok"], result)
-        for call in self.calls:
-            self.assertEqual([name for name in call["env"] if name.startswith("PIP_")], ["PIP_CONFIG_FILE"])
-
-    def test_no_pip_configuration_file_or_working_directory_module_takes_part(self):
-        """--isolated skips user configuration only; a pip.py or ensurepip.py in the caller's directory would run."""
-        seen = []
-        result = self.setup.setup(FORGE, self.environ, run=self.runner(),
-                                  create=lambda path: (seen.append(os.getcwd()), fake_venv(path)))
-        self.assertTrue(result["ok"], result)
-        home = os.path.realpath(self.target.parent)
-        self.assertEqual([os.path.realpath(directory) for directory in seen], [home])
-        for call in self.calls:
-            self.assertEqual(call["env"]["PIP_CONFIG_FILE"], os.devnull)
-            self.assertEqual(os.path.realpath(call["cwd"]), home)
-            self.assertEqual(call["command"][1], "-I")
-        self.assertNotEqual(os.path.realpath(os.getcwd()), home, "the caller's directory is restored")
-
-    def test_relative_paths_mean_the_callers_directory(self):
-        caller = os.getcwd()
-        os.chdir(self.temporary.name)
-        try:
-            environ = {**self.environ, environment.HOME_VARIABLE: "relative-home"}
-            result = self.setup.setup(FORGE, environ, run=self.runner(), create=fake_venv, wheelhouse=Path("wheels"))
-        finally:
-            os.chdir(caller)
-        self.assertTrue(result["ok"], result)
-        home = Path(self.temporary.name).resolve() / "relative-home"
-        self.assertEqual(Path(result["environment"]).resolve().parent, home)
-        install = self.calls[0]["command"]
-        self.assertEqual(Path(install[install.index("--find-links") + 1]).resolve(),
-                         Path(self.temporary.name).resolve() / "wheels")
-        self.assertTrue((Path(result["environment"]) / environment.MARKER).exists())
-
-    def test_a_home_through_a_link_and_dot_dot_gets_one_real_environment(self):
-        """venv normalizes `link/..` lexically while the file system follows the link: setup resolves first."""
-        base = Path(self.temporary.name).resolve()
-        (base / "deep" / "inner").mkdir(parents=True)
-        (base / "linked").symlink_to(base / "deep" / "inner")
-        environ = {**self.environ, environment.HOME_VARIABLE: str(base / "linked" / ".." / "forge-home")}
-        result = self.setup.setup(FORGE, environ, run=self.runner())
-        self.assertTrue(result["ok"], result)
-        self.assertEqual(Path(result["environment"]).parent, base / "deep" / "forge-home")
-        self.assertTrue(environment.python_of(Path(result["environment"])).exists())
-        self.assertFalse((base / "forge-home").exists(), "nothing is built where venv's spelling points")
-
-    def test_an_install_whose_packages_cannot_be_imported_is_not_finished(self):
-        result = self.setup.setup(FORGE, self.environ, run=self.runner(imports=1), create=fake_venv)
-        self.assertFalse(result["ok"])
-        self.assertEqual(environment.decide(FORGE, "/x", self.environ)[0], "missing")
-        self.assertFalse(self.target.exists(), "a failed setup leaves nothing")
-
-    def test_setup_builds_at_the_final_path_under_a_lock(self):
-        created = []
-        result = self.setup.setup(FORGE, self.environ, run=self.runner(),
-                                  create=lambda path: (created.append(path), fake_venv(path)))
-        self.assertTrue(result["ok"], result)
-        self.assertEqual([path.resolve() for path in created], [self.target.resolve()],
-                         "a virtual environment cannot be moved after creation")
-        self.assertTrue(all(call["locked"] for call in self.calls))
-        self.assertFalse(self.setup.lock_path(self.target).exists(), "the lock is released")
-        self.assertEqual(environment.decide(FORGE, "/x", self.environ)[0], "exec")
-        again = self.setup.setup(FORGE, self.environ, run=self.runner(install=1), create=None)
-        self.assertTrue(again["ok"] and again["existing"], "an existing environment is reused")
-
-    def test_setup_rebuilds_an_environment_whose_python_no_longer_starts(self):
-        broken_environment(FORGE, self.environ)
-        (self.target / "left-over").write_text("old", encoding="utf-8")
-        created = []
-        result = self.setup.setup(FORGE, self.environ, run=self.runner(),
-                                  create=lambda path: (created.append(path), fake_venv(path)))
-        self.assertTrue(result["ok"] and not result["existing"], result)
-        self.assertEqual(Path(result["environment"]).resolve(), self.target.resolve())
-        self.assertEqual([path.resolve() for path in created], [self.target.resolve()])
-        self.assertFalse((self.target / "left-over").exists(), "the broken environment is replaced, not reused")
-        self.assertEqual(environment.decide(FORGE, "/x", self.environ)[0], "exec")
-
-    def test_a_running_setup_is_left_alone(self):
-        self.target.parent.mkdir(parents=True, exist_ok=True)
-        self.setup.lock_path(self.target).mkdir()
-        fake_venv(self.target)
-        result = self.setup.setup(FORGE, self.environ, run=self.runner(), create=fake_venv)
-        self.assertFalse(result["ok"])
-        self.assertIn("another setup", result["error"])
-        self.assertTrue(environment.python_of(self.target).exists(), "nothing of the other setup is deleted")
-        self.assertEqual(self.calls, [])
-
-    def test_an_environment_finished_while_waiting_for_the_lock_is_reused(self):
-        """Another setup finishes between the first check and taking the lock: the second check sees it."""
-        checks = []
-        real_complete = environment.complete
-
-        def complete(root, directory):
-            checks.append(directory)
-            if len(checks) == 1:  # the other setup finishes right after this first check
-                fake_venv(directory)
-                (directory / environment.MARKER).write_text(environment.lock_digest(FORGE), encoding="utf-8")
-                return False
-            return real_complete(root, directory)
-
-        def never(path):
-            raise AssertionError("must not create")
-
-        original = self.setup.environment.complete
-        self.setup.environment.complete = complete
-        try:
-            result = self.setup.setup(FORGE, self.environ, run=self.runner(install=1), create=never)
-        finally:
-            self.setup.environment.complete = original
-        self.assertTrue(result["ok"] and result["existing"], result)
-        self.assertEqual(len(checks), 2, "checked again after taking the lock")
-        self.assertEqual(self.calls, [])
-        self.assertTrue((self.target / environment.MARKER).exists(), "the other setup's environment survives")
-        self.assertFalse(self.setup.lock_path(self.target).exists())
-
-    def test_something_else_at_the_target_is_reported_not_deleted(self):
-        self.target.parent.mkdir(parents=True, exist_ok=True)
-        self.target.write_text("not an environment", encoding="utf-8")
-        result = self.setup.setup(FORGE, self.environ, run=self.runner(), create=fake_venv)
-        self.assertFalse(result["ok"])
-        self.assertIn(str(self.target), result["error"])
-        self.assertEqual(self.target.read_text(encoding="utf-8"), "not an environment")
+    def test_pyproject_declares_no_downloaded_dependency(self):
+        project = tomllib.loads((FORGE / "pyproject.toml").read_text(encoding="utf-8"))["project"]
+        self.assertEqual(project["dependencies"], [])
+        for gone in ("scripts/setup.py", "requirements.lock", "packaging/requirements.in", "tools/lock_requirements.py"):
+            self.assertFalse((FORGE / gone).exists(), gone)
 
 
 if __name__ == "__main__":
