@@ -54,7 +54,7 @@ def check_name_format(files, facts, params):
             return str(error)
         if len(name) > params["max_chars"]:
             return f"name has {len(name)} characters, more than {params['max_chars']}"
-        if not NAME.match(name):
+        if not NAME.fullmatch(name):
             return f"name {name!r} is not lowercase letters, digits and single hyphens"
         if name != posixpath.basename(directory):
             return f"name {name!r} differs from the directory {posixpath.basename(directory)!r}"
@@ -165,7 +165,7 @@ def check_invocation_flags(files, facts, params):
 
 REGISTRY = {
     "skills.frontmatter": ("1.0.0", check_frontmatter),
-    "skills.name-format": ("1.0.0", check_name_format),
+    "skills.name-format": ("1.1.0", check_name_format),
     "skills.description-length": ("1.0.0", check_description_length),
     "skills.body-lines": ("1.0.0", check_body_lines),
     "skills.reference-depth": ("1.4.0", check_reference_depth),

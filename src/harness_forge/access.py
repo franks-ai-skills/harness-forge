@@ -236,7 +236,7 @@ def _arguments(name: str, words: list[str]) -> tuple[list[str], list[str]]:
                 raise Unreadable(f"{name} option {word} is not one Forge can read")
         index += 1
     for option, value in given:
-        if option in _NUMERIC and not _NUMBER.match(value):
+        if option in _NUMERIC and not _NUMBER.fullmatch(value):
             raise Unreadable(f"{name} {option} needs a number")
         if name == "nl" and option == "-b" and value != "a":
             raise Unreadable("nl -b takes only a")
@@ -291,7 +291,7 @@ def command_problems(command: str, workspace: Path, home: str = "") -> list[str]
             if not scripts:
                 problems.append("sed needs a script")
             problems += [f"sed script {script!r} may run or write" for script in scripts
-                         if not _SED_PRINT.match(script)]
+                         if not _SED_PRINT.fullmatch(script)]
         if kind == "one path" and len(positionals) > 1:
             problems.append(f"{name} with a second file writes to it")
         problems += [problem for problem in (_path_problem(path, workspace) for path in positionals) if problem]

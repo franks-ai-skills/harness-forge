@@ -32,6 +32,14 @@ carries 0.3.0's plugin release-tag guidance.
   findings are presented with the goal, design choice or safeguard each
   suggests, and the user adopts all, some or none (#45).
 
+### Tokens
+
+- Whole-token checks refuse a trailing line feed or carriage return and
+  line feed: schema patterns through fastjsonschema, and Forge's own
+  checks (skill names, reviewer command numbers and `sed` scripts, skill
+  paths in a Codex run) with full matches. `skills.name-format` is
+  version 1.1.0 (#51).
+
 ### Dependencies
 
 - Forge's runtime dependencies ship inside the plugin in `vendor/`:

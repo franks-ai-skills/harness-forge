@@ -329,7 +329,7 @@ def _observe_claude(stdout: str, name: str, baseline: set[str], workspace: Path 
                                 for folder in (f".claude/skills/{name}", f".agents/skills/{name}", directory)
                                 if folder}:
                         signal = f"read SKILL.md from the {name} skill"
-                    elif (_CLAUDE_SKILL_PATH.match(path) or [None, name])[1] != name:
+                    elif (_CLAUDE_SKILL_PATH.fullmatch(path) or [None, name])[1] != name:
                         # Another skill's SKILL.md: reading it chooses that skill, as a Skill call would.
                         # The candidate's name elsewhere is no other skill's choice.
                         other_reads.add(str(block.get("id")))
@@ -431,7 +431,7 @@ def _skills_read(item: dict) -> list[tuple[str, str]]:
     read = []
     for segment in segments:
         for word in segment[1:]:
-            match = _SKILL_PATH.match(word)
+            match = _SKILL_PATH.fullmatch(word)
             if match and any(re.fullmatch(rf"name:\s*['\"]?{re.escape(match.group(1))}['\"]?\s*", line)
                              for line in lines):
                 read.append((match.group(1), posixpath.normpath(word)))
