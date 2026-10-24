@@ -43,11 +43,12 @@ import re
 import sys
 from pathlib import Path
 
-import yaml
-
 ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT / "src") not in sys.path:
     sys.path.insert(0, str(ROOT / "src"))
+
+import harness_forge  # noqa: E402,F401  activates vendor/ before yaml is imported
+import yaml  # noqa: E402
 
 from harness_forge.adapters.base import Completed, preflight, run_command  # noqa: E402
 from harness_forge.contracts import write_decision  # noqa: E402
