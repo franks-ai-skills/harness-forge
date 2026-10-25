@@ -6,8 +6,11 @@ import unittest
 from pathlib import Path
 
 from harness_forge.build_skill import (
+    CONFLICT_TOTAL_LIMIT,
     BuilderUnavailable,
     ConflictError,
+    conflict_report,
+    conflicts,
     mark_built,
     plan_skill,
     unavailable_result,
@@ -270,6 +273,51 @@ class WriteTest(unittest.TestCase):
                    for key in plan(reference_decision(recommended="commands", chosen="commands"))
                    if key.startswith(".agents/")}
         self.assertEqual(written, set(BUILDER_OUTPUTS))
+
+
+class ConflictReportTest(unittest.TestCase):
+    """Each conflicting file keeps its own diff; a cut or omitted one is marked and named (#78)."""
+
+    def test_a_complete_diff_is_shown_whole(self):
+        report = conflict_report([("a/SKILL.md", "-old\n+new\n")])
+        self.assertEqual(report["conflicts"], [{"path": "a/SKILL.md", "diff": "-old\n+new\n", "chars": 10,
+                                                "truncated": False}])
+        self.assertEqual((report["diff"], report["incomplete"]), ("-old\n+new\n", []))
+
+    def test_a_diff_over_the_file_bound_is_cut_and_marked(self):
+        report = conflict_report([("a/SKILL.md", "x" * 25000), ("a/b.md", "y" * 10)])
+        first, second = report["conflicts"]
+        self.assertEqual((len(first["diff"]), first["chars"], first["truncated"]), (20000, 25000, True))
+        self.assertEqual((second["diff"], second["chars"], second["truncated"]), ("y" * 10, 10, False))
+        self.assertEqual(report["incomplete"], ["a/SKILL.md"])
+        self.assertIn("[Forge: the diff of a/SKILL.md is cut after 20000 of 25000 characters]", report["diff"])
+
+    def test_every_diff_past_the_total_bound_is_marked_and_named(self):
+        entries = [("a/1.md", "1" * 20000), ("a/2.md", "2" * 20000), ("a/3.md", "3" * 25000),
+                   ("a/4.md", "4" * 50), ("a/5.md", "5" * 5)]
+        report = conflict_report(entries)
+        self.assertEqual([entry["path"] for entry in report["conflicts"]], [path for path, _ in entries])
+        self.assertEqual([entry["chars"] for entry in report["conflicts"]], [20000, 20000, 25000, 50, 5])
+        self.assertEqual([entry["truncated"] for entry in report["conflicts"]], [False, False, True, True, True])
+        self.assertEqual([len(entry["diff"]) for entry in report["conflicts"]], [20000, 20000, 20000, 0, 0])
+        self.assertLessEqual(sum(len(entry["diff"]) for entry in report["conflicts"]), CONFLICT_TOTAL_LIMIT)
+        self.assertEqual(report["incomplete"], ["a/3.md", "a/4.md", "a/5.md"])
+        for path in ("a/4.md", "a/5.md"):
+            self.assertIn(f"[Forge: the diff of {path} is not shown; the output limit was reached]", report["diff"])
+
+    def test_listing_conflicts_reads_only(self):
+        root = Path(self.enterContext(tempfile.TemporaryDirectory()))
+        skill = root / ".agents" / "skills" / NAME / "SKILL.md"
+        skill.parent.mkdir(parents=True)
+        skill.write_text("---\nname: reproduction-checklist\ndescription: mine\n---\nHand-written.\n", encoding="utf-8")
+        before = sorted((str(path), path.stat().st_mtime_ns) for path in root.rglob("*"))
+        listed = conflicts(root, plan())
+        self.assertEqual(sorted((str(path), path.stat().st_mtime_ns) for path in root.rglob("*")), before)
+        with self.assertRaises(ConflictError) as raised:
+            write_skill(root, plan())
+        self.assertEqual(listed, raised.exception.conflicts)
+        self.assertEqual([path for path, _ in listed], [f".agents/skills/{NAME}/SKILL.md"])
+        self.assertIn("Hand-written.", listed[0][1])
 
 
 class UntrustedInputTest(unittest.TestCase):

@@ -47,8 +47,11 @@ instruction, and stop; never install or download anything yourself.
   is unavailable in this release; the part stays blocked with its
   recommendation unchanged. A reused artifact is never rebuilt.
 - **Never overwrite silently.** If a different skill already exists at
-  the path, show Forge's diff and replace only the files the user agrees
-  to. A file Forge wrote earlier that the new plan no longer has is
+  the path, show each conflicting file's diff and ask about each file;
+  replace only the files the user agrees to after seeing their whole
+  diff. Forge names a diff it cut or left out in `incomplete`: say so,
+  and show that file's whole diff page by page with `--show-diff` before
+  asking. A file whose whole diff the user has not seen is not agreed. A file Forge wrote earlier that the new plan no longer has is
   listed too; `--replace` with its path removes it. A matching existing skill is kept as it is.
 - **Built is not verified.** A successful build sets the part to `built`;
   only harness-verify can set `verified`. Do not write the README's
@@ -85,8 +88,12 @@ instruction, and stop; never install or download anything yourself.
    --evidence <workers output> --relay <relay> --description <file>
    --procedure <file> --checklist <file>`. It refuses the build when a
    binding does not match or the checklist is malformed, and reports
-   conflicts as a diff; after the user agrees, run it again with
-   `--replace` listing the agreed paths.
+   each conflicting file under `conflicts` with its diff. For a path in
+   `incomplete`, run the same command with `--show-diff <path>` added,
+   then with `--offset <next_offset>` until `next_offset` is null: it
+   only reads and changes no file or record.
+   After the user agrees, run the build again with `--replace` listing
+   the agreed paths.
 6. Run harness-verify on the result: it judges each requirement by its
    accepted statement, so a checklist line that drops part of it fails
    there.

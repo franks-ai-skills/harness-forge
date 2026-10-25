@@ -1,5 +1,6 @@
 """The live CLI commands end to end in a temporary repository, with scripted workers and fetches."""
 
+import argparse
 import contextlib
 import importlib.util
 import io
@@ -87,6 +88,53 @@ class Cli:
         assert code == 0, stderr
         return self.write(f"relay-{run_id}.json", {"choice": "confirm", "displayed_digest": contract["digest"],
                                                    "part_ids": self.parts, "run_id": run_id})
+
+
+class ConflictOutputTest(unittest.TestCase):
+    """The conflict report and its preview pages always fit the CLI's byte bound (#78)."""
+
+    def setUp(self):
+        specification = importlib.util.spec_from_file_location("forge_conflict_output", FORGE / "scripts" / "forge.py")
+        self.module = importlib.util.module_from_spec(specification)
+        specification.loader.exec_module(self.module)
+
+    def printed(self, call):
+        stdout = io.StringIO()
+        with contextlib.redirect_stdout(stdout):
+            call()
+        text = stdout.getvalue()
+        self.assertLessEqual(len(text.rstrip("\n").encode("utf-8")), self.module.MAX_OUTPUT_BYTES)
+        return json.loads(text)
+
+    def test_large_unicode_and_escaped_conflicts_fit_and_stay_named(self):
+        heavy = {"ascii": "a" * 20000, "emoji": "\U0001F600" * 20000, "escaped": '"\\\n\x01' * 5000}
+        for kind, text in heavy.items():
+            with self.subTest(kind=kind):
+                entries = [(f".agents/skills/x/{kind}-{n}.md", text) for n in range(4)]
+                output = self.printed(lambda: self.module.emit(self.module._conflict_payload("differs", entries)))
+                self.assertEqual([entry["path"] for entry in output["conflicts"]], [path for path, _ in entries])
+                for entry, (_, full) in zip(output["conflicts"], entries):
+                    self.assertEqual(entry["chars"], len(full))
+                    self.assertTrue(full.startswith(entry["diff"]))
+                    self.assertEqual(entry["truncated"], len(entry["diff"]) < len(full))
+                self.assertEqual(output["incomplete"],
+                                 [entry["path"] for entry in output["conflicts"] if entry["truncated"]])
+                self.assertTrue(output["incomplete"], "four such diffs never fit whole")
+                for path in output["incomplete"]:
+                    self.assertIn(f"[Forge: the diff of {path} is", output["diff"])
+
+    def test_preview_pages_fit_and_rebuild_the_whole_diff(self):
+        for text in ("\U0001F600" * 30000, '"\\\n\x01' * 12000, "a" * 45000):
+            with self.subTest(chars=len(text)):
+                pages, offset = [], 0
+                while offset is not None:
+                    arguments = argparse.Namespace(show_diff="a.md", offset=offset, replace=None)
+                    page = self.printed(lambda: self.module._show_diff(arguments, {"a.md": text}))
+                    self.assertEqual((page["offset"], page["chars"]), (offset, len(text)))
+                    self.assertTrue(page["diff"])
+                    pages.append(page["diff"])
+                    offset = page["next_offset"]
+                self.assertEqual("".join(pages), text)
 
 
 class LiveCommandsTest(unittest.TestCase):
@@ -257,6 +305,61 @@ class LiveCommandsTest(unittest.TestCase):
                                              f".agents/skills/{NAME}/references/requirements.md")
         self.assertEqual(code, 0, stderr)
         self.assertIn("1. Name the platform the reproducer runs on.", skill.read_text(encoding="utf-8"))
+
+    def test_a_cut_conflict_diff_is_named_and_shown_whole_page_by_page(self):
+        cli, arguments = self.build_ready(ResearchRunner([finding()]))
+        values = dict(zip(arguments[::2], arguments[1::2]))
+        skill = self.root / f".agents/skills/{NAME}/SKILL.md"
+        skill.write_text(skill.read_text(encoding="utf-8") + "".join(f"Hand-written line {n}.\n" for n in range(3000)),
+                         encoding="utf-8")
+        snapshot = {path: path.read_bytes() for path in self.root.rglob("*") if path.is_file()}
+
+        calls = []
+
+        def build(*extra):
+            calls.append(extra)
+            relay = cli.confirm(self.decision, f"build-cut-{len(calls)}", "--revision", values["--revision"])
+            return cli("build", "--decision", self.decision, "--part", "A", "--revision", values["--revision"],
+                       "--evidence", values["--evidence"], "--relay", relay, "--root", self.root,
+                       "--description", cli.write("description.txt", DESCRIPTION),
+                       "--procedure", cli.write("procedure.md", PROCEDURE), *extra)
+
+        code, output, stderr = build()
+        self.assertEqual((code, output["built"]), (1, False), stderr)
+        paths = [entry["path"] for entry in output["conflicts"]]
+        self.assertIn(f".agents/skills/{NAME}/SKILL.md", paths)
+        first = output["conflicts"][paths.index(f".agents/skills/{NAME}/SKILL.md")]
+        self.assertTrue(first["truncated"])
+        self.assertGreater(first["chars"], len(first["diff"]))
+        self.assertIn(f".agents/skills/{NAME}/SKILL.md", output["incomplete"])
+        self.assertIn(f"[Forge: the diff of .agents/skills/{NAME}/SKILL.md is cut after", output["diff"])
+
+        pages, offset = [], 0
+        while offset is not None:
+            code, page, stderr = build("--show-diff", f".agents/skills/{NAME}/SKILL.md", "--offset", offset)
+            self.assertEqual(code, 0, stderr)
+            self.assertEqual((page["chars"], page["offset"]), (first["chars"], offset))
+            pages.append(page["diff"])
+            offset = page["next_offset"]
+        whole = "".join(pages)
+        self.assertEqual(len(whole), first["chars"])
+        self.assertTrue(whole.startswith(first["diff"]))
+        self.assertIn("-Hand-written line 2999.", whole)
+        self.assertEqual({path: path.read_bytes() for path in self.root.rglob("*") if path.is_file()
+                          and ".scratch" not in path.parts}, {path: data for path, data in snapshot.items()
+                                                              if ".scratch" not in path.parts},
+                         "reporting and previewing conflicts change no file and no record")
+
+        code, _, stderr = build("--show-diff", "README.md")
+        self.assertEqual(code, 2)
+        self.assertIn("not a conflict of this build", stderr)
+        code, _, stderr = build("--show-diff", f".agents/skills/{NAME}/SKILL.md", "--replace",
+                                f".agents/skills/{NAME}/SKILL.md")
+        self.assertEqual(code, 2)
+        self.assertIn("--show-diff only reads", stderr)
+        code, _, stderr = build("--show-diff", f".agents/skills/{NAME}/SKILL.md", "--offset", first["chars"] + 1)
+        self.assertEqual(code, 2)
+        self.assertIn("outside the diff", stderr)
 
     def test_research_accept_build_and_verify(self):
         runner = ResearchRunner([finding()])

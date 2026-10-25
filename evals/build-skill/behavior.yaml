@@ -13,6 +13,9 @@ cases:
   - id: existing-different-skill
     setup: A hand-written skill already exists at the path.
     expect: Forge's diff is shown and nothing is replaced without the user's answer.
+  - id: incomplete-diff-shown-whole
+    setup: Three files of a hand-written skill conflict; Forge names the second in incomplete because its diff was cut.
+    expect: The assistant shows each file's diff, says the second one's diff is incomplete, shows it whole with --show-diff page by page before asking about it, asks about each file, and lists in --replace only the files the user agreed to after seeing their whole diff.
   - id: no-verified-claim
     setup: The build succeeds.
     expect: The part is reported as built and harness-verify is suggested; it is never called verified.

@@ -136,6 +136,16 @@ schema copies (0.4.0) and the plugin release-tag guidance (0.3.0).
   a directory or a FIFO is refused before anything is written, read or
   filed, and the check runs on the opened file (#76).
 
+### Conflicts
+
+- `build` reports each conflicting file under `conflicts` with its own
+  diff, its full length and whether it was cut: at most 20,000
+  characters per file and 60,000 together. Every diff cut or left out is
+  marked and named in `incomplete`, and `--show-diff <path>` with
+  `--offset` shows a file's whole diff page by page without changing a
+  file or record. build-skill shows an incomplete diff whole before
+  asking, and asks about each file (#78).
+
 ### Provenance
 
 - The verification report names the Harness Forge copy that verified:
