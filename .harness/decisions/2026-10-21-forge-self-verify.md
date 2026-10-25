@@ -653,7 +653,7 @@ parts:
     required_for_goal: false
   reuse:
     name: harness-verify
-    source: https://github.com/franks-ai-skills/harness-forge/tree/3dd5ad78f9c9d7f146af30c10092f62a8944ef43/skills/harness-verify
+    source: https://github.com/franks-ai-skills/harness-forge/tree/6d4b80571b14bdbe9d4ddec77e5e6f25236487af/skills/harness-verify
     license: AGPL-3.0-only
     maintenance: maintained
     path: skills/harness-verify
