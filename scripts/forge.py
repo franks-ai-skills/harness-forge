@@ -62,6 +62,7 @@ from harness_forge.research import (  # noqa: E402
     recheck_targets, record_drift, write_research,
     write_revision,
 )
+from harness_forge.licensing import check as licensing_check  # noqa: E402
 from harness_forge.provenance import forge_provenance  # noqa: E402
 from harness_forge.runtime import load_cases  # noqa: E402
 from harness_forge.workflow import research_pass, verify_live  # noqa: E402
@@ -1079,6 +1080,17 @@ def _compare_requirements(arguments: argparse.Namespace) -> int:
     return 0
 
 
+def _licensing(arguments: argparse.Namespace) -> int:
+    """For a publicly shared result: whether conventional locations identify licensing information."""
+    root = Path(arguments.root).resolve()
+    try:
+        decision = load_decision(Path(arguments.decision))
+    except ValueError as error:
+        raise _InvalidInput(str(error)) from error
+    emit({"command": "licensing", **licensing_check(decision.record, root)})
+    return 0
+
+
 def _readme(arguments: argparse.Namespace) -> int:
     """Write the result README's Outside controls section, and where skills load, from the decision record."""
     root = Path(arguments.root).resolve()
@@ -1587,6 +1599,11 @@ def build_parser() -> argparse.ArgumentParser:
     accept.add_argument("--choices", required=True, help="JSON: rule id to accept, reject or {edit: rule}")
     accept.add_argument("--slug", required=True)
     accept.set_defaults(handler=_accept)
+    licensing = commands.add_parser("licensing", help="check a publicly shared result repository for "
+                                                       "licensing information; changes nothing")
+    licensing.add_argument("--decision", required=True)
+    licensing.add_argument("--root", required=True, help="target repository root")
+    licensing.set_defaults(handler=_licensing)
     compare = commands.add_parser("compare-requirements",
                                   help="group a part's proposed requirements against the ones accepted before")
     compare.add_argument("--decision", required=True)

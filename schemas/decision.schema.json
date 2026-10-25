@@ -792,6 +792,51 @@
           "drift_digest"
         ]
       }
+    },
+    "licensing": {
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "basis": {
+              "type": "string",
+              "pattern": "^[0-9a-f]{64}$"
+            },
+            "answer": {
+              "const": "continue"
+            }
+          },
+          "required": [
+            "basis",
+            "answer"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "basis": {
+              "type": "string",
+              "pattern": "^[0-9a-f]{64}$"
+            },
+            "answer": {
+              "const": "location"
+            },
+            "location": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 500,
+              "pattern": "\\S"
+            }
+          },
+          "required": [
+            "basis",
+            "answer",
+            "location"
+          ],
+          "additionalProperties": false
+        }
+      ]
     }
   },
   "additionalProperties": false,
