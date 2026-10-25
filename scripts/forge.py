@@ -38,8 +38,8 @@ import stat  # noqa: E402
 
 from harness_forge.adapters.base import preflight, run_command  # noqa: E402
 from harness_forge.build_skill import (  # noqa: E402
-    CONFLICT_DIFF_LIMIT, BuilderUnavailable, ConflictError, build_outputs, conflict_report, mark_built, plan_skill,
-    write_skill,
+    CONFLICT_DIFF_LIMIT, BuilderUnavailable, ConflictError, bounded_prefix, build_outputs, conflict_report, mark_built,
+    plan_skill, write_skill,
 )
 from harness_forge.build_skill import conflicts as build_conflicts  # noqa: E402
 from harness_forge.contracts import (  # noqa: E402
@@ -1229,7 +1229,7 @@ def _build(arguments: argparse.Namespace) -> int:
         emit({"command": "build", "built": False, "reason": str(error)})
         return 1
     except ConflictError as error:
-        emit({"command": "build", "built": False, "reason": str(error), **conflict_report(error.conflicts)})
+        emit(_conflict_payload(str(error), error.conflicts))
         return 1
     except (OSError, ValueError) as error:
         raise _InvalidInput(str(error)) from error
@@ -1238,6 +1238,24 @@ def _build(arguments: argparse.Namespace) -> int:
     _save_decision(arguments, mark_built(decision, arguments.part, build))
     emit({"command": "build", "built": True, "written": [str(path.relative_to(root)) for path in written]})
     return 0
+
+
+def _payload_size(payload: dict) -> int:
+    return len(json.dumps(payload, ensure_ascii=False).encode("utf-8"))
+
+
+def _conflict_payload(reason: str, entries: list[tuple[str, str]]) -> dict:
+    """The conflict report, its shown diffs shrunk until the whole output fits the byte bound.
+
+    Every shown character is printed twice, under ``conflicts`` and in the joined ``diff``.
+    """
+    size = MAX_OUTPUT_BYTES // 2
+    while True:
+        payload = {"command": "build", "built": False, "reason": reason, **conflict_report(entries, size=size)}
+        excess = _payload_size(payload) - MAX_OUTPUT_BYTES
+        if excess <= 0 or size == 0:
+            return payload  # emit refuses one whose paths and marks alone are too long
+        size = max(0, size - excess // 2 - 1)
 
 
 def _show_diff(arguments: argparse.Namespace, diffs: dict[str, str]) -> int:
@@ -1250,10 +1268,12 @@ def _show_diff(arguments: argparse.Namespace, diffs: dict[str, str]) -> int:
                             f"{', '.join(diffs) or 'none'}")
     if not 0 <= arguments.offset <= len(diff):
         raise _InvalidInput(f"--offset {arguments.offset}: outside the diff's {len(diff)} characters")
-    page = diff[arguments.offset:arguments.offset + CONFLICT_DIFF_LIMIT]
+    payload = {"command": "build", "built": False, "path": arguments.show_diff, "offset": arguments.offset,
+               "chars": len(diff), "diff": "", "next_offset": len(diff)}
+    # A page holds at most CONFLICT_DIFF_LIMIT characters and as many as fit the output's byte bound.
+    page = bounded_prefix(diff[arguments.offset:], CONFLICT_DIFF_LIMIT, MAX_OUTPUT_BYTES - _payload_size(payload))
     end = arguments.offset + len(page)
-    emit({"command": "build", "built": False, "path": arguments.show_diff, "offset": arguments.offset,
-          "chars": len(diff), "diff": page, "next_offset": end if end < len(diff) else None})
+    emit({**payload, "diff": page, "next_offset": end if end < len(diff) else None})
     return 0
 
 

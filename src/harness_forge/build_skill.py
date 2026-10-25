@@ -13,6 +13,7 @@ from __future__ import annotations
 import copy
 import difflib
 import hashlib
+import json
 import os
 import re
 from pathlib import Path
@@ -330,17 +331,37 @@ def conflicts(root: Path, planned: dict[str, str], *, replace: list[str] | tuple
     return _conflicts(root, name, planned, replace)[0]
 
 
-def conflict_report(entries: list[tuple[str, str]]) -> dict:
+def serialized_size(char: str) -> int:
+    """The bytes one character takes in UTF-8 JSON without ASCII escaping, as the CLI prints it."""
+    return len(json.dumps(char, ensure_ascii=False).encode("utf-8")) - 2
+
+
+def bounded_prefix(text: str, chars: int, size: int) -> str:
+    """The longest start of ``text`` with at most ``chars`` characters and ``size`` serialized bytes."""
+    used = 0
+    for index, char in enumerate(text[:chars]):
+        used += serialized_size(char)
+        if used > size:
+            return text[:index]
+    return text[:chars]
+
+
+def conflict_report(entries: list[tuple[str, str]], *, size: int | None = None) -> dict:
     """Every conflicting path with as much of its own diff as the bounds allow.
 
-    A diff cut or left out by a bound is marked, keeps its full length and is named in ``incomplete``, so
-    nobody agrees to a replacement on a diff they did not see whole. ``diff`` joins the shown text with the
-    marks for callers that read one string.
+    The character limits are ceilings; ``size`` also bounds the serialized bytes of all shown diffs, so the
+    caller can fit the whole output. A diff cut or left out by a bound is marked, keeps its full length and
+    is named in ``incomplete``, so nobody agrees to a replacement on a diff they did not see whole. ``diff``
+    joins the shown text with the marks for callers that read one string.
     """
     report, shown, incomplete, left = [], [], [], CONFLICT_TOTAL_LIMIT
+    room = size
     for path, diff in entries:
-        part = diff[:min(CONFLICT_DIFF_LIMIT, left)]
+        limit = min(CONFLICT_DIFF_LIMIT, left)
+        part = diff[:limit] if room is None else bounded_prefix(diff, limit, room)
         left -= len(part)
+        if room is not None:
+            room -= sum(serialized_size(char) for char in part)
         truncated = len(part) < len(diff)
         report.append({"path": path, "diff": part, "chars": len(diff), "truncated": truncated})
         if not truncated:

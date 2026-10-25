@@ -1,5 +1,6 @@
 """The live CLI commands end to end in a temporary repository, with scripted workers and fetches."""
 
+import argparse
 import contextlib
 import importlib.util
 import io
@@ -87,6 +88,53 @@ class Cli:
         assert code == 0, stderr
         return self.write(f"relay-{run_id}.json", {"choice": "confirm", "displayed_digest": contract["digest"],
                                                    "part_ids": self.parts, "run_id": run_id})
+
+
+class ConflictOutputTest(unittest.TestCase):
+    """The conflict report and its preview pages always fit the CLI's byte bound (#78)."""
+
+    def setUp(self):
+        specification = importlib.util.spec_from_file_location("forge_conflict_output", FORGE / "scripts" / "forge.py")
+        self.module = importlib.util.module_from_spec(specification)
+        specification.loader.exec_module(self.module)
+
+    def printed(self, call):
+        stdout = io.StringIO()
+        with contextlib.redirect_stdout(stdout):
+            call()
+        text = stdout.getvalue()
+        self.assertLessEqual(len(text.rstrip("\n").encode("utf-8")), self.module.MAX_OUTPUT_BYTES)
+        return json.loads(text)
+
+    def test_large_unicode_and_escaped_conflicts_fit_and_stay_named(self):
+        heavy = {"ascii": "a" * 20000, "emoji": "\U0001F600" * 20000, "escaped": '"\\\n\x01' * 5000}
+        for kind, text in heavy.items():
+            with self.subTest(kind=kind):
+                entries = [(f".agents/skills/x/{kind}-{n}.md", text) for n in range(4)]
+                output = self.printed(lambda: self.module.emit(self.module._conflict_payload("differs", entries)))
+                self.assertEqual([entry["path"] for entry in output["conflicts"]], [path for path, _ in entries])
+                for entry, (_, full) in zip(output["conflicts"], entries):
+                    self.assertEqual(entry["chars"], len(full))
+                    self.assertTrue(full.startswith(entry["diff"]))
+                    self.assertEqual(entry["truncated"], len(entry["diff"]) < len(full))
+                self.assertEqual(output["incomplete"],
+                                 [entry["path"] for entry in output["conflicts"] if entry["truncated"]])
+                self.assertTrue(output["incomplete"], "four such diffs never fit whole")
+                for path in output["incomplete"]:
+                    self.assertIn(f"[Forge: the diff of {path} is", output["diff"])
+
+    def test_preview_pages_fit_and_rebuild_the_whole_diff(self):
+        for text in ("\U0001F600" * 30000, '"\\\n\x01' * 12000, "a" * 45000):
+            with self.subTest(chars=len(text)):
+                pages, offset = [], 0
+                while offset is not None:
+                    arguments = argparse.Namespace(show_diff="a.md", offset=offset, replace=None)
+                    page = self.printed(lambda: self.module._show_diff(arguments, {"a.md": text}))
+                    self.assertEqual((page["offset"], page["chars"]), (offset, len(text)))
+                    self.assertTrue(page["diff"])
+                    pages.append(page["diff"])
+                    offset = page["next_offset"]
+                self.assertEqual("".join(pages), text)
 
 
 class LiveCommandsTest(unittest.TestCase):
