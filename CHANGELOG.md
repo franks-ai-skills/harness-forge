@@ -60,6 +60,14 @@ release-tag guidance.
   statement, so a line that drops part of it fails. Without a checklist
   the output is unchanged (#49).
 
+### Disclosure
+
+- The README and the research workers' reference say that Claude Code
+  2.1.310 kept research workers' fetched-page tool results in the
+  selected profile after the run, despite `--no-session-persistence`;
+  they can hold untrusted content, are not Forge's diagnostics, and
+  Forge does not delete profile data (#48).
+
 ### Provenance
 
 - The verification report names the Harness Forge copy that verified:

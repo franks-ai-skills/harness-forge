@@ -252,6 +252,22 @@ history/configuration exposure. Forge does not require or provision one.
 A fresh directory alone does not prove credential or keychain isolation;
 using the existing account can expose more than its login material.
 
+**Files the CLI keeps.** Observed on 2026-10-24 with Forge 0.2.0 and
+Claude Code 2.1.310: after the research workers finished, the selected
+Claude Code profile still held their fetched-page tool results, seven
+files of about 512 KB in total, under
+`<profile>/projects/<folder named after Forge's temporary research
+workspace>/<session>/tool-results/`. The workers were launched with
+`--no-session-persistence`; the files remained despite the flag, and no
+session transcripts were found in those folders. These files can hold
+untrusted fetched content. Removing Forge's temporary workspace does not
+remove them, and other Claude Code releases may behave differently.
+They are the CLI's files, not Forge's runtime diagnostics, which stay in
+Forge's data directory (see "Gaps in the runtime tests of a built
+skill"). Forge does not delete
+or move profile data: whether to remove them is the operator's decision,
+and a separate worker profile keeps them out of the everyday one.
+
 ## Model access
 
 Forge runs the standard `claude` and `codex` CLIs with the login they
