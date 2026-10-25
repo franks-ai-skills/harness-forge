@@ -87,7 +87,15 @@ instruction, and stop; never install or download anything yourself.
    Forge refuses anchors and aliases, so repeat shared fixtures. A Claude
    Code case may permit only `Skill`, `Read`, `Grep` and `Glob`: it runs
    without a sandbox, so a case that permits any other tool is
-   unavailable. Run `scripts/forge.py verify --decision
+   unavailable. When a skill writes files or its safety rules are about
+   what it reads, writes or refuses, add `behavior` cases, shaped like
+   `evals/smoke/behavior-example.yaml`: each names its `harnesses`, the
+   paths it may `write` (a directory followed by `/**`, or an exact path,
+   which only Claude Code can enforce, never the skill's own files, a harness directory or an
+   instruction file), `network: none`, any `dependencies` from another
+   part, and what to `expect` of the saved files and the recorded
+   actions. Read [references/contract.md](references/contract.md#behavior-tests)
+   before telling the user what a behavior result shows. Run `scripts/forge.py verify --decision
    <record> --root <repository> --revision <rules file> --harness <this
    harness> --evidence <workers output> --relay <relay> --slug <slug>
    --write --cases <file>`. This harness must be one of the decision's

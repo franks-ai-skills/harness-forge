@@ -143,6 +143,7 @@ FORGE_RULES = {
     "selection.goal-conflict": "No confirmed answer rules out the chosen mechanism",
     "research.drift": "No open security or compatibility drift touches the part's rules",
     "runtime.explicit-activation": "A live build's explicit invocation was observed to activate the skill",
+    "runtime.behavior": "Every declared behavior case for the harness ran once and passed",
     "inputs.bound": "No bound input changed after the run was prepared",
 }
 
@@ -299,8 +300,12 @@ def bound_inputs(
         "parts": {part["id"]: canonical_digest(part) for part in decision.record["parts"]},
         "checkers": canonical_digest({checker_id: version for checker_id, (version, _) in sorted(REGISTRY.items())}),
         "worker": canonical_digest(worker_configurations(worker_evidence)),
-        "cases": {part["id"]: canonical_digest(sorted((case for case in cases if case["part_id"] == part["id"]),
-                                                      key=lambda case: case["id"]))
+        # A behavior case binds the bytes of the dependencies it names too: changing one invalidates its result.
+        "cases": {part["id"]: canonical_digest(sorted(
+            ({**case, "dependency_sha256": {path: hashlib.sha256(files[path]).hexdigest() if path in files
+                                            else "missing" for path in case.get("dependencies") or []}}
+             if case.get("kind") == "behavior" else case for case in cases if case["part_id"] == part["id"]),
+            key=lambda case: case["id"]))
                   for part in decision.record["parts"]},
     }
 
@@ -566,6 +571,7 @@ def finish_run(
     selection: dict[str, list[dict]] | None = None,
     kept: dict[str, dict] | None = None,
     cited: dict[str, list[str]] | None = None,
+    required_behavior: dict[str, set[str]] | None = None,
 ) -> list[PartResult]:
     """Each part's harness and goal result.
 
@@ -592,6 +598,11 @@ def finish_run(
     required_activation maps a part to its explicit runtime case ids: a live
     build is verified only when one of them passed. Offline runs leave it
     out and report their runtime tests as none run.
+
+    required_behavior maps a part to the behavior case ids declared for the
+    run's harness: each needs exactly one result, and a part is verified only
+    when all of them passed. An unavailable case leaves the behavior
+    unverified, which is no claim that the build is wrong.
 
     worker_observations are evidence records from workers that ran after the
     run was prepared. They join the report. A configuration that was not
@@ -697,7 +708,24 @@ def finish_run(
                 _forge_rule(run, "runtime.explicit-activation")
                 rule_results.append({"rule_id": "runtime.explicit-activation", "check": "script", "result": "fail",
                                      "reason": "the live build needs an observed explicit activation, and none passed"})
+            behavior_problems = []
+            for case_id in sorted((required_behavior or {}).get(part_id, ())):
+                found = [r for r in runtime_results if r.part_id == part_id and r.case_id == case_id
+                         and r.kind == "behavior"]
+                if len(found) != 1:
+                    behavior_problems.append(f"{case_id}: {len(found)} results instead of one")
+                elif found[0].result == "unavailable":
+                    behavior_problems.append(f"{case_id}: behavior unverified ({found[0].reason})")
+                elif found[0].result != "pass":
+                    behavior_problems.append(f"{case_id}: {found[0].result} ({found[0].reason})")
+            if behavior_problems:
+                _forge_rule(run, "runtime.behavior")
+                rule_results.append({"rule_id": "runtime.behavior", "check": "script",
+                                     # Unverified behavior is no failed build: "error" blocks without saying so.
+                                     "result": "error" if all("unverified" in p for p in behavior_problems)
+                                     else "fail", "reason": "; ".join(behavior_problems)[:2000]})
             ok = confirmed and not blocked and not failures and not runtime_failed and not no_activation \
+                and not behavior_problems \
                 and not (selection or {}).get(part_id) \
                 and (part_id not in outside or part_id in kept_verified) \
                 and goal is not None \

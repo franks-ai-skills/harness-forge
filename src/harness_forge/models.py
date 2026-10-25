@@ -256,6 +256,9 @@ class RuntimeResult:
     harness_version: str
     environment: str
     inventory: str = "not observable"  # "observed" when the harness reported the skills, plugins and servers it loaded
+    # "behavior" for a behavior case (#54): its details hold the failed assertions, the records and the gaps.
+    kind: str = "activation"
+    details: dict | None = None
 
 
 @dataclass(frozen=True)

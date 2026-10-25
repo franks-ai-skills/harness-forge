@@ -43,7 +43,8 @@
         "pass",
         "fail",
         "error",
-        "not-run"
+        "not-run",
+        "unavailable"
       ]
     },
     "reason": {
@@ -78,6 +79,82 @@
         "observed",
         "not observable"
       ]
+    },
+    "kind": {
+      "enum": [
+        "activation",
+        "behavior"
+      ]
+    },
+    "details": {
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "failed": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 2000
+              },
+              "maxItems": 100
+            },
+            "changes": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 600
+              },
+              "maxItems": 500
+            },
+            "requests": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 2000
+              },
+              "maxItems": 500
+            },
+            "denied": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 2000
+              },
+              "maxItems": 500
+            },
+            "gaps": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 2000
+              },
+              "maxItems": 20
+            },
+            "case_digest": {
+              "type": "string",
+              "pattern": "^[0-9a-f]{64}$"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "failed",
+            "changes",
+            "requests",
+            "denied",
+            "gaps",
+            "case_digest"
+          ]
+        },
+        {
+          "type": "null"
+        }
+      ]
     }
   },
   "additionalProperties": false,
@@ -94,5 +171,58 @@
     "harness",
     "harness_version",
     "environment"
+  ],
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "result": {
+            "const": "unavailable"
+          }
+        },
+        "required": [
+          "result"
+        ]
+      },
+      "then": {
+        "properties": {
+          "kind": {
+            "const": "behavior"
+          }
+        },
+        "required": [
+          "kind"
+        ]
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "kind": {
+            "const": "behavior"
+          }
+        },
+        "required": [
+          "kind"
+        ]
+      },
+      "then": {
+        "properties": {
+          "details": {
+            "type": "object"
+          }
+        },
+        "required": [
+          "details"
+        ]
+      },
+      "else": {
+        "properties": {
+          "details": {
+            "type": "null"
+          }
+        }
+      }
+    }
   ]
 }

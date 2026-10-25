@@ -47,12 +47,17 @@ def _literal(value) -> str:
     return json.dumps(value)
 
 
-def command(role: str, workspace: str, *, structured: bool = True) -> list[str]:
+def command(role: str, workspace: str, *, structured: bool = True, writes: tuple[str, ...] = ()) -> list[str]:
     """The worker command; reads are limited to the workspace by the permission profile.
 
     ``structured=False`` leaves out the output schema, for a runtime case
-    that runs a skill rather than a worker.
+    that runs a skill rather than a worker. ``writes`` are absolute paths
+    inside the workspace that a behavior case may write: the more specific
+    path's ``write`` overrides the workspace's ``read``. Without them,
+    nothing is writable.
     """
+    filesystem = {":root": "deny", ":minimal": "read", workspace: "read"}
+    filesystem.update({path: "write" for path in writes})
     settings = {
         "approval_policy": "never",
         "project_doc_max_bytes": 0,
@@ -60,7 +65,7 @@ def command(role: str, workspace: str, *, structured: bool = True) -> list[str]:
         "apps._default.enabled": False,
         "web_search": "live" if role == "research" else "disabled",
         "default_permissions": PROFILE,
-        f"permissions.{PROFILE}.filesystem": {":root": "deny", ":minimal": "read", workspace: "read"},
+        f"permissions.{PROFILE}.filesystem": filesystem,
         f"permissions.{PROFILE}.network.enabled": False,
     }
     disabled = DISABLED_FEATURES + (NO_SHELL if role != "review" else ())

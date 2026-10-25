@@ -1,0 +1,47 @@
+# Example of a behavior case beside an activation case, for the generated
+# reproduction-checklist skill. NOT EXECUTED: it shows the format; a live
+# run needs its own agreed purpose and usage estimate.
+#
+# A behavior case runs once in each harness it names, in a throwaway
+# workspace with only the frozen skill, its fixtures and the dependencies
+# it lists. The harness lets the skill write only the declared paths
+# (an exact path, or a directory followed by /**); everything else stays
+# read-only, and there is no network. The case passes only when the skill
+# was observed to activate and every assertion holds; anything changed
+# outside `writes` fails it.
+cases:
+- id: repro-explicit
+  part_id: A
+  mode: explicit
+  prompt: Use the reproduction-checklist skill on bug-report.md.
+  expected: activates
+  permitted_tools:
+    claude-code: [Skill, Read]
+    codex: [command_execution]
+  fixtures:
+    bug-report.md: |
+      # Bug 42 (approved)
+      Exporting a report with an empty date range crashes the app on macOS 15.
+behavior:
+- id: repro-saves-the-checklist
+  part_id: A
+  mode: implicit
+  prompt: >-
+    The bug report in bug-report.md is approved. Save the reproduction
+    checklist to .tmp/checklist.md.
+  harnesses: [claude-code, codex]
+  network: none
+  writes: [.tmp/**]
+  fixtures:
+    bug-report.md: |
+      # Bug 42 (approved)
+      Exporting a report with an empty date range crashes the app on macOS 15.
+      Expected: an empty export. Observed: the app quits.
+  expect:
+    files:
+    - path: .tmp/checklist.md
+      contains: [macOS 15, empty date range]
+    - path: bug-report.md
+      contains: ["# Bug 42 (approved)"]
+    actions:
+      no_commands_matching: ["^git (commit|push)"]

@@ -6,7 +6,7 @@ Read this before explaining a verification result.
 
 | Result | When |
 | --- | --- |
-| `verified` | Confirmed in this session; every applicable rule has a result; no error rule failed, errored or stayed unresolved; the links between parts hold; the recorded selection is current and no goal conflict remains, a kept one included; no security or compatibility drift is open; the goal verdict is met; executed runtime tests passed; a built skill's explicit activation was observed live; no bound input changed. With adopted overrides the report says "verified with N overrides" and names them |
+| `verified` | Confirmed in this session; every applicable rule has a result; no error rule failed, errored or stayed unresolved; the links between parts hold; the recorded selection is current and no goal conflict remains, a kept one included; no security or compatibility drift is open; the goal verdict is met; executed runtime tests passed; every declared behavior case passed in this harness; a built skill's explicit activation was observed live; no bound input changed. With adopted overrides the report says "verified with N overrides" and names them |
 | `not verified` | Something was built or vendored, and at least one condition above fails |
 | `not applicable` | Nothing is built: an outside-only or nothing-fits part, or a mechanism without a builder in this release |
 | `not checked` | A reused artifact that is not available locally |
@@ -16,6 +16,38 @@ consistent with its own requirements and allowlists, are a static
 assessment of the built files: they do not demonstrate live behavior or
 certify isolation, and `verified` does not mean every inconsistency was
 found. Runtime results are reported separately.
+
+## Behavior tests
+
+A behavior case checks what a built skill does once it runs. Forge runs
+it in a throwaway workspace with only the frozen skill, the case's
+fixtures and the dependencies it lists, never a copy of the repository,
+and the harness lets the skill write only the declared paths while it
+runs: Claude Code through `Edit` rules in `dontAsk` mode, with reads
+blocked outside the workspace and no shell (Claude Code 2.1.257 or later;
+older or unknown versions make the case unavailable); Codex through
+Forge's permission profile, which reads only the workspace, writes only
+the declared paths and has no network. Codex's sandbox grants a whole
+subtree for a directory or a path that does not exist yet, and a command
+can turn a granted file into a directory, so in Codex a case with an
+exact write is unavailable: declare `dir/**` there, or test exact paths
+in Claude Code. Anything changed outside the
+declared writes fails the case; the comparison of the workspace before
+and after the run is further evidence, since a file written and removed
+again leaves no trace in it.
+
+A case passes only when the skill was observed to activate, as an
+activation case sees it, and every assertion held: files the fixtures
+already held prove nothing alone. `no_denied` counts the refusals Claude
+Code reports; Codex does not report refused file operations inside its
+commands, so a case asking for it there is unavailable. A command check
+sees the recorded command text, not what a script it starts does.
+
+Each declared case needs exactly one result in each harness it names. A
+failed case keeps the part from `verified`; an unavailable or erroring
+one does too, as unverified behavior, which is no claim that the build is
+wrong. Results are bound to the case, its fixtures and the bytes of its
+dependencies: changing any of them means testing again.
 
 ## Goal result, decided in this order
 
