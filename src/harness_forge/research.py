@@ -417,15 +417,20 @@ def supported_findings(record: dict) -> dict[str, dict]:
             and entry.get("finding_digest") == canonical_digest(findings[entry["finding_id"]])}
 
 
-def provenance_sources(record: dict, part_id: str, brief: str) -> set[str]:
-    """Sources that give a part's requirements provenance: kept findings of its current deep brief.
+def provenance_findings(record: dict, part_id: str, brief: str) -> list[dict]:
+    """The kept findings of a part's current deep brief that give its requirements provenance.
 
     Only findings that passed both checks and whose source the policy still allows.
     """
     supported = supported_findings(record)
-    return {finding["source"] for finding in record["findings"]
+    return [finding for finding in record["findings"]
             if finding["pass"] == "deep" and finding["part_id"] == part_id and finding["brief_digest"] == brief
-            and finding["id"] in supported and source_rejection(finding["source"]) is None}
+            and finding["id"] in supported and source_rejection(finding["source"]) is None]
+
+
+def provenance_sources(record: dict, part_id: str, brief: str) -> set[str]:
+    """Sources that give a part's requirements provenance: kept findings of its current deep brief."""
+    return {finding["source"] for finding in provenance_findings(record, part_id, brief)}
 
 
 def recheck_targets(revision: AcceptedRevision, part_id: str, sources: set[str]) -> list[dict]:
@@ -438,6 +443,53 @@ def recheck_targets(revision: AcceptedRevision, part_id: str, sources: set[str])
             targets.append({"requirement_id": rule["id"], "kind": rule["kind"], "statement": rule["statement"],
                             "sources": lost})
     return targets
+
+
+def compare_requirements(previous: AcceptedRevision | None, proposed: list[Rule], part_id: str,
+                         findings: list[dict]) -> dict:
+    """A part's proposed requirements grouped against the ones accepted for it before, for the user to decide.
+
+    Rules compare by their full content: object keys in any order, arrays in
+    order. ``findings`` are the part's provenance findings under its current
+    brief (provenance_findings). Provenance is source-level, as accept checks
+    it: a kept finding from a cited source does not show that the
+    requirement is justified. Nothing is accepted here.
+
+    - ``unchanged``: accepted before with the same content, every source with provenance.
+    - ``unsupported``: accepted before with the same content, a source without provenance.
+    - ``changed``: accepted before under the same id with other content, with the differing fields.
+    - ``new``: not accepted before for the part.
+    - ``removed``: accepted before, not proposed now.
+    """
+    _require_unique([rule.id for rule in proposed], "proposed requirements")
+    for rule in proposed:
+        _check_entry(part_id, rule)
+    before = {entry["rule"]["id"]: entry["rule"] for entry in (previous.rules if previous else [])
+              if entry["part_id"] == part_id}
+    sources = {finding["source"] for finding in findings}
+
+    def item(rule: dict) -> dict:
+        return {"requirement": rule, "missing_sources": [source for source in rule["sources"] if source not in sources],
+                "findings": [{"id": finding["id"], "source": finding["source"], "claim": finding["claim"],
+                              "quote": finding["quote"]}
+                             for finding in findings if finding["source"] in rule["sources"]]}
+
+    groups = {"unchanged": [], "unsupported": [], "changed": [], "new": []}
+    for rule in proposed:
+        current, earlier = item(rule.to_dict()), before.get(rule.id)
+        if earlier is None:
+            groups["new"].append(current)
+        elif canonical_digest(earlier) == canonical_digest(current["requirement"]):
+            groups["unsupported" if current["missing_sources"] else "unchanged"].append(current)
+        else:
+            after = current["requirement"]
+            current["differences"] = {field: {"before": earlier.get(field), "after": after.get(field)}
+                                      for field in sorted(set(earlier) | set(after))
+                                      if canonical_digest(earlier.get(field)) != canonical_digest(after.get(field))}
+            groups["changed"].append(current)
+    proposed_ids = {rule.id for rule in proposed}
+    groups["removed"] = [{"requirement": rule} for rule_id, rule in before.items() if rule_id not in proposed_ids]
+    return groups
 
 
 def _check_record(record: dict, where: str) -> None:

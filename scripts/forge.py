@@ -56,7 +56,8 @@ from harness_forge.research import (  # noqa: E402
     _BLOCKING_DRIFT, UNTRUSTED_NOTE, _catalog, accept_requirements, drift_category, drift_digest, drift_state, finding_problem,
     load_research, load_revision, source_rejection,
     make_brief, merge_revision,
-    UnassignedRevision, dangling_drift, provenance_sources, recheck_targets, record_drift, write_research,
+    UnassignedRevision, compare_requirements, dangling_drift, provenance_findings, provenance_sources,
+    recheck_targets, record_drift, write_research,
     write_revision,
 )
 from harness_forge.runtime import load_cases  # noqa: E402
@@ -974,16 +975,25 @@ def _recheck(arguments: argparse.Namespace, root: Path, existing: dict, targets:
     return 0 if result["status"] == "completed" else 1
 
 
-def _provenance_problem(root: Path, slug: str, part_id: str, brief: str, accepted) -> str | None:
-    """Accepted requirements rest on the part's current deep research: its brief, and its kept findings' sources."""
+def _deep_research(root: Path, slug: str, part_id: str, brief: str) -> dict:
+    """The research record, which must hold deep research for the part under its current brief."""
     path = root / ".harness" / "research" / f"{slug}.md"
     try:
         record = load_research(path, root=root) if path.is_file() else None
     except ValueError as error:
-        return str(error)
+        raise _InvalidInput(str(error)) from error
     if not _has_deep_brief(record, part_id, brief):
-        return (f"there is no deep research for part {part_id} under its current brief; run the deep pass before "
-                "accepting its requirements, even none")
+        raise _InvalidInput(f"there is no deep research for part {part_id} under its current brief; run the deep "
+                            "pass before accepting its requirements, even none")
+    return record
+
+
+def _provenance_problem(root: Path, slug: str, part_id: str, brief: str, accepted) -> str | None:
+    """Accepted requirements rest on the part's current deep research: its brief, and its kept findings' sources."""
+    try:
+        record = _deep_research(root, slug, part_id, brief)
+    except _InvalidInput as error:
+        return str(error)
     sources = provenance_sources(record, part_id, brief)
     for entry in accepted.rules:
         for source in entry["rule"]["sources"]:
@@ -994,24 +1004,34 @@ def _provenance_problem(root: Path, slug: str, part_id: str, brief: str, accepte
     return None
 
 
+def _recorded_revision(decision: Decision, root: Path, slug: str):
+    """The revision the decision records, and the parts of an older one that names no single part.
+
+    Returns (revision, None); (None, its parts, possibly none) for an older revision that names no
+    single part; or (None, None) when the decision records none. The file must be the recorded one.
+    """
+    recorded = (decision.record.get("accepted_revision") or {}).get("digest")
+    if not recorded:
+        return None, None
+    try:
+        previous = load_revision(safe_path(root, f".harness/research/{slug}.rules.yaml"), root=root)
+        digest, unassigned = previous.digest, None
+    except UnassignedRevision as error:
+        previous, digest, unassigned = None, error.digest, error.parts
+    except (OSError, ValueError) as error:
+        raise _InvalidInput(f"the recorded requirements cannot be read: {error}") from error
+    if digest != recorded:
+        raise _InvalidInput("the requirements file is not the one the decision records; accept from that file")
+    return previous, unassigned
+
+
 def _accept(arguments: argparse.Namespace) -> int:
     """Write the accepted revision from the user's choices and record it in the decision."""
     root = Path(arguments.root).resolve()
     decision, _ = _decision_and_revision(arguments, root, matching=False)
-    recorded = (decision.record.get("accepted_revision") or {}).get("digest")
-    previous, unassigned = None, []
-    if recorded:
-        # Other parts' accepted requirements stay; this part's are replaced.
-        try:
-            previous = load_revision(safe_path(root, f".harness/research/{arguments.slug}.rules.yaml"), root=root)
-            digest = previous.digest
-        except UnassignedRevision as error:
-            # An older revision without a single part: this acceptance replaces it, dropping what it held.
-            digest, unassigned = error.digest, error.parts
-        except (OSError, ValueError) as error:
-            raise _InvalidInput(f"the recorded requirements cannot be read: {error}") from error
-        if digest != recorded:
-            raise _InvalidInput("the requirements file is not the one the decision records; accept from that file")
+    # Other parts' accepted requirements stay; this part's are replaced. An older revision without a
+    # single part is replaced whole, dropping what it held.
+    previous, unassigned = _recorded_revision(decision, root, arguments.slug)
     proposed = _read_json(arguments.proposed).get("requirements", [])
     choices = _read_json(arguments.choices)
     try:
@@ -1022,7 +1042,7 @@ def _accept(arguments: argparse.Namespace) -> int:
         if problem:
             raise _InvalidInput(problem)
         parts = {part["id"] for part in decision.record["parts"]}
-        dropped = sorted(set(previous.brief_digests) - parts) if previous else [p for p in unassigned
+        dropped = sorted(set(previous.brief_digests) - parts) if previous else [p for p in unassigned or []
                                                                                  if p != arguments.part]
         revision = merge_revision(previous, accepted, parts)
         path = write_revision(root, arguments.slug, revision)
@@ -1032,6 +1052,27 @@ def _accept(arguments: argparse.Namespace) -> int:
     _save_decision(arguments, decision)
     emit({"command": "accept", "digest": revision.digest, "rule_ids": revision.rule_ids, "dropped_parts": dropped,
           "written": str(path)})
+    return 0
+
+
+def _compare_requirements(arguments: argparse.Namespace) -> int:
+    """Group a part's proposed requirements against the ones accepted for it before; changes nothing."""
+    root = Path(arguments.root).resolve()
+    decision, _ = _decision_and_revision(arguments, root, matching=False)
+    previous, unassigned = _recorded_revision(decision, root, arguments.slug)
+    if unassigned is not None:
+        raise _InvalidInput("the recorded requirements are an older revision that names no single part, so they "
+                            "cannot be compared; ask about each proposed requirement one at a time")
+    try:
+        rules = [Rule.from_dict(rule) for rule in _read_json(arguments.proposed).get("requirements", [])]
+        brief = make_brief(decision, "deep", arguments.part).digest
+        record = _deep_research(root, arguments.slug, arguments.part, brief)
+        groups = compare_requirements(previous, rules, arguments.part,
+                                      provenance_findings(record, arguments.part, brief))
+    except (ValueError, KeyError, TypeError) as error:
+        raise _InvalidInput(str(error)) from error
+    emit({"command": "compare-requirements", "part_id": arguments.part, "brief_digest": brief,
+          "untrusted": UNTRUSTED_NOTE, **groups})
     return 0
 
 
@@ -1540,6 +1581,14 @@ def build_parser() -> argparse.ArgumentParser:
     accept.add_argument("--choices", required=True, help="JSON: rule id to accept, reject or {edit: rule}")
     accept.add_argument("--slug", required=True)
     accept.set_defaults(handler=_accept)
+    compare = commands.add_parser("compare-requirements",
+                                  help="group a part's proposed requirements against the ones accepted before")
+    compare.add_argument("--decision", required=True)
+    compare.add_argument("--root", required=True, help="target repository root")
+    compare.add_argument("--part", required=True)
+    compare.add_argument("--proposed", required=True, help="JSON with the proposed requirements as idea rules")
+    compare.add_argument("--slug", required=True)
+    compare.set_defaults(handler=_compare_requirements)
     build.add_argument("--part", required=True)
     build.add_argument("--description", required=True, help="file with the one-line skill description")
     build.add_argument("--procedure", required=True, help="file with the procedure")
