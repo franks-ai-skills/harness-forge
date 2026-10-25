@@ -413,6 +413,64 @@
           "type": "null"
         }
       ]
+    },
+    "builds": {
+      "type": "object",
+      "propertyNames": {
+        "type": "string",
+        "pattern": "^[A-Z][A-Z0-9]*$"
+      },
+      "additionalProperties": {
+        "type": "object",
+        "properties": {
+          "forge": {
+            "type": "object",
+            "properties": {
+              "version": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 200
+              },
+              "source": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 200
+              },
+              "commit": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 200
+              },
+              "tree": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 200
+              }
+            },
+            "required": [
+              "version",
+              "source",
+              "commit",
+              "tree"
+            ],
+            "additionalProperties": false
+          },
+          "outputs_changed": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 512
+            },
+            "maxItems": 64
+          }
+        },
+        "required": [
+          "forge",
+          "outputs_changed"
+        ],
+        "additionalProperties": false
+      }
     }
   },
   "additionalProperties": false,

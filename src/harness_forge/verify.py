@@ -30,6 +30,7 @@ from harness_forge.models import (
     VerificationRun,
 )
 from harness_forge.predicates import UnknownFact
+from harness_forge.provenance import VERIFIER_PREFIX, forge_provenance
 from harness_forge.research import blocked_parts, drift_category, drift_state
 from harness_forge.selection import conflict_kept, goal_conflict, selection_state
 from harness_forge.scope import affected_parts
@@ -309,9 +310,13 @@ def prepare_run(
     symlinks: dict[str, str] | None = None, revision: AcceptedRevision | None = None,
     overrides: list[dict] | tuple = (), kb_version: str = "", worker_evidence: list[dict] | tuple = (),
     scope: set[str] | None = None, scope_label: str = "Extensive review (rarely needed)",
-    recorded_drift: list[dict] | tuple = (), cases: list[dict] | tuple = (),
+    recorded_drift: list[dict] | tuple = (), cases: list[dict] | tuple = (), forge: dict[str, str] | None = None,
 ) -> VerificationRun:
-    """Decide applicability, run script rules and freeze the bound inputs."""
+    """Decide applicability, run script rules and freeze the bound inputs.
+
+    ``forge`` is the verifying Harness Forge copy's provenance, collected
+    here once when not given; the report shows that saved value.
+    """
     duplicate = part_ids_problem(decision.record)
     if duplicate:
         raise ValueError(duplicate)
@@ -345,7 +350,10 @@ def prepare_run(
                     "facts": dict(record["facts"])},
         parts=[dict(part) for part in record["parts"]], worker_evidence=list(worker_evidence),
         approved_workers=_approval_digests(worker_evidence), kb_version=kb_version,
-        scope=scope_label, tool_versions={"harness-forge-checkers": inputs["checkers"]},
+        scope=scope_label,
+        tool_versions={"harness-forge-checkers": inputs["checkers"],
+                       **{f"{VERIFIER_PREFIX}{key}": value
+                          for key, value in (forge if forge is not None else forge_provenance()).items()}},
         overrides=[{"rule_id": override["rule_id"], "digest": canonical_digest(override)} for override in overrides],
         scope_parts=sorted(scope) if scope is not None else None,
     )

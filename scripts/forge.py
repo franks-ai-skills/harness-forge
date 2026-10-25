@@ -35,7 +35,9 @@ import os  # noqa: E402
 import re  # noqa: E402
 
 from harness_forge.adapters.base import preflight, run_command  # noqa: E402
-from harness_forge.build_skill import BuilderUnavailable, ConflictError, mark_built, plan_skill, write_skill  # noqa: E402
+from harness_forge.build_skill import (  # noqa: E402
+    BuilderUnavailable, ConflictError, build_outputs, mark_built, plan_skill, write_skill,
+)
 from harness_forge.contracts import (  # noqa: E402
     RELAY_KEYS, confirm_contract, load_decision, render_contract, resolve_goal_conflict, update_readme,
     write_decision,
@@ -60,6 +62,7 @@ from harness_forge.research import (  # noqa: E402
     recheck_targets, record_drift, write_research,
     write_revision,
 )
+from harness_forge.provenance import forge_provenance  # noqa: E402
 from harness_forge.runtime import load_cases  # noqa: E402
 from harness_forge.workflow import research_pass, verify_live  # noqa: E402
 from harness_forge.scope import affected_parts, earlier_run, preserved_parts, review_scope, settled  # noqa: E402
@@ -1148,7 +1151,9 @@ def _build(arguments: argparse.Namespace) -> int:
         return 1
     except (OSError, ValueError) as error:
         raise _InvalidInput(str(error)) from error
-    _save_decision(arguments, mark_built(decision, arguments.part))
+    # Recorded only now that the write succeeded: a refused or failed build keeps the earlier record.
+    build = {"forge": dict(forge_provenance()), "outputs": build_outputs(root, planned)}
+    _save_decision(arguments, mark_built(decision, arguments.part, build))
     emit({"command": "build", "built": True, "written": [str(path.relative_to(root)) for path in written]})
     return 0
 

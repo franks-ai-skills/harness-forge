@@ -13,12 +13,39 @@ from pathlib import Path
 from harness_forge.contracts import WORKER_DISCLOSURE, WORKER_POLICY
 from harness_forge.documents import safe_path, validate
 from harness_forge.models import PartResult, VerificationRun
+from harness_forge.provenance import describe, verifier
 
 
 
 def _one_line(value: str) -> str:
     """Text from a worker or a run kept on one line, so that it cannot start a heading or a code block."""
     return re.sub(r"\r\n|\r|\n", " ", value)
+
+
+def recorded_builds(run: VerificationRun) -> dict[str, dict]:
+    """Each part's recorded build, with the outputs whose files or links this run found otherwise.
+
+    Compared with the run's frozen inputs only: a path the record names is never
+    opened for this. A missing output, a file where a link was or the reverse,
+    and a changed link target count as changed. Reporting only: no verdict
+    depends on it. A part without a build record is absent.
+    """
+    frozen = run.frozen_inputs
+    builds = {}
+    for part in run.parts:
+        build = part.get("build")
+        if not build:
+            continue
+        changed = []
+        for path, value in sorted(build["outputs"].items()):
+            kind, _, expected = value.partition(":")
+            found = frozen["files"].get(path) if kind == "sha256" else frozen["symlinks"].get(path)
+            other = frozen["symlinks"] if kind == "sha256" else frozen["files"]
+            if found != expected or path in other:
+                changed.append(path)
+        builds[part["id"]] = {"forge": dict(build["forge"]), "outputs_changed": changed}
+    return builds
+
 
 def report_data(run: VerificationRun, results: list[PartResult]) -> dict:
     """The report's complete, schema-validated record of results and bound inputs."""
@@ -37,6 +64,9 @@ def report_data(run: VerificationRun, results: list[PartResult]) -> dict:
         "part_map": {"files": dict(run.part_files), "dirs": dict(run.part_dirs), "links": dict(run.part_links),
                      "requirement_parts": list(run.requirement_parts)},
     }
+    builds = recorded_builds(run)
+    if builds:
+        data["builds"] = builds
     # Only a run with declared dependencies records them, so earlier reports keep their exact form.
     if run.part_dependencies:
         data["part_map"]["dependencies"] = dict(run.part_dependencies)
@@ -56,6 +86,7 @@ def render_report(run: VerificationRun, results: list[PartResult]) -> str:
         "# Verification report", "",
         f"- Run: `{run.run_id}`",
         f"- Harness KB version: {run.kb_version or 'unknown'}",
+        f"- Harness Forge verifier: {describe(verifier(run.tool_versions))}",
         f"- Contract digest: {run.contract_digest or 'none (' + (run.unconfirmed_reason or 'no live confirmation') + ')'}",
         f"- Confirmed parts: {', '.join(run.confirmed_parts) or 'none'}",
         f"- Decision record digest: {run.decision_digest}",
@@ -91,7 +122,15 @@ def render_report(run: VerificationRun, results: list[PartResult]) -> str:
         lines.append(f"- Observed out-of-scope action: {violation}. Its output was discarded.")
     lines.append("")
 
+    builds = recorded_builds(run)
     for result in results:
+        build = builds.get(result.part_id)
+        if build is None:
+            builder = outputs = "unknown (no build record)"
+        else:
+            builder = f"Harness Forge {describe(build['forge'])}"
+            outputs = ("changed since that build: " + ", ".join(build["outputs_changed"])
+                       if build["outputs_changed"] else "match that build")
         lines += [
             f"## Part {result.part_id}", "",
             f"- Harness result: {result.harness_result}" + (
@@ -101,6 +140,8 @@ def render_report(run: VerificationRun, results: list[PartResult]) -> str:
             f"- Goal result: {result.goal_result}",
             f"- Status: {result.status}",
             f"- Outside dependencies: {', '.join(result.outside_dependencies) or 'none'}",
+            f"- Recorded builder: {builder}",
+            f"- Built outputs: {outputs}",
         ]
         answers = next((part["answers"] for part in run.parts if part["id"] == result.part_id), {})
         lines.append(f"- Confirmed answers: `{json.dumps(answers, sort_keys=True)}`")

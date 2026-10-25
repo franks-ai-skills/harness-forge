@@ -51,6 +51,18 @@ release-tag guidance.
   statement, so a line that drops part of it fails. Without a checklist
   the output is unchanged (#49).
 
+### Provenance
+
+- The verification report names the Harness Forge copy that verified:
+  its declared version and, for a Git checkout of Forge, the full commit
+  and whether it had uncommitted changes; each value is `unknown` on its
+  own when it cannot be established (#52).
+- A successful build records the building copy's provenance and the
+  bytes and links it left in the part's decision record; the report
+  shows that recorded builder separately and whether the checked outputs
+  still match that build. A refused build keeps the earlier record, and
+  verification never writes it (#55).
+
 ### Tokens
 
 - Whole-token checks refuse a trailing line feed or carriage return and
