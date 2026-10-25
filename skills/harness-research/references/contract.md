@@ -30,6 +30,12 @@ configured controls, observed tools and unknowns as worker evidence. A
 worker seen acting outside its role fails its run, and its output is
 discarded. An unproven restriction alone does not fail the run.
 
+A worker's CLI can keep files of its own after the run: with Claude Code
+2.1.310, fetched-page tool results stayed in the user's Claude Code
+profile although Forge removed its temporary workspace. They can hold
+untrusted fetched content. The README's "Files the CLI keeps" says
+where they were observed; Forge does not delete profile data.
+
 ## Discarded output
 
 The script checks every response against Forge's worker-response schema.
