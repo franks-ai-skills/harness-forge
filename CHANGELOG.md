@@ -52,6 +52,13 @@ schema copies (0.4.0) and the plugin release-tag guidance (0.3.0).
   asked again while those observations stay the same. Forge never chooses
   or adds a license and never holds up the build for this (#58).
 
+### Questions
+
+- harness-intake asks neutral questions: an inferred answer is shown
+  with the part of the description it came from before the question,
+  and the choices keep a stable order whatever was inferred; only a
+  recommendation `select` computed is marked and put first (#72).
+
 ### Behavior tests
 
 - Runtime case files take `behavior` cases beside the activation cases.
