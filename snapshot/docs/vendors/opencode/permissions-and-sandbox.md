@@ -2,7 +2,7 @@
 
 The `permission` config key decides, per tool call, whether OpenCode runs the call (`allow`), prompts the user (`ask`), or refuses it (`deny`). Rules are keyed by tool name and can carry patterns over the call's input, such as a file path, a bash command, or a subagent name. Defaults are permissive: most tools are allowed without a prompt.
 
-**Sandbox:** the notes do not describe any OS-level sandbox in OpenCode (no process, filesystem, or network isolation for tool execution). The containment mechanisms they record are permission rules, the `external_directory` gate for paths outside the working directory, the default `read` deny on `.env` files, plugin hooks that can block calls, and `experimental.policies`. The notes neither confirm nor rule out an OS-level sandbox explicitly; they record none.
+**Sandbox:** the notes do not describe any OS-level sandbox in OpenCode (no process, filesystem, or network isolation for tool execution). The containment mechanisms they record are permission rules, the `external_directory` gate for paths outside the working directory, the approval OpenCode asks for by default before reading `.env` files, plugin hooks that can block calls, and `experimental.policies`. The notes neither confirm nor rule out an OS-level sandbox explicitly; they record none.
 
 ## Locations and scopes
 
@@ -31,7 +31,7 @@ The `permission` config key decides, per tool call, whether OpenCode runs the ca
 
 | Key | Pattern matches | Accepts pattern object | Default |
 | --- | --- | --- | --- |
-| `read` | file path | yes | `allow` for `*`; `deny` for `*.env` and `*.env.*`; `allow` for `*.env.example` |
+| `read` | file path | yes | `allow` for `*`; `ask` for `*.env` and `*.env.*`; `allow` for `*.env.example` |
 | `edit` | file path; covers the `edit`, `write`, and `apply_patch` tools | yes | `allow` |
 | `glob` | the glob pattern | yes | `allow` |
 | `grep` | the regex | yes | `allow` |
@@ -48,7 +48,7 @@ The `permission` config key decides, per tool call, whether OpenCode runs the ca
 | `doom_loop` | the same call repeated 3 times with identical input | no (action only) | `ask` |
 | any other name | custom or MCP tool names, e.g. `"mymcp_*"` | yes | |
 
-Sources: [Permissions](https://opencode.ai/docs/permissions/); [Agents](https://opencode.ai/docs/agents/); [Tools](https://opencode.ai/docs/tools/); action-only keys and unknown keys from [SRC core/src/v1/config/permission.ts](https://github.com/anomalyco/opencode/blob/dev/packages/core/src/v1/config/permission.ts). Defaults: "most keys are `allow`; `doom_loop` and `external_directory` are `ask`" ([Permissions](https://opencode.ai/docs/permissions/)).
+Sources: [Permissions](https://opencode.ai/docs/permissions/); [Agents](https://opencode.ai/docs/agents/); [Tools](https://opencode.ai/docs/tools/); action-only keys and unknown keys from [SRC core/src/v1/config/permission.ts](https://github.com/anomalyco/opencode/blob/dev/packages/core/src/v1/config/permission.ts). Defaults: "most keys are `allow`; `doom_loop` and `external_directory` are `ask`"; "`read` is `"allow"`, but `.env` files require approval by default" (`*.env` and `*.env.*` `ask`, `*.env.example` `allow`; checked 2026-10-25) ([Permissions](https://opencode.ai/docs/permissions/#defaults)).
 
 ### Pattern syntax
 

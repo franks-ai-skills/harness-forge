@@ -14,9 +14,12 @@ once it supports such dependencies.
 
 ## Unreleased
 
-Pins agent-harness-kb 0.5.0: `skills.name-format` is version 1.1.0,
-its schema copies are Draft-07 (0.4.0), and it carries 0.3.0's plugin
-release-tag guidance.
+Pins agent-harness-kb 0.6.0: security guidance and rules for skill
+writes, repository metadata, embedded material and credential reads,
+readable outside control names and reasons, and checker versions
+`selection.match` 1.6.0 and `outside.readme-coverage` 1.3.0. Earlier
+pins since 0.2.0 brought `skills.name-format` 1.1.0 (0.5.0), Draft-07
+schema copies (0.4.0) and the plugin release-tag guidance (0.3.0).
 
 ### Selection and intake
 

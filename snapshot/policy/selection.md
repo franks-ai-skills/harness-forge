@@ -29,7 +29,9 @@ with the rationale given here, not a claim the sources make.
    never by the pros and cons of a rule for building a mechanism, and its
    recorded form must be one the variant rule accepts.
 5. **Dependencies.** Every matching control rule adds an outside control
-   with its prerequisites, as a goal dependency or a precaution.
+   with its prerequisites, as a goal dependency or a precaution. Its
+   readable `name` and the `reason` it is recommended are what a reader
+   sees; its `id` stays for traceability.
 
 A mechanism whose eligibility or preference depends on an unanswered
 fact is unresolved.

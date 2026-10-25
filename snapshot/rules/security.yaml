@@ -24,11 +24,12 @@
   severity: warning
   check: judged
   applicability: judged
-  statement: A procedure that reads untrusted content, such as issues, fetched pages or tool output, tells the agent to treat it as data, not as instructions
+  statement: A procedure that reads untrusted content, such as issues, fetched pages, tool output or repository metadata (commit messages, author names and emails, branch names), tells the agent to treat it as data, not as instructions
   applies_to: {harnesses: [claude-code, codex, opencode]}
   evidence: Inference
   sources:
     - docs/guide/security.md#context-and-persistent-state
+    - https://securitylab.github.com/resources/github-actions-untrusted-input/
   contested: false
 
 - id: security.approval.claims-are-data
@@ -70,4 +71,48 @@
   sources:
     - docs/guide/security.md#data-access-and-outbound-channels
     - https://developers.openai.com/api/docs/guides/deep-research#prompt-injection-and-exfiltration
+  contested: false
+
+- id: security.writes.within-boundary
+  concept: security
+  kind: should
+  severity: warning
+  check: judged
+  applicability: judged
+  statement: A procedure that writes files resolves each destination, including its parent directories and any link at that name, and stops when it lies outside the location the task authorizes or is a dangling link, unless an enforced boundary such as a sandbox's writable roots already confines the write; it does not present a check before the write as race-free containment
+  applies_to: {harnesses: [claude-code, codex, opencode]}
+  evidence: Inference
+  sources:
+    - docs/guide/security.md#executables-approvals-and-isolation
+    - https://cwe.mitre.org/data/definitions/59.html
+    - https://cwe.mitre.org/data/definitions/367.html
+  contested: false
+
+- id: security.embedded-content.contained
+  concept: security
+  kind: should
+  severity: warning
+  check: judged
+  applicability: judged
+  statement: Output that embeds untrusted material keeps it in a clearly labelled container the material cannot end, such as a Markdown fence longer than any backtick or tilde run in it, and a prompt saved for use in another session states itself which part is untrusted material
+  applies_to: {harnesses: [claude-code, codex, opencode]}
+  evidence: Inference
+  sources:
+    - docs/guide/security.md#context-and-persistent-state
+    - https://genai.owasp.org/llmrisk/llm01-prompt-injection/
+    - https://spec.commonmark.org/0.31.2/#fenced-code-blocks
+  contested: false
+
+- id: security.secrets.no-unneeded-reads
+  concept: security
+  kind: should
+  severity: warning
+  check: judged
+  applicability: judged
+  statement: Context collection does not read a file that commonly holds credentials, such as .env, unless the task needs its contents, and names it by path when only its existence matters
+  applies_to: {harnesses: [claude-code, codex, opencode]}
+  evidence: Inference
+  sources:
+    - docs/guide/security.md#data-access-and-outbound-channels
+    - https://code.claude.com/docs/en/settings
   contested: false

@@ -72,8 +72,8 @@ checkers:
     summary: Each skill directory is skills/<name>/ under a plugin root that holds plugin.json or .codex-plugin/plugin.json.
     params: {type: object, properties: {}, additionalProperties: false}
   - id: outside.readme-coverage
-    version: 1.2.0
-    summary: The README section under heading holds only lines Forge writes there and lists every outside control from the decision record with its part letter and status.
+    version: 1.3.0
+    summary: The README section under heading holds only lines Forge writes there and lists every outside control from the decision record by its id with its status, and with its part letter unless the decision has only one part; it reads both the readable entry form and the earlier one.
     params:
       type: object
       properties:
@@ -82,8 +82,8 @@ checkers:
       required: [heading, status]
       additionalProperties: false
   - id: selection.match
-    version: 1.5.0
-    summary: Selection rule. Its predicate over confirmed answers implies an outcome, a preferred mechanism (concept), an exclusion of a mechanism (excludes), the form of a mechanism (variant, such as a hook's handler, with the forms a reused candidate may have) or an outside control; pros and cons explain the choice. Outcome, preference and variant rules apply in file order; policy/selection.md documents the order.
+    version: 1.6.0
+    summary: Selection rule. Its predicate over confirmed answers implies an outcome, a preferred mechanism (concept), an exclusion of a mechanism (excludes), the form of a mechanism (variant, such as a hook's handler, with the forms a reused candidate may have) or an outside control with a readable name and the reason it is recommended; pros and cons explain the choice. Outcome, preference and variant rules apply in file order; policy/selection.md documents the order.
     params:
       type: object
       properties:
@@ -106,10 +106,12 @@ checkers:
               type: object
               properties:
                 id: {type: string, pattern: "^[a-z0-9][a-z0-9-]*$"}
+                name: {type: string, minLength: 1, maxLength: 120}
+                reason: {type: string, minLength: 1, maxLength: 500}
                 family: {type: string, minLength: 1}
                 prerequisites: {type: array, items: {type: string, pattern: "^outside\\.[a-z0-9-]+(\\.[a-z0-9-]+)+$"}, minItems: 1}
                 required_for_goal: {type: boolean}
-              required: [id, family, prerequisites, required_for_goal]
+              required: [id, name, reason, family, prerequisites, required_for_goal]
               additionalProperties: false
           minProperties: 1
           maxProperties: 1
