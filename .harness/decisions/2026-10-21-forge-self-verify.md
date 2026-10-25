@@ -189,7 +189,7 @@ parts:
     required_for_goal: false
   reuse:
     name: build-skill
-    source: https://github.com/franks-ai-skills/harness-forge/tree/3dd5ad78f9c9d7f146af30c10092f62a8944ef43/skills/build-skill
+    source: https://github.com/franks-ai-skills/harness-forge/tree/112a631399a85d3fb96d1d47a44615a9a3439690/skills/build-skill
     license: AGPL-3.0-only
     maintenance: maintained
     path: skills/build-skill
@@ -344,7 +344,7 @@ parts:
     required_for_goal: false
   reuse:
     name: harness-intake
-    source: https://github.com/franks-ai-skills/harness-forge/tree/3dd5ad78f9c9d7f146af30c10092f62a8944ef43/skills/harness-intake
+    source: https://github.com/franks-ai-skills/harness-forge/tree/112a631399a85d3fb96d1d47a44615a9a3439690/skills/harness-intake
     license: AGPL-3.0-only
     maintenance: maintained
     path: skills/harness-intake
@@ -498,7 +498,7 @@ parts:
     required_for_goal: false
   reuse:
     name: harness-research
-    source: https://github.com/franks-ai-skills/harness-forge/tree/3dd5ad78f9c9d7f146af30c10092f62a8944ef43/skills/harness-research
+    source: https://github.com/franks-ai-skills/harness-forge/tree/112a631399a85d3fb96d1d47a44615a9a3439690/skills/harness-research
     license: AGPL-3.0-only
     maintenance: maintained
     path: skills/harness-research
@@ -653,7 +653,7 @@ parts:
     required_for_goal: false
   reuse:
     name: harness-verify
-    source: https://github.com/franks-ai-skills/harness-forge/tree/3dd5ad78f9c9d7f146af30c10092f62a8944ef43/skills/harness-verify
+    source: https://github.com/franks-ai-skills/harness-forge/tree/112a631399a85d3fb96d1d47a44615a9a3439690/skills/harness-verify
     license: AGPL-3.0-only
     maintenance: maintained
     path: skills/harness-verify
