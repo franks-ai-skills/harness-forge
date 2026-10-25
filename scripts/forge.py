@@ -1365,6 +1365,18 @@ def _require_target(decision: Decision, harness: str) -> None:
                             "the verification from a target harness")
 
 
+def _plugin_behavior_problem(decision: Decision, cases: list[dict]) -> str | None:
+    """A behavior case for a skill shipped in a plugin could never run, so it would keep the part from verified
+    for good: refused before anything runs."""
+    parts = {part["id"]: part for part in decision.record["parts"]}
+    for case in cases:
+        part = parts.get(case["part_id"])
+        if case.get("kind") == BEHAVIOR and part is not None and skill_home(part) == "plugin":
+            return (f"behavior case {case['id']}: part {case['part_id']} is a skill shipped in a plugin, whose "
+                    "runtime cases cannot run yet; leave its behavior cases out")
+    return None
+
+
 def _verify(arguments: argparse.Namespace) -> int:
     """Live verification: static checks, a fresh review worker, runtime cases and the report."""
     root = Path(arguments.root).resolve()
@@ -1380,15 +1392,20 @@ def _verify(arguments: argparse.Namespace) -> int:
         cases = load_cases(Path(arguments.cases)) if arguments.cases else []
     except (OSError, ValueError) as error:
         raise _InvalidInput(str(error)) from error
-    for case in cases:
+    # Behavior cases name their harnesses and need no activation fields; the rules below are the activation cases'.
+    activation = [case for case in cases if case.get("kind") != BEHAVIOR]
+    for case in activation:
         if arguments.harness not in case["permitted_tools"]:
             raise _InvalidInput(f"case {case['id']} names no permitted tools for {arguments.harness}")
-    covered = {case["part_id"] for case in cases}
+    problem = _plugin_behavior_problem(decision, cases)
+    if problem:
+        raise _InvalidInput(problem)
+    covered = {case["part_id"] for case in activation}
     for part in decision.record["parts"]:
         if part_kind(part) == "build" and arguments.harness in decision.record["targets"] and part["id"] not in covered:
             raise _InvalidInput(f"part {part['id']} is a built skill: pass its runtime cases with --cases")
     for part_id in sorted(covered):
-        kinds = {(case["mode"], case["expected"]) for case in cases if case["part_id"] == part_id}
+        kinds = {(case["mode"], case["expected"]) for case in activation if case["part_id"] == part_id}
         if not {("explicit", "activates"), ("negative", "does-not-activate")} <= kinds:
             raise _InvalidInput(f"part {part_id} needs an explicit invocation and a near miss among its cases")
     exclusions = set()
