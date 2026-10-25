@@ -52,6 +52,21 @@ schema copies (0.4.0) and the plugin release-tag guidance (0.3.0).
   asked again while those observations stay the same. Forge never chooses
   or adds a license and never holds up the build for this (#58).
 
+### Behavior tests
+
+- Runtime case files take `behavior` cases beside the activation cases.
+  Each runs a built skill in a throwaway workspace with only the frozen
+  skill, its fixtures and the dependencies it names; the harness lets it
+  write only the declared paths (Claude Code through `Edit` rules in
+  `dontAsk` mode with reads kept in the workspace, Codex through Forge's
+  permission profile), without network. A case asserts on the saved files
+  and on the recorded tool requests, denials and commands, and passes only
+  with the skill's observed activation; anything changed outside the
+  declared writes fails it, and what a harness cannot observe makes it
+  unavailable. Every declared case must pass in each harness it names for
+  the part to be verified. The report shows behavior results in their own
+  table with their observation gaps (#54).
+
 ### README sections and naming
 
 - The result README's Outside controls section explains what outside

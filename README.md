@@ -174,6 +174,16 @@ limits what those tests can prove:
 | Claude Code | The cases run without a sandbox, so only the `Skill`, `Read`, `Grep` and `Glob` tools can be permitted. Skills that stay listed with bundled skills turned off (your own, or built-ins that this setting keeps, such as `design`, `doctor` and `plugin-authoring` in 2.1.296) are turned off for each case with `skillOverrides`; a skill that still loads makes the case `not-run`. So does a candidate named like a bundled skill, which would answer its `Skill` call or `/<name>`. A user-invoked skill (`disable-model-invocation: true`) is out of the model's reach, so Forge runs its explicit case as `/<name> <prompt>`, sent as a stream-json message that Claude Code replays: only its own expansion of a resolved `/<name>` counts as activation, and a case without one reports `not-run`, not a pass. |
 | Codex | Codex does not report which skills, plugins and MCP servers it loaded, so its runs are best-effort: `clean` is null and the summary states the gap. Activation counts only when Codex prints the skill's whole `SKILL.md` with one reading command that names no other file, or with one `cat` whose first file it is and whose output starts with it; a read chained with other commands reports `not-run`. A near-miss case has no signal that proves non-activation and reports `not-run`. A user-invoked skill (`policy.allow_implicit_invocation: false`) gets its explicit case as `$<name> <prompt>`; Codex injects the skill without a stream event, so that case passes only when the model also reads `SKILL.md`, and otherwise reports `not-run`. Codex 0.162 starts a `codex-code-mode-host` helper by default; on macOS, when the Homebrew cask installed it, Gatekeeper can stop its first launch at a prompt. |
 
+Behavior cases, which let a skill write the paths they declare, have
+their own limits: Claude Code's file tools are held to those paths by its
+permission rules, not by an operating-system sandbox, and its denials are
+the ones it reports for its own tool calls; in Codex a write through a
+shell command shows only in the comparison of the workspace before and
+after the run, and refused file operations inside a command are not
+reported. A file written and removed again during a run leaves no trace
+in that comparison. The report lists these gaps with the results, and an
+unavailable case never counts as passed.
+
 A reused skill that ships in a plugin (`skills/<name>/` beside the
 plugin's `plugin.json`) gets its static checks and review, but its
 runtime cases report `not-run` in both harnesses: a plugin skill loads
