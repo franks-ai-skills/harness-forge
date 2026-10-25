@@ -1,6 +1,6 @@
 {
   "files": {
-    "checks/catalog.yaml": "b817f1f043632b889153acc20c2f6b01bcb24f1bf7190bbea478f4ed11bd7906",
+    "checks/catalog.yaml": "2ea8447b1ca6ee06ec7e27a4c238789fa213338341c09300a321519e23e649d8",
     "docs/README.md": "cae6e58a0dee9165c37edb397dcb71cec4ac82ca3f59b1a354fb92dcc1ba7086",
     "docs/best-practices/README.md": "89ac22cf507f98b84e910878a2e757fc33bf39c1536be2a90ba829eba878acef",
     "docs/best-practices/automation.md": "284f293bd52fedb25c4114735029f0026ff56d72d179c62bd74392239728184f",
@@ -154,8 +154,8 @@
     "schemas/rules.schema.json": "a78a4ca2397ab1fa4a4be81d9e3e303e6f493a6787ed84e86ba5c8bb6f289707",
     "schemas/selection.schema.json": "ad37342f88c066605f6905146a830e5137050ec4c8ff4992756780b4e7848919"
   },
-  "kb_commit": "4cde40e19739a53e1efd4e31d6565b24c47c0673",
-  "kb_version": "0.4.0",
+  "kb_commit": "e73530d946a57db70777f09bc8bfcb3d7a16de34",
+  "kb_version": "0.5.0",
   "migration": {
     "files": {
       "docs/README.md": "cae6e58a0dee9165c37edb397dcb71cec4ac82ca3f59b1a354fb92dcc1ba7086",

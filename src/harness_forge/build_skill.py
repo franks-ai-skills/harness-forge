@@ -125,7 +125,7 @@ def plan_skill(
     _check_bindings(decision, part_id, revision, confirmation, worker_evidence, overrides, drift)
 
     name = part["slug"]
-    if not NAME.match(name) or len(name) > _limit(rules, "skills.name.format", "max_chars", 64):
+    if not NAME.fullmatch(name) or len(name) > _limit(rules, "skills.name.format", "max_chars", 64):
         raise ValueError(f"{name!r} is not a valid skill name")
     description = description.strip()
     if not description or "\n" in description or len(description) > _limit(rules, "skills.description.length", "max_chars", 1024):
