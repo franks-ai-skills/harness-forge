@@ -166,17 +166,36 @@ def render_report(run: VerificationRun, results: list[PartResult]) -> str:
                 lines.append(f"- {position['position']} ({', '.join(position['sources'])})")
         lines.append("")
 
+    activation = [item for item in run.runtime_results if item.kind != "behavior"]
+    behavior = [item for item in run.runtime_results if item.kind == "behavior"]
     lines += ["## Runtime tests", ""]
-    if run.runtime_results:
+    if activation:
         lines += ["| Part | Case | Harness | Result | Observed | Reason |", "| --- | --- | --- | --- | --- | --- |"]
-        for item in run.runtime_results:
+        for item in activation:
             lines.append(f"| {item.part_id} | {item.case_id} | {item.harness} {item.harness_version} | {item.result} | "
                          f"{_one_line(item.observed_activation or '-')} | {_one_line(item.reason)} |")
-        for harness in sorted({item.harness for item in run.runtime_results if item.inventory != "observed"}):
+        for harness in sorted({item.harness for item in activation if item.inventory != "observed"}):
             lines += ["", f"Inventory gap: {harness} does not report the skills, plugins and MCP servers it loaded, "
                           "so a user-level one that stayed loaded cannot be ruled out; its results are best-effort."]
     else:
         lines.append("none run")
+    if behavior:
+        # What a built skill did once it ran: its writes, its records and what the harness could not show.
+        lines += ["", "## Behavior tests", "",
+                  "| Part | Case | Harness | Result | Reason | Changed | Failed assertions |",
+                  "| --- | --- | --- | --- | --- | --- | --- |"]
+        for item in behavior:
+            details = item.details or {}
+            cells = [_one_line("; ".join(details.get(key) or []) or "none").replace("|", "\\|")
+                     for key in ("changes", "failed")]
+            lines.append(f"| {item.part_id} | {item.case_id} | {item.harness} {item.harness_version} | {item.result} "
+                         f"| {_one_line(item.reason).replace('|', chr(92) + '|')} | {cells[0]} | {cells[1]} |")
+        for harness in sorted({item.harness for item in behavior}):
+            gaps = sorted({gap for item in behavior if item.harness == harness for gap in (item.details or {})
+                           .get("gaps") or []})
+            if gaps:
+                lines += ["", f"Observation gaps in {harness}: " + "; ".join(gaps) + "."]
+        lines += ["", "An unavailable behavior case leaves the behavior unverified; it does not count as passed."]
     lines += ["", "## Checked files", "", "```"]
     lines += [f"{digest}  {_one_line(path)}" for path, digest in run.frozen_inputs["files"].items()]
     lines += [f"link  {_one_line(path)} -> {_one_line(target)}" for path, target in run.frozen_inputs["symlinks"].items()]

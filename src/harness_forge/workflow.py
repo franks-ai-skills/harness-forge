@@ -23,6 +23,7 @@ from harness_forge.research import (
     worker_finding,
 )
 from harness_forge.diagnostics import Diagnostics
+from harness_forge.behavior import BEHAVIOR
 from harness_forge.runtime import run_skill_runtime
 from harness_forge.verify import bound_inputs, finish_run, part_kind, prepare_run, review_request, validate_review
 
@@ -236,11 +237,18 @@ def verify_live(
     for evidence in observations:
         validate(evidence, "worker-evidence")
     # The spec's live build requires an observed explicit activation in each target harness.
+    judged_builds = [part for part in run.parts if part_kind(part) == "build" and part["id"] in run.confirmed_parts
+                     and harness in run.targets and (scope is None or part["id"] in scope)]
     required = {part["id"]: {case["id"] for case in cases if case["part_id"] == part["id"]
+                             and case.get("kind") != BEHAVIOR
                              and case["mode"] == "explicit" and case["expected"] == "activates"}
-                for part in run.parts if part_kind(part) == "build" and part["id"] in run.confirmed_parts
-                and harness in run.targets and (scope is None or part["id"] in scope)}
+                for part in judged_builds}
+    # A declared behavior case is an obligation in each harness it names (#54).
+    behavior = {part["id"]: {case["id"] for case in cases if case["part_id"] == part["id"]
+                             and case.get("kind") == BEHAVIOR and harness in case["harnesses"]}
+                for part in judged_builds}
     results = finish_run(run, review, runtime, current, worker_observations=observations,
                          confirmed_exclusions=frozenset(confirmed_exclusions), required_activation=required,
+                         required_behavior={part: ids for part, ids in behavior.items() if ids},
                          drift=drift, selection=selection, kept=kept, cited=cited)
     return run, results

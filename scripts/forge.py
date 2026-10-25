@@ -64,6 +64,7 @@ from harness_forge.research import (  # noqa: E402
 )
 from harness_forge.licensing import check as licensing_check  # noqa: E402
 from harness_forge.provenance import forge_provenance  # noqa: E402
+from harness_forge.behavior import BEHAVIOR, case_digest  # noqa: E402
 from harness_forge.runtime import load_cases  # noqa: E402
 from harness_forge.workflow import research_pass, verify_live  # noqa: E402
 from harness_forge.scope import affected_parts, earlier_run, preserved_parts, review_scope, settled  # noqa: E402
@@ -675,13 +676,21 @@ def _runtime_holds(run, part_id: str, current: dict, owners, harness: str, cases
         return True
     directory = owners.part_dirs[part_id] + "/"
     files = {path: digest for path, digest in current["files"].items() if path.startswith(directory)}
-    declared = {case["id"]: case for case in cases if case["part_id"] == part_id}
+    # A behavior case counts only in the harnesses it names, and only once it passed with its current definition
+    # and dependency bytes.
+    declared = {case["id"]: case for case in cases if case["part_id"] == part_id
+                and (case.get("kind") != BEHAVIOR or harness in case["harnesses"])}
     evidence = [result for result in run.runtime_results if result.part_id == part_id and result.harness == harness]
-    explicit = {case_id for case_id, case in declared.items()
-                if case["mode"] == "explicit" and case["expected"] == "activates"}
+    explicit = {case_id for case_id, case in declared.items() if case.get("kind") != BEHAVIOR
+                and case["mode"] == "explicit" and case["expected"] == "activates"}
+    behavior = {case_id: case_digest(case, {path: current["files"].get(path, "missing")
+                                            for path in case.get("dependencies") or []})
+                for case_id, case in declared.items() if case.get("kind") == BEHAVIOR}
     passed = {result.case_id for result in evidence if result.result == "pass"}
+    current_behavior = {result.case_id for result in evidence if result.kind == BEHAVIOR and result.details
+                        and result.details.get("case_digest") == behavior.get(result.case_id)}
     return (bool(explicit) and sorted(result.case_id for result in evidence) == sorted(declared)
-            and explicit <= passed
+            and explicit <= passed and set(behavior) <= passed & current_behavior
             and all(result.result not in ("fail", "error") and result.file_hashes == files for result in evidence))
 
 
