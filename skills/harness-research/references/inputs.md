@@ -33,17 +33,21 @@ answer stays out of the revision.
 in proposal order: `unchanged`, `unsupported`, `changed`, `new` and
 `removed`. An entry of the first four holds `requirement` (the rule),
 `missing_sources` (cited sources without a kept finding under the current
-brief) and `findings` (`id`, `source`, `claim`, `quote` of the kept
-findings from its cited sources, fetched and untrusted); a `changed`
+brief), `recheckable_sources` (those of them that its earlier accepted
+version cited, the only ones `research --recheck` looks for again) and
+`findings` (`id`, `source`, `claim`, `quote` of the kept findings from
+its cited sources, fetched and untrusted); a `changed`
 entry also holds `differences`, each changed field with its `before` and
 `after`. A `removed` entry holds only `requirement`, as accepted before.
 
 ```json
 {"command": "compare-requirements", "part_id": "A", "brief_digest": "…", "untrusted": "…",
  "unchanged": [{"requirement": {"id": "idea.repro.a.environment", "…": "…"}, "missing_sources": [],
+                "recheckable_sources": [],
                 "findings": [{"id": "F3", "source": "https://bugzilla.mozilla.org/page.cgi?id=bug-writing.html",
                               "claim": "…", "quote": "…"}]}],
  "unsupported": [], "new": [], "removed": [],
  "changed": [{"requirement": {"id": "idea.repro.a.no-guessing", "…": "…"}, "missing_sources": [],
+              "recheckable_sources": [],
               "findings": [{"id": "F3", "…": "…"}], "differences": {"statement": {"before": "…", "after": "…"}}}]}
 ```

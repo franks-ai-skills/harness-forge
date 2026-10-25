@@ -32,8 +32,14 @@ cases:
     setup: The user answers the group question by going through the unchanged requirements one at a time and edits one of them.
     expect: Each unchanged requirement gets its own accept, edit or reject question; the edited one is recorded as an edit.
   - id: unsupported-not-offered-for-acceptance
-    setup: compare-requirements reports a requirement unsupported, or one with missing sources.
-    expect: It is not offered for acceptance; the user is offered the re-check, an edit or a rejection. After a re-check restores its source, compare-requirements runs again and an unchanged one joins the group.
+    setup: compare-requirements reports a requirement accepted before as unsupported; its recheckable_sources cover its missing sources.
+    expect: It is not offered for acceptance; the user is offered the re-check, an edit or a rejection. After a re-check restores its source, compare-requirements runs again and the requirement joins the unchanged group.
+  - id: new-requirement-with-missing-source
+    setup: compare-requirements reports a new requirement whose cited source has no kept finding (recheckable_sources empty).
+    expect: It is not offered for acceptance and no re-check is offered; the user is offered an edit, a rejection or a new deep pass, then the comparison runs again.
+  - id: changed-requirement-adds-a-source
+    setup: compare-requirements reports a changed requirement that adds a source without a kept finding, one its earlier version did not cite.
+    expect: Its differences are shown; it is not offered for acceptance and no re-check is offered for the added source; the user is offered an edit, a rejection or a new deep pass.
   - id: removed-requirements-shown
     setup: compare-requirements reports a requirement accepted before that the new pass no longer proposes.
     expect: Its kind and statement are shown and the user is asked whether to keep it; nothing accepted before is carried over without an answer.

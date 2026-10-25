@@ -121,8 +121,12 @@ instruction, and stop; never install or download anything yourself.
    - `new`: one at a time.
    - `unsupported` (same content, a cited source without a kept finding
      now) and every requirement whose `missing_sources` is not empty:
-     `accept` refuses it, so offer only the re-check below, an edit or a
-     rejection.
+     `accept` refuses it, so do not offer to accept it. When its
+     `recheckable_sources` cover all of its `missing_sources`, offer the
+     re-check below, an edit or a rejection. Otherwise (a new requirement,
+     or a changed one citing a source its earlier version did not), the
+     re-check cannot find those sources: offer an edit, a rejection or a
+     new deep pass, then compare again.
    - `removed`: accepted before, no longer proposed. Show each one's kind
      and statement and ask whether to keep any; a kept one goes into the
      proposals unchanged and is checked like any other.

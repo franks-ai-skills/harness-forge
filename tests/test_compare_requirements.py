@@ -53,7 +53,17 @@ class CompareTest(unittest.TestCase):
         groups = compare_requirements(self.previous, rules(PLATFORM, VERSION, SECRETS), "A", kept(SOURCE, VERSIONS))
         self.assertEqual(ids(groups["unsupported"]), [SECRETS["id"]])
         self.assertEqual(groups["unsupported"][0]["missing_sources"], [NOTES])
+        self.assertEqual(groups["unsupported"][0]["recheckable_sources"], [NOTES])
         self.assertEqual(groups["unsupported"][0]["findings"], [])
+
+    def test_only_sources_an_earlier_version_cited_can_be_re_checked(self):
+        added = {**PLATFORM, "sources": [SOURCE, VERSIONS, NOTES]}
+        new = requirement("crash-log", [NOTES], statement="The checklist asks for the full crash log")
+        groups = compare_requirements(self.previous, rules(added, new, SECRETS), "A", kept(SOURCE))
+        changed, = groups["changed"]
+        self.assertEqual((changed["missing_sources"], changed["recheckable_sources"]), ([VERSIONS, NOTES], [VERSIONS]))
+        self.assertEqual((groups["new"][0]["missing_sources"], groups["new"][0]["recheckable_sources"]), ([NOTES], []))
+        self.assertEqual(groups["unsupported"][0]["recheckable_sources"], [NOTES])
 
     def test_any_changed_field_or_source_order_is_changed_with_its_differences(self):
         statement = {**VERSION, "statement": "The checklist names the reproducer's version"}
@@ -136,6 +146,7 @@ class CompareCommandTest(RecheckCase):
                          ([PLATFORM["id"]], [VERSION["id"]], [SECRETS["id"]], [self.NEW["id"]], []))
         self.assertEqual([item["source"] for item in output["unchanged"][0]["findings"]], [SOURCE, VERSIONS])
         self.assertEqual(output["new"][0]["missing_sources"], [NOTES])
+        self.assertEqual(output["new"][0]["recheckable_sources"], [])
         self.assertIn("untrusted", output["untrusted"])
         self.assertEqual(output["brief_digest"], self.current_brief())
 

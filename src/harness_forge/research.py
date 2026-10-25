@@ -460,6 +460,10 @@ def compare_requirements(previous: AcceptedRevision | None, proposed: list[Rule]
     - ``changed``: accepted before under the same id with other content, with the differing fields.
     - ``new``: not accepted before for the part.
     - ``removed``: accepted before, not proposed now.
+
+    ``recheckable_sources`` are the missing sources that the requirement's
+    earlier accepted version cited: only those can a re-check (recheck_targets)
+    look for again.
     """
     _require_unique([rule.id for rule in proposed], "proposed requirements")
     for rule in proposed:
@@ -469,7 +473,10 @@ def compare_requirements(previous: AcceptedRevision | None, proposed: list[Rule]
     sources = {finding["source"] for finding in findings}
 
     def item(rule: dict) -> dict:
-        return {"requirement": rule, "missing_sources": [source for source in rule["sources"] if source not in sources],
+        missing = [source for source in rule["sources"] if source not in sources]
+        earlier = before.get(rule["id"], {}).get("sources", [])
+        return {"requirement": rule, "missing_sources": missing,
+                "recheckable_sources": [source for source in missing if source in earlier],
                 "findings": [{"id": finding["id"], "source": finding["source"], "claim": finding["claim"],
                               "quote": finding["quote"]}
                              for finding in findings if finding["source"] in rule["sources"]]}
