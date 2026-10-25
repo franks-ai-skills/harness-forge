@@ -30,7 +30,7 @@ hosting:
   platform: github
   plan: free
   visibility: public
-kb_version: 0.2.0
+kb_version: 0.6.0
 facts:
   target_set: both
   reach: public
@@ -189,7 +189,7 @@ parts:
     required_for_goal: false
   reuse:
     name: build-skill
-    source: https://github.com/franks-ai-skills/harness-forge/tree/5ff7fc0282a8c8890838ccd7a8178e3a9356977d/skills/build-skill
+    source: https://github.com/franks-ai-skills/harness-forge/tree/3dd5ad78f9c9d7f146af30c10092f62a8944ef43/skills/build-skill
     license: AGPL-3.0-only
     maintenance: maintained
     path: skills/build-skill
@@ -200,7 +200,7 @@ parts:
     - workers/
     - templates/
     - schemas/
-    - requirements.lock
+    - vendor/
     - snapshot/kb-manifest.json
     - snapshot/rules/selection.yaml
     - snapshot/rules/skills.yaml
@@ -344,7 +344,7 @@ parts:
     required_for_goal: false
   reuse:
     name: harness-intake
-    source: https://github.com/franks-ai-skills/harness-forge/tree/93f5285ec649b036ce2abaaa59ec04a270410ce4/skills/harness-intake
+    source: https://github.com/franks-ai-skills/harness-forge/tree/3dd5ad78f9c9d7f146af30c10092f62a8944ef43/skills/harness-intake
     license: AGPL-3.0-only
     maintenance: maintained
     path: skills/harness-intake
@@ -355,7 +355,7 @@ parts:
     - workers/
     - templates/
     - schemas/
-    - requirements.lock
+    - vendor/
     - snapshot/kb-manifest.json
     - snapshot/rules/selection.yaml
     - snapshot/rules/skills.yaml
@@ -498,7 +498,7 @@ parts:
     required_for_goal: false
   reuse:
     name: harness-research
-    source: https://github.com/franks-ai-skills/harness-forge/tree/8b9bb9111a81c77d8ea7fbd92346a93f1916726b/skills/harness-research
+    source: https://github.com/franks-ai-skills/harness-forge/tree/3dd5ad78f9c9d7f146af30c10092f62a8944ef43/skills/harness-research
     license: AGPL-3.0-only
     maintenance: maintained
     path: skills/harness-research
@@ -509,7 +509,7 @@ parts:
     - workers/
     - templates/
     - schemas/
-    - requirements.lock
+    - vendor/
     - snapshot/kb-manifest.json
     - snapshot/rules/selection.yaml
     - snapshot/rules/skills.yaml
@@ -653,7 +653,7 @@ parts:
     required_for_goal: false
   reuse:
     name: harness-verify
-    source: https://github.com/franks-ai-skills/harness-forge/tree/93f5285ec649b036ce2abaaa59ec04a270410ce4/skills/harness-verify
+    source: https://github.com/franks-ai-skills/harness-forge/tree/3dd5ad78f9c9d7f146af30c10092f62a8944ef43/skills/harness-verify
     license: AGPL-3.0-only
     maintenance: maintained
     path: skills/harness-verify
@@ -664,7 +664,7 @@ parts:
     - workers/
     - templates/
     - schemas/
-    - requirements.lock
+    - vendor/
     - snapshot/kb-manifest.json
     - snapshot/rules/selection.yaml
     - snapshot/rules/skills.yaml
