@@ -41,6 +41,8 @@ _BUILT = ("harness-only", "outside-alongside")
 _WITHOUT_MECHANISM = {"harness-only": "nothing-fits", "outside-alongside": "outside-instead"}
 _MAX_ASSIGNMENTS = 200_000
 _POLICY = "policy/selection.md"
+# The decision record holds this text as YAML, where a Markdown link does not render: a plain URL.
+_FORGE_URL = "https://github.com/franks-ai-skills/harness-forge"
 
 
 def normalize(values: dict) -> dict:
@@ -405,7 +407,7 @@ def recommend(answers: dict, whole_idea: dict, rules: list[Rule], candidates: li
             continue
         rule = next(r for r in selection_rules if r.id == entry["rules"][0])
         if winner is not None:
-            why = f"{winner.id} comes before {rule.id} in Forge's preference order ({_POLICY})"
+            why = f"{winner.id} comes before {rule.id} in Harness Forge's preference order ({_POLICY} in {_FORGE_URL})"
         else:
             why = f"the outcome {outcome} builds no harness mechanism"
         variant_rule = _variant_rule(selection_rules, entry["concept"], facts)

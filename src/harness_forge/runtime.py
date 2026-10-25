@@ -192,7 +192,7 @@ def claude_skill_origins(runner: Runner, environ: Mapping[str, str], *, timeout:
 PLUGIN_RUNTIME = ("unavailable: runtime cases for a skill shipped in a plugin are not supported yet; its static "
                   "checks and review still apply")
 
-UNKNOWN_ORIGINS = ("unavailable: an empty Claude Code launch failed, timed out or listed no skills, so Forge cannot "
+UNKNOWN_ORIGINS = ("unavailable: an empty Claude Code launch failed, timed out or listed no skills, so Harness Forge cannot "
                    "tell bundled skills from the user's")
 
 

@@ -68,7 +68,7 @@ def each_skill(files: dict[str, bytes], check) -> tuple[str, str]:
         try:
             problem = check(directory, files)
         except UnreadableMarkdown as error:
-            problem = f"Markdown Forge cannot read reliably: {error}"
+            problem = f"Markdown Harness Forge cannot read reliably: {error}"
         if problem:
             problems.append(f"{directory}: {problem}")
     return ("fail", "; ".join(problems)) if problems else ("pass", f"{len(directories)} skill(s) checked")

@@ -10,6 +10,7 @@ import re
 from dataclasses import asdict
 from pathlib import Path
 
+from harness_forge.checks.outside import FORGE_URL
 from harness_forge.contracts import WORKER_DISCLOSURE, WORKER_POLICY
 from harness_forge.documents import safe_path, validate
 from harness_forge.models import PartResult, VerificationRun
@@ -86,7 +87,7 @@ def render_report(run: VerificationRun, results: list[PartResult]) -> str:
         "# Verification report", "",
         f"- Run: `{run.run_id}`",
         f"- Harness KB version: {run.kb_version or 'unknown'}",
-        f"- Harness Forge verifier: {describe(verifier(run.tool_versions))}",
+        f"- [Harness Forge]({FORGE_URL}) verifier: {describe(verifier(run.tool_versions))}",
         f"- Contract digest: {run.contract_digest or 'none (' + (run.unconfirmed_reason or 'no live confirmation') + ')'}",
         f"- Confirmed parts: {', '.join(run.confirmed_parts) or 'none'}",
         f"- Decision record digest: {run.decision_digest}",
