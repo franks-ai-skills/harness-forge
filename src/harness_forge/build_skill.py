@@ -12,6 +12,8 @@ from __future__ import annotations
 
 import copy
 import difflib
+import hashlib
+import os
 import re
 from pathlib import Path
 
@@ -345,13 +347,35 @@ def _refuse_blocked(part: dict) -> None:
         raise ValueError(f"part {part['id']} is blocked; resolve what blocks it before building")
 
 
-def mark_built(decision: Decision, part_id: str) -> Decision:
-    """A successful build sets the part to built; only verification sets verified."""
+def build_outputs(root: Path, planned: dict[str, str]) -> dict[str, str]:
+    """What a build left at each planned path: ``sha256:<hex>`` of a file's bytes, or ``link:<target>``.
+
+    Read back from disk after the write, never through a link.
+    """
+    outputs = {}
+    for key in sorted(planned):
+        path = root / key
+        if path.is_symlink():
+            outputs[key] = f"link:{os.readlink(path)}"
+        elif path.is_file():
+            outputs[key] = f"sha256:{hashlib.sha256(path.read_bytes()).hexdigest()}"
+    return outputs
+
+
+def mark_built(decision: Decision, part_id: str, build: dict | None = None) -> Decision:
+    """A successful build sets the part to built; only verification sets verified.
+
+    ``build`` is the last successful build of the part's skill package: the
+    building Forge copy's provenance and the outputs it left. It replaces an
+    earlier one; a failed build never reaches here, so that one stays.
+    """
     _refuse_blocked(decision.part(part_id))
     record = copy.deepcopy(decision.record)
     for part in record["parts"]:
         if part["id"] == part_id:
             part["status"] = "built"
+            if build is not None:
+                part["build"] = copy.deepcopy(build)
     return Decision(record=record, body=decision.body)
 
 

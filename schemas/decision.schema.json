@@ -463,6 +463,62 @@
               "chosen",
               "rule_ids"
             ]
+          },
+          "build": {
+            "type": "object",
+            "properties": {
+              "forge": {
+                "type": "object",
+                "properties": {
+                  "version": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 200
+                  },
+                  "source": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 200
+                  },
+                  "commit": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 200
+                  },
+                  "tree": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 200
+                  }
+                },
+                "required": [
+                  "version",
+                  "source",
+                  "commit",
+                  "tree"
+                ],
+                "additionalProperties": false
+              },
+              "outputs": {
+                "type": "object",
+                "minProperties": 1,
+                "maxProperties": 64,
+                "propertyNames": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 512
+                },
+                "additionalProperties": {
+                  "type": "string",
+                  "pattern": "^(sha256:[0-9a-f]{64}|link:.{1,512})$"
+                }
+              }
+            },
+            "required": [
+              "forge",
+              "outputs"
+            ],
+            "additionalProperties": false
           }
         },
         "additionalProperties": false,
