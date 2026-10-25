@@ -31,6 +31,7 @@ from typing import Callable, Iterable, Mapping
 from harness_forge.access import inside, tool_paths
 from harness_forge.adapters import codex
 from harness_forge.adapters.base import Completed, Runner, preflight, run_command, worker_environment
+from harness_forge.behavior import BEHAVIOR, CLAUDE_TOOLS, CODEX_ITEMS, behavior_case, case_digest, plain_path
 from harness_forge.checks.common import frontmatter
 from harness_forge.diagnostics import Diagnostics
 from harness_forge.documents import fold_name, load_document, parse_yaml, safe_path
@@ -40,6 +41,8 @@ from harness_forge.verify import skill_home
 MODES = ("explicit", "implicit", "negative")
 EXPECTED = ("activates", "does-not-activate")
 RUNTIME_TIMEOUT = 600
+# A behavior result's `expected`: the case's declared writes and assertions, not an activation.
+BEHAVIOR_EXPECTED = "behaves as declared"
 
 
 # Claude's sandbox covers only Bash and is off unless configured, and its file
@@ -79,8 +82,17 @@ def _shared_id(cases: list[dict]) -> str | None:
 
 
 def load_cases(path: Path) -> list[dict]:
-    """Cases from an evals/smoke file: bounded, strict YAML against the closed runtime-cases schema."""
-    cases = load_document(Path(path), "runtime-cases")["cases"]
+    """Cases from an evals/smoke file: bounded, strict YAML against the closed runtime-cases schema.
+
+    Its activation cases, then its behavior cases, each of these marked with
+    ``kind: behavior``; ids are unique across both.
+    """
+    document = load_document(Path(path), "runtime-cases")
+    cases = list(document["cases"]) + [{**case, "kind": BEHAVIOR} for case in document.get("behavior") or []]
+    for item in cases:
+        for dependency in item.get("dependencies") or []:
+            if not plain_path(dependency):
+                raise ValueError(f"{path}: case {item['id']!r}: dependency {dependency} is not a plain relative path")
     shared = _shared_id(cases)
     if shared:
         raise ValueError(f"{path}: {shared}")
@@ -939,9 +951,10 @@ def run_skill_runtime(
     shared = _shared_id(cases)
     if shared:
         raise ValueError(shared)
-    # A case file names tools only for the harnesses its idea targets.
+    # A case file names tools only for the harnesses its idea targets; a behavior case names its harnesses.
+    cases = [case for case in cases if case.get("kind") != BEHAVIOR or harness in case["harnesses"]]
     for test_case in cases:
-        if harness not in test_case["permitted_tools"]:
+        if test_case.get("kind") != BEHAVIOR and harness not in test_case["permitted_tools"]:
             raise ValueError(f"case {test_case['id']} names no permitted tools for {harness}")
     frozen = run.frozen_inputs["files"]
     for test_case in cases:
@@ -975,8 +988,11 @@ def run_skill_runtime(
         # The repository's own links for the part, as they are: a missing one stays missing.
         links = {link: run.frozen_inputs["symlinks"][link] for link in run.part_links.get(test_case["part_id"], [])
                  if link in run.frozen_inputs["symlinks"]}
-        permitted = list(test_case["permitted_tools"][harness])
+        behavior = test_case.get("kind") == BEHAVIOR
+        permitted = list(CLAUDE_TOOLS if harness == "claude-code" else CODEX_ITEMS) if behavior else \
+            list(test_case["permitted_tools"][harness])
         fixtures = dict(test_case.get("fixtures") or {})
+        dependencies = {path: files[path] for path in test_case.get("dependencies") or [] if path in files}
         # The model cannot start a user-invoked skill: its explicit case is the user's own invocation.
         invoked = test_case["mode"] == "explicit" and user_invoked(harness, staged, directory)
         prompt = f"{INVOCATION[harness]}{name} {test_case['prompt']}" if invoked else test_case["prompt"]
@@ -984,6 +1000,9 @@ def run_skill_runtime(
             "throwaway workspace with only the frozen skill and fixtures",
             *([f"invoked as {INVOCATION[harness]}{name}"] if invoked else []),
             f"tools: {', '.join(permitted) or 'none'}", "network: none requested",
+            *([f"writes: {', '.join(test_case.get('writes') or []) or 'none'}",
+               *[f"dependency {path} sha256 {frozen[path]}" for path in sorted(test_case.get("dependencies") or [])
+                 if path in frozen]] if behavior else []),
             *[f"{path} sha256 {hashlib.sha256(text.encode()).hexdigest()}" for path, text in sorted(fixtures.items())],
         ])
 
@@ -995,7 +1014,18 @@ def run_skill_runtime(
             return result(outcome, reason)
 
         def result(outcome: str, reason: str, activation: str | None = None,
-                   inventory: str = "not observable") -> RuntimeResult:
+                   inventory: str = "not observable", details: dict | None = None) -> RuntimeResult:
+            if behavior:
+                # A behavior case that never ran still says what it would have bound and why it stopped.
+                outcome = "unavailable" if outcome == "not-run" else outcome
+                details = details or {"failed": [], "changes": [], "requests": [], "denied": [], "gaps": [],
+                                      "case_digest": case_digest(test_case, {path: frozen[path] for path in
+                                                                            dependencies if path in frozen})}
+                return RuntimeResult(run_id=run.run_id, part_id=test_case["part_id"], case_id=test_case["id"],
+                                     prompt=test_case["prompt"], expected=BEHAVIOR_EXPECTED,
+                                     observed_activation=activation, result=outcome, reason=reason,
+                                     file_hashes=hashes, harness=harness, harness_version=checked["version"],
+                                     environment=environment, inventory=inventory, kind=BEHAVIOR, details=details)
             built = RuntimeResult(run_id=run.run_id, part_id=test_case["part_id"], case_id=test_case["id"],
                                   prompt=test_case["prompt"], expected=test_case["expected"],
                                   observed_activation=activation, result=outcome, reason=reason, file_hashes=hashes,
@@ -1011,7 +1041,13 @@ def run_skill_runtime(
         if test_case["part_id"] in plugin_parts:
             results.append(stopped("not-run", PLUGIN_RUNTIME))
             continue
-        stop = case_preflight(harness, test_case, directory, staged, links)
+        if behavior:
+            outside = sorted(path for path in test_case.get("dependencies") or []
+                             if path not in files or path.startswith(directory + "/"))
+            if outside:
+                results.append(stopped("error", f"dependency {outside[0]} is not another part's frozen file"))
+                continue
+        stop = None if behavior else case_preflight(harness, test_case, directory, staged, links)
         if stop:
             results.append(stopped(*stop))
             continue
@@ -1020,6 +1056,13 @@ def run_skill_runtime(
             results.append(stopped("not-run", blocked))
             continue
         keep = None if diagnostics is None else functools.partial(diagnostics.keep, "cases", test_case["id"])
+        if behavior:
+            outcome, reason, activation, details = behavior_case(
+                harness, test_case, {**staged, **dependencies}, directory, prompt, runner=runner, environ=environ,
+                version=checked["version"], baseline=set(baseline_skills), links=links, off=user_skills or (),
+                slash=invoked, timeout=timeout, workspace_root=workspace_root, keep=keep)
+            results.append(result(outcome, reason, activation, details=details))
+            continue
         outcome, reason, activation, inventory = activation_case(
             harness, staged, [directory], directory, prompt, test_case["expected"], permitted, fixtures,
             runner=runner, environ=environ, baseline=set(baseline_skills), timeout=timeout,
