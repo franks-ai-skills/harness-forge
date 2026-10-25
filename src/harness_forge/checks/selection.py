@@ -13,4 +13,4 @@ def check_match(files, facts, params):
     return ("pass", f"implies {params['implies']}") if matched else ("fail", "predicate does not match")
 
 
-REGISTRY = {"selection.match": ("1.5.0", check_match)}
+REGISTRY = {"selection.match": ("1.6.0", check_match)}
