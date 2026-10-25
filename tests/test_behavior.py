@@ -155,6 +155,27 @@ class RunTest(BehaviorCase):
         self.assertIn("no_denied cannot be observed", result.reason)
         self.assertFalse(runner.worker_calls, "an unobservable requirement launches nothing")
 
+    def test_an_exact_codex_write_runs_only_for_an_existing_file(self):
+        for label, test_case in (("missing", behavior(writes=["out.md"])),
+                                 ("directory", behavior(writes=["out"], fixtures={"out/seed.txt": "x"}))):
+            with self.subTest(label):
+                (result,), runner = self.run_case("codex", codex_writes(DRAFT), test_case)
+                self.assertEqual(result.result, "unavailable")
+                self.assertIn("only when it is an existing file", result.reason)
+                self.assertFalse(runner.worker_calls, "nothing launches with a wider grant")
+        exact = behavior(writes=["notes.md"], fixtures={"notes.md": "old"},
+                         expect={"files": [{"path": "notes.md", "contains": ["new"]}]})
+        (result,), runner = self.run_case("codex", codex_writes("notes.md"), exact,
+                                          act=write("notes.md", "new"))
+        self.assertEqual(result.result, "pass", result.reason)
+        call = runner.worker_calls[-1]
+        profile = next(item for item in call["command"] if item.startswith("permissions.forge-worker.filesystem="))
+        self.assertIn(f'"{call["cwd"]}/notes.md"="write"', profile)
+        # Claude's Edit rule for an exact path does not cover what lies below it.
+        (result,), _ = self.run_case("claude-code", claude_writes("out.md"), behavior(
+            writes=["out.md"], expect={"files": [{"path": "out.md", "exists": True}]}), act=write("out.md"))
+        self.assertEqual(result.result, "pass", result.reason)
+
     def test_a_forbidden_tool_or_command_fails(self):
         no_task = behavior(expect={"files": [{"path": DRAFT, "exists": True}], "actions": {"no_tools": ["Grep"]}})
         (result,), _ = self.run_case("claude-code", claude_writes(DRAFT, extra_calls=("Grep",)), no_task,

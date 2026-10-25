@@ -27,7 +27,10 @@ runs: Claude Code through `Edit` rules in `dontAsk` mode, with reads
 blocked outside the workspace and no shell (Claude Code 2.1.257 or later;
 older or unknown versions make the case unavailable); Codex through
 Forge's permission profile, which reads only the workspace, writes only
-the declared paths and has no network. Anything changed outside the
+the declared paths and has no network. Codex's sandbox grants a whole
+subtree for a directory or a path that does not exist yet, so in Codex an
+exact write is allowed only for a file the workspace already has, such as
+a fixture; declare `dir/**` otherwise, or the case is unavailable there. Anything changed outside the
 declared writes fails the case; the comparison of the workspace before
 and after the run is further evidence, since a file written and removed
 again leaves no trace in it.
