@@ -11,6 +11,7 @@ import unittest
 from pathlib import Path
 
 from harness_forge.build_skill import build_outputs, mark_built, write_skill
+from harness_forge.checks.outside import FORGE_URL
 from harness_forge.contracts import render_contract
 from harness_forge.documents import validate
 from harness_forge.provenance import UNKNOWN, collect, describe, forge_provenance, verifier
@@ -173,7 +174,7 @@ class ReportTest(unittest.TestCase):
 
     def test_the_verifier_and_the_recorded_builder_are_separate(self):
         run, results, rendered = self.report(built_record())
-        self.assertIn("- Harness Forge verifier: 0.3.0 (source unknown)", rendered)
+        self.assertIn(f"- [Harness Forge]({FORGE_URL}) verifier: 0.3.0 (source unknown)", rendered)
         self.assertIn(f"- Recorded builder: Harness Forge 0.2.0 (checkout {'a' * 7}, clean)", rendered)
         self.assertIn("- Built outputs: match that build", rendered)
         data = report_data(run, results)
@@ -217,7 +218,7 @@ class ReportTest(unittest.TestCase):
         run, results, _ = self.report(built_record())
         older = copy.deepcopy(run)
         older.tool_versions = {"harness-forge-checkers": run.tool_versions["harness-forge-checkers"]}
-        self.assertIn("- Harness Forge verifier: unknown", render_report(older, results))
+        self.assertIn(f"- [Harness Forge]({FORGE_URL}) verifier: unknown", render_report(older, results))
 
 
 if __name__ == "__main__":

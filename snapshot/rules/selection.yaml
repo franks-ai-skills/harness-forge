@@ -2461,6 +2461,8 @@ rules:
     implies:
       control:
         id: codeowners-agent-config
+        name: Code-owner review of agent configuration
+        reason: The agent's own configuration files decide what it may do, so a change to them, also one made through a pull request, takes effect only after a code owner approves it
         family: merge rules
         prerequisites:
         - outside.codeowners.agent-config
@@ -2494,6 +2496,8 @@ rules:
     implies:
       control:
         id: merge-rules
+        name: Merge rule for agent pull requests
+        reason: An agent that opens pull requests needs a merge rule outside the harness; without one, the outer control that agents opening pull requests assume is missing
         family: merge rules
         prerequisites:
         - outside.merge.no-agent-bypass
@@ -2532,6 +2536,8 @@ rules:
     implies:
       control:
         id: event-gate
+        name: Gate for events without an agent
+        reason: The event happens without an agent, such as a merge, deploy or publish, so a harness build adds no enforcement; only a gate on the event itself enforces the goal
         family: merge rules or required checks
         prerequisites:
         - outside.gate.real-refs
@@ -2580,6 +2586,8 @@ rules:
     implies:
       control:
         id: compromise-resistant-gate
+        name: Gate a compromised agent cannot reach
+        reason: The goal must hold even when the agent is manipulated or its configuration is changed, so it is enforced by a control the agent's identity cannot reach
         family: outside gate
         prerequisites:
         - outside.gate.real-refs
@@ -2623,6 +2631,8 @@ rules:
     implies:
       control:
         id: outer-isolation
+        name: Isolation around the agent
+        reason: A bypass or no-prompt mode, an untrusted repository, or untrusted input combined with secrets and outbound access needs a boundary outside the harness
         family: isolation
         prerequisites:
         - outside.merge.no-agent-bypass

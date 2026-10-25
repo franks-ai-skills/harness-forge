@@ -824,6 +824,12 @@ pages:
       rules:
       - security.untrusted-input.as-data
       - security.approval.claims-are-data
+    - text: Repository metadata is untrusted input
+      rules:
+      - security.untrusted-input.as-data
+    - text: Embedded untrusted material in a container it cannot end; saved prompts state their own trust boundary
+      rules:
+      - security.embedded-content.contained
     - text: Memory poisoning and persistent writes
       status: not-a-rule
       reason: Applies to concepts other than skills; their rules are extracted with their builders, outside
@@ -833,6 +839,9 @@ pages:
     - text: Helpers under permissions and isolation
       rules:
       - security.helpers.confined
+    - text: Write destinations resolved and kept inside the authorized location; preflight is not containment
+      rules:
+      - security.writes.within-boundary
     - text: Startup review, bare mode, hook decisions
       status: not-a-rule
       reason: Applies to concepts other than skills; their rules are extracted with their builders, outside
@@ -842,6 +851,9 @@ pages:
     - text: Allowed fields and destinations for data a procedure sends out
       rules:
       - security.outbound.minimal-data
+    - text: No unneeded reads of credential files
+      rules:
+      - security.secrets.no-unneeded-reads
     - text: Credential brokering, workload isolation and enforcement at the outbound call
       status: not-a-rule
       reason: Platform, MCP and network controls outside a built skill's files; their rules come with

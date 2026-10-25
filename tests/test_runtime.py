@@ -432,7 +432,7 @@ class RuntimeTest(unittest.TestCase):
                 # A usage limit stops these launches too: the reason names the launch and how it ended, in
                 # Forge's own words; the harness's text, which can name local paths, stays out of the report.
                 self.assertEqual(result.reason, "unavailable: an empty Claude Code launch failed, timed out or listed "
-                                                "no skills, so Forge cannot tell bundled skills from the user's: the "
+                                                "no skills, so Harness Forge cannot tell bundled skills from the user's: the "
                                                 f"launch with bundled skills off {cause}")
                 self.assertEqual(len(runner.worker_calls), 2, "no case launches")
 

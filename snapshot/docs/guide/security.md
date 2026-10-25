@@ -94,6 +94,35 @@ models, simulated workspaces and unspecified harness versions
 A new conversation does not remove contaminated persistent state
 **[Inference]**.
 
+**[Vendor]** Repository metadata is untrusted input too: GitHub
+Security Lab lists commit messages, commit author names and emails,
+issue and pull request titles and bodies, comments and the head branch
+name as data that "might be attacker controlled", and a branch name can
+still carry a command injection
+([GitHub Security Lab](https://securitylab.github.com/resources/github-actions-untrusted-input/),
+[script injections](https://docs.github.com/en/actions/concepts/security/script-injections)).
+**[Inference]** A procedure that reads the log, branches or remotes
+treats what it finds there as data, like an issue body
+([research note](../research-notes/agent-harness-security-2026-10-25.md#repository-metadata)).
+
+**[Advisory]** "Separate and clearly denote untrusted content", with no
+fool-proof prevention known
+([OWASP LLM01](https://genai.owasp.org/llmrisk/llm01-prompt-injection/));
+OpenAI: separation and structure "greatly reduce, but don't fully
+remove, this risk"
+([agent builder safety](https://developers.openai.com/api/docs/guides/agent-builder-safety)).
+**[Inference]** Output that embeds untrusted material keeps it in a
+container the material cannot end: in Markdown, a fence longer than
+every backtick or tilde run in the material, because a closing fence
+needs "at least as many" characters as the opening one; the fence still
+ends where its list item or block quote ends
+([CommonMark §4.5](https://spec.commonmark.org/0.31.2/#fenced-code-blocks)).
+That is syntax containment, not protection from the instructions in the
+material. A prompt saved for another session states itself which part is
+untrusted material, because the instructions of the session that wrote
+it do not travel with it
+([research note](../research-notes/agent-harness-security-2026-10-25.md#embedded-material)).
+
 ### Executables, approvals and isolation
 
 **[Inference]** Review an unfamiliar checkout before launching the harness:
@@ -127,6 +156,18 @@ SDK callback timeout blocks **[Vendor]**
 permissions and isolation when a hook fails to run. `PostToolUse` cannot
 undo a completed disclosure.
 
+**[Inference]** A procedure that writes files resolves the destination,
+including its parent directories and any link at that name, and stops
+when it lies outside the location the task authorizes or is a dangling
+link; an equivalent enforced boundary, such as a sandbox's writable
+roots, serves the same purpose. A missing destination is a new file only
+when no link sits at that name. A check before the write is not race-free
+containment ([CWE-367](https://cwe.mitre.org/data/definitions/367.html));
+a recheck afterwards detects an unauthorized write but neither prevents
+nor undoes it. Link resolution is a known weakness class
+([CWE-59](https://cwe.mitre.org/data/definitions/59.html),
+[research note](../research-notes/agent-harness-security-2026-10-25.md#write-destinations)).
+
 ### Data access and outbound channels
 
 **[Vendor]** Even read-only MCP search can disclose private data through
@@ -145,6 +186,21 @@ Test allowed domains too: a domain allowlist does not inspect payloads.
 Cover query parameters, tool arguments, email recipients, logs, generated
 URLs and browser output. Prompts and “no write tools” are supporting
 controls, not sufficient confidentiality boundaries.
+
+**[Vendor]** The harnesses' own examples and defaults keep `.env` files
+out of unattended reads: Claude Code's settings example denies
+`Read(./.env)` and `Read(./.env.*)`, OpenCode asks for approval before
+reading `*.env` and `*.env.*` but allows `*.env.example` by default, and
+a Codex permission profile can deny
+`**/*.env` ([Claude Code settings](https://code.claude.com/docs/en/settings),
+[OpenCode](../vendors/opencode/permissions-and-sandbox.md#keys),
+[Codex](../vendors/codex/permissions-and-sandbox.md#example)). **[Inference]**
+Context collection does not read a file that commonly holds credentials
+unless the task needs its contents, and names it by path when only its
+existence matters; reading it puts the secret into the session, whatever
+the output rules say. Classify by the specific file, as those defaults
+do, not by a broad extension
+([research note](../research-notes/agent-harness-security-2026-10-25.md#credential-reads)).
 
 ### MCP authorization and transport
 

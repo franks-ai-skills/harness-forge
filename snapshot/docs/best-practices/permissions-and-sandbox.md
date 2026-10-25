@@ -45,7 +45,7 @@ Permissions decide whether a tool call runs. The sandbox limits what a running c
 
 - CC: `permissions.allow`, `ask`, `deny` in settings files, for any tool (`Bash(...)`, `Read(...)`, `Edit(...)`, `WebFetch(domain:...)`, `mcp__...`). Evaluation is deny, then ask, then allow, first match; a deny in any scope beats an allow in any scope. Managed rules cannot be overridden by CLI flags. "Yes, and don't ask again" for Bash saves a permanent per-repository rule; file-edit approvals last until session end ([CC permissions](https://code.claude.com/docs/en/permissions)).
 - Codex: Starlark `prefix_rule(pattern, decision, justification, match, not_match)` in `rules/*.rules` next to each config layer; project rules only if the project is trusted. The most restrictive matching decision wins: `forbidden` > `prompt` > `allow`. Linear scripts joined with `&&`, `||`, `;`, `|` are split; scripts with redirections, substitutions, variables, wildcards or control flow are evaluated as one invocation `["bash","-lc","<script>"]`. Rules are experimental ([Codex rules](https://learn.chatgpt.com/codex/rules)). An `allow` rule runs the command outside the sandbox ([Permissions concept](../concepts/permissions-and-sandbox.md)).
-- OpenCode: `permission` key per tool. The last matching rule wins, so put `"*"` first. Most permissions default to `allow`; `external_directory` and `doom_loop` default to `ask`; `.env` reads are blocked by default except `.env.example` ([OpenCode permissions](https://opencode.ai/docs/permissions/)).
+- OpenCode: `permission` key per tool. The last matching rule wins, so put `"*"` first. Most permissions default to `allow`; `external_directory` and `doom_loop` default to `ask`; `.env` and `.env.*` reads ask for approval by default, `.env.example` reads are allowed ([OpenCode permissions](https://opencode.ai/docs/permissions/#defaults)).
 
 **Trade-offs.** Command-pattern rules match the text the model usually produces, not the program. They are guidance, not a boundary ([practice 3](#3-treat-command-rules-as-guidance-and-enforce-with-the-sandbox)).
 
@@ -127,7 +127,7 @@ Permissions decide whether a tool call runs. The sandbox limits what a running c
 - **How:**
   - CC: set both the `Read(...)` deny and `sandbox.filesystem.denyRead`. For a lockdown, `"denyRead": ["~/"]` with `allowRead` for the project (the narrower path wins), or `permissions.blockReadsOutsideWorkingDirectories`.
   - Codex: permission profile `filesystem."<path>" = "deny"` (beta; profiles are used instead of `sandbox_mode`, not together with it), or admin `[permissions.filesystem]` deny-read globs in `requirements.toml`.
-  - OpenCode: `read` deny patterns; `.env` is denied by default.
+  - OpenCode: `read` deny patterns, such as `"*.env": "deny"`; by default `.env` reads only ask for approval.
 - **Evidence:** [Vendor] [CC sandboxing](https://code.claude.com/docs/en/sandboxing); [Vendor] [Codex managed configuration](https://learn.chatgpt.com/codex/enterprise/managed-configuration); [Vendor] [OpenCode permissions](https://opencode.ai/docs/permissions/).
 
 ### 5. Enable filesystem and network isolation together

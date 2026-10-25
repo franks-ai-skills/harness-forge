@@ -404,6 +404,7 @@ def prepare_run(
             "part_id": part_id, "symlinks": {k: v for k, v in symlinks.items() if k in run.part_links.get(part_id, [])},
             "outside_controls": [{"part_id": part_id, "control": c["control"]} for c in part["outside_controls"]],
             "readme_path": README,
+            "decision_part_ids": [item["id"] for item in record["parts"]],
         }
         # Only Forge decides where the skill lives: a value from the idea's facts or the answers never stands in.
         facts.pop("skill_home", None)

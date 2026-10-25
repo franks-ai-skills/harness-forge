@@ -17,12 +17,13 @@ import hashlib
 import json
 import re
 import shlex
+from functools import lru_cache
 from pathlib import Path
 
 import yaml
 
 from harness_forge.documents import canonical_digest, load_document, markdown_section, safe_path, split_frontmatter, validate
-from harness_forge.checks.outside import foreign_lines
+from harness_forge.checks.outside import FORGE_URL, OUTSIDE_INTRO, REACH_START, foreign_lines
 from harness_forge.models import AcceptedRevision, Confirmation, Contract, Decision
 from harness_forge.research import UNTRUSTED_TAG
 from harness_forge.selection import BUILDABLE, CONFLICT_CHOICES, goal_conflict, next_question
@@ -37,6 +38,10 @@ RELAY_KEYS = {"choice", "displayed_digest", "part_ids", "run_id"}
 OUTSIDE_HEADING = "Outside controls"
 OUTSIDE_STATUS = "recommended, not verified"
 REACH_HEADING = "Where the skills load"
+SNAPSHOT = Path(__file__).resolve().parents[2] / "snapshot"
+AVAILABILITY = {"available": "Recorded as available during intake",
+                "unavailable": "Recorded as unavailable during intake",
+                "unknown": "Its availability was unknown during intake"}
 # User-level skill roots (KB docs/guide/skills.md, "User scope").
 USER_SKILL_ROOTS = {"claude-code": "~/.claude/skills/", "codex": "~/.agents/skills/"}
 TARGET_NAMES = {"claude-code": "Claude Code", "codex": "Codex"}
@@ -667,23 +672,50 @@ def _codeowners_condition(targets: list[str]) -> str:
             "branch rule requires code-owner review")
 
 
+@lru_cache(maxsize=1)
+def pinned_controls() -> dict[str, dict[str, str]]:
+    """Each outside control's readable name and the reason it is recommended, by id, from the pinned KB."""
+    document = load_document(SNAPSHOT / "rules" / "selection.yaml", "selection")
+    controls = {}
+    for rule in document["rules"]:
+        control = ((rule.get("params") or {}).get("implies") or {}).get("control")
+        if control:
+            controls[control["id"]] = {"name": control["name"], "reason": control["reason"]}
+    return controls
+
+
+@lru_cache(maxsize=1)
+def pinned_kb_version() -> str:
+    return json.loads((SNAPSHOT / "kb-manifest.json").read_text(encoding="utf-8"))["kb_version"]
+
+
 def _outside_section(decision: Decision, conditions: dict[str, str]) -> str:
     lines = [f"## {OUTSIDE_HEADING}", ""]
     entries = []
     conditions = {**conditions, **FORGE_CONDITIONS,
                   "outside.codeowners.agent-config": _codeowners_condition(decision.record["targets"])}
+    # With one part, "part A" explains nothing; with several, each entry names its part.
+    several = len(decision.record["parts"]) > 1
     for part in decision.record["parts"]:
         for control in part["outside_controls"]:
-            role = "required for the goal" if control["required_for_goal"] else "precaution"
+            # Readable text from the pinned KB by id; the id stays for traceability.
+            known = pinned_controls().get(control["control"], {})
+            name = " ".join(known.get("name", control["control"]).split())
+            where = f"`{control['control']}`, part {part['id']}" if several else f"`{control['control']}`"
+            goal = "this part's goal" if several else "the goal"
+            role = (f"Required for {goal}: the goal does not hold without it." if control["required_for_goal"]
+                    else f"Not recorded as required for {goal}.")
+            reason = " ".join(known.get("reason", "").split()).rstrip(".")
             entries.append(
-                f"- `{control['control']}` (part {part['id']}): {OUTSIDE_STATUS}. {role.capitalize()}; "
-                f"availability {control['availability']}. It works as a gate only when:"
+                f"- **{name}** ({where}): {OUTSIDE_STATUS}. {role} {AVAILABILITY[control['availability']]}; "
+                f"Harness Forge has not verified its setup or enforcement."
+                + (f" Why: {reason}." if reason else "") + " It works as a gate only when:"
             )
             for rule_id in effective_prerequisites(control):
                 # A statement may span lines; the README holds it on one, as Forge reads it back.
                 condition = " ".join((conditions.get(rule_id) or "").split())
                 entries.append(f"  - {condition} (`{rule_id}`)" if condition else f"  - `{rule_id}`")
-    lines += entries or ["None recommended."]
+    lines += [OUTSIDE_INTRO.format(kb_version=pinned_kb_version()), "", *entries] if entries else ["None recommended."]
     return "\n".join(lines) + "\n"
 
 
@@ -711,14 +743,15 @@ def _reach_section(decision: Decision) -> str | None:
     locations = " and ".join(f"`{USER_SKILL_ROOTS[target]}<name>/` for {TARGET_NAMES[target]}"
                              for target in record["targets"] if target in USER_SKILL_ROOTS)
     if record["reach"] == "user":
-        wanted, use = "all of your repositories", "To use them everywhere, copy each skill's folder to your user skills location"
+        wanted, use = ("you want to use them in all of your repositories",
+                       "To use them everywhere, copy each skill's folder to your user skills location")
     else:
-        wanted, use = ("public", "This release packages no plugin: publish this repository, and each user copies "
-                       "each skill's folder to their user skills location")
+        wanted, use = ("you plan to share them publicly", "This release packages no plugin: publish this repository, "
+                       "and each user copies each skill's folder to their user skills location")
     return (f"## {REACH_HEADING}\n\n"
-            f"Forge builds {', '.join(f'`{name}`' for name in names)} into this repository "
-            f"(`.agents/skills/<name>/`), and a skill there loads only in this repository, although the idea's "
-            f"reach is {wanted}. {use}: {locations}. Forge verifies the skills in this repository, not a copy.\n")
+            f"{REACH_START}{', '.join(f'`{name}`' for name in names)} into this repository "
+            f"(`.agents/skills/<name>/`), and a skill there loads only in this repository, although {wanted}. "
+            f"{use}: {locations}. Harness Forge verifies the skills in this repository, not a copy.\n")
 
 
 def _replace_section(readme: str, heading: str, section: str | None) -> str:

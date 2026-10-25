@@ -23,7 +23,8 @@ def outside_only():
 def coverage(readme: str) -> str:
     record = outside_only()
     controls = [{"part_id": p["id"], "control": c["control"]} for p in record.record["parts"] for c in p["outside_controls"]]
-    return check_readme_coverage({"README.md": readme.encode()}, {"outside_controls": controls}, PARAMS)[0]
+    facts = {"outside_controls": controls, "decision_part_ids": [p["id"] for p in record.record["parts"]]}
+    return check_readme_coverage({"README.md": readme.encode()}, facts, PARAMS)[0]
 
 
 class FenceTest(unittest.TestCase):
@@ -132,7 +133,7 @@ class ForgeSectionTest(unittest.TestCase):
         indented = "# Repro\n\n## Outside controls\n\nNone recommended.\n\n" + "".join(
             "    " + line + "\n" for line in entry.splitlines())
         self.assertEqual(coverage(indented), "fail", "an entry in indented code is no recommendation")
-        self.assertEqual(coverage(written.replace("\n- `event-gate`", "\nMy note.\n\n- `event-gate`")), "fail")
+        self.assertEqual(coverage(written.replace("\n- **Gate for events", "\nMy note.\n\n- **Gate for events")), "fail")
 
     def test_bare_cr_line_endings_keep_coverage(self):
         self.assertEqual(coverage(update_outside_section("# Repro\n", outside_only()).replace("\n", "\r")), "pass")
@@ -184,7 +185,10 @@ class RoundFourTest(unittest.TestCase):
     def test_coverage_needs_the_exact_control_part_and_status(self):
         written = update_outside_section("# Repro\n", outside_only())
         self.assertEqual(coverage(written.replace("`event-gate`", "`not-event-gate`")), "fail")
-        other_part = written.replace("(part B)", "(part C)").replace("It works as a gate", "Unlike part B, it works as a gate")
+        # A one-part decision writes no part; an entry naming another part does not count for it.
+        other_part = written.replace("(`event-gate`)", "(`event-gate`, part C)").replace(
+            "It works as a gate", "Unlike part B, it works as a gate")
+        self.assertNotEqual(other_part, written)
         self.assertEqual(coverage(other_part), "fail")
 
     def test_only_skill_md_has_frontmatter_to_skip(self):
