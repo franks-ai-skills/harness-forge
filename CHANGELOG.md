@@ -129,6 +129,13 @@ schema copies (0.4.0) and the plugin release-tag guidance (0.3.0).
   plain HTTPS URL, in labelled fences longer than any backtick or tilde
   run in them (#71).
 
+### Drift issues
+
+- `drift-issue` writes its proposal and `publish-issue` reads it only
+  as a regular file: a symbolic link at that name, also a dangling one,
+  a directory or a FIFO is refused before anything is written, read or
+  filed, and the check runs on the opened file (#76).
+
 ### Provenance
 
 - The verification report names the Harness Forge copy that verified:
