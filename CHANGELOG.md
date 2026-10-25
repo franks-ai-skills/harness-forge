@@ -32,6 +32,13 @@ release-tag guidance.
   optional `survey_candidates` and shown in the contract. Then the other
   findings are presented with the goal, design choice or safeguard each
   suggests, and the user adopts all, some or none (#45).
+- After a new deep pass, `forge.py compare-requirements` groups a part's
+  proposed requirements against the ones accepted for it before, by
+  their full content: unchanged with current source support, changed
+  (with each difference), new, unsupported and removed. harness-research
+  asks once about the displayed unchanged group, with each item still
+  open to edit or rejection, and asks about the others one at a time;
+  `accept` stays the only way to record them (#47).
 
 ### Tokens
 

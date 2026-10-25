@@ -14,7 +14,7 @@ import yaml
 from harness_forge.contracts import load_decision, render_contract
 from harness_forge.documents import validate
 from harness_forge.models import Rule
-from harness_forge.research import accept_requirements
+from harness_forge.research import accept_requirements, compare_requirements
 
 FORGE = Path(__file__).resolve().parents[1]
 INTAKE = FORGE / "skills" / "harness-intake" / "references" / "inputs.md"
@@ -73,10 +73,24 @@ class IntakeInputsTest(unittest.TestCase):
 
 class ResearchInputsTest(unittest.TestCase):
     def test_proposed_requirements_and_choices_are_accepted(self):
-        (_, proposed), (_, choices) = blocks(RESEARCH)
+        (_, proposed), (_, choices), _ = blocks(RESEARCH)
         rules = [Rule.from_dict(rule) for rule in json.loads(proposed)["requirements"]]
         accepted = accept_requirements(rules, json.loads(choices), "0" * 64, part_id="A")
         self.assertEqual(accepted.rule_ids, ["idea.repro.a.environment"])
+
+    def test_the_comparison_output_shows_the_commands_groups_and_fields(self):
+        (_, proposed), _, (_, shown) = blocks(RESEARCH)
+        shown = json.loads(shown)
+        rules = [Rule.from_dict(rule) for rule in json.loads(proposed)["requirements"]]
+        previous = accept_requirements(rules, {rule.id: "accept" for rule in rules}, "0" * 64, part_id="A")
+        statement = {**rules[1].to_dict(), "statement": "The checklist presents a guess as an observation"}
+        source = rules[0].sources[0]
+        groups = compare_requirements(previous, [rules[0], Rule.from_dict(statement)], "A",
+                                      [{"id": "F3", "source": source, "claim": "c", "quote": "q"}])
+        self.assertEqual(set(shown) - {"command", "part_id", "brief_digest", "untrusted"}, set(groups))
+        self.assertEqual(set(shown["unchanged"][0]), set(groups["unchanged"][0]))
+        self.assertEqual(set(shown["changed"][0]), set(groups["changed"][0]))
+        self.assertEqual(set(shown["changed"][0]["differences"]), set(groups["changed"][0]["differences"]))
 
 
 if __name__ == "__main__":
