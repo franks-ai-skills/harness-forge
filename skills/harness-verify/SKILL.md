@@ -90,8 +90,8 @@ instruction, and stop; never install or download anything yourself.
    unavailable. When a skill writes files or its safety rules are about
    what it reads, writes or refuses, add `behavior` cases, shaped like
    `evals/smoke/behavior-example.yaml`: each names its `harnesses`, the
-   paths it may `write` (an exact path or a directory followed by
-   `/**`, never the skill's own files, a harness directory or an
+   paths it may `write` (a directory followed by `/**`, or an exact path,
+   which only Claude Code can enforce, never the skill's own files, a harness directory or an
    instruction file), `network: none`, any `dependencies` from another
    part, and what to `expect` of the saved files and the recorded
    actions. Read [references/contract.md](references/contract.md#behavior-tests)

@@ -59,7 +59,7 @@ schema copies (0.4.0) and the plugin release-tag guidance (0.3.0).
   skill, its fixtures and the dependencies it names; the harness lets it
   write only the declared paths (Claude Code through `Edit` rules in
   `dontAsk` mode with reads kept in the workspace, Codex through Forge's
-  permission profile), without network. A case asserts on the saved files
+  permission profile, for `dir/**` paths only), without network. A case asserts on the saved files
   and on the recorded tool requests, denials and commands, and passes only
   with the skill's observed activation; anything changed outside the
   declared writes fails it, and what a harness cannot observe makes it

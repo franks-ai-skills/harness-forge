@@ -138,14 +138,12 @@ def unsupported(case: dict, harness: str, version: str) -> str | None:
     if harness == "codex" and actions.get("no_denied"):
         return "Codex does not report refused file operations inside its commands, so no_denied cannot be observed"
     if harness == "codex":
-        # Codex's sandbox grants a whole subtree for a directory or a path that does not exist yet, so an exact
-        # write holds only for a file the workspace already has: a fixture.
-        files = set(case.get("fixtures") or {})
-        loose = [entry for entry in case.get("writes") or []
-                 if (scope := write_scope(entry)) and not scope[1] and scope[0] not in files]
-        if loose:
-            return (f"Codex can limit the exact write {loose[0]} to that path only when it is an existing file, "
-                    f"such as a fixture; declare {loose[0]}/** if its whole subtree may change")
+        # Codex's sandbox grants a whole subtree for a directory or a path that does not exist yet, and a command
+        # can turn a granted file into a directory before the next command: an exact write is never exact there.
+        exact = [entry for entry in case.get("writes") or [] if (scope := write_scope(entry)) and not scope[1]]
+        if exact:
+            return (f"Codex cannot limit a write to the exact path {exact[0]}: its sandbox would grant the whole "
+                    f"subtree; declare {exact[0]}/** if that may change, or test the case in Claude Code")
     if harness == "claude-code":
         found = re.search(r"(\d+)\.(\d+)\.(\d+)", version or "")
         if not found or tuple(int(number) for number in found.groups()) < CLAUDE_READ_BLOCK:
