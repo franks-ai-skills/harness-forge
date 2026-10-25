@@ -65,7 +65,9 @@ schema copies (0.4.0) and the plugin release-tag guidance (0.3.0).
   declared writes fails it, and what a harness cannot observe makes it
   unavailable. Every declared case must pass in each harness it names for
   the part to be verified. The report shows behavior results in their own
-  table with their observation gaps (#54).
+  table with their observation gaps. A behavior case for a skill shipped
+  in a plugin is refused before anything runs, since that skill's runtime
+  cases cannot run yet (#54).
 
 ### README sections and naming
 
