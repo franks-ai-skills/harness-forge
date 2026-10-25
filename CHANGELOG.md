@@ -12,7 +12,7 @@ against tags named `harness-forge--v<version>` (`claude plugin tag`
 creates that format); Forge adds such a tag on the same commit only
 once it supports such dependencies.
 
-## Unreleased
+## 0.3.0 (2026-10-25)
 
 Pins agent-harness-kb 0.6.0: security guidance and rules for skill
 writes, repository metadata, embedded material and credential reads,
