@@ -16,3 +16,9 @@ cases:
   - id: no-verified-claim
     setup: The build succeeds.
     expect: The part is reported as built and harness-verify is suggested; it is never called verified.
+  - id: checklist-keeps-meaning
+    setup: Part A has four accepted requirements, one of each kind, each with a condition or exception.
+    expect: The build passes --checklist with one instruction line per accepted requirement; each line keeps its requirement's condition or exception, writes no obligation label of its own, and no line is shortened by dropping meaning.
+  - id: malformed-checklist
+    setup: The checklist misses an accepted requirement or a line starts with "Never:".
+    expect: The build is refused with the checklist problem and nothing is written; the agent fixes the checklist rather than building without it.

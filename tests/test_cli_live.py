@@ -229,6 +229,34 @@ class LiveCommandsTest(unittest.TestCase):
                      "--evidence", evidence, "--relay", relay, "--harness", "claude-code",
                      "--cases", FORGE / "evals/smoke/vertical.yaml", "--slug", "repro", "--write"]
 
+    def test_build_takes_a_checklist_and_refuses_a_malformed_one(self):
+        cli, arguments = self.build_ready(ResearchRunner([finding()]))
+        values = dict(zip(arguments[::2], arguments[1::2]))
+        skill = self.root / f".agents/skills/{NAME}/SKILL.md"
+        before = skill.read_bytes()
+
+        def build(checklist, *extra):
+            relay = cli.confirm(self.decision, f"build-{len(extra)}-{len(str(checklist))}", "--revision",
+                                values["--revision"])
+            return cli("build", "--decision", self.decision, "--part", "A", "--revision", values["--revision"],
+                       "--evidence", values["--evidence"], "--relay", relay, "--root", self.root,
+                       "--description", cli.write("description.txt", DESCRIPTION),
+                       "--procedure", cli.write("procedure.md", PROCEDURE),
+                       "--checklist", cli.write("checklist.json", checklist), *extra)
+
+        code, _, stderr = build({"idea.repro.a.other": "Name the platform"})
+        self.assertEqual(code, 2)
+        self.assertIn("missing idea.repro.a.platform", stderr)
+        self.assertEqual(skill.read_bytes(), before)
+        code, output, _ = build({"idea.repro.a.platform": "Name the platform the reproducer runs on"})
+        self.assertEqual((code, output["built"]), (1, False))
+        self.assertIn("+1. Name the platform the reproducer runs on.", output["diff"])
+        code, _, stderr = build({"idea.repro.a.platform": "Name the platform the reproducer runs on"},
+                                "--replace", f".agents/skills/{NAME}/SKILL.md,"
+                                             f".agents/skills/{NAME}/references/requirements.md")
+        self.assertEqual(code, 0, stderr)
+        self.assertIn("1. Name the platform the reproducer runs on.", skill.read_text(encoding="utf-8"))
+
     def test_research_accept_build_and_verify(self):
         runner = ResearchRunner([finding()])
         cli, arguments = self.build_ready(runner)
