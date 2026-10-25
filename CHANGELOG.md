@@ -116,6 +116,19 @@ schema copies (0.4.0) and the plugin release-tag guidance (0.3.0).
   they can hold untrusted content, are not Forge's diagnostics, and
   Forge does not delete profile data (#48).
 
+### Fetched text
+
+- The contract shows each fetched value of a recorded drift, a drift
+  decision and an override's description (claim, source, fetch date,
+  quote, context) as one escaped JSON string on its own line, under an
+  untrusted label, so the text cannot close its quotes or add a line
+  such as `Contract digest:`. A contract that shows such text binds the
+  rendering, so its digest changes once and earlier confirmations of it
+  no longer hold; other contracts keep their digests. The drift issue
+  or comment puts the claim and the quote, and a source that is not a
+  plain HTTPS URL, in labelled fences longer than any backtick or tilde
+  run in them (#71).
+
 ### Provenance
 
 - The verification report names the Harness Forge copy that verified:
