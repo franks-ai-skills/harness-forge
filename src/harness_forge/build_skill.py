@@ -212,8 +212,9 @@ def plan_skill(
             kind = KIND_LABELS[rule["kind"]].lower()
             if not lines:
                 return f"{number}. `{rule['id']}` ({kind}): {', '.join(rule['sources'])}"
-            statement = " ".join(rule["statement"].split()).rstrip(".")
-            return f"{number}. `{rule['id']}` ({kind}): {statement}. Sources: {', '.join(rule['sources'])}"
+            # The accepted wording exactly: a statement's own line breaks continue the list item.
+            statement = rule["statement"].rstrip().replace("\n", "\n   ")
+            return f"{number}. `{rule['id']}` ({kind}): {statement}\n   - Sources: {', '.join(rule['sources'])}"
         planned[f"{base}/references/requirements.md"] = _template(
             "requirements.md.tmpl", digest=part_requirements_digest(revision, part_id), part=part_id,
             # Without a checklist the text stays as before, so earlier builds do not change.

@@ -54,8 +54,8 @@ class ChecklistTest(unittest.TestCase):
                       "2. Number each reproduction step.\n"
                       "3. Do not merge expected and observed behavior into one line.\n", skill_md)
         self.assertNotIn("The checklist names the environment", skill_md)
-        self.assertIn("1. `idea.repro.a.environment` (must): The checklist names the environment. Sources: "
-                      "https://docs.example-vendor.com/bug-reports", reference)
+        self.assertIn("1. `idea.repro.a.environment` (must): The checklist names the environment.\n"
+                      "   - Sources: https://docs.example-vendor.com/bug-reports", reference)
         self.assertIn("the rule id, its kind, the\naccepted statement and its sources.", reference)
         self.assertIn("need the exact accepted wording", skill_md)
         for statement in ("The checklist names the environment", "Name the environment"):
@@ -67,6 +67,23 @@ class ChecklistTest(unittest.TestCase):
                       "2. Never: ask for access tokens, unless the user pasted a redacted example.\n"
                       "3. Prefer to: fit the checklist on one screen when the bug has at most five steps.\n"
                       "4. Avoid: asking for screenshots for a command-line bug.\n", skill_md)
+
+    def test_the_reference_keeps_the_accepted_wording_exactly(self):
+        exact = [idea_rule("command", "The checklist quotes `a  b` as written; it ends with a colon:"),
+                 idea_rule("lines", "The checklist lists\n  - the platform\n  - the version")]
+        revision = accept_requirements(exact, {rule.id: "accept" for rule in exact}, "b" * 64)
+        record = reference_decision()
+        record.record["accepted_revision"] = {"digest": revision.digest, "rule_ids": revision.rule_ids}
+        contract = render_contract(record, revision, [], worker_evidence=EVIDENCE)
+        relay = {"choice": "confirm", "displayed_digest": contract.digest, "part_ids": ["A"], "run_id": "run-1"}
+        reference = plan_skill(record, "A", revision, PINNED, worker_evidence=EVIDENCE, description=DESCRIPTION,
+                               procedure=PROCEDURE, confirmation=confirm_contract(contract, relay, run_id="run-1"),
+                               checklist={"idea.repro.a.command": "Quote `a  b` as written",
+                                          "idea.repro.a.lines": "List the platform and the version"})[REFERENCE]
+        self.assertIn("1. `idea.repro.a.command` (must): The checklist quotes `a  b` as written; it ends with a "
+                      "colon:\n   - Sources:", reference)
+        self.assertIn("2. `idea.repro.a.lines` (must): The checklist lists\n     - the platform\n     - the version\n"
+                      "   - Sources:", reference)
 
     def test_without_a_checklist_the_statements_stay_in_skill_md(self):
         planned = plan()
