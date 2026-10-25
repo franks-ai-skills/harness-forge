@@ -40,6 +40,16 @@ each part's record, the checker versions and the worker evidence. A
 change to any of them returns the affected parts to `built`; a shared
 file such as the README affects every part that owns it.
 
+## Provenance
+
+The report names the Harness Forge copy that verified (its declared
+version and, for a Git checkout of Forge itself, the commit and whether
+it had uncommitted changes) and, per part, the copy that last built it
+successfully, as the build recorded it in the decision record. Any value
+that could not be established is `unknown`. "Built outputs" compares the
+checked files and links with the ones that build left; a hand edit since
+then shows as changed. It is information only and changes no result.
+
 ## Not applicable from the reviewer
 
 Allowed only for rules whose applicability needs judgment. For an error

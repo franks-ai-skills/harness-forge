@@ -1168,6 +1168,62 @@ class LiveCommandsTest(unittest.TestCase):
         runtime = report[report.index("## Runtime tests"):report.index("## Checked files")]
         self.assertEqual(runtime.count("(kept from run verify-1) |"), len(first["runtime"]))
 
+    def test_the_build_record_reaches_the_report_and_survives_verification_and_review(self):
+        from harness_forge.provenance import describe, forge_provenance
+        cli, arguments = self.build_ready(ResearchRunner([finding()]))
+        build = load_decision(self.decision).part("A")["build"]
+        self.assertEqual(build["forge"], forge_provenance())
+        self.assertEqual(sorted(build["outputs"]), [f".agents/skills/{NAME}/SKILL.md",
+                                                    f".agents/skills/{NAME}/references/requirements.md",
+                                                    f".claude/skills/{NAME}"])
+        self.assertEqual(build["outputs"][f".claude/skills/{NAME}"], f"link:../../.agents/skills/{NAME}")
+        code, _, stderr = cli("verify", *arguments)
+        self.assertEqual(code, 0, stderr)
+        self.assertEqual(load_decision(self.decision).part("A")["build"], build, "verification never writes it")
+        report = (self.root / ".harness/reports/repro.md").read_text(encoding="utf-8")
+        self.assertIn(f"- Harness Forge verifier: {describe(forge_provenance())}", report)
+        self.assertIn(f"- Recorded builder: Harness Forge {describe(build['forge'])}", report)
+        self.assertIn("- Built outputs: match that build", report)
+
+        relay = arguments[arguments.index("--relay") + 1]
+        code, output, stderr = cli("scope", "--harness", "claude-code", "--decision", self.decision, "--root",
+                                   self.root, "--revision", self.root / ".harness/research/repro.rules.yaml",
+                                   "--slug", "repro", "--fixed", "", "--evidence", self.root / ".scratch/workers.json",
+                                   "--relay", relay, "--cases", arguments[arguments.index("--cases") + 1])
+        self.assertEqual(code, 0, stderr)
+        choice = cli.write("scope-keep.json", {"choice": "review", "displayed_digest": output["options"][0]["digest"],
+                                               "run_id": "verify-1"})
+        code, output, stderr = cli("verify", *arguments, "--scope", "review", "--fixed", "", "--scope-relay", choice)
+        self.assertEqual((code, output["kept_parts"]), (0, ["A"]), stderr)
+        report = (self.root / ".harness/reports/repro.md").read_text(encoding="utf-8")
+        self.assertIn(f"- Recorded builder: Harness Forge {describe(build['forge'])}", report)
+        self.assertIn(f"- Harness Forge verifier: {describe(forge_provenance())}", report)
+
+    def test_a_refused_build_keeps_the_earlier_build_record(self):
+        cli, arguments = self.build_ready(ResearchRunner([finding()]))
+        values = dict(zip(arguments[::2], arguments[1::2]))
+        record = load_decision(self.decision)
+        record.part("A")["build"]["forge"] = {"version": "0.1.0", "source": "unknown", "commit": "unknown",
+                                              "tree": "unknown"}
+        write_decision(self.root, record, slug="repro", date="2026-10-10")
+        earlier = load_decision(self.decision).part("A")["build"]
+        relay = cli.confirm(self.decision, "rebuild-1", "--revision", values["--revision"])
+        code, _, _ = cli("build", "--decision", self.decision, "--part", "A", "--revision", values["--revision"],
+                         "--evidence", values["--evidence"], "--relay", relay, "--root", self.root,
+                         "--description", cli.write("description.txt", DESCRIPTION),
+                         "--procedure", cli.write("procedure.md", PROCEDURE),
+                         "--checklist", cli.write("bad.json", {"idea.repro.a.other": "x"}))
+        self.assertEqual(code, 2)
+        self.assertEqual(load_decision(self.decision).part("A")["build"], earlier)
+        relay = cli.confirm(self.decision, "rebuild-2", "--revision", values["--revision"])
+        code, _, stderr = cli("build", "--decision", self.decision, "--part", "A", "--revision", values["--revision"],
+                              "--evidence", values["--evidence"], "--relay", relay, "--root", self.root,
+                              "--description", cli.write("description.txt", DESCRIPTION),
+                              "--procedure", cli.write("procedure.md", PROCEDURE))
+        self.assertEqual(code, 0, stderr)
+        from harness_forge.provenance import forge_provenance
+        self.assertEqual(load_decision(self.decision).part("A")["build"]["forge"], forge_provenance())
+
     def test_a_review_keeps_no_part_whose_runtime_evidence_does_not_hold(self):
         import json as json_module
         cli, arguments = self.build_ready(ResearchRunner([finding()]))
