@@ -8,7 +8,7 @@ checkers:
     summary: SKILL.md starts with YAML frontmatter; name and description are non-empty strings; license and compatibility are strings, compatibility at most 500 characters; metadata maps strings to strings.
     params: {type: object, properties: {}, additionalProperties: false}
   - id: skills.name-format
-    version: 1.0.0
+    version: 1.1.0
     summary: name has at most max_chars lowercase letters, digits and single hyphens and equals the skill directory name.
     params:
       type: object

@@ -14,8 +14,9 @@ once it supports such dependencies.
 
 ## Unreleased
 
-Pins agent-harness-kb 0.4.0: its schema copies are Draft-07, and it
-carries 0.3.0's plugin release-tag guidance.
+Pins agent-harness-kb 0.5.0: `skills.name-format` is version 1.1.0,
+its schema copies are Draft-07 (0.4.0), and it carries 0.3.0's plugin
+release-tag guidance.
 
 ### Selection and intake
 
