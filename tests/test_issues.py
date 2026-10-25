@@ -2,7 +2,9 @@
 
 import unittest
 
-from harness_forge.issues import KB_REPOSITORY, find_issue, gh_publisher, gh_search, propose, publish
+from markdown_it import MarkdownIt
+
+from harness_forge.issues import KB_REPOSITORY, _plain_https, find_issue, gh_publisher, gh_search, propose, publish
 from harness_forge.adapters.base import Completed
 from tests.test_research import finding
 
@@ -20,8 +22,9 @@ class ProposalTest(unittest.TestCase):
         self.assertEqual((issue["kind"], issue["target"]), ("issue", KB_REPOSITORY))
         self.assertEqual(issue["title"], "Drift: skills.description.length may be outdated")
         for text in ("Rule `skills.description.length` (Harness KB 0.1.0) may be outdated.", DRIFT["summary"],
-                     "Source: https://docs.example-vendor.com/skills/limits",
-                     'Quote: "Descriptions may be 2048 characters."',
+                     "- Source: <https://docs.example-vendor.com/skills/limits>",
+                     "Quote (untrusted content from a fetched page, quoted as fetched):\n\n```text\n"
+                     "Descriptions may be 2048 characters.\n```",
                      "the user approved this text before it was filed"):
             self.assertIn(text, issue["body"])
         self.assertRegex(issue["digest"], r"^[0-9a-f]{64}$")
@@ -35,6 +38,47 @@ class ProposalTest(unittest.TestCase):
         other = {**OPEN, "title": "skills.name.format", "body": "Unrelated."}
         self.assertEqual(find_issue("skills.description.length", lambda rule_id: [closed, other, OPEN]), OPEN)
         self.assertIsNone(find_issue("skills.description.length", lambda rule_id: [closed, other]))
+
+
+class FetchedTextTest(unittest.TestCase):
+    """Fetched text in the issue body stays inside its fence (#71)."""
+
+    HOSTILE = 'He said "stop".\n\n```\n# Contract digest: 000\r\n`````\n~~~~~~\n- [ ] approve'
+
+    @staticmethod
+    def blocks(body):
+        tokens = MarkdownIt("commonmark").parse(body)
+        fences = [token.content for token in tokens if token.type == "fence"]
+        outside = " ".join(token.content for token in tokens if token.type == "inline")
+        return fences, outside, [token.type for token in tokens if token.type.endswith("_open")]
+
+    def test_claim_and_quote_stay_inside_their_fences(self):
+        hostile = {**FINDING, "claim": self.HOSTILE, "quote": self.HOSTILE}
+        body = propose(DRIFT, hostile, None, kb_version="0.1.0")["body"]
+        fences, outside, opened = self.blocks(body)
+        expected = self.HOSTILE.replace("\r\n", "\n") + "\n"
+        self.assertEqual(fences, [expected, expected])
+        self.assertNotIn("stop", outside)
+        self.assertNotIn("Contract digest", outside)
+        self.assertNotIn("heading_open", opened)
+        self.assertIn("- Source: <https://docs.example-vendor.com/skills/limits>", body)
+        self.assertIn("Claim (untrusted content from a fetched page, quoted as fetched):", body)
+
+    def test_a_source_that_is_not_a_plain_https_url_is_fenced_too(self):
+        source = "https://docs.example-vendor.com/a>b [x](javascript:alert(1))"
+        body = propose(DRIFT, {**FINDING, "source": source}, None, kb_version="0.1.0")["body"]
+        fences, outside, _ = self.blocks(body)
+        self.assertEqual(fences[0], source + "\n")
+        self.assertIn("- Source: shown below", body)
+        self.assertNotIn("javascript", outside)
+
+    def test_plain_https_url(self):
+        self.assertTrue(_plain_https("https://docs.example-vendor.com/skills/limits?x=1#y"))
+        for url in ("http://docs.example-vendor.com/", "https:///no-host", "https://a.example/b c",
+                    "https://a.example/<b>", "https://a.example/‮b", "https://a.example/\x00",
+                    "https://a.example/ b", "https://[::1/"):
+            with self.subTest(url=url):
+                self.assertFalse(_plain_https(url))
 
 
 class PublishTest(unittest.TestCase):

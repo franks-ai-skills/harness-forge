@@ -15,7 +15,9 @@ from __future__ import annotations
 
 import json
 import re
+import unicodedata
 from typing import Callable, Mapping
+from urllib.parse import urlsplit
 
 from harness_forge.adapters.base import Runner, run_command
 from harness_forge.documents import canonical_digest
@@ -25,6 +27,28 @@ RELAY_KEYS = {"choice", "displayed_digest", "run_id"}
 GH_TIMEOUT = 60
 # What gh needs to reach GitHub with the user's existing login; nothing else is passed on.
 _GH_ENVIRONMENT = ("PATH", "HOME", "GH_CONFIG_DIR", "XDG_CONFIG_HOME", "GH_HOST", "LANG", "LC_ALL", "TMPDIR")
+
+
+def _plain_https(url: str) -> bool:
+    """Whether the URL can stand as a Markdown autolink: HTTPS with a host and nothing that ends or splits it."""
+    if any(char.isspace() or char in "<>" or unicodedata.category(char) in ("Cc", "Cf", "Zl", "Zp") for char in url):
+        return False
+    try:
+        parts = urlsplit(url)
+        return parts.scheme == "https" and bool(parts.hostname)
+    except ValueError:
+        return False
+
+
+def _fenced(label: str, text: str) -> list[str]:
+    """Fetched text under a label, in a fence longer than any backtick or tilde run in it, then a blank line.
+
+    Only Markdown's own line endings split it, so other characters stay as fetched.
+    """
+    longest = max((len(run) for run in re.findall(r"`+|~+", text)), default=0)
+    fence = "`" * max(3, longest + 1)
+    return [f"{label} (untrusted content from a fetched page, quoted as fetched):", "", fence + "text",
+            *re.split(r"\r\n|\r|\n", text), fence, ""]
 
 
 def find_issue(rule_id: str, search: Callable[[str], list[dict]]) -> dict | None:
@@ -38,16 +62,20 @@ def find_issue(rule_id: str, search: Callable[[str], list[dict]]) -> dict | None
 def propose(drift: dict, finding: dict, existing: dict | None, *, kb_version: str,
             repository: str = KB_REPOSITORY) -> dict:
     """The exact text to show the user: a comment on ``existing`` or a new issue, with the digest it binds."""
+    source = finding["source"]
+    linked = _plain_https(source)
     body = "\n".join([
         f"Rule `{drift['rule_id']}` (Harness KB {kb_version}) may be outdated.",
         "",
         drift["summary"],
         "",
-        f"- Source: {finding['source']}",
-        f"- Quote: \"{finding['quote']}\"",
-        f"- Checks: the quote appears verbatim on the fetched page, and an independent source-support check "
-        f"found that it supports the claim \"{finding['claim']}\".",
+        f"- Source: <{source}>" if linked else "- Source: shown below",
+        "- Checks: the quote appears verbatim on the fetched page, and an independent source-support check "
+        "found that it supports the claim.",
         "",
+        *([] if linked else _fenced("Source", source)),
+        *_fenced("Claim", finding["claim"]),
+        *_fenced("Quote", finding["quote"]),
         "Proposed from a Harness Forge research run; the user approved this text before it was filed.",
     ])
     if existing:

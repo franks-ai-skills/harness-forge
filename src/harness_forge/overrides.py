@@ -26,7 +26,7 @@ import yaml
 from harness_forge.checks import REGISTRY
 from harness_forge.documents import load_document, safe_path, schema_errors, validate
 from harness_forge.models import Confirmation, Rule
-from harness_forge.research import UNTRUSTED_TAG, supported_findings
+from harness_forge.research import UNTRUSTED_TAG, contained, supported_findings
 
 OVERRIDES_DIR = ".harness/overrides"
 # What an override may change; sources may only gain the drift finding's own source.
@@ -211,7 +211,8 @@ def describe(override: dict, checked: dict) -> list[str]:
     elif new is not None:
         lines.append(f"  New: {new.severity}: {new.statement}" + (f"; params {new.params}" if new.params else ""))
         lines += [f"    {change['field']}: {change['old']!r} -> {change['new']!r}" for change in checked["changes"]]
-    lines.append(f"  Source ({UNTRUSTED_TAG}): {finding['source']}: \"{finding['quote']}\"")
+    lines += [f"  Source ({UNTRUSTED_TAG}, one escaped JSON string): {contained(finding['source'])}",
+              f"  Quote ({UNTRUSTED_TAG}, one escaped JSON string): {contained(finding['quote'])}"]
     lines += [f"  Warning: it {warning}" for warning in checked["warnings"]]
     lines += [f"  Problem: {problem}" for problem in checked["problems"]]
     return lines
