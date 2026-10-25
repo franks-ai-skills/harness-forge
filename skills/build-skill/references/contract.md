@@ -12,10 +12,13 @@ Read this when Forge refuses a build or reports a conflict.
 | Name | The part's slug is not 1–64 lowercase letters, digits and single hyphens |
 | Description | Empty, more than one line, or over the description limit, an adopted override's included |
 | Procedure | Empty, or it uses Claude Code-only placeholders |
+| Checklist (`--checklist`, optional) | Not a JSON object holding exactly the part's accepted requirement ids, or a line is empty, not text, more than one line, over 2,000 characters, uses a placeholder, or starts with its own obligation label or word |
 | Paths | A file would land outside `.agents/skills/<name>/`, or a directory on the way is a symbolic link |
 | Existing content | A file differs from the plan, the skill's directory holds a file Forge wrote earlier that the plan no longer has, or `.claude/skills/<name>` is not the planned relative link |
 
-A refused build writes nothing. Conflicts come with a unified diff;
+The checklist checks are syntax only: whether a line keeps its
+requirement's meaning and strength is judged in harness-verify, against
+the accepted statement. A refused build writes nothing. Conflicts come with a unified diff;
 replace only the files the user names; a named file the plan no longer
 has is removed. To repair a part after a failed
 verification, rebuild it and replace only the failing files the user

@@ -40,6 +40,17 @@ release-tag guidance.
   open to edit or rejection, and asks about the others one at a time;
   `accept` stays the only way to record them (#47).
 
+### Build
+
+- `forge.py build --checklist` takes one instruction line per accepted
+  requirement, written by build-skill for the agent that runs the skill.
+  The Requirements section then shows those lines with the label for
+  each kind, and `references/requirements.md` keeps the accepted
+  statements with their ids and sources. Forge checks the checklist's
+  shape; the review worker judges each requirement against its accepted
+  statement, so a line that drops part of it fails. Without a checklist
+  the output is unchanged (#49).
+
 ### Tokens
 
 - Whole-token checks refuse a trailing line feed or carriage return and
