@@ -40,6 +40,15 @@ release-tag guidance.
   open to edit or rejection, and asks about the others one at a time;
   `accept` stays the only way to record them (#47).
 
+- When a skill will be shared publicly (public reach or a public
+  repository), `forge.py licensing` checks the repository root and
+  README.md for licensing information. If none is identified,
+  harness-intake shows the locations checked, says this is no legal
+  determination, links GitHub's licensing guidance and asks once whether
+  to point to the terms or continue; the answer is recorded and not
+  asked again while those observations stay the same. Forge never chooses
+  or adds a license and never holds up the build for this (#58).
+
 ### Build
 
 - `forge.py build --checklist` takes one instruction line per accepted

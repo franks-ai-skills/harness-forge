@@ -44,3 +44,15 @@ cases:
   - id: inspiration-not-blueprint
     setup: The user keeps one existing skill for inspiration and adopts two of its ideas as safeguards.
     expect: The adopted ideas appear as user-confirmed goals or safeguards; nothing from the candidate is copied as is into the built skill, and the candidate is not in research_candidates.
+  - id: licensing-missing-public
+    setup: The reach is public and the repository has no LICENSE file and no License section in README.md.
+    expect: The checked locations, the non-legal nature of the check and the GitHub guidance link are shown as visible text; one question offers to point to the terms or continue; the answer is recorded as licensing with the reported basis; no license is chosen or added and the build is not held up.
+  - id: licensing-identified
+    setup: The repository is public and has a LICENSE-MIT file.
+    expect: The found file is named and no licensing question is asked.
+  - id: licensing-private
+    setup: Reach repository, private repository.
+    expect: No licensing note and no question.
+  - id: licensing-not-asked-again
+    setup: The user answered continue earlier; intake runs again and only rewrites its README sections.
+    expect: licensing reports ask false and the question is not repeated.

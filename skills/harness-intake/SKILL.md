@@ -183,7 +183,25 @@ time, read [references/inputs.md](references/inputs.md) for their shapes.
    mechanism was recommended: say so. With severity `error`, a confirmed
    answer rules the choice out, and you ask the goal-conflict question
    described in [references/contract.md](references/contract.md#goal-conflicts).
-9. **Record.** Write `.harness/decisions/<date>-<slug>.md`, then run
+9. **Record.** Write `.harness/decisions/<date>-<slug>.md`. Then run
+   `scripts/forge.py licensing --decision <record> --root <repository>`.
+   It looks only when the skill will be shared publicly (public reach or
+   a public repository). When it reports `ask: true`, show as visible
+   text, briefly: the locations it `checked`; that no licensing
+   information was identified there (or, for `incomplete`, which
+   location could not be checked), which is not a legal determination,
+   since terms can sit in a differently named file or cover only part of
+   the repository; that others who copy the skill need clear terms, and
+   neither a public repository nor Harness Forge's generated-output
+   exception establishes rights in every input or third-party
+   component; and its `guidance` link. Recommend clarifying the terms
+   before public reuse, then ask one question: point to where the terms
+   are, or continue without choosing a license. Record the answer as
+   `licensing` with the reported `basis`: `answer: location` with the
+   user's text as `location` (their information, not verified terms), or
+   `answer: continue`. With `identified`, say which files or README
+   parts it found, and ask nothing. Never choose, add or change a
+   license, and do not hold up the build for this. Then run
    `scripts/forge.py readme --decision <record> --root <repository>`. It
    writes the result README's `Outside controls` section, also for parts
    that build nothing, with each control's conditions spelled out, and,
