@@ -4,6 +4,7 @@ import contextlib
 import importlib.util
 import io
 import json
+import os
 import tempfile
 import unittest
 from pathlib import Path
@@ -1363,6 +1364,55 @@ class LiveCommandsTest(unittest.TestCase):
                               "--evidence", self.root / ".scratch/workers.json", "--relay", relay)
         self.assertEqual(code, 2, "under a confirmation the retired rule leaves no conflict, as select shows")
         self.assertIn("no goal conflict", stderr)
+
+    def test_the_proposal_file_is_never_a_symbolic_link_or_special_file(self):
+        cli, _ = self.build_ready(ResearchRunner([finding()]))
+        filed = []
+        cli.module.ISSUES = (lambda rule_id: [], lambda proposal: filed.append(proposal) or "https://github.com/k/b/issues/3")
+        self.record_drift(cli)
+        scratch = self.root / ".scratch"
+        scratch.mkdir(exist_ok=True)
+        outside = Path(self.enterContext(tempfile.TemporaryDirectory())) / "elsewhere.txt"
+        outside.write_text("keep me", encoding="utf-8")
+
+        def propose_to(path):
+            return cli("drift-issue", "--root", self.root, "--rule", "skills.description.length", "--finding", "F1",
+                       "--run-id", "drift-1", "--out", path)
+
+        (scratch / "link.json").symlink_to(outside)
+        (scratch / "dangling.json").symlink_to(outside.parent / "missing.txt")
+        (scratch / "folder.json").mkdir()
+        os.mkfifo(scratch / "pipe.json")
+        for name, reason in (("link.json", "a symbolic link"), ("dangling.json", "a symbolic link"),
+                             ("folder.json", ""), ("pipe.json", "")):
+            with self.subTest(name=name):
+                code, _, stderr = propose_to(scratch / name)
+                self.assertEqual(code, 2, stderr)
+                self.assertIn(reason, stderr)
+                self.assertIn("only a regular file is used", stderr)
+        self.assertEqual(outside.read_text(encoding="utf-8"), "keep me")
+        self.assertFalse((outside.parent / "missing.txt").exists())
+
+        existing = scratch / "existing.json"
+        existing.write_text("x" * 100000, encoding="utf-8")
+        for path in (scratch / "new.json", existing):
+            with self.subTest(path=path.name):
+                code, proposal, stderr = propose_to(path)
+                self.assertEqual(code, 0, stderr)
+                self.assertEqual(json.loads(path.read_text(encoding="utf-8"))["digest"], proposal["digest"])
+
+        relay = cli.write("approve.json", {"choice": "approve", "displayed_digest": proposal["digest"],
+                                           "run_id": "drift-1"})
+        (scratch / "proposal-link.json").symlink_to(existing)
+        for name in ("proposal-link.json", "folder.json", "pipe.json"):
+            with self.subTest(proposal=name):
+                code, _, stderr = cli("publish-issue", "--root", self.root, "--proposal", scratch / name,
+                                      "--relay", relay)
+                self.assertEqual(code, 2, stderr)
+                self.assertIn("only a regular file is used", stderr)
+        self.assertEqual(filed, [], "a refused proposal file is rejected before anything is filed")
+        code, output, stderr = cli("publish-issue", "--root", self.root, "--proposal", existing, "--relay", relay)
+        self.assertEqual((code, output["issue"]), (0, "https://github.com/k/b/issues/3"), stderr)
 
     def test_a_missing_github_cli_is_reported(self):
         cli, _ = self.build_ready(ResearchRunner([finding()]))
