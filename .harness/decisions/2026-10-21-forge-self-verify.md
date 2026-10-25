@@ -189,7 +189,7 @@ parts:
     required_for_goal: false
   reuse:
     name: build-skill
-    source: https://github.com/franks-ai-skills/harness-forge/tree/112a631399a85d3fb96d1d47a44615a9a3439690/skills/build-skill
+    source: https://github.com/franks-ai-skills/harness-forge/tree/3767d7e5591c6efd45b3ff1a5d15ce90dd92b4e7/skills/build-skill
     license: AGPL-3.0-only
     maintenance: maintained
     path: skills/build-skill
