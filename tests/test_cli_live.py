@@ -258,6 +258,61 @@ class LiveCommandsTest(unittest.TestCase):
         self.assertEqual(code, 0, stderr)
         self.assertIn("1. Name the platform the reproducer runs on.", skill.read_text(encoding="utf-8"))
 
+    def test_a_cut_conflict_diff_is_named_and_shown_whole_page_by_page(self):
+        cli, arguments = self.build_ready(ResearchRunner([finding()]))
+        values = dict(zip(arguments[::2], arguments[1::2]))
+        skill = self.root / f".agents/skills/{NAME}/SKILL.md"
+        skill.write_text(skill.read_text(encoding="utf-8") + "".join(f"Hand-written line {n}.\n" for n in range(3000)),
+                         encoding="utf-8")
+        snapshot = {path: path.read_bytes() for path in self.root.rglob("*") if path.is_file()}
+
+        calls = []
+
+        def build(*extra):
+            calls.append(extra)
+            relay = cli.confirm(self.decision, f"build-cut-{len(calls)}", "--revision", values["--revision"])
+            return cli("build", "--decision", self.decision, "--part", "A", "--revision", values["--revision"],
+                       "--evidence", values["--evidence"], "--relay", relay, "--root", self.root,
+                       "--description", cli.write("description.txt", DESCRIPTION),
+                       "--procedure", cli.write("procedure.md", PROCEDURE), *extra)
+
+        code, output, stderr = build()
+        self.assertEqual((code, output["built"]), (1, False), stderr)
+        paths = [entry["path"] for entry in output["conflicts"]]
+        self.assertIn(f".agents/skills/{NAME}/SKILL.md", paths)
+        first = output["conflicts"][paths.index(f".agents/skills/{NAME}/SKILL.md")]
+        self.assertTrue(first["truncated"])
+        self.assertGreater(first["chars"], len(first["diff"]))
+        self.assertIn(f".agents/skills/{NAME}/SKILL.md", output["incomplete"])
+        self.assertIn(f"[Forge: the diff of .agents/skills/{NAME}/SKILL.md is cut after", output["diff"])
+
+        pages, offset = [], 0
+        while offset is not None:
+            code, page, stderr = build("--show-diff", f".agents/skills/{NAME}/SKILL.md", "--offset", offset)
+            self.assertEqual(code, 0, stderr)
+            self.assertEqual((page["chars"], page["offset"]), (first["chars"], offset))
+            pages.append(page["diff"])
+            offset = page["next_offset"]
+        whole = "".join(pages)
+        self.assertEqual(len(whole), first["chars"])
+        self.assertTrue(whole.startswith(first["diff"]))
+        self.assertIn("-Hand-written line 2999.", whole)
+        self.assertEqual({path: path.read_bytes() for path in self.root.rglob("*") if path.is_file()
+                          and ".scratch" not in path.parts}, {path: data for path, data in snapshot.items()
+                                                              if ".scratch" not in path.parts},
+                         "reporting and previewing conflicts change no file and no record")
+
+        code, _, stderr = build("--show-diff", "README.md")
+        self.assertEqual(code, 2)
+        self.assertIn("not a conflict of this build", stderr)
+        code, _, stderr = build("--show-diff", f".agents/skills/{NAME}/SKILL.md", "--replace",
+                                f".agents/skills/{NAME}/SKILL.md")
+        self.assertEqual(code, 2)
+        self.assertIn("--show-diff only reads", stderr)
+        code, _, stderr = build("--show-diff", f".agents/skills/{NAME}/SKILL.md", "--offset", first["chars"] + 1)
+        self.assertEqual(code, 2)
+        self.assertIn("outside the diff", stderr)
+
     def test_research_accept_build_and_verify(self):
         runner = ResearchRunner([finding()])
         cli, arguments = self.build_ready(runner)

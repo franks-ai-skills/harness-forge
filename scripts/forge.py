@@ -38,8 +38,10 @@ import stat  # noqa: E402
 
 from harness_forge.adapters.base import preflight, run_command  # noqa: E402
 from harness_forge.build_skill import (  # noqa: E402
-    BuilderUnavailable, ConflictError, build_outputs, mark_built, plan_skill, write_skill,
+    CONFLICT_DIFF_LIMIT, BuilderUnavailable, ConflictError, build_outputs, conflict_report, mark_built, plan_skill,
+    write_skill,
 )
+from harness_forge.build_skill import conflicts as build_conflicts  # noqa: E402
 from harness_forge.contracts import (  # noqa: E402
     RELAY_KEYS, confirm_contract, load_decision, render_contract, resolve_goal_conflict, update_readme,
     write_decision,
@@ -1184,7 +1186,7 @@ def _pinned_rules() -> list[Rule]:
 
 
 def _build(arguments: argparse.Namespace) -> int:
-    """Build a confirmed skill part; conflicts are reported as a diff, never overwritten."""
+    """Build a confirmed skill part; conflicts are reported file by file, never overwritten."""
     root = Path(arguments.root).resolve()
     decision, revision = _decision_and_revision(arguments, root)
     approval, overrides = _approval(arguments, decision, revision)
@@ -1220,12 +1222,14 @@ def _build(arguments: argparse.Namespace) -> int:
         planned = plan_skill(decision, arguments.part, revision, pinned, confirmation=approval["confirmation"],
                              worker_evidence=approval["worker_evidence"], description=description, procedure=procedure,
                              overrides=overrides, drift=_drift(root), checklist=checklist)
+        if arguments.show_diff:
+            return _show_diff(arguments, dict(build_conflicts(root, planned)))
         written = write_skill(root, planned, replace=[item for item in (arguments.replace or "").split(",") if item])
     except BuilderUnavailable as error:
         emit({"command": "build", "built": False, "reason": str(error)})
         return 1
     except ConflictError as error:
-        emit({"command": "build", "built": False, "reason": str(error), "diff": error.diff[:20000]})
+        emit({"command": "build", "built": False, "reason": str(error), **conflict_report(error.conflicts)})
         return 1
     except (OSError, ValueError) as error:
         raise _InvalidInput(str(error)) from error
@@ -1233,6 +1237,23 @@ def _build(arguments: argparse.Namespace) -> int:
     build = {"forge": dict(forge_provenance()), "outputs": build_outputs(root, planned)}
     _save_decision(arguments, mark_built(decision, arguments.part, build))
     emit({"command": "build", "built": True, "written": [str(path.relative_to(root)) for path in written]})
+    return 0
+
+
+def _show_diff(arguments: argparse.Namespace, diffs: dict[str, str]) -> int:
+    """One page of one conflicting path's complete diff; writes nothing and records nothing."""
+    if arguments.replace:
+        raise _InvalidInput("--show-diff only reads; run --replace separately once the user agreed")
+    diff = diffs.get(arguments.show_diff)
+    if diff is None:
+        raise _InvalidInput(f"{arguments.show_diff}: not a conflict of this build; conflicts: "
+                            f"{', '.join(diffs) or 'none'}")
+    if not 0 <= arguments.offset <= len(diff):
+        raise _InvalidInput(f"--offset {arguments.offset}: outside the diff's {len(diff)} characters")
+    page = diff[arguments.offset:arguments.offset + CONFLICT_DIFF_LIMIT]
+    end = arguments.offset + len(page)
+    emit({"command": "build", "built": False, "path": arguments.show_diff, "offset": arguments.offset,
+          "chars": len(diff), "diff": page, "next_offset": end if end < len(diff) else None})
     return 0
 
 
@@ -1698,6 +1719,10 @@ def build_parser() -> argparse.ArgumentParser:
     build.add_argument("--checklist", help="JSON: each accepted requirement's id to its instruction line for "
                                            "SKILL.md's Requirements section")
     build.add_argument("--replace", help="comma-separated paths the user agreed to replace, or to remove when the plan no longer has them")
+    build.add_argument("--show-diff", metavar="PATH",
+                       help="read only: one conflicting path's complete diff, a page at a time; writes nothing")
+    build.add_argument("--offset", type=int, default=0,
+                       help="with --show-diff: where the page starts, the next_offset of the previous page")
     build.set_defaults(handler=_build)
     verify.add_argument("--cases", help="runtime cases, such as evals/smoke/vertical.yaml")
     verify.add_argument("--confirm-not-applicable", action="append", default=[], metavar="PART:RULE:TOKEN",

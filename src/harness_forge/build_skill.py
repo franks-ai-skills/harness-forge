@@ -32,12 +32,18 @@ class BuilderUnavailable(RuntimeError):
     """This release has no builder for the part's chosen mechanism or outcome."""
 
 
-class ConflictError(RuntimeError):
-    """Existing content differs from the planned skill."""
+# Bounds of build's JSON output: one file's diff, and all files' diffs together.
+CONFLICT_DIFF_LIMIT = 20000
+CONFLICT_TOTAL_LIMIT = 60000
 
-    def __init__(self, message: str, diff: str):
+
+class ConflictError(RuntimeError):
+    """Existing content differs from the planned skill: each conflicting path with its own diff."""
+
+    def __init__(self, message: str, conflicts: list[tuple[str, str]]):
         super().__init__(message)
-        self.diff = diff
+        self.conflicts = conflicts
+        self.diff = "\n".join(diff for _, diff in conflicts)
 
 
 class SymlinkTarget(str):
@@ -276,34 +282,34 @@ def _stale_outputs(root: Path, name: str, planned: dict[str, str]) -> list[str]:
     return stale
 
 
-def write_skill(root: Path, planned: dict[str, str], *, replace: list[str] | tuple = ()) -> list[Path]:
-    """Write the planned skill; keep matching files; refuse conflicts unless replaced."""
+def _checked(root: Path, planned: dict[str, str]) -> tuple[Path, str]:
     root = Path(root).resolve()
     name = _skill_name(planned)
     for key, value in planned.items():
         _check_key(key, name, value)
         _check_no_link_escape(root, key)
+    return root, name
 
-    conflicts, diffs = [], []
+
+def _conflicts(root: Path, name: str, planned: dict[str, str],
+               replace: list[str] | tuple) -> tuple[list[tuple[str, str]], list[Path]]:
+    """Each path whose existing content differs, with its diff, and the leftovers the user agreed to remove."""
+    entries = []
     for key, value in planned.items():
         target = root / key
         if isinstance(value, SymlinkTarget):
             if target.is_symlink():
                 if str(target.readlink()) != value and key not in replace:
-                    conflicts.append(key)
-                    diffs.append(f"{key}: links to {target.readlink()}, planned {value}")
+                    entries.append((key, f"{key}: links to {target.readlink()}, planned {value}"))
             elif target.exists():
-                conflicts.append(key)
-                diffs.append(f"{key}: exists and is not a symbolic link")
+                entries.append((key, f"{key}: exists and is not a symbolic link"))
         elif target.is_symlink() or (target.exists() and not target.is_file()):
-            conflicts.append(key)
-            diffs.append(f"{key}: exists and is not a regular file")
+            entries.append((key, f"{key}: exists and is not a regular file"))
         elif target.exists():
             current = target.read_text(encoding="utf-8")
             if current != value and key not in replace:
-                conflicts.append(key)
-                diffs.append("".join(difflib.unified_diff(current.splitlines(True), value.splitlines(True),
-                                                          f"existing/{key}", f"planned/{key}")))
+                entries.append((key, "".join(difflib.unified_diff(current.splitlines(True), value.splitlines(True),
+                                                                   f"existing/{key}", f"planned/{key}"))))
     # A file Forge wrote earlier that the plan no longer has, such as the
     # requirements reference of a part left without requirements or a
     # command's agents/openai.yaml, would keep acting unseen: it goes only
@@ -314,10 +320,47 @@ def write_skill(root: Path, planned: dict[str, str], *, replace: list[str] | tup
         if key in replace and (target.is_symlink() or target.is_file()):
             leftovers.append(target)
         else:
-            conflicts.append(key)
-            diffs.append(f"{key}: exists and is not part of the planned skill")
-    if conflicts:
-        raise ConflictError(f"existing content differs: {', '.join(conflicts)}", "\n".join(diffs))
+            entries.append((key, f"{key}: exists and is not part of the planned skill"))
+    return entries, leftovers
+
+
+def conflicts(root: Path, planned: dict[str, str], *, replace: list[str] | tuple = ()) -> list[tuple[str, str]]:
+    """What write_skill would refuse, each path with its complete diff; reads only."""
+    root, name = _checked(root, planned)
+    return _conflicts(root, name, planned, replace)[0]
+
+
+def conflict_report(entries: list[tuple[str, str]]) -> dict:
+    """Every conflicting path with as much of its own diff as the bounds allow.
+
+    A diff cut or left out by a bound is marked, keeps its full length and is named in ``incomplete``, so
+    nobody agrees to a replacement on a diff they did not see whole. ``diff`` joins the shown text with the
+    marks for callers that read one string.
+    """
+    report, shown, incomplete, left = [], [], [], CONFLICT_TOTAL_LIMIT
+    for path, diff in entries:
+        part = diff[:min(CONFLICT_DIFF_LIMIT, left)]
+        left -= len(part)
+        truncated = len(part) < len(diff)
+        report.append({"path": path, "diff": part, "chars": len(diff), "truncated": truncated})
+        if not truncated:
+            shown.append(part)
+            continue
+        incomplete.append(path)
+        if part:
+            shown.append(part + ("" if part.endswith("\n") else "\n")
+                         + f"[Forge: the diff of {path} is cut after {len(part)} of {len(diff)} characters]")
+        else:
+            shown.append(f"[Forge: the diff of {path} is not shown; the output limit was reached]")
+    return {"conflicts": report, "diff": "\n".join(shown), "incomplete": incomplete}
+
+
+def write_skill(root: Path, planned: dict[str, str], *, replace: list[str] | tuple = ()) -> list[Path]:
+    """Write the planned skill; keep matching files; refuse conflicts unless replaced."""
+    root, name = _checked(root, planned)
+    entries, leftovers = _conflicts(root, name, planned, replace)
+    if entries:
+        raise ConflictError(f"existing content differs: {', '.join(key for key, _ in entries)}", entries)
 
     skill_dir = root / ".agents" / "skills" / name
     for path in leftovers:
