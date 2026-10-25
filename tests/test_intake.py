@@ -139,10 +139,10 @@ class ReadmeTest(unittest.TestCase):
     def test_section_lists_every_control_including_no_build_parts(self):
         readme = update_outside_section("# Repro\n\nIntro.\n", self.outside_only())
         self.assertIn("## Outside controls", readme)
-        self.assertIn("`codeowners-agent-config` (part A): recommended, not verified", readme)
-        self.assertIn("`event-gate` (part B): recommended, not verified", readme)
+        self.assertIn("(`codeowners-agent-config`, part A): recommended, not verified", readme)
+        self.assertIn("(`event-gate`, part B): recommended, not verified", readme)
         self.assertIn("outside.merge.no-agent-bypass", readme)
-        self.assertIn("availability unknown", readme)
+        self.assertIn("Its availability was unknown during intake", readme)
 
     def test_each_prerequisite_reads_as_its_condition(self):
         condition = "The agent's identity is on no bypass or override list of the control"
@@ -163,7 +163,7 @@ class ReadmeTest(unittest.TestCase):
             self.assertEqual(entry.count("(`outside.gate.real-refs`)"), 1, entry)
         self.assertIn("It targets the real refs and resources it protects, such as", readme,
                       "the KB rule's examples stay examples: CODEOWNERS protects no production account (Codex review)")
-        codeowners = next(entry for entry in entries if entry.startswith("`codeowners-agent-config`"))
+        codeowners = next(entry for entry in entries if "(`codeowners-agent-config`" in entry.splitlines()[0])
         line = next(line for line in codeowners.splitlines() if "(`outside.codeowners.agent-config`)" in line)
         for named in ("`.agents/`", "`.claude/`", "`AGENTS.md`", "code-owner review"):
             self.assertIn(named, line)

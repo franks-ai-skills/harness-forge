@@ -49,6 +49,27 @@ release-tag guidance.
   asked again while those observations stay the same. Forge never chooses
   or adds a license and never holds up the build for this (#58).
 
+### README sections and naming
+
+- The result README's Outside controls section explains what outside
+  controls are, links the pinned KB guide and names each control by its
+  readable name with the reason it is recommended, both from the pinned
+  KB by id, which stays for traceability. Availability reads as recorded
+  intake information, precautions as "Not recorded as required", and
+  "part A" appears only when the decision has several parts. "Where the
+  skills load" says "you plan to share them publicly" instead of the
+  intake term "reach" (#53).
+- Text Harness Forge writes into a target repository names and links
+  Harness Forge: the README sections, the requirements reference, the
+  verification report's header and the decision record's preference
+  text (a plain URL there, as it is YAML). The skills tell the model to
+  do the same in files it writes (#50).
+- The reader accepts the new and the earlier section forms, so an
+  existing README upgrades in place; `outside.readme-coverage` is
+  version 1.3.0 and accepts an entry without a part only for a decision
+  with one part. `selection.match` is version 1.6.0, for the controls'
+  new `name` and `reason` (#50, #53).
+
 ### Build
 
 - `forge.py build --checklist` takes one instruction line per accepted

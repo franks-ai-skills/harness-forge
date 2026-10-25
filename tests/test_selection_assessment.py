@@ -63,6 +63,9 @@ class AlternativesTest(unittest.TestCase):
             with self.subTest(alternative=alternative["concept"]):
                 self.assertEqual(assessed(actual)[alternative["concept"]]["state"], "viable alternative")
                 self.assertIn("policy/selection.md", alternative["why_not_chosen"])
+                # The decision record holds it as YAML: a plain URL, no Markdown link (#50).
+                self.assertIn("Harness Forge's preference order (policy/selection.md in "
+                              "https://github.com/franks-ai-skills/harness-forge)", alternative["why_not_chosen"])
                 self.assertTrue(alternative["rules"])
 
     def test_an_alternative_that_violates_a_requirement_is_never_offered(self):

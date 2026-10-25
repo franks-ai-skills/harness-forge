@@ -1169,6 +1169,7 @@ class LiveCommandsTest(unittest.TestCase):
         self.assertEqual(runtime.count("(kept from run verify-1) |"), len(first["runtime"]))
 
     def test_the_build_record_reaches_the_report_and_survives_verification_and_review(self):
+        from harness_forge.checks.outside import FORGE_URL
         from harness_forge.provenance import describe, forge_provenance
         cli, arguments = self.build_ready(ResearchRunner([finding()]))
         build = load_decision(self.decision).part("A")["build"]
@@ -1181,7 +1182,7 @@ class LiveCommandsTest(unittest.TestCase):
         self.assertEqual(code, 0, stderr)
         self.assertEqual(load_decision(self.decision).part("A")["build"], build, "verification never writes it")
         report = (self.root / ".harness/reports/repro.md").read_text(encoding="utf-8")
-        self.assertIn(f"- Harness Forge verifier: {describe(forge_provenance())}", report)
+        self.assertIn(f"- [Harness Forge]({FORGE_URL}) verifier: {describe(forge_provenance())}", report)
         self.assertIn(f"- Recorded builder: Harness Forge {describe(build['forge'])}", report)
         self.assertIn("- Built outputs: match that build", report)
 
@@ -1197,7 +1198,7 @@ class LiveCommandsTest(unittest.TestCase):
         self.assertEqual((code, output["kept_parts"]), (0, ["A"]), stderr)
         report = (self.root / ".harness/reports/repro.md").read_text(encoding="utf-8")
         self.assertIn(f"- Recorded builder: Harness Forge {describe(build['forge'])}", report)
-        self.assertIn(f"- Harness Forge verifier: {describe(forge_provenance())}", report)
+        self.assertIn(f"- [Harness Forge]({FORGE_URL}) verifier: {describe(forge_provenance())}", report)
 
     def test_a_refused_build_keeps_the_earlier_build_record(self):
         cli, arguments = self.build_ready(ResearchRunner([finding()]))
@@ -1749,7 +1750,7 @@ class LiveCommandsTest(unittest.TestCase):
         self.assertEqual(code, 0, stderr)
         readme = (self.root / "README.md").read_text(encoding="utf-8")
         self.assertTrue(readme.startswith("# Repro\n"))
-        self.assertIn("`codeowners-agent-config` (part A): recommended, not verified", readme)
+        self.assertIn("(`codeowners-agent-config`): recommended, not verified", readme)
         self.assertIn("and where CODEOWNERS is used, CODEOWNERS owns itself (`outside.ci.workflow-protected`)", readme, "a KB rule's statement")
         self.assertIn("the branch rule requires code-owner review (`outside.codeowners.agent-config`)", readme,
                       "Forge's own wording of the CODEOWNERS condition")
