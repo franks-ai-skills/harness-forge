@@ -30,9 +30,11 @@ if __name__ == "__main__":
 from dataclasses import asdict  # noqa: E402
 
 import datetime  # noqa: E402
+import errno  # noqa: E402
 import functools  # noqa: E402
 import os  # noqa: E402
 import re  # noqa: E402
+import stat  # noqa: E402
 
 from harness_forge.adapters.base import preflight, run_command  # noqa: E402
 from harness_forge.build_skill import (  # noqa: E402
@@ -148,6 +150,61 @@ def _read_json(path: str) -> dict:
         value = parse_json(source.read_text(encoding="utf-8"))
     except (OSError, ValueError) as error:
         raise _InvalidInput(str(error)) from error
+    if not isinstance(value, dict):
+        raise _InvalidInput(f"{path}: expected a JSON object")
+    return value
+
+
+def _open_regular(path: str, flags: int) -> int:
+    """Open a regular file without following a symbolic link at its name; a FIFO never blocks.
+
+    The check runs on the opened descriptor, so nothing swapped in after it is read or written.
+    """
+    try:
+        descriptor = os.open(path, flags | os.O_NOFOLLOW | os.O_NONBLOCK, 0o644)
+    except OSError as error:
+        reason = "a symbolic link" if error.errno == errno.ELOOP else error.strerror
+        raise _InvalidInput(f"{path}: {reason}; only a regular file is used") from error
+    try:
+        regular = stat.S_ISREG(os.fstat(descriptor).st_mode)
+    except OSError as error:
+        os.close(descriptor)
+        raise _InvalidInput(str(error)) from error
+    if not regular:
+        os.close(descriptor)
+        raise _InvalidInput(f"{path}: not a regular file; only a regular file is used")
+    return descriptor
+
+
+def _write_proposal(path: str, text: str) -> None:
+    """Write drift-issue's proposal: nothing changes before the opened file is known to be regular."""
+    descriptor = _open_regular(path, os.O_WRONLY | os.O_CREAT)
+    try:
+        os.ftruncate(descriptor, 0)
+        data = memoryview(text.encode("utf-8"))
+        while data:
+            data = data[os.write(descriptor, data):]
+    except OSError as error:
+        raise _InvalidInput(str(error)) from error
+    finally:
+        os.close(descriptor)
+
+
+def _read_proposal(path: str) -> dict:
+    """Read publish-issue's proposal the way drift-issue wrote it, bounded while it is read."""
+    descriptor = _open_regular(path, os.O_RDONLY)
+    try:
+        chunks, size = [], 0
+        while chunk := os.read(descriptor, 65536):
+            size += len(chunk)
+            if size > 1024 * 1024:
+                raise _InvalidInput(f"{path}: larger than 1 MiB")
+            chunks.append(chunk)
+        value = parse_json(b"".join(chunks).decode("utf-8"))
+    except (OSError, ValueError) as error:
+        raise _InvalidInput(f"{path}: {error}") from error
+    finally:
+        os.close(descriptor)
     if not isinstance(value, dict):
         raise _InvalidInput(f"{path}: expected a JSON object")
     return value
@@ -1285,10 +1342,7 @@ def _drift_issue(arguments: argparse.Namespace) -> int:
     except (OSError, ValueError) as error:
         raise _InvalidInput(f"searching the KB's issues failed: {error}") from error
     proposal = {**propose(entry, entry["finding"], existing, kb_version=_kb_version()), "run_id": arguments.run_id}
-    try:
-        Path(arguments.out).write_text(json.dumps(proposal, indent=2), encoding="utf-8")
-    except OSError as error:
-        raise _InvalidInput(str(error)) from error
+    _write_proposal(arguments.out, json.dumps(proposal, indent=2))
     # The proposal file stays as approved and filed; only the output carries the note.
     emit({"command": "drift-issue", **proposal, "untrusted": UNTRUSTED_NOTE})
     return 0
@@ -1297,7 +1351,7 @@ def _drift_issue(arguments: argparse.Namespace) -> int:
 def _publish_issue(arguments: argparse.Namespace) -> int:
     """File an approved proposal, or record a decline or open answer, in the drift entry and its override."""
     root = Path(arguments.root).resolve()
-    proposal = _read_json(arguments.proposal)
+    proposal = _read_proposal(arguments.proposal)
     relay = _read_json(arguments.relay)
     fields = ("kind", "target", "title", "body")
     if not set(fields) | {"digest", "run_id", "rule_id", "finding_id"} <= set(proposal) or proposal["digest"] != \
