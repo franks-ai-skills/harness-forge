@@ -1135,9 +1135,10 @@ def _build(arguments: argparse.Namespace) -> int:
     try:
         description = Path(arguments.description).read_text(encoding="utf-8")
         procedure = Path(arguments.procedure).read_text(encoding="utf-8")
+        checklist = _read_json(arguments.checklist) if arguments.checklist else None
         planned = plan_skill(decision, arguments.part, revision, pinned, confirmation=approval["confirmation"],
                              worker_evidence=approval["worker_evidence"], description=description, procedure=procedure,
-                             overrides=overrides, drift=_drift(root))
+                             overrides=overrides, drift=_drift(root), checklist=checklist)
         written = write_skill(root, planned, replace=[item for item in (arguments.replace or "").split(",") if item])
     except BuilderUnavailable as error:
         emit({"command": "build", "built": False, "reason": str(error)})
@@ -1592,6 +1593,8 @@ def build_parser() -> argparse.ArgumentParser:
     build.add_argument("--part", required=True)
     build.add_argument("--description", required=True, help="file with the one-line skill description")
     build.add_argument("--procedure", required=True, help="file with the procedure")
+    build.add_argument("--checklist", help="JSON: each accepted requirement's id to its instruction line for "
+                                           "SKILL.md's Requirements section")
     build.add_argument("--replace", help="comma-separated paths the user agreed to replace, or to remove when the plan no longer has them")
     build.set_defaults(handler=_build)
     verify.add_argument("--cases", help="runtime cases, such as evals/smoke/vertical.yaml")
