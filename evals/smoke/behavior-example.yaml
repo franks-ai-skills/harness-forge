@@ -44,4 +44,4 @@ behavior:
     - path: bug-report.md
       contains: ["# Bug 42 (approved)"]
     actions:
-      no_tools: [Bash]
+      no_commands_matching: ["^git (commit|push)"]

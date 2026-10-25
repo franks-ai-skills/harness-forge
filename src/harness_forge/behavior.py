@@ -50,6 +50,9 @@ CLAUDE_READ_BLOCK = (2, 1, 257)
 _PROTECTED = {".agents", ".claude", ".codex"}
 _INSTRUCTION_FILES = {"agents.md", "agents.override.md", "claude.md", "claude.local.md"}
 _GLOB = re.compile(r"[*?\[\]]")
+# A declared write lands inside a Claude permission rule and a Codex profile key: only these characters, so that
+# no path can close the rule and add another one ("out),Write,Edit(other").
+_WRITE_PART = re.compile(r"[A-Za-z0-9._-]+")
 GAPS = {
     "claude-code": [
         "Claude Code's file tools are limited by its permission rules, not by an operating-system sandbox",
@@ -75,7 +78,7 @@ def write_scope(entry: str) -> tuple[str, bool] | None:
     """(path, subtree) for a declared write: an exact relative path, or a directory with a final ``/**``."""
     subtree = entry.endswith("/**")
     path = entry[:-3] if subtree else entry
-    if not plain_path(path) or _GLOB.search(path):
+    if not plain_path(path) or _GLOB.search(path) or not all(_WRITE_PART.fullmatch(part) for part in path.split("/")):
         return None
     return path, subtree
 
@@ -102,8 +105,8 @@ def case_problem(case: dict, harness: str, protected: Iterable[str]) -> str | No
     for entry in case.get("writes") or []:
         scope = write_scope(entry)
         if scope is None:
-            return (f"write {entry!r} is neither an exact relative path nor a directory followed by /**, the "
-                    "forms both harnesses can enforce")
+            return (f"write {entry!r} is neither an exact relative path nor a directory followed by /**, made of "
+                    "letters, digits, dots, hyphens and underscores: the forms both harnesses can enforce")
         base, _ = scope
         folded = fold_name(base)
         parts = folded.split("/")
@@ -115,6 +118,8 @@ def case_problem(case: dict, harness: str, protected: Iterable[str]) -> str | No
         target = item.get("path") or item.get("glob")
         if not plain_path(target):
             return f"file assertion {target!r} is not a plain relative path"
+        if item.get("absent") and set(item) - {"path", "glob", "absent"}:
+            return f"file assertion {target}: absent cannot be combined with other checks"
     unknown = sorted(set(((case.get("expect") or {}).get("actions") or {}).get("no_tools") or [])
                      - KNOWN_TOOLS[harness])
     if unknown:
@@ -212,10 +217,18 @@ def observe_claude(stdout: str) -> dict:
                 continue
             if event.get("type") == "assistant" and block.get("type") == "tool_use":
                 arguments = block.get("input") if isinstance(block.get("input"), dict) else {}
-                requests[str(block.get("id"))] = {"tool": str(block.get("name")), "input": arguments, "error": None}
+                if str(block.get("id")) in requests:
+                    broken += 1
+                requests[str(block.get("id"))] = {"tool": str(block.get("name")), "input": arguments, "error": None,
+                                                  "answered": False}
             elif event.get("type") == "user" and block.get("type") == "tool_result":
                 request = requests.get(str(block.get("tool_use_id")))
-                if request is not None and block.get("is_error") is True:
+                if request is None or request["answered"]:
+                    # A result for no request, or a second one, breaks the correlation.
+                    broken += 1
+                    continue
+                request["answered"] = True
+                if block.get("is_error") is True:
                     content = block.get("content")
                     request["error"] = _short(content if isinstance(content, str) else
                                               " ".join(item.get("text", "") for item in content or []
@@ -230,11 +243,12 @@ def observe_claude(stdout: str) -> dict:
             entry = f"{request['tool']} {_short(request['input'])}"
             if entry not in denied:
                 denied.append(entry)
+    unanswered = [request for request in requests.values() if not request["answered"]]
     return {"requests": [f"{request['tool']} {_short(request['input'])}"
                          + (f" (error: {request['error']})" if request["error"] else "")
-                         for request in requests.values()],
+                         + ("" if request["answered"] else " (no result)") for request in requests.values()],
             "tools": [request["tool"] for request in requests.values()], "commands": [], "denied": denied,
-            "complete": complete and not broken, "broken": broken}
+            "complete": complete and not broken and not unanswered, "broken": broken}
 
 
 def observe_codex(stdout: str) -> dict:
@@ -246,8 +260,9 @@ def observe_codex(stdout: str) -> dict:
         item = event.get("item") if isinstance(event.get("item"), dict) else None
         if item is not None and event.get("type") in ("item.started", "item.completed", "item.updated"):
             key = str(item.get("id") or len(items))
-            kept = items.setdefault(key, {"type": str(item.get("type")), "item": {}})
+            kept = items.setdefault(key, {"type": str(item.get("type")), "item": {}, "finished": False})
             kept["item"] = {**kept["item"], **item}
+            kept["finished"] = kept["finished"] or event.get("type") == "item.completed"
         if event.get("type") == "turn.completed":
             complete = True
         if event.get("type") in ("turn.failed", "error"):
@@ -267,8 +282,11 @@ def observe_codex(stdout: str) -> dict:
             requests.append(f"file change {', '.join(paths) or 'unknown'} ({item.get('status', 'unknown')})")
         else:
             requests.append(f"{kind} {_short(item)}")
+    # A command or file change counts only once Codex finished it; one still in progress leaves the record open.
+    unfinished = [kept for kept in items.values() if kept["type"] in CODEX_ITEMS
+                  and (not kept["finished"] or kept["item"].get("status") in (None, "in_progress"))]
     return {"requests": requests, "tools": tools, "commands": commands, "denied": [],
-            "complete": complete and not errored and not broken, "broken": broken}
+            "complete": complete and not errored and not broken and not unfinished, "broken": broken}
 
 
 def evaluate(case: dict, harness: str, workspace: Path, after: Mapping[str, str], observed: dict) -> list[str]:
@@ -294,8 +312,7 @@ def evaluate(case: dict, harness: str, workspace: Path, after: Mapping[str, str]
             if path not in regular:
                 failed.append(f"{path}: not a regular file ({after[path].split(':', 1)[0]}), not inspected")
                 continue
-            if item.get("exists"):
-                continue
+            # `exists` holds by now; every other check given beside it is evaluated too.
             text = safe_path(workspace, path).read_bytes().decode("utf-8", "replace")
             if "equals" in item and text != item["equals"]:
                 failed.append(f"{path}: content differs from the expected text")

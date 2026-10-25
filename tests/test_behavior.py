@@ -178,6 +178,21 @@ class RunTest(BehaviorCase):
         self.assertEqual(result.result, "unavailable")
         self.assertIn("activation was not observed", result.reason)
 
+    def test_a_request_without_its_result_or_an_unfinished_command_is_an_error(self):
+        events = [json.loads(line) for line in claude_writes(DRAFT).splitlines()]
+        unmatched = [event for event in events if not (event.get("type") == "user" and any(
+            block.get("tool_use_id") == "w0" for block in event["message"]["content"]))]
+        (result,), _ = self.run_case("claude-code", "\n".join(json.dumps(e) for e in unmatched) + "\n",
+                                     act=write(DRAFT))
+        self.assertEqual(result.result, "error")
+        self.assertIn("(no result)", " ".join(result.details["requests"]))
+        events = [json.loads(line) for line in codex_writes(DRAFT, commands=("git status",)).splitlines()]
+        running = [event for event in events if not (event["type"] == "item.completed"
+                                                     and event["item"].get("id") == "k0")]
+        (result,), _ = self.run_case("codex", "\n".join(json.dumps(e) for e in running) + "\n", act=write(DRAFT))
+        self.assertEqual(result.result, "error")
+        self.assertIn("records are incomplete", result.reason)
+
     def test_an_incomplete_run_is_an_error_and_never_passes(self):
         stream = "\n".join(line for line in claude_writes(DRAFT).splitlines() if '"type": "result"' not in line)
         (result,), _ = self.run_case("claude-code", stream + "\n", act=write(DRAFT))
@@ -202,6 +217,9 @@ class RunTest(BehaviorCase):
             expect={"files": [{"glob": ".tmp/*.md", "contains": ["## Steps"]}, {"path": ".tmp/other", "absent": True}]}),
             act=write(DRAFT))
         self.assertEqual(result.result, "pass", result.reason)
+        (result,), _ = self.run_case("claude-code", claude_writes(DRAFT), behavior(
+            expect={"files": [{"path": DRAFT, "exists": True, "contains": ["## Missing"]}]}), act=write(DRAFT))
+        self.assertEqual(result.result, "fail", "every check given beside exists is evaluated")
 
     def test_an_assertion_on_a_link_does_not_follow_it(self):
         def act(workspace):
@@ -231,6 +249,18 @@ class PolicyTest(unittest.TestCase):
             with self.subTest(entry):
                 self.assertIn(message, case_problem(behavior(writes=[entry]), "claude-code", protected))
         self.assertIsNone(case_problem(behavior(writes=[".tmp/**", "out/report.md"]), "codex", protected))
+
+    def test_a_write_path_cannot_add_another_permission(self):
+        for entry in ("out),Write,Edit(other", "a b/**", "x,y", "dir/(x)/**", "tmp/~/**"):
+            with self.subTest(entry):
+                self.assertIn("neither an exact", case_problem(behavior(writes=[entry]), "claude-code", []))
+        allowed = claude_command([".tmp/**", "out/report_1.md"])
+        rules = allowed[allowed.index("--allowedTools") + 1].split(",")
+        self.assertEqual(rules, ["Skill", "Read", "Grep", "Glob", "Edit(./.tmp/**)", "Edit(./out/report_1.md)"])
+
+    def test_absent_cannot_be_combined_with_other_checks(self):
+        self.assertIn("absent cannot be combined", case_problem(
+            behavior(expect={"files": [{"path": DRAFT, "absent": True, "contains": ["x"]}]}), "codex", []))
 
     def test_a_subtree_also_permits_creating_its_directory(self):
         self.assertTrue(permits(".tmp", [".tmp/**"]))
@@ -283,8 +313,13 @@ class CasesFileTest(unittest.TestCase):
         with self.assertRaises(ValueError):
             load_cases(self.write_cases({"cases": [self.activation()], "behavior": [{**plain, "network": "full"}]}))
 
-    def test_the_example_file_is_valid(self):
-        load_cases(Path(__file__).resolve().parents[1] / "evals" / "smoke" / "behavior-example.yaml")
+    def test_the_example_file_is_valid_for_every_harness_it_names(self):
+        cases = load_cases(Path(__file__).resolve().parents[1] / "evals" / "smoke" / "behavior-example.yaml")
+        for case in cases:
+            if case.get("kind") == "behavior":
+                for harness in case["harnesses"]:
+                    with self.subTest(harness):
+                        self.assertIsNone(case_problem(case, harness, [f"{SKILL_DIR}/SKILL.md"]))
 
 
 class VerificationTest(BehaviorCase):
@@ -314,6 +349,24 @@ class VerificationTest(BehaviorCase):
         part = self.finish([passed, passed], {"A": {"drafts-a-file"}})["A"]
         self.assertIn("2 results instead of one", next(r for r in part.rule_results
                                                        if r["rule_id"] == "runtime.behavior")["reason"])
+
+    def test_a_locally_reused_artifact_carries_its_behavior_obligation(self):
+        from harness_forge.contracts import confirm_contract, render_contract
+        from harness_forge.verify import prepare_run
+        from harness_forge.workflow import behavior_obligations
+        from tests.test_verify import build_files, readme
+        record = skill_decision(outcome="reuse", reuse={"name": "reproduction-checklist", "source": "https://example.com",
+                                                        "license": "MIT", "maintenance": "maintained",
+                                                        "path": SKILL_DIR})
+        files, links = build_files(skill_decision())
+        contract = render_contract(record, REVISION, [], worker_evidence=EVIDENCE)
+        relay = {"choice": "confirm", "displayed_digest": contract.digest, "part_ids": ["A"], "run_id": "run-1"}
+        run = prepare_run(record, {**files, "README.md": readme(record)}, RULES,
+                          confirm_contract(contract, relay, run_id="run-1"), symlinks=links, revision=REVISION,
+                          kb_version="0.1.0", worker_evidence=EVIDENCE)
+        self.assertEqual(behavior_obligations(run, [behavior()], "claude-code"), {"A": {"drafts-a-file"}})
+        self.assertEqual(behavior_obligations(run, [behavior(harnesses=["codex"])], "claude-code"), {})
+        self.assertEqual(behavior_obligations(self.scenario.run, [behavior()], "codex", scope=set()), {})
 
     def test_the_report_shows_behavior_apart_from_activation(self):
         (passed,), _ = self.run_case("claude-code", claude_writes(DRAFT), act=write(DRAFT))

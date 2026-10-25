@@ -153,6 +153,21 @@ def research_pass(
     return result
 
 
+def behavior_obligations(run, cases: list[dict], harness: str, scope: set[str] | None = None) -> dict[str, set[str]]:
+    """The behavior case ids each judged artifact must pass in ``harness``: a built part's and a local reuse's
+    alike, since behavior cases run on both (#54)."""
+    obligations = {}
+    for part in run.parts:
+        if part_kind(part) not in ("build", "local-reuse") or part["id"] not in run.confirmed_parts \
+                or harness not in run.targets or (scope is not None and part["id"] not in scope):
+            continue
+        ids = {case["id"] for case in cases if case["part_id"] == part["id"] and case.get("kind") == BEHAVIOR
+               and harness in case["harnesses"]}
+        if ids:
+            obligations[part["id"]] = ids
+    return obligations
+
+
 def verify_live(
     decision: Decision, files: dict[str, bytes], symlinks: dict[str, str], rules: list[Rule],
     revision: AcceptedRevision | None, harness: str, *, contract: Contract, confirmation: Confirmation | None,
@@ -237,18 +252,14 @@ def verify_live(
     for evidence in observations:
         validate(evidence, "worker-evidence")
     # The spec's live build requires an observed explicit activation in each target harness.
-    judged_builds = [part for part in run.parts if part_kind(part) == "build" and part["id"] in run.confirmed_parts
-                     and harness in run.targets and (scope is None or part["id"] in scope)]
     required = {part["id"]: {case["id"] for case in cases if case["part_id"] == part["id"]
                              and case.get("kind") != BEHAVIOR
                              and case["mode"] == "explicit" and case["expected"] == "activates"}
-                for part in judged_builds}
-    # A declared behavior case is an obligation in each harness it names (#54).
-    behavior = {part["id"]: {case["id"] for case in cases if case["part_id"] == part["id"]
-                             and case.get("kind") == BEHAVIOR and harness in case["harnesses"]}
-                for part in judged_builds}
+                for part in run.parts if part_kind(part) == "build" and part["id"] in run.confirmed_parts
+                and harness in run.targets and (scope is None or part["id"] in scope)}
+    behavior = behavior_obligations(run, cases, harness, scope)
     results = finish_run(run, review, runtime, current, worker_observations=observations,
                          confirmed_exclusions=frozenset(confirmed_exclusions), required_activation=required,
-                         required_behavior={part: ids for part, ids in behavior.items() if ids},
+                         required_behavior=behavior,
                          drift=drift, selection=selection, kept=kept, cited=cited)
     return run, results
