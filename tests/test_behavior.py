@@ -383,6 +383,15 @@ class VerificationTest(BehaviorCase):
         self.assertEqual(behavior_obligations(run, [behavior(harnesses=["codex"])], "claude-code"), {})
         self.assertEqual(behavior_obligations(self.scenario.run, [behavior()], "codex", scope=set()), {})
 
+    def test_a_behavior_case_for_a_plugin_skill_is_refused_before_it_runs(self):
+        from tests.test_skill_references import forge_cli
+        from tests.test_verify import PrecedenceTest
+        record = PrecedenceTest.plugin_reuse(PrecedenceTest())[0]
+        cli = forge_cli()
+        self.assertIn("skill shipped in a plugin", cli._plugin_behavior_problem(record, [behavior()]))
+        self.assertIsNone(cli._plugin_behavior_problem(self.scenario.record, [behavior()]))
+        self.assertIsNone(cli._plugin_behavior_problem(record, [{**behavior(), "kind": None}]))
+
     def test_the_report_shows_behavior_apart_from_activation(self):
         (passed,), _ = self.run_case("claude-code", claude_writes(DRAFT), act=write(DRAFT))
         self.finish([passed], {"A": {"drafts-a-file"}})

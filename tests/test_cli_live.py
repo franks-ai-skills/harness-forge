@@ -381,6 +381,27 @@ class LiveCommandsTest(unittest.TestCase):
         self.assertEqual(code, 2)
         self.assertIn("part A needs an explicit invocation and a near miss", stderr)
 
+    def test_verify_takes_a_cases_file_with_behavior_cases(self):
+        """The CLI's case checks are the activation cases'; a behavior case runs and reports, never crashes (#54)."""
+        import yaml
+        cli, arguments = self.build_ready(ResearchRunner([finding()]))
+        document = yaml.safe_load((FORGE / "evals/smoke/vertical.yaml").read_text(encoding="utf-8"))
+        document["behavior"] = [{"id": "saves-the-checklist", "part_id": "A", "mode": "implicit",
+                                 "prompt": "Save the checklist to .tmp/checklist.md.",
+                                 "harnesses": ["claude-code"], "network": "none", "writes": [".tmp/**"],
+                                 "expect": {"files": [{"path": ".tmp/checklist.md", "exists": True}]}}]
+        mixed = cli.write("mixed.yaml", yaml.safe_dump(document))
+        option = arguments.index("--cases") + 1
+        code, output, stderr = cli("verify", *arguments[:option], mixed, *arguments[option + 1:])
+        self.assertIn(code, (0, 1), stderr)
+        behavior = [item for item in output["runtime"] if item["case_id"] == "saves-the-checklist"]
+        self.assertEqual(len(behavior), 1)
+        self.assertNotEqual(behavior[0]["result"], "pass", "the fake launcher writes nothing")
+        self.assertEqual(output["parts"][0]["harness_result"], "not verified")
+        only_behavior = cli.write("only-behavior.yaml", yaml.safe_dump({"cases": [], "behavior": document["behavior"]}))
+        code, _, stderr = cli("verify", *arguments[:option], only_behavior, *arguments[option + 1:])
+        self.assertEqual(code, 2)
+
     def test_cases_without_tools_for_the_verified_harness_stop_before_any_worker(self):
         import yaml
         runner = ResearchRunner([finding()])
