@@ -36,5 +36,27 @@ class FetchedTextTest(unittest.TestCase):
         self.assertIn("fenced as the rule on fetched text says and as visible text", skill("harness-intake"))
 
 
+
+class RecordLinksTest(unittest.TestCase):
+    """#96: the agent checks for symbolic links before writing a record under .harness/ itself."""
+
+    def test_intake_and_verify_check_every_component_before_writing(self):
+        for name, example in (("harness-intake", "the decision record"), ("harness-verify", "`.harness/cases.yaml`")):
+            with self.subTest(name):
+                text = skill(name)
+                for expected in (f"file under `.harness/` yourself, such as {example}, check every existing path "
+                                 "component from the repository root to that file without following symbolic links",
+                                 "If any is a symbolic link, also a dangling one, stop and tell the user",
+                                 "The destination must stay inside the repository's `.harness/`",
+                                 "a missing component is fine unless it is a dangling link",
+                                 "This check is not race-free"):
+                    self.assertIn(expected, text)
+
+    def test_skills_that_never_write_under_harness_themselves_need_no_check(self):
+        for name in ("build-skill", "harness-research"):
+            with self.subTest(name):
+                self.assertNotIn("No record through a link", skill(name))
+
+
 if __name__ == "__main__":
     unittest.main()
