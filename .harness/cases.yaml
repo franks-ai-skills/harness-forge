@@ -1,0 +1,195 @@
+# Runtime activation cases for Harness Forge's own four skills
+# (https://github.com/franks-ai-skills/harness-forge), verified as parts A to D
+# of .harness/decisions/2026-10-21-forge-self-verify.md. Each case runs once
+# per target harness in a throwaway workspace that holds only the frozen
+# skill and the fixtures below. Claude Code reads the skill through the Skill
+# tool; Codex reads skill files only through its shell. No case needs web
+# access or writes. The skills ship in a plugin, so there are no behavior
+# cases.
+cases:
+- id: build-skill-explicit
+  part_id: A
+  mode: explicit
+  prompt: >-
+    Use the build-skill skill to build the changelog-entry skill that part A
+    of plan.md decided.
+  expected: activates
+  permitted_tools:
+    claude-code: [Skill, Read, Grep, Glob]
+    codex: [command_execution]
+  fixtures:
+    plan.md: |
+      # Plan: changelog entries
+      Part A, changelog-entry: a skill that drafts a CHANGELOG.md entry from
+      the merged pull requests since the last tag. Mechanism: skills.
+      Status: decided and confirmed; requirements accepted.
+- id: build-skill-implicit
+  part_id: A
+  mode: implicit
+  prompt: >-
+    Part A in plan.md is decided and its requirements are accepted. Now
+    create that skill for Claude Code and Codex.
+  expected: activates
+  permitted_tools:
+    claude-code: [Skill, Read, Grep, Glob]
+    codex: [command_execution]
+  fixtures:
+    plan.md: |
+      # Plan: changelog entries
+      Part A, changelog-entry: a skill that drafts a CHANGELOG.md entry from
+      the merged pull requests since the last tag. Mechanism: skills.
+      Status: decided and confirmed; requirements accepted.
+- id: build-skill-near-miss
+  part_id: A
+  mode: negative
+  prompt: >-
+    In one sentence, what does the skill in changelog-entry/SKILL.md do? I
+    am not asking you to build or change anything.
+  expected: does-not-activate
+  permitted_tools:
+    claude-code: [Skill, Read, Grep, Glob]
+    codex: [command_execution]
+  fixtures:
+    changelog-entry/SKILL.md: |
+      ---
+      name: changelog-entry
+      description: Drafts a CHANGELOG.md entry from the merged pull requests since the last tag. Use when asked for a changelog entry.
+      ---
+      # Changelog entry
+      List the merged pull requests since the last tag and group them by type.
+- id: harness-intake-explicit
+  part_id: B
+  mode: explicit
+  prompt: >-
+    Use the harness-intake skill on my idea in idea.md.
+  expected: activates
+  permitted_tools:
+    claude-code: [Skill, Read, Grep, Glob]
+    codex: [command_execution]
+  fixtures:
+    idea.md: |
+      # Idea
+      Whenever I ask for one, the coding agent should draft a CHANGELOG.md
+      entry from the pull requests merged since the last tag.
+- id: harness-intake-implicit
+  part_id: B
+  mode: implicit
+  prompt: >-
+    I want the coding agent to remind me to run the tests before every
+    commit. Should that be a skill, a hook or something else?
+  expected: activates
+  permitted_tools:
+    claude-code: [Skill, Read, Grep, Glob]
+    codex: [command_execution]
+  fixtures:
+    README.md: |
+      # Example project
+      A small Python library. Tests run with `python -m unittest`.
+- id: harness-intake-near-miss
+  part_id: B
+  mode: negative
+  prompt: >-
+    Explain in two sentences what the hooks entry in settings-example.json
+    does. I only want the explanation.
+  expected: does-not-activate
+  permitted_tools:
+    claude-code: [Skill, Read, Grep, Glob]
+    codex: [command_execution]
+  fixtures:
+    settings-example.json: |
+      {"hooks": {"PreToolUse": [{"matcher": "Bash", "hooks": [{"type": "command", "command": "./check.sh"}]}]}}
+- id: harness-research-explicit
+  part_id: C
+  mode: explicit
+  prompt: >-
+    Use the harness-research skill to research prior art and pitfalls for
+    the idea in idea.md.
+  expected: activates
+  permitted_tools:
+    claude-code: [Skill, Read, Grep, Glob]
+    codex: [command_execution]
+  fixtures:
+    idea.md: |
+      # Idea
+      Whenever I ask for one, the coding agent should draft a CHANGELOG.md
+      entry from the pull requests merged since the last tag.
+- id: harness-research-implicit
+  part_id: C
+  mode: implicit
+  prompt: >-
+    Before we build the changelog skill described in idea.md, find out what
+    similar tools already exist and which pitfalls people report.
+  expected: activates
+  permitted_tools:
+    claude-code: [Skill, Read, Grep, Glob]
+    codex: [command_execution]
+  fixtures:
+    idea.md: |
+      # Idea
+      Whenever I ask for one, the coding agent should draft a CHANGELOG.md
+      entry from the pull requests merged since the last tag.
+- id: harness-research-near-miss
+  part_id: C
+  mode: negative
+  prompt: >-
+    From what you already know, which file does a skill folder need at
+    minimum? Answer in one sentence without any research.
+  expected: does-not-activate
+  permitted_tools:
+    claude-code: [Skill, Read, Grep, Glob]
+    codex: [command_execution]
+  fixtures:
+    README.md: |
+      # Example project
+      A small Python library. Tests run with `python -m unittest`.
+- id: harness-verify-explicit
+  part_id: D
+  mode: explicit
+  prompt: >-
+    Use the harness-verify skill to check whether the skill in
+    changelog-entry/ meets its goal.
+  expected: activates
+  permitted_tools:
+    claude-code: [Skill, Read, Grep, Glob]
+    codex: [command_execution]
+  fixtures:
+    changelog-entry/SKILL.md: |
+      ---
+      name: changelog-entry
+      description: Drafts a CHANGELOG.md entry from the merged pull requests since the last tag. Use when asked for a changelog entry.
+      ---
+      # Changelog entry
+      List the merged pull requests since the last tag and group them by type.
+- id: harness-verify-implicit
+  part_id: D
+  mode: implicit
+  prompt: >-
+    I just built the changelog-entry skill in changelog-entry/. Does it meet
+    the goal we confirmed for it?
+  expected: activates
+  permitted_tools:
+    claude-code: [Skill, Read, Grep, Glob]
+    codex: [command_execution]
+  fixtures:
+    changelog-entry/SKILL.md: |
+      ---
+      name: changelog-entry
+      description: Drafts a CHANGELOG.md entry from the merged pull requests since the last tag. Use when asked for a changelog entry.
+      ---
+      # Changelog entry
+      List the merged pull requests since the last tag and group them by type.
+- id: harness-verify-near-miss
+  part_id: D
+  mode: negative
+  prompt: >-
+    Is branch protection on the main branch configured as described in
+    repo-settings.md? Just compare the two lines.
+  expected: does-not-activate
+  permitted_tools:
+    claude-code: [Skill, Read, Grep, Glob]
+    codex: [command_execution]
+  fixtures:
+    repo-settings.md: |
+      # Wanted settings
+      main: require a pull request and one approving review.
+      Current: pull request required, no review required.
