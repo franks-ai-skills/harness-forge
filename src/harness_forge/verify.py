@@ -593,7 +593,7 @@ def finish_run(
 
     drift is the research records' drift. Unresolved security or
     compatibility drift on a rule that applies to a part blocks that part
-    until the user decides; the decision flow is not available yet.
+    until the user decides with ``drift-decision``.
 
     required_activation maps a part to its explicit runtime case ids: a live
     build is verified only when one of them passed. Offline runs leave it

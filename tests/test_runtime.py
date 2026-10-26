@@ -7,6 +7,7 @@ from pathlib import Path
 
 import yaml
 
+from harness_forge import runtime
 from harness_forge.adapters.base import Completed
 from harness_forge.runtime import BASELINE_PROMPT, load_cases, run_skill_runtime
 from harness_forge.verify import finish_run, validate_review
@@ -93,7 +94,12 @@ class RuntimeTest(unittest.TestCase):
                                     environ=PARENT, **options)
         return results, runner
 
-    def test_a_plugin_skill_has_no_runtime_cases_yet(self):
+    def test_the_plugin_reason_names_the_structural_limit(self):
+        self.assertEqual(runtime.PLUGIN_RUNTIME, "unavailable: the runtime test workspace does not install plugins, so it cannot run cases for a skill shipped in a plugin; its static checks and review still apply")
+        self.assertNotIn("yet", runtime.PLUGIN_RUNTIME)
+        self.assertNotIn("not supported", runtime.PLUGIN_RUNTIME)
+
+    def test_a_plugin_skill_has_no_runtime_cases(self):
         """A plugin skill loads through plugin installation, which the throwaway workspace does not do."""
         part = self.scenario.run.parts[0]
         part.update(outcome="reuse", reuse={"name": NAME, "source": "https://example.com/repro", "license": "MIT",

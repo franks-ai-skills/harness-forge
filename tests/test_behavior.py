@@ -388,7 +388,10 @@ class VerificationTest(BehaviorCase):
         from tests.test_verify import PrecedenceTest
         record = PrecedenceTest.plugin_reuse(PrecedenceTest())[0]
         cli = forge_cli()
-        self.assertIn("skill shipped in a plugin", cli._plugin_behavior_problem(record, [behavior()]))
+        problem = cli._plugin_behavior_problem(record, [behavior()])
+        self.assertIn("skill shipped in a plugin, and the runtime test workspace does not install plugins, so its "
+                      "runtime cases cannot run; leave its behavior cases out", problem)
+        self.assertNotIn("yet", problem)
         self.assertIsNone(cli._plugin_behavior_problem(self.scenario.record, [behavior()]))
         self.assertIsNone(cli._plugin_behavior_problem(record, [{**behavior(), "kind": None}]))
 

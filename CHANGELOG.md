@@ -29,6 +29,9 @@ once it supports such dependencies.
 
 - harness-verify ties its note on plugin skills' runtime cases to the
   release instead of saying they cannot run "yet" (#81).
+- The not-run reason of a plugin skill's runtime case and the refusal
+  of its behavior cases now name the structural limit: the runtime test
+  workspace does not install plugins (#81).
 
 ## 0.3.0 (2026-10-25)
 
