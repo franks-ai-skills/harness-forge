@@ -132,8 +132,11 @@ class HistoryTest(unittest.TestCase):
     def test_a_report_with_the_historical_label_still_reads(self):
         from harness_forge.scope import earlier_run
         stored = (FORGE / ".harness/reports/forge-self-verify.md").read_text(encoding="utf-8")
-        self.assertIn("- Contract digest: ", stored, "the stored 0.3.0 report keeps its label")
-        self.assertIsNotNone(earlier_run(stored))
+        self.assertEqual(stored.count("- Confirmed configuration digest: "), 1)
+        # A report recorded before #85, such as Forge 0.3.0's, carries the historical label.
+        historical = stored.replace("- Confirmed configuration digest: ", "- Contract digest: ")
+        self.assertEqual(earlier_run(historical), earlier_run(stored))
+        self.assertIsNotNone(earlier_run(historical))
 
 
 if __name__ == "__main__":
