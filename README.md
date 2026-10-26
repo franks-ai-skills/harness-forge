@@ -56,6 +56,18 @@ local-path marketplace makes Codex copy the whole directory into its
 plugin cache, including ignored files such as a virtual environment or
 private evidence.
 
+Forge writes into the target repository: the built skills; `.harness/`,
+the decision, research, override, runtime-case and report records to
+review and commit; and `.harness-forge/runs/<run id>/`, one directory
+per run for the files the agent writes for Forge, such as the worker
+plan and the confirmation relays. `scripts/forge.py run-dir` allocates
+that directory and creates `.harness-forge/.gitignore` with the single
+line `*` when it is missing, so git ignores the whole directory; it
+never changes the repository's own `.gitignore`. Forge reads and writes
+files there without following symbolic links and never overwrites one.
+They stay until you delete them, and none of them confirms anything in
+a later session.
+
 ### Dependencies
 
 Forge needs Python 3.11 or newer and nothing else: its runtime

@@ -14,6 +14,17 @@ once it supports such dependencies.
 
 ## Unreleased
 
+### Run files
+
+- A run's own files, such as the worker plan and the confirmation
+  relays, go into `.harness-forge/runs/<run id>/` at the target
+  repository's root instead of an unnamed place such as `.harness/`.
+  The new `run-dir` command allocates the directory once per run and
+  creates `.harness-forge/.gitignore` with the single line `*` when it
+  is missing. Forge reads inputs and writes the drift-issue proposal
+  there without following symbolic links, and never overwrites a run
+  file. All four skills name the files (#83).
+
 ### Verification
 
 - harness-verify ties its note on plugin skills' runtime cases to the

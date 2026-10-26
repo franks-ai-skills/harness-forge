@@ -27,6 +27,22 @@ instruction, and stop; never install or download anything yourself.
   URL elsewhere, such as a YAML comment. Keep identifiers such as
   `harness-forge` and `scripts/forge.py` as they are, and leave the
   user's own text, quotations and recorded evidence unchanged.
+- **Run files go in `.harness-forge/`.** Once per session, before
+  writing the first file for Forge, run `scripts/forge.py run-dir --root
+  <repository>` (the directory that holds `.harness/`), or keep using the
+  directory an earlier step of this session allocated, and tell the user
+  its absolute `path`. Write there every file that Forge reads and that
+  is not part of the built product, named as the steps below say, and
+  pass absolute paths; use its `run_id` as the run id in every relay.
+  `.harness/` keeps only the records. The command creates
+  `.harness-forge/.gitignore` with exactly the single line `*` when it
+  is missing and never changes it or the repository's own `.gitignore`;
+  when `tracked_files` is above zero, say that the rule does not untrack
+  those files. Never write through a symbolic link there and never
+  overwrite a run file: give a changed file a new name, such as
+  `relay-2.json`. Forge refuses links on the way and existing files. The
+  files stay after the run for the user to delete, and a saved relay
+  never confirms anything in a later session.
 - **Confirm the current contract first,** in this session, as
   harness-intake's contract reference describes. Without it, every part
   stays blocked and its goal is reported as not assessed. A run without
@@ -67,7 +83,8 @@ instruction, and stop; never install or download anything yourself.
    earlier report, which the repository can hold in any form, and the
    user's choice is what keeps them. Every part's scripts and link
    checks run again either way. For Review, pass `--scope review --fixed
-   <parts> --scope-relay <file>` to step 3, the relay holding `choice`
+   <parts> --scope-relay <file>` to step 3, the relay in the run
+   directory as `scope-relay.json` (a new name each time) holding `choice`
    review, the option's `displayed_digest` and the confirmation's
    `run_id`; for Extensive review, pass `--scope extensive`. Each verify
    run writes a new report, so ask the scope question again before

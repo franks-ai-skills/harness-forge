@@ -29,6 +29,22 @@ command prints bounded JSON.
   URL elsewhere, such as a YAML comment. Keep identifiers such as
   `harness-forge` and `scripts/forge.py` as they are, and leave the
   user's own text, quotations and recorded evidence unchanged.
+- **Run files go in `.harness-forge/`.** Once per session, before
+  writing the first file for Forge, run `scripts/forge.py run-dir --root
+  <repository>` (the directory that holds `.harness/`), or keep using the
+  directory an earlier step of this session allocated, and tell the user
+  its absolute `path`. Write there every file that Forge reads and that
+  is not part of the built product, named as the steps below say, and
+  pass absolute paths; use its `run_id` as the run id in every relay.
+  `.harness/` keeps only the records. The command creates
+  `.harness-forge/.gitignore` with exactly the single line `*` when it
+  is missing and never changes it or the repository's own `.gitignore`;
+  when `tracked_files` is above zero, say that the rule does not untrack
+  those files. Never write through a symbolic link there and never
+  overwrite a run file: give a changed file a new name, such as
+  `relay-2.json`. Forge refuses links on the way and existing files. The
+  files stay after the run for the user to delete, and a saved relay
+  never confirms anything in a later session.
 - **One question per message, in the user's terms.** Forge's question
   texts say what to find out, not how to word it: ask about the user's
   own idea and say what the answer changes for it. Offer the choices as
@@ -136,8 +152,9 @@ time, read [references/inputs.md](references/inputs.md) for their shapes.
    reuse, keeps the linking part from verified: Forge cannot check the
    linked artifact (`links.parts`). Say so, and keep a real link anyway.
    Record `split_confirmed: true` only after the user agrees.
-6. **Per-part questions.** Write the confirmed answers to a JSON file and
-   run `scripts/forge.py select --input <file>`. Add each reuse
+6. **Per-part questions.** Write the confirmed answers to
+   `select-input.json` in the run directory and run
+   `scripts/forge.py select --input <file>`. Add each reuse
    candidate the user confirmed from the survey under `candidates`, with
    its `name`, `source`, `license`, `maintenance`, `fit`, `concept` and,
    for a hook, its form as `variant`, with every setting that changes its

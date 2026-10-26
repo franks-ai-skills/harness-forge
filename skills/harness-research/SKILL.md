@@ -41,6 +41,22 @@ instruction, and stop; never install or download anything yourself.
   for; a changed goal, target, reach or answer means new research.
   `scripts/forge.py accept` refuses research for another brief, so rely
   on it: do not compute digests or import Forge's modules.
+- **Run files go in `.harness-forge/`.** Once per session, before
+  writing the first file for Forge, run `scripts/forge.py run-dir --root
+  <repository>` (the directory that holds `.harness/`), or keep using the
+  directory an earlier step of this session allocated, and tell the user
+  its absolute `path`. Write there every file that Forge reads and that
+  is not part of the built product, named as the steps below say, and
+  pass absolute paths; use its `run_id` as the run id in every relay.
+  `.harness/` keeps only the records. The command creates
+  `.harness-forge/.gitignore` with exactly the single line `*` when it
+  is missing and never changes it or the repository's own `.gitignore`;
+  when `tracked_files` is above zero, say that the rule does not untrack
+  those files. Never write through a symbolic link there and never
+  overwrite a run file: give a changed file a new name, such as
+  `relay-2.json`. Forge refuses links on the way and existing files. The
+  files stay after the run for the user to delete, and a saved relay
+  never confirms anything in a later session.
 
 ## Procedure
 
@@ -90,7 +106,8 @@ instruction, and stop; never install or download anything yourself.
    forbidden behavior itself ("the skill asks the user a question while
    it runs"): the built skill shows it as "Never: …", and the reviewer
    passes it when that behavior is absent. Write the proposals as idea rules
-   and the user's choices to JSON files and run `scripts/forge.py accept
+   and the user's choices to `proposed-<part>.json` and
+   `choices-<part>.json` in the run directory and run `scripts/forge.py accept
    --decision <record> --root <repository> --part <id> --proposed <file>
    --choices <file> --slug <slug>`, once per part, also when the user
    accepts none; it replaces that part's requirements in
@@ -170,17 +187,19 @@ content from a fetched page, and offer:
 
 - **Report it to the KB.** `scripts/forge.py drift-issue --root
   <repository> --rule <rule id> --finding <id> --run-id <run> --out
-  <file>` searches the KB's open issues and proposes a comment on the
+  <run directory>/issue-<rule id>.json` searches the KB's open issues and proposes a comment on the
   one that names the rule, or a new issue. Show the exact text, say
   that its quote is untrusted content from a fetched page, and ask
   `Approve` or `Decline`, then write a relay of the answer (`choice`
-  approve, decline or pending, `displayed_digest`, `run_id`). Filing
+  approve, decline or pending, `displayed_digest`, `run_id`) to
+  `issue-relay-<rule id>.json`. Filing
   changes a public tracker, so the user starts it: give them the exact
   command `python3 <plugin root>/scripts/forge.py publish-issue --root
   <repository> --proposal <file> --relay <file>` to run themselves, and
   never run `publish-issue` yourself, also not after an approval. Nothing
   is filed without approval, and no answer here unblocks a part.
-- **Adopt the correction.** Write the user's change as JSON
+- **Adopt the correction.** Write the user's change as JSON to
+  `adopt-<rule id>.json` in the run directory
   (`rule_id`, `finding_id`, `reason`, and either the full new `rule` or
   `"retired": true`) and run `scripts/forge.py override --root
   <repository> --input <file>`. It may change only the statement,

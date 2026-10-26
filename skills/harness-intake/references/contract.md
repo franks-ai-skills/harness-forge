@@ -6,7 +6,8 @@ verification.
 ## What to show
 
 First run `scripts/forge.py workers --harness <this harness>` and save
-its output. If a role reports `needs_cost_question`, the login is an API
+its output as `workers.json` in the run directory that `run-dir`
+allocated (see the skill's rule on run files). If a role reports `needs_cost_question`, the login is an API
 key or unknown and can cost extra: ask the user `Continue` or `Stop`
 and run it again with `--login-answer`. Never log in, log out or switch
 accounts. Then run `scripts/forge.py prepare-contract --decision
@@ -56,12 +57,13 @@ These never confirm a part:
 
 ## The relay
 
-After an explicit confirmation, write exactly these fields to a JSON file
-and pass it with `--relay` to `research`, `build` and `verify`, together
+After an explicit confirmation, write exactly these fields to
+`relay.json` in the run directory (`relay-2.json` and so on for a later
+confirmation, since a run file is never overwritten) and pass it with `--relay` to `research`, `build` and `verify`, together
 with the same `--evidence`; they refuse a relay for any other contract:
 
 ```json
-{"choice": "confirm", "displayed_digest": "<digest you showed>", "part_ids": ["A"], "run_id": "<this run>"}
+{"choice": "confirm", "displayed_digest": "<digest you showed>", "part_ids": ["A"], "run_id": "<run-dir's run_id>"}
 ```
 
 Forge checks the digest, the run and the part ids; it cannot check that
