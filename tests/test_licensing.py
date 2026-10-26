@@ -325,6 +325,13 @@ class LicenseOfferTest(unittest.TestCase):
         regenerated = update_readme(readme, load_decision(self.path))
         self.assertIn(LICENSE_SECTION, regenerated)
 
+    def test_the_guidance_offers_exactly_this(self):
+        text = " ".join((FORGE / "skills/harness-intake/SKILL.md").read_text(encoding="utf-8").split())
+        for expected in ("ask its `question` word for word", "`Yes, please` and `No, thanks`, in that order, neither "
+                         "marked recommended nor preselected", "--add agpl-3.0-only", "`answer: declined`",
+                         "Never choose, replace or change a license yourself"):
+            self.assertIn(expected, text)
+
 
 if __name__ == "__main__":
     unittest.main()
