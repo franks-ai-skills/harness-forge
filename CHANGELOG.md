@@ -25,6 +25,9 @@ once it supports such dependencies.
   never overwrites or changes existing licensing. A licensing location
   behind a symbolic link now makes the check incomplete instead of
   missing (#91).
+- The public licensing question no longer follows a recommendation: it
+  asks with two unmarked options, and the recommendation to clarify the
+  terms before public reuse comes only after a "continue" answer (#93).
 
 ### Confirmation
 

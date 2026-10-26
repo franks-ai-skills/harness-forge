@@ -325,6 +325,16 @@ class LicenseOfferTest(unittest.TestCase):
         regenerated = update_readme(readme, load_decision(self.path))
         self.assertIn(LICENSE_SECTION, regenerated)
 
+    def test_the_public_question_is_neutral_and_the_recommendation_follows_a_continue_answer(self):
+        text = " ".join((FORGE / "skills/harness-intake/SKILL.md").read_text(encoding="utf-8").split())
+        start = text.index("When it reports `ask: true`")
+        question = text.index("point to where the terms are, or continue without choosing a license", start)
+        recommendation = text.index("recommend clarifying the terms before public reuse", start)
+        self.assertNotIn("ecommend clarifying", text[start:question], "no recommendation frames the question (#93)")
+        self.assertIn("neither marked recommended", text[start:question])
+        self.assertGreater(recommendation, question)
+        self.assertIn("Only after a `continue` answer", text[question:recommendation])
+
     def test_the_guidance_offers_exactly_this(self):
         text = " ".join((FORGE / "skills/harness-intake/SKILL.md").read_text(encoding="utf-8").split())
         for expected in ("ask its `question` word for word", "`Yes, please` and `No, thanks`, in that order, neither "
