@@ -68,6 +68,7 @@ from harness_forge.research import (  # noqa: E402
 )
 from harness_forge.licensing import check as licensing_check  # noqa: E402
 from harness_forge import runfiles  # noqa: E402
+from harness_forge.summary import details_name, render_details, render_summary  # noqa: E402
 from harness_forge.provenance import forge_provenance  # noqa: E402
 from harness_forge.behavior import BEHAVIOR, case_digest  # noqa: E402
 from harness_forge.runtime import load_cases  # noqa: E402
@@ -504,7 +505,12 @@ def _overrides_command(arguments: argparse.Namespace) -> int:
 
 
 def _prepare_contract(arguments: argparse.Namespace) -> int:
-    """Render the current contract offline; confirmation needs a live relay."""
+    """Render the current contract offline as a summary and a details file; confirmation needs a live relay."""
+    root = Path(arguments.decision).resolve().parents[2]
+    try:
+        run_directory = runfiles.run_directory(arguments.run_dir, root)
+    except (OSError, ValueError) as error:
+        raise _InvalidInput(str(error)) from error
     try:
         decision = load_decision(Path(arguments.decision))
         revision = load_revision(Path(arguments.revision)) if arguments.revision else None
@@ -513,7 +519,7 @@ def _prepare_contract(arguments: argparse.Namespace) -> int:
     problem = answers_problem(decision.record, _selection_document())
     if problem:
         raise _InvalidInput(problem)
-    overrides, described = _checked_overrides(Path(arguments.decision).resolve().parents[2])
+    overrides, described = _checked_overrides(root)
     # The parts build would refuse, named so that only the others are offered for confirmation. Until a
     # confirmation adopts the shown overrides, select decides under the pinned rules, so a selection current
     # under either set is not refused.
@@ -533,19 +539,36 @@ def _prepare_contract(arguments: argparse.Namespace) -> int:
                 validate(record, "worker-evidence")
         except ValueError as error:
             raise _InvalidInput(str(error)) from error
+    drift = _drift(root)
     try:
         contract = render_contract(decision, revision, overrides, worker_evidence=evidence, described=described,
-                                   drift=_drift(Path(arguments.decision).resolve().parents[2]))
+                                   drift=drift)
     except ValueError as error:
         raise _InvalidInput(str(error)) from error
     problem = _revision_problem(decision, revision)
     if problem:
         raise _InvalidInput(problem)
+    research = _research_states(decision, revision, Path(arguments.decision))
+    checked = {override["rule_id"]: result for override, result in _check_all(root)}
+    details = render_details(contract, decision.record, worker_evidence=evidence)
+    name, checksum = details_name(details)
+    path = run_directory / name
+    try:
+        # Written before its link is returned; a name holds one content, so a shown link never changes target.
+        runfiles.create_once(path, details)
+    except (OSError, ValueError) as error:
+        raise _InvalidInput(str(error)) from error
+    summary = render_summary(
+        contract, decision.record, checked_overrides=[checked[entry["rule_id"]] for entry in contract.overrides],
+        refused=refused, research=research, drift=contract.content["drift"],
+        drift_states=[drift_state(entry, decision.record, overrides) for entry in drift],
+        conditions={rule.id: rule.statement for rule in _pinned_rules()}, details_path=str(path))
     emit({
-        "command": "prepare-contract", "digest": contract.digest, "text": contract.text,
+        "command": "prepare-contract", "digest": contract.digest, "summary": summary,
+        "details": {"path": str(path), "sha256": checksum},
         "parts": contract.parts, "overrides": contract.overrides, "worker_policy": contract.worker_policy,
         "confirmed_part_ids": [], "relay_fields": sorted(RELAY_KEYS), "refused_parts": refused,
-        "research": _research_states(decision, revision, Path(arguments.decision)),
+        "research": research,
     })
     return 0
 
@@ -1716,6 +1739,8 @@ def build_parser() -> argparse.ArgumentParser:
     prepare.add_argument("--decision", required=True, help=".harness/decisions/<date>-<slug>.md")
     prepare.add_argument("--revision", help=".harness/research/<slug>.rules.yaml")
     prepare.add_argument("--evidence", help="JSON object with worker_evidence records")
+    prepare.add_argument("--run-dir", required=True,
+                         help="this run's directory from run-dir; the details file is written there")
     prepare.set_defaults(handler=_prepare_contract)
     readme = commands.add_parser("readme", help="write the result README's Outside controls and where-skills-load sections")
     readme.add_argument("--decision", required=True, help=".harness/decisions/<date>-<slug>.md")

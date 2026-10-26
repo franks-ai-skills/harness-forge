@@ -63,3 +63,14 @@ def revision(*requirements: tuple[str, str, str]) -> AcceptedRevision:
     digest = canonical_digest(rules)
     briefs = {part_id: "1" * 64 for part_id, _, _ in requirements}
     return AcceptedRevision(rule_ids=[r["rule"]["id"] for r in rules], rules=rules, brief_digests=briefs, digest=digest)
+
+
+def with_run_dir(arguments) -> list[str]:
+    """prepare-contract's arguments with a run directory of the decision's repository, as run-dir allocates one."""
+    arguments = [str(argument) for argument in arguments]
+    if arguments[:1] == ["prepare-contract"] and "--run-dir" not in arguments and "--decision" in arguments:
+        from pathlib import Path
+        run = Path(arguments[arguments.index("--decision") + 1]).resolve().parents[2] / ".harness-forge/runs/test-run"
+        run.mkdir(parents=True, exist_ok=True)
+        arguments += ["--run-dir", str(run)]
+    return arguments
