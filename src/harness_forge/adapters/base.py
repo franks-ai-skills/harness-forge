@@ -170,9 +170,9 @@ def _approved(contract: Contract, confirmation: Confirmation | None, worker_evid
             WORKER_POLICY, "not-certified", WORKER_DISCLOSURE):
         raise ValueError("workers launch only under the disclosed best-effort-v1 policy; certified isolation is not offered")
     if confirmation is None or confirmation.contract_digest != contract.digest:
-        raise ValueError("no worker launches before the user confirms the current contract")
+        raise ValueError("no worker launches before the user confirms the current inputs in this session")
     if contract.worker_policy["evidence_digest"] != canonical_digest(list(worker_evidence)):
-        raise ValueError("the worker configurations are not the ones the confirmed contract shows")
+        raise ValueError("the worker configurations are not the ones the confirmed summary shows")
     return {canonical_digest(item) for item in worker_configurations(list(worker_evidence))}
 
 
@@ -204,7 +204,7 @@ def run_worker(request: dict, harness: str, *, contract: Contract, confirmation:
         return _response(request, "unavailable", configuration, reason=checked["reason"])
     approved = _approved(contract, confirmation, worker_evidence)
     if canonical_digest(worker_configurations([configuration])[0]) not in approved:
-        raise ValueError("this worker configuration was not approved with the confirmed contract")
+        raise ValueError("this worker configuration was not approved with the confirmation")
 
     adapter = ADAPTERS[harness]
     with tempfile.TemporaryDirectory(prefix=f"forge-{role}-", dir=workspace_root) as directory:

@@ -145,7 +145,7 @@ def _check_bindings(decision: Decision, part_id: str, revision: AcceptedRevision
                     overrides: list[dict] | tuple = (), drift: list[dict] | tuple = ()) -> None:
     problem = confirmation_problem(confirmation, decision, revision, list(overrides), worker_evidence, drift)
     if problem:
-        raise ValueError(f"building needs the current contract confirmed in this session: {problem}")
+        raise ValueError(f"building needs the current configuration proposal confirmed in this session: {problem}")
     if part_id not in confirmation.part_ids:
         raise ValueError(f"part {part_id} is not confirmed in this session")
     recorded = decision.record.get("accepted_revision") or {}

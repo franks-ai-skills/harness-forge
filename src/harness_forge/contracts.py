@@ -303,7 +303,7 @@ def render_contract(
 
     record = decision.record
     hosting = record["hosting"]
-    lines = [f"Contract for: {record['idea']}", f"Goals: {'; '.join(record['goals'])}",
+    lines = [f"Idea: {record['idea']}", f"Goals: {'; '.join(record['goals'])}",
              f"Picture: {record['picture']}", f"Targets: {', '.join(record['targets'])}",
              f"Reach: {record['reach']}; hosting: {hosting['platform']}, {hosting['plan']} plan, {hosting['visibility']}",
              f"Facts: {_pairs(record['facts'])}"]
@@ -320,7 +320,7 @@ def render_contract(
         lines += _part_text(part) + [""]
     lines.append(f"Accepted Idea KB revision: {'sha256 ' + revision_digest if revision_digest else 'none yet'}")
     if override_entries:
-        lines.append("Rule overrides for this repository (they apply once you confirm this contract):")
+        lines.append("Rule overrides for this repository (they apply once you confirm them):")
         for entry in override_entries:
             lines.append(f"  - {entry['rule_id']} (sha256 {entry['digest']}):")
             shown = (described or {}).get(entry["rule_id"]) or entry["content"].splitlines()
@@ -360,7 +360,7 @@ def render_contract(
     )
     lines.append(f"Worker policy: {WORKER_POLICY}, isolation not-certified. {WORKER_DISCLOSURE} ({evidence_text})")
     lines += _worker_lines(worker_evidence)
-    lines.append(f"Contract digest: {digest}")
+    lines.append(f"Confirmation digest: {digest}")
     lines += _hint(previous, parts)
     return Contract(parts=parts, overrides=override_entries, worker_policy=worker_policy,
                     text="\n".join(lines) + "\n", digest=digest, content=content)
@@ -391,7 +391,7 @@ def confirmation_problem(
     except ValueError as error:
         return str(error)
     if confirmation.contract_digest != current.digest:
-        return "the confirmation is for another contract than the current one"
+        return "the confirmation is for other inputs than the current ones"
     return None
 
 

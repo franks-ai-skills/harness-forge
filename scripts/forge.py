@@ -68,7 +68,7 @@ from harness_forge.research import (  # noqa: E402
 )
 from harness_forge.licensing import check as licensing_check  # noqa: E402
 from harness_forge import runfiles  # noqa: E402
-from harness_forge.summary import details_name, render_details, render_summary  # noqa: E402
+from harness_forge.summary import TITLES, details_name, render_details, render_summary  # noqa: E402
 from harness_forge.provenance import forge_provenance  # noqa: E402
 from harness_forge.behavior import BEHAVIOR, case_digest  # noqa: E402
 from harness_forge.runtime import load_cases  # noqa: E402
@@ -340,7 +340,7 @@ def _select(arguments: argparse.Namespace) -> int:
         preview = outcome(apply_overrides(pinned, pending))
         payload["override_preview"] = {
             "overrides": [o["rule_id"] for o in pending],
-            "note": "a preview only: it applies once the contract that shows these overrides is confirmed",
+            "note": "a preview only: it applies once the user confirms a summary that shows these overrides",
             **{key: preview[key] for key in ("outcome", "mechanism", "pending_question", "question", "goal_conflict")}}
     emit(payload)
     return 0
@@ -362,7 +362,7 @@ def _selection_under_confirmation(arguments: argparse.Namespace) -> tuple[list[R
     if not arguments.relay:
         return pinned, [], overrides
     if not (arguments.decision and arguments.evidence):
-        raise _InvalidInput("a confirmation relay needs --decision and --evidence for the contract it confirms")
+        raise _InvalidInput("a confirmation relay needs --decision and --evidence for what it confirms")
     decision, revision = _decision_and_revision(arguments, root)
     approval, confirmed = _approval(arguments, decision, revision)
     return effective_rules(pinned, confirmed, approval["confirmation"]), confirmed, []
@@ -550,8 +550,9 @@ def _prepare_contract(arguments: argparse.Namespace) -> int:
         raise _InvalidInput(problem)
     research = _research_states(decision, revision, Path(arguments.decision))
     checked = {override["rule_id"]: result for override, result in _check_all(root)}
-    details = render_details(contract, decision.record, worker_evidence=evidence)
-    name, checksum = details_name(details)
+    title = TITLES[arguments.purpose]
+    details = render_details(contract, decision.record, title=title, worker_evidence=evidence)
+    name, checksum = details_name(details, title)
     path = run_directory / name
     try:
         # Written before its link is returned; a name holds one content, so a shown link never changes target.
@@ -559,12 +560,13 @@ def _prepare_contract(arguments: argparse.Namespace) -> int:
     except (OSError, ValueError) as error:
         raise _InvalidInput(str(error)) from error
     summary = render_summary(
-        contract, decision.record, checked_overrides=[checked[entry["rule_id"]] for entry in contract.overrides],
+        contract, decision.record, title=title, checked_overrides=[checked[entry["rule_id"]] for entry in contract.overrides],
         refused=refused, research=research, drift=contract.content["drift"],
         drift_states=[drift_state(entry, decision.record, overrides) for entry in drift],
         conditions={rule.id: rule.statement for rule in _pinned_rules()}, details_path=str(path))
     emit({
-        "command": "prepare-contract", "digest": contract.digest, "summary": summary,
+        "command": "prepare-contract", "purpose": arguments.purpose, "title": title, "digest": contract.digest,
+        "summary": summary,
         "details": {"path": str(path), "sha256": checksum},
         "parts": contract.parts, "overrides": contract.overrides, "worker_policy": contract.worker_policy,
         "confirmed_part_ids": [], "relay_fields": sorted(RELAY_KEYS), "refused_parts": refused,
@@ -877,7 +879,7 @@ def _scope(arguments: argparse.Namespace) -> int:
                     "judged_rules": sum(counts.get(p, 0) for p in every), "link_checks": True, "kept": []})
     built = [f"`{part['slug']}`" for part in decision.record["parts"] if part["chosen"] in ("skills", "commands")]
     question = (f"Verification checks the skills Forge built in this repository ({', '.join(built) or 'none'}) "
-                "against their confirmed contract, not the current conversation's other work. Which parts should "
+                "against their confirmed configuration summary, not the current conversation's other work. Which parts should "
                 "it judge again?")
     emit({"command": "scope", "question": question, "fixed": sorted(fixed),
           "changed": plan["changed"] if earlier else every,
@@ -998,7 +1000,8 @@ def _approval(arguments: argparse.Namespace, decision: Decision, revision) -> tu
         raise _InvalidInput(str(error)) from error
     confirmation = confirm_contract(contract, relay, run_id=str(relay.get("run_id", "")))
     if confirmation is None:
-        raise _InvalidInput("the relay does not confirm the current contract; show it with prepare-contract and ask again")
+        raise _InvalidInput("the relay does not confirm the current inputs; run prepare-contract again, show its summary and "
+                            "linked details, and ask again")
     return {"contract": contract, "confirmation": confirmation, "worker_evidence": evidence}, overrides
 
 
@@ -1678,10 +1681,10 @@ def build_parser() -> argparse.ArgumentParser:
                         help="JSON file with answers, whole_idea and candidates; chosen and goal for a goal conflict")
     select.add_argument("--root", help="target repository; its rule overrides are previewed, or applied with --relay")
     for command in (select,):
-        command.add_argument("--decision", help="the decision whose contract --relay confirms")
+        command.add_argument("--decision", help="the decision whose summary --relay confirms")
         command.add_argument("--revision", help=".harness/research/<slug>.rules.yaml")
-        command.add_argument("--evidence", help="JSON with the worker_evidence the contract shows")
-        command.add_argument("--relay", help="JSON relay confirming the contract that shows the overrides")
+        command.add_argument("--evidence", help="JSON with the worker_evidence the summary shows")
+        command.add_argument("--relay", help="JSON relay confirming the summary that shows the overrides")
     select.set_defaults(handler=_select)
     override = commands.add_parser("override", help="propose a rule override from a kept, supported finding")
     override.add_argument("--root", required=True, help="target repository root")
@@ -1732,13 +1735,16 @@ def build_parser() -> argparse.ArgumentParser:
     resolve.add_argument("--adjusted-goal", help="the adjusted goal, for adjust-goal")
     resolve.add_argument("--reason", required=True, help="the user's reason for the answer")
     resolve.add_argument("--revision", help=".harness/research/<slug>.rules.yaml")
-    resolve.add_argument("--evidence", help="JSON with the worker_evidence the contract shows")
-    resolve.add_argument("--relay", help="JSON relay confirming the contract; the repository's overrides apply only then")
+    resolve.add_argument("--evidence", help="JSON with the worker_evidence the summary shows")
+    resolve.add_argument("--relay", help="JSON relay confirming the current summary; the repository's overrides apply only then")
     resolve.set_defaults(handler=_resolve_conflict)
-    prepare = commands.add_parser("prepare-contract", help="render the current contract for confirmation")
+    prepare = commands.add_parser("prepare-contract", help="prepare the research proposal, configuration proposal or configuration summary for confirmation")
     prepare.add_argument("--decision", required=True, help=".harness/decisions/<date>-<slug>.md")
     prepare.add_argument("--revision", help=".harness/research/<slug>.rules.yaml")
     prepare.add_argument("--evidence", help="JSON object with worker_evidence records")
+    prepare.add_argument("--purpose", required=True, choices=sorted(TITLES),
+                         help="what the confirmation is for: research (a research proposal), configuration (a "
+                              "configuration proposal before building) or verification (a configuration summary)")
     prepare.add_argument("--run-dir", required=True,
                          help="this run's directory from run-dir; the details file is written there")
     prepare.set_defaults(handler=_prepare_contract)
@@ -1764,7 +1770,7 @@ def build_parser() -> argparse.ArgumentParser:
     workers.add_argument("--login-answer", choices=("continue", "stop"),
                          help="the user's answer to the cost question for an API-key or unknown login")
     workers.set_defaults(handler=_workers)
-    live = {"--evidence": "JSON with the worker_evidence the confirmed contract showed",
+    live = {"--evidence": "JSON with the worker_evidence the confirmed summary showed",
             "--relay": "JSON relay of the user's confirmation: choice, displayed_digest, part_ids, run_id"}
     research = commands.add_parser("research", help="run one research pass with live workers")
     accept = commands.add_parser("accept", help="write the accepted requirements from the user's choices")
@@ -1833,8 +1839,8 @@ def build_parser() -> argparse.ArgumentParser:
     scope.add_argument("--decision", required=True)
     scope.add_argument("--root", required=True, help="target repository root")
     scope.add_argument("--revision", help=".harness/research/<slug>.rules.yaml")
-    scope.add_argument("--evidence", required=True, help="JSON with the worker_evidence the contract shows")
-    scope.add_argument("--relay", required=True, help="JSON relay of the user's confirmation of the current contract")
+    scope.add_argument("--evidence", required=True, help="JSON with the worker_evidence the summary shows")
+    scope.add_argument("--relay", required=True, help="JSON relay of the user's confirmation of the configuration summary")
     scope.add_argument("--slug", required=True, help="the report to compare with, .harness/reports/<slug>.md")
     scope.add_argument("--harness", required=True, choices=["claude-code", "codex"],
                        help="the harness verify will run; only its earlier runtime evidence can be kept")

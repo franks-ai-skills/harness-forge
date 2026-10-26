@@ -662,15 +662,15 @@ class LiveCommandsTest(unittest.TestCase):
                                    self.root / ".harness/research/repro.rules.yaml")
         self.assertEqual(code, 0, stderr)
         details = Path(output["details"]["path"]).read_text(encoding="utf-8")
-        self.assertIn("Rule overrides for this repository (they apply once you confirm this contract):", details)
+        self.assertIn("Rule overrides for this repository (they apply once you confirm them):", details)
         self.assertIn("The team prefers longer descriptions.", details)
         code, _, stderr = cli("verify", *arguments)
         self.assertEqual(code, 2)
-        self.assertIn("does not confirm the current contract", stderr)
+        self.assertIn("does not confirm the current inputs", stderr)
         option = dict(zip(arguments[::2], arguments[1::2]))
         code, _, stderr = cli("check", "--decision", self.decision, "--root", self.root, "--revision", option["--revision"])
         self.assertEqual(code, 2)
-        self.assertIn("apply only after a contract confirmation", stderr)
+        self.assertIn("apply only after a confirmation in this session", stderr)
         (overrides / "notes.txt").write_text("not an override", encoding="utf-8")
         code, _, stderr = cli("prepare-contract", "--decision", self.decision)
         self.assertEqual(code, 2)
@@ -793,7 +793,7 @@ class LiveCommandsTest(unittest.TestCase):
         self.assertEqual(output["goal_conflict"]["severity"], "error", "unconfirmed, the pinned rules decide")
         preview = output["override_preview"]
         self.assertEqual(preview["overrides"], ["selection.eligibility.own-context-skills"])
-        self.assertIn("applies once the contract that shows these overrides is confirmed", preview["note"])
+        self.assertIn("applies once the user confirms a summary that shows these overrides", preview["note"])
         self.assertNotEqual((preview["goal_conflict"] or {}).get("severity"), "error")
 
         revision = self.root / ".harness/research/repro.rules.yaml"

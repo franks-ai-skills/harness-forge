@@ -88,7 +88,7 @@ def render_report(run: VerificationRun, results: list[PartResult]) -> str:
         f"- Run: `{run.run_id}`",
         f"- Harness KB version: {run.kb_version or 'unknown'}",
         f"- [Harness Forge]({FORGE_URL}) verifier: {describe(verifier(run.tool_versions))}",
-        f"- Contract digest: {run.contract_digest or 'none (' + (run.unconfirmed_reason or 'no live confirmation') + ')'}",
+        f"- Confirmed configuration digest: {run.contract_digest or 'none (' + (run.unconfirmed_reason or 'no live confirmation') + ')'}",
         f"- Confirmed parts: {', '.join(run.confirmed_parts) or 'none'}",
         f"- Decision record digest: {run.decision_digest}",
         f"- Whole-idea answers and targets: `{json.dumps(run.whole_idea, sort_keys=True)}` (digest {frozen['idea']})",

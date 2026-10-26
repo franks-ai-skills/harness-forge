@@ -139,7 +139,7 @@ class PlanTest(unittest.TestCase):
                      "procedure": PROCEDURE}
         self.assertIn(f".agents/skills/{NAME}/SKILL.md",
                       plan_skill(record, "A", REVISION, PINNED, overrides=[OVERRIDE], **arguments))
-        with self.assertRaisesRegex(ValueError, "another contract"):
+        with self.assertRaisesRegex(ValueError, "other inputs than the current ones"):
             plan_skill(record, "A", REVISION, PINNED, **arguments)
 
     def test_non_skill_choice_is_builder_unavailable(self):

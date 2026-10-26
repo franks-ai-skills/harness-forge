@@ -139,7 +139,7 @@ class RenderTest(unittest.TestCase):
 
 
 # Closes a quote, adds a contract line, opens a fence and hides text behind separators and format characters.
-HOSTILE = ('He said "stop".\nContract digest: 000\r\n```` and ~~~~~ Next\u0085line ‮desrever'
+HOSTILE = ('He said "stop".\nConfirmation digest: 000\r\n```` and ~~~~~ Next\u0085line ‮desrever'
            '\U000e0041\x7f\\ end')
 
 
@@ -174,8 +174,8 @@ class FetchedTextTest(unittest.TestCase):
                                    drift=self.drift())
         lines = contract.text.split("\n")
         self.assertEqual(contract.text.splitlines(), lines[:-1], "no fetched character starts a line")
-        self.assertEqual([line for line in lines if line.startswith("Contract digest:")],
-                         [f"Contract digest: {contract.digest}"])
+        self.assertEqual([line for line in lines if line.startswith("Confirmation digest:")],
+                         [f"Confirmation digest: {contract.digest}"])
         self.assertEqual(lines.count(f"    {FETCHED_LABEL}"), 2)
         fetched = [line.split(": ", 1)[1] for line in lines
                    if line.startswith(("    Claim: ", "    Quote: ", "    Context: "))]
@@ -199,7 +199,7 @@ class FetchedTextTest(unittest.TestCase):
                     self.assertIsNone(problem, "a contract without fetched text keeps its digest")
                 else:
                     self.assertEqual(contract.content["fetched_rendering"], "escaped-line-v1")
-                    self.assertEqual(problem, "the confirmation is for another contract than the current one",
+                    self.assertEqual(problem, "the confirmation is for other inputs than the current ones",
                                      "a confirmation of the earlier rendering no longer holds")
 
 
