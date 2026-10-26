@@ -68,6 +68,15 @@ files there without following symbolic links and never overwrites one.
 They stay until you delete them, and none of them confirms anything in
 a later session.
 
+When no licensing information is found in a result repository, Forge
+offers to add its own license, the GNU Affero General Public License
+v3.0 only (AGPL-3.0-only), with the choices "Yes, please" and "No,
+thanks". Only after "Yes, please" does `scripts/forge.py license` write
+a `LICENSE` that is byte for byte the one Forge ships (checked against
+its SHA-256) and a `License` section in README.md, and record the
+answer. It never overwrites, replaces or changes existing licensing,
+and the Generated Output Exception is not copied.
+
 Before each confirmation, the agent shows a short Markdown summary,
 named by what it is for: a research proposal before research, a
 configuration proposal before building, a configuration summary before

@@ -14,6 +14,18 @@ once it supports such dependencies.
 
 ## Unreleased
 
+### Licensing
+
+- Forge inspects every result repository for licensing information, not
+  only publicly shared ones, and offers its own license,
+  AGPL-3.0-only, with "Yes, please" and "No, thanks" when none is found.
+  The new `license` command adds it only after "Yes, please": `LICENSE`
+  byte for byte as Forge ships it (refused unless its SHA-256 matches),
+  a fixed `License` section in README.md, and the recorded answer. It
+  never overwrites or changes existing licensing. A licensing location
+  behind a symbolic link now makes the check incomplete instead of
+  missing (#91).
+
 ### Confirmation
 
 - What the user confirms is named by its purpose instead of

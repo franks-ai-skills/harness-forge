@@ -835,6 +835,49 @@
             "location"
           ],
           "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "basis": {
+              "type": "string",
+              "pattern": "^[0-9a-f]{64}$"
+            },
+            "answer": {
+              "const": "added"
+            },
+            "license": {
+              "const": "AGPL-3.0-only"
+            },
+            "sha256": {
+              "type": "string",
+              "pattern": "^[0-9a-f]{64}$"
+            }
+          },
+          "required": [
+            "basis",
+            "answer",
+            "license",
+            "sha256"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "basis": {
+              "type": "string",
+              "pattern": "^[0-9a-f]{64}$"
+            },
+            "answer": {
+              "const": "declined"
+            }
+          },
+          "required": [
+            "basis",
+            "answer"
+          ],
+          "additionalProperties": false
         }
       ]
     }

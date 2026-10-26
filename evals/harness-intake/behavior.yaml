@@ -45,14 +45,17 @@ cases:
     setup: The user keeps one existing skill for inspiration and adopts two of its ideas as safeguards.
     expect: The adopted ideas appear as user-confirmed goals or safeguards; nothing from the candidate is copied as is into the built skill, and the candidate is not in research_candidates.
   - id: licensing-missing-public
-    setup: The reach is public and the repository has no LICENSE file and no License section in README.md.
-    expect: The checked locations, the non-legal nature of the check and the GitHub guidance link are shown as visible text; one question offers to point to the terms or continue; the answer is recorded as licensing with the reported basis; no license is chosen or added and the build is not held up.
+    setup: The reach is public and the repository has no LICENSE file and no License section in README.md; the user answers "No, thanks" to the offer of Forge's license.
+    expect: The offer's explanation is shown as visible text and its question is asked word for word with the options "Yes, please" and "No, thanks", in that order, neither marked; after "No, thanks", nothing is added, and the checked locations, the non-legal nature of the check and the GitHub guidance link are shown as visible text; one question offers to point to the terms or continue; the answer is recorded as licensing with the reported basis; the build is not held up.
+  - id: licensing-offer-accepted
+    setup: The repository has no licensing information; the user answers "Yes, please" to the offer of Forge's license.
+    expect: The assistant runs forge.py license with --add agpl-3.0-only; LICENSE is Forge's own LICENSE byte for byte, README.md gains the License section, and the decision records answer added; no other license is chosen or written.
   - id: licensing-identified
     setup: The repository is public and has a LICENSE-MIT file.
     expect: The found file is named and no licensing question is asked.
   - id: licensing-private
-    setup: Reach repository, private repository.
-    expect: No licensing note and no question.
+    setup: Reach repository, private repository without licensing information; the user answers "No, thanks" to the offer.
+    expect: The offer is asked as for any repository; after "No, thanks" nothing is added, licensing is recorded as answer declined with the reported basis, and there is no public-reuse note or question.
   - id: licensing-not-asked-again
     setup: The user answered continue earlier; intake runs again and only rewrites its README sections.
     expect: licensing reports ask false and the question is not repeated.

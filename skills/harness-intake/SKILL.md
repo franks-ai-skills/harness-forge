@@ -222,23 +222,40 @@ time, read [references/inputs.md](references/inputs.md) for their shapes.
    described in [references/contract.md](references/contract.md#goal-conflicts).
 9. **Record.** Write `.harness/decisions/<date>-<slug>.md`. Then run
    `scripts/forge.py licensing --decision <record> --root <repository>`.
-   It looks only when the skill will be shared publicly (public reach or
-   a public repository). When it reports `ask: true`, show as visible
-   text, briefly: the locations it `checked`; that no licensing
-   information was identified there (or, for `incomplete`, which
-   location could not be checked), which is not a legal determination,
-   since terms can sit in a differently named file or cover only part of
-   the repository; that others who copy the skill need clear terms, and
-   neither a public repository nor Harness Forge's generated-output
-   exception establishes rights in every input or third-party
-   component; and its `guidance` link. Recommend clarifying the terms
-   before public reuse, then ask one question: point to where the terms
-   are, or continue without choosing a license. Record the answer as
-   `licensing` with the reported `basis`: `answer: location` with the
-   user's text as `location` (their information, not verified terms), or
-   `answer: continue`. With `identified`, say which files or README
-   parts it found, and ask nothing. Never choose, add or change a
-   license, and do not hold up the build for this. Then run
+   It inspects the repository's root and README.md for licensing
+   information.
+   - When it reports an `offer`, show each line of its `explanation` as
+     visible text, then ask its `question` word for word, as one
+     multiple-choice question with exactly its two `options`, `Yes,
+     please` and `No, thanks`, in that order, neither marked recommended
+     nor preselected. Only an explicit `Yes, please` in this session
+     counts: then run `scripts/forge.py license --decision <record>
+     --root <repository> --add agpl-3.0-only`, which writes `LICENSE`,
+     the README's `License` section and the recorded answer itself. For
+     `No, thanks`, silence or an unclear answer, add nothing: when `ask`
+     is true, ask the question below; otherwise record `licensing` as
+     `answer: declined` with the reported `basis`.
+   - When it reports `ask: true` (the skill will be shared publicly:
+     public reach or a public repository) and no license was added, show
+     as visible text, briefly: the locations it `checked`; that no
+     licensing information was identified there (or, for `incomplete`,
+     which location could not be checked), which is not a legal
+     determination, since terms can sit in a differently named file or
+     cover only part of the repository; that others who copy the skill
+     need clear terms, and neither a public repository nor Harness
+     Forge's generated-output exception establishes rights in every
+     input or third-party component; and its `guidance` link. Recommend
+     clarifying the terms before public reuse, then ask one question:
+     point to where the terms are, or continue without choosing a
+     license. Record the answer as `licensing` with the reported
+     `basis`: `answer: location` with the user's text as `location`
+     (their information, not verified terms), or `answer: continue`.
+   - With `identified`, say which files or README parts it found, and
+     ask nothing.
+
+   Never choose, replace or change a license yourself: Forge adds only
+   its own, after that explicit answer. Do not hold up the build for
+   this. Then run
    `scripts/forge.py readme --decision <record> --root <repository>`. It
    writes the result README's `Outside controls` section, also for parts
    that build nothing, with each control's conditions spelled out, and,
