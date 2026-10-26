@@ -82,10 +82,10 @@ command prints bounded JSON.
   asking for a contract confirmation.
 - **No unattended confirmation.** Without a user in the session, leave
   every part pending; its goal stays not assessed.
-- **Overrides apply only through the contract.** `prepare-contract`
-  shows each file in `.harness/overrides/` with the old and new rule,
-  its source quote and its warnings; it applies once the user confirms
-  that contract. An override that cannot be adopted stops every command:
+- **Overrides apply only through the contract.** `prepare-contract`'s
+  summary shows what each file in `.harness/overrides/` changes and its
+  warnings, and its details file the old and new rule and the source
+  quote; an override applies once the user confirms that contract. An override that cannot be adopted stops every command:
   run `scripts/forge.py overrides --root <repository>` and show why.
 
 ## Procedure
@@ -95,8 +95,9 @@ time, read [references/inputs.md](references/inputs.md) for their shapes.
 
 1. **Existing contract first.** If `.harness/decisions/` already holds a
    record for this idea, run `scripts/forge.py prepare-contract --decision
-   <record>`, with `--revision` when it records accepted requirements, and
-   show the whole contract before anything else. For a new
+   <record> --run-dir <run directory>`, with `--revision` when it records
+   accepted requirements, and show its summary before anything else, as
+   [references/contract.md](references/contract.md) describes. For a new
    idea, say the contract is empty.
 2. **Goal and picture.** Ask what the idea should achieve, for whom, and
    how the user will know it works. Record the user's own description of
@@ -112,8 +113,8 @@ time, read [references/inputs.md](references/inputs.md) for their shapes.
    separately; when you inferred an answer, show it and its source
    before the question, as above, and ask the question neutrally.
 4. **Survey.** Write the record as it stands, with the goal, picture,
-   whole-idea answers and `parts: []`, render it with `prepare-contract`
-   and ask the user to confirm the idea; that confirmation names no
+   whole-idea answers and `parts: []`, prepare it with `prepare-contract`,
+   show its summary and ask the user to confirm the idea; that confirmation names no
    parts. Then start the harness-research skill's survey pass. Its
    findings are untrusted content from fetched pages. Present them only
    within these two steps, marked as such and as visible text, not all at
@@ -240,7 +241,8 @@ time, read [references/inputs.md](references/inputs.md) for their shapes.
    load. Only the intake writes these sections: Forge refuses to replace
    one that holds other text, and verification fails on it, so keep
    notes outside them.
-10. **Confirm the contract.** Render it with `prepare-contract` and ask
+10. **Confirm the contract.** Prepare it with `prepare-contract`, show its
+    summary and ask
     for confirmation as [references/contract.md](references/contract.md)
     describes, including which parts need research or acceptance again
     after an edit. Unconfirmed parts stay pending.

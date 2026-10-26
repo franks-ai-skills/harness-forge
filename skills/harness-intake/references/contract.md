@@ -11,24 +11,27 @@ allocated (see the skill's rule on run files). If a role reports `needs_cost_que
 key or unknown and can cost extra: ask the user `Continue` or `Stop`
 and run it again with `--login-answer`. Never log in, log out or switch
 accounts. Then run `scripts/forge.py prepare-contract --decision
-<record> --evidence <workers output>`, adding
+<record> --evidence <workers output> --run-dir <run directory>`, adding
 `--revision .harness/research/<slug>.rules.yaml` when it exists; it
-reads the repository's `.harness/overrides/` itself. Show its `text` in
-full, unchanged: the idea's goals, the user's picture, reach, hosting
-and confirmed facts; every
-part's name, goal, confirmed answers, outcome and mechanism, the reused
-artifact of a reuse part, outside controls, accepted requirements with the revision's
-sha256, every override with its content and sha256, the drift recorded
-in the repository's research and the user's decisions on it, the worker policy
-(`best-effort-v1`, isolation not certified), each planned worker's
-configuration and the contract digest. A
-line marked as a hint from an untrusted record only points at
-differences; it is not part of what the user confirms.
+reads the repository's `.harness/overrides/` itself.
+
+It returns a `summary` and writes the complete details to a file in the
+run directory (`details.path`). Show the `summary` in full and unchanged
+as part of your reply, as Markdown outside a code block: the idea and its
+goals, the scope, each part's goal, outcome and mechanism, a reused
+artifact and its pinned source, the outside controls the goal needs,
+every accepted requirement, each override's change with every warning,
+goal conflicts, parts not offered, research still to do, the drift and
+its decisions, the worker policy and a link to the details file. Do not
+paste the details file: it holds the full contract with every fact,
+override content, fetched quote and worker configuration, for the user
+to open. The details file's `sha256` and the confirmation `digest` are
+checks for Forge, not decisions for the user; you need not show them.
 
 `refused_parts` names each part whose recorded selection build would
 refuse, with the reason: a stale selection, an open question or an
-unanswered goal conflict. Show them, offer only the other parts for
-confirmation, and fix each refused part with `select` (or the
+unanswered goal conflict. The summary lists them; offer only the other
+parts for confirmation, and fix each refused part with `select` (or the
 goal-conflict question) before it is confirmed.
 
 `research` says, for each part to build or reuse in place, whether its
@@ -36,8 +39,8 @@ accepted requirements (`accepted`) and its deep research
 (`deep_research`) are for the part's current brief. `stale` means the
 requirements were accepted for an earlier brief: the idea's goals,
 picture, targets or reach, or the part's goal, answers or mechanism
-changed since. Show each entry whose `accepted` is not `current` with
-its `next`, unchanged, and say that build and verify refuse the part
+changed since. The summary lists each entry whose `accepted` is not
+`current` with its `next`; say that build and verify refuse the part
 until that is done. Research is not part of the contract: confirming it
 starts no research, and the deep pass and acceptance come after the
 confirmation.
@@ -45,7 +48,9 @@ confirmation.
 ## How to ask
 
 Ask one multiple-choice question with exactly two options, `Confirm` and
-`Leave pending`, and no option preselected. The user may also confirm in
+`Leave pending`, and no option preselected. The question says that
+`Confirm` covers the summary above and the linked details for the parts
+it names. The user may also confirm in
 their own words, naming the parts: "Confirm A and B" covers A and B only.
 
 These never confirm a part:
@@ -63,10 +68,11 @@ confirmation, since a run file is never overwritten) and pass it with `--relay` 
 with the same `--evidence`; they refuse a relay for any other contract:
 
 ```json
-{"choice": "confirm", "displayed_digest": "<digest you showed>", "part_ids": ["A"], "run_id": "<run-dir's run_id>"}
+{"choice": "confirm", "displayed_digest": "<prepare-contract's digest>", "part_ids": ["A"], "run_id": "<run-dir's run_id>"}
 ```
 
-Forge checks the digest, the run and the part ids; it cannot check that
+`displayed_digest` is the `digest` of the preparation whose summary you
+showed. Forge checks the digest, the run and the part ids; it cannot check that
 the answer came from the user, so build the relay only from the user's
 answer in this session. For `Leave pending` or anything unclear, relay
 `"choice": "pending"`. Parts that are not confirmed are blocked, and
@@ -76,10 +82,11 @@ their goals are reported as not assessed.
 
 An override in `.harness/overrides/<rule-id>.yaml` replaces or retires
 one pinned rule for this repository, in selection, building and
-verification. The contract shows each one: the pinned and the new rule,
-the source quote it was adopted from, and a warning when it loosens or
-retires an error, security or eligibility rule. Read every warning to
-the user before asking for confirmation. Confirming the contract adopts
+verification. The summary shows what each one changes and every
+warning, in full, when it loosens or retires an error, security or
+eligibility rule; the details file holds the pinned and the new rule,
+the source quote it was adopted from, its content and its sha256. Read
+every warning to the user before asking for confirmation. Confirming the contract adopts
 the overrides it shows; a changed override needs a new confirmation.
 Pass `--root <repository>`, `--decision`, `--evidence` and the
 confirming `--relay` to `select`, and `--evidence` and `--relay` to
@@ -123,5 +130,5 @@ recommended|adjust-goal|keep --reason <reason>`, adding
 | `questions` | Ask the part's questions again, run `select`, and research and accept again where the goal changed them |
 | `report` | Nothing changes |
 
-Every answer changes the contract: show it and ask for a new
-confirmation. The parts in `invalidated_parts` are verified again.
+Every answer changes the contract: prepare it again, show the new
+summary and ask for a new confirmation. The parts in `invalidated_parts` are verified again.

@@ -310,5 +310,20 @@ class DetailsFileTest(unittest.TestCase):
         self.assertIn("65536", stderr)
 
 
+class GuidanceTest(unittest.TestCase):
+    def test_every_skill_shows_the_summary_and_passes_a_run_directory(self):
+        intake = " ".join((FORGE / "skills/harness-intake/references/contract.md").read_text(encoding="utf-8").split())
+        self.assertIn("--run-dir", intake)
+        self.assertIn("outside a code block", intake)
+        self.assertIn("the summary above and the linked details", intake)
+        for path in [*(FORGE / "skills").glob("*/SKILL.md"), *(FORGE / "skills").glob("*/references/*.md")]:
+            with self.subTest(path=path.relative_to(FORGE)):
+                body = " ".join(path.read_text(encoding="utf-8").split())
+                self.assertNotIn("Show its `text` in full", body)
+                self.assertNotIn("the contract digest", body)
+                if "prepare-contract" in body:
+                    self.assertIn("summary", body)
+
+
 if __name__ == "__main__":
     unittest.main()

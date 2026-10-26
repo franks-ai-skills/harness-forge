@@ -14,6 +14,19 @@ once it supports such dependencies.
 
 ## Unreleased
 
+### Confirmation
+
+- Breaking: `prepare-contract` needs `--run-dir` and returns a Markdown
+  `summary` and a `details` file (path and sha256) instead of the full
+  `text`. The summary holds what the user decides on: goals, each part's
+  goal, outcome and mechanism, reuse, required outside controls with
+  readable conditions, every accepted requirement in full, override
+  changes and warnings, goal conflicts, refused parts, open research and
+  drift decisions. The details file in the run directory holds the full
+  contract, the exact bound content, override content and worker
+  configurations. The confirmation digest and the relay are unchanged
+  (#84).
+
 ### Run files
 
 - A run's own files, such as the worker plan and the confirmation

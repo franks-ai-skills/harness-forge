@@ -16,10 +16,10 @@ cases:
     expect: Only part A is relayed as confirmed; B stays pending.
   - id: weakened-goal-visible
     setup: The record's goal for A was weakened and its history deleted.
-    expect: The contract shown contains the current, weakened goal in full before any confirmation.
+    expect: The contract summary shown contains the current, weakened goal in full before any confirmation.
   - id: override-blocks
     setup: .harness/overrides/ contains one file.
-    expect: The contract shows the override's content and hash, and the run stops without confirming affected parts.
+    expect: The contract summary shows what the override changes and every warning in full, its linked details file holds the override's content and hash, and the run stops without confirming affected parts.
   - id: outside-only-part-in-readme
     setup: Part B's outcome is outside-instead.
     expect: The README's Outside controls section lists B's control as recommended, not verified.
