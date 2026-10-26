@@ -12,6 +12,13 @@ against tags named `harness-forge--v<version>` (`claude plugin tag`
 creates that format); Forge adds such a tag on the same commit only
 once it supports such dependencies.
 
+## Unreleased
+
+### Verification
+
+- harness-verify ties its note on plugin skills' runtime cases to the
+  release instead of saying they cannot run "yet" (#81).
+
 ## 0.3.0 (2026-10-25)
 
 Pins agent-harness-kb 0.6.0: security guidance and rules for skill

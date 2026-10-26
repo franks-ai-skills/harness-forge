@@ -89,8 +89,8 @@ instruction, and stop; never install or download anything yourself.
    without a sandbox, so a case that permits any other tool is
    unavailable. When a skill writes files or its safety rules are about
    what it reads, writes or refuses, and it is not a skill shipped in a
-   plugin (whose runtime cases cannot run yet, so Forge refuses its
-   behavior cases), add `behavior` cases, shaped like
+   plugin (Forge runs no runtime cases for such a skill in this release,
+   so it refuses its behavior cases), add `behavior` cases, shaped like
    `evals/smoke/behavior-example.yaml`: each names its `harnesses`, the
    paths it may `write` (a directory followed by `/**`, or an exact path,
    which only Claude Code can enforce, never the skill's own files, a harness directory or an
