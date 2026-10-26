@@ -5,6 +5,7 @@ import importlib.util
 import io
 import json
 import os
+import re
 import subprocess
 import tempfile
 import unittest
@@ -180,6 +181,21 @@ class RunFilesTest(unittest.TestCase):
         self.assertFalse((self.outside / "missing.md").exists())
         self.assertFalse(runfiles.create(self.outside / "elsewhere.md", "x"), "paths elsewhere are not handled here")
         self.assertFalse((self.outside / "elsewhere.md").exists())
+
+    def test_the_guidance_names_the_directory_the_ignore_rule_and_the_files(self):
+        for skill in ("harness-intake", "harness-research", "build-skill", "harness-verify"):
+            with self.subTest(skill):
+                text = " ".join((FORGE / "skills" / skill / "SKILL.md").read_text(encoding="utf-8").split())
+                self.assertIn("scripts/forge.py run-dir --root <repository>", text)
+                self.assertIn(".harness-forge/", text)
+                self.assertIn("symbolic link", text)
+        intake = (FORGE / "skills/harness-intake/references/contract.md").read_text(encoding="utf-8")
+        for name in ("workers.json", "relay.json"):
+            self.assertIn(name, intake)
+        self.assertIn("select-input.json", (FORGE / "skills/harness-intake/SKILL.md").read_text(encoding="utf-8"))
+        self.assertIn("scope-relay.json", (FORGE / "skills/harness-verify/SKILL.md").read_text(encoding="utf-8"))
+        self.assertTrue(re.search(r"exactly the single line `\*`",
+                                  " ".join((FORGE / "skills/harness-intake/SKILL.md").read_text(encoding="utf-8").split())))
 
 
 if __name__ == "__main__":

@@ -28,6 +28,22 @@ instruction, and stop; never install or download anything yourself.
   URL elsewhere, such as a YAML comment. Keep identifiers such as
   `harness-forge` and `scripts/forge.py` as they are, and leave the
   user's own text, quotations and recorded evidence unchanged.
+- **Run files go in `.harness-forge/`.** Once per session, before
+  writing the first file for Forge, run `scripts/forge.py run-dir --root
+  <repository>` (the directory that holds `.harness/`), or keep using the
+  directory an earlier step of this session allocated, and tell the user
+  its absolute `path`. Write there every file that Forge reads and that
+  is not part of the built product, named as the steps below say, and
+  pass absolute paths; use its `run_id` as the run id in every relay.
+  `.harness/` keeps only the records. The command creates
+  `.harness-forge/.gitignore` with exactly the single line `*` when it
+  is missing and never changes it or the repository's own `.gitignore`;
+  when `tracked_files` is above zero, say that the rule does not untrack
+  those files. Never write through a symbolic link there and never
+  overwrite a run file: give a changed file a new name, such as
+  `relay-2.json`. Forge refuses links on the way and existing files. The
+  files stay after the run for the user to delete, and a saved relay
+  never confirms anything in a later session.
 - **Build only what was confirmed.** The part must be confirmed in this
   session, and the decision record must name the same accepted Idea KB
   revision the contract showed. Otherwise stop and send the user back to
@@ -83,7 +99,8 @@ instruction, and stop; never install or download anything yourself.
    `must`), so write no such word or label yourself, except a plain "Do
    not …" for a `must`. A short safety reminder may overlap a procedure
    step; leave operational detail in the procedure.
-5. Save the texts to files and run `scripts/forge.py build --decision
+5. Save the texts as `description-<part>.txt`, `procedure-<part>.md`
+   and `checklist-<part>.json` in the run directory and run `scripts/forge.py build --decision
    <record> --root <repository> --part <id> --revision <rules file>
    --evidence <workers output> --relay <relay> --description <file>
    --procedure <file> --checklist <file>`. It refuses the build when a
