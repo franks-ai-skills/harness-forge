@@ -703,6 +703,7 @@ class LiveCommandsTest(unittest.TestCase):
         self.assertEqual(code, 0, stderr)
         self.assertIn("Warning: it changes its parameters for the error rule skills.description.length, which may "
                       "loosen it", shown["summary"])
+        self.assertIn("  - params.max\\_chars: from 1024 to 2048\n", shown["summary"], "the summary shows the change")
 
         code, _, stderr = cli("verify", *arguments)
         self.assertEqual(code, 2, "the old confirmation does not cover the override")

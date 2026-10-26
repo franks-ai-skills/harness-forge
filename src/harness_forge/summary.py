@@ -131,11 +131,29 @@ def _part(part: dict, conditions: dict[str, str]) -> list[str]:
     return lines
 
 
-def _override_change(checked: dict) -> str:
+def _value(value) -> str:
+    """A rule field's value: text in quotation marks, anything else as compact JSON."""
+    return f"\u201c{value}\u201d" if isinstance(value, str) else json.dumps(value, ensure_ascii=False, sort_keys=True)
+
+
+def _override_change(checked: dict) -> list[str]:
+    """What adopting the override changes, field by field, from check_override's structured result."""
+    old = checked.get("old")
     if checked["retired"]:
-        return "retires the pinned rule"
-    fields = [change["field"] for change in checked["changes"]]
-    return "changes the pinned rule's " + (", ".join(fields) if fields else "content")
+        pinned = f": {old.severity}: {old.statement}" if old is not None else ""
+        return [f"retires the pinned rule{text(pinned, '  ')}"]
+    lines = ["changes the pinned rule:"]
+    for change in checked["changes"]:
+        before, after = change.get("old"), change.get("new")
+        if change["field"] == "params" and isinstance(before, dict) and isinstance(after, dict):
+            for key in sorted(set(before) | set(after)):
+                if before.get(key) != after.get(key):
+                    lines.append(f"  - {text('params.' + key, '    ')}: from {text(_value(before.get(key)), '    ')} "
+                                 f"to {text(_value(after.get(key)), '    ')}")
+        else:
+            lines.append(f"  - {text(change['field'], '    ')}: from {text(_value(before), '    ')} to "
+                         f"{text(_value(after), '    ')}")
+    return lines
 
 
 def render_summary(contract: Contract, record: dict, *, checked_overrides: list[dict], refused: list[dict],
@@ -159,7 +177,8 @@ def render_summary(contract: Contract, record: dict, *, checked_overrides: list[
     if checked_overrides:
         lines += ["### Rule overrides", ""]
         for checked in checked_overrides:
-            lines.append(f"- {code(checked['rule_id'])}: {_override_change(checked)}")
+            first, *more = _override_change(checked)
+            lines += [f"- {code(checked['rule_id'])}: {first}", *more]
             lines += [f"  - Warning: it {text(warning, '    ')}" for warning in checked["warnings"]]
         lines.append("")
     if refused:

@@ -39,7 +39,10 @@ DRIFT = [{"rule_id": "skills.description.length", "finding_id": "F1", "slug": "r
 CHECKED = [{"rule_id": "skills.description.length", "retired": False, "warnings": [
     "lowers the error rule skills.description.length from error to warning",
     "changes its parameters for the error rule skills.description.length, which may loosen it"],
-    "changes": [{"field": "params"}, {"field": "severity"}]}]
+    "changes": [{"field": "params", "old": {"max_chars": 1024}, "new": {"max_chars": 2048}},
+                {"field": "severity", "old": "error", "new": "warning"},
+                {"field": "statement", "old": "The description is present and at most 1,024 characters",
+                 "new": "The description is present and at most 2,048 characters"}], "old": None}]
 OVERRIDE = {"rule_id": "skills.description.length", "pinned_kb_version": "0.1.0", "retired": True,
             "reason": "The team's own reason, sha256 " + "e" * 64 + ".", "date": "2026-10-09", "link": "pending"}
 DETAILS = "/tmp/run dir/a&amp;b/#x/50%/new\nline/contract-details-0123456789abcdef.md"
@@ -132,7 +135,11 @@ class SummaryContentTest(unittest.TestCase):
                       self.plain)
         self.assertIn("switched to the recommended mechanism (Switch.). Verification will assess the current choice "
                       "and goal; confirmation does not verify the part.", self.plain)
-        self.assertIn("- `skills.description.length`: changes the pinned rule's params, severity", self.summary)
+        self.assertIn("- `skills.description.length`: changes the pinned rule:\n"
+                      "  - params.max\\_chars: from 1024 to 2048\n"
+                      "  - severity: from \u201cerror\u201d to \u201cwarning\u201d\n"
+                      "  - statement: from \u201cThe description is present and at most 1,024 characters\u201d to "
+                      "\u201cThe description is present and at most 2,048 characters\u201d\n", self.summary)
         for warning in CHECKED[0]["warnings"]:
             self.assertIn(f"Warning: it {warning}", self.plain)
         self.assertIn("- Part C: its selection is stale", self.summary)
