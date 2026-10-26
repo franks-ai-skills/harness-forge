@@ -347,7 +347,9 @@ removed.
 
 ## Outside controls
 
-- `codeowners-agent-config` (part A): recommended, not verified. Precaution; availability available. It works as a gate only when:
+Outside controls are settings the repository owner or operator configures outside the skills' instructions, for example on the Git host or in CI. [Harness Forge](https://github.com/franks-ai-skills/harness-forge) recommends them from the intake answers; it does not set them up or check them. Background: [Outside gates](https://github.com/franks-ai-skills/agent-harness-kb/blob/v0.6.0/docs/guide/outside-gates.md).
+
+- **Code-owner review of agent configuration** (`codeowners-agent-config`, part A): recommended, not verified. Not recorded as required for this part's goal. Recorded as available during intake; Harness Forge has not verified its setup or enforcement. Why: The agent's own configuration files decide what it may do, so a change to them, also one made through a pull request, takes effect only after a code owner approves it. It works as a gate only when:
   - Workflow, scanner and policy files that define a gate are under code owners or come from outside the repository at a pinned ref, and where CODEOWNERS is used, CODEOWNERS owns itself (`outside.ci.workflow-protected`)
   - A CODEOWNERS entry names an owner for every file that configures the agent, including `.agents/`, `.claude/`, `CLAUDE.md`, `.mcp.json`, `.codex/`, `AGENTS.md`, `AGENTS.override.md`, `.devcontainer/`, the CI workflow files and the CODEOWNERS file itself, and the branch rule requires code-owner review (`outside.codeowners.agent-config`)
   - No broader credential or channel the agent can reach, such as a personal token or a metadata endpoint, bypasses the control (`outside.gate.no-broader-bypass`)
@@ -356,12 +358,12 @@ removed.
   - Where the control requires approval, approval comes from an identity other than the author, the last pusher and the launching user, and it resets on new pushes (`outside.merge.requester-cannot-approve`)
   - It targets the real refs and resources it protects, such as the default and release branches and tags or the production accounts (`outside.gate.real-refs`)
   - Its configuration is checked periodically, because gate configuration drifts silently (`outside.gate.periodic-verification`)
-- `outer-isolation` (part A): recommended, not verified. Precaution; availability available. It works as a gate only when:
+- **Isolation around the agent** (`outer-isolation`, part A): recommended, not verified. Not recorded as required for this part's goal. Recorded as available during intake; Harness Forge has not verified its setup or enforcement. Why: A bypass or no-prompt mode, an untrusted repository, or untrusted input combined with secrets and outbound access needs a boundary outside the harness. It works as a gate only when:
   - No broader credential or channel the agent can reach, such as a personal token or a metadata endpoint, bypasses the control (`outside.gate.no-broader-bypass`)
   - The agent's identity, including the bot, app, token and the human whose token it uses, is on no bypass or override list of the control (`outside.merge.no-agent-bypass`)
   - It targets the real refs and resources it protects, such as the default and release branches and tags or the production accounts (`outside.gate.real-refs`)
   - Its configuration is checked periodically, because gate configuration drifts silently (`outside.gate.periodic-verification`)
-- `codeowners-agent-config` (part B): recommended, not verified. Precaution; availability available. It works as a gate only when:
+- **Code-owner review of agent configuration** (`codeowners-agent-config`, part B): recommended, not verified. Not recorded as required for this part's goal. Recorded as available during intake; Harness Forge has not verified its setup or enforcement. Why: The agent's own configuration files decide what it may do, so a change to them, also one made through a pull request, takes effect only after a code owner approves it. It works as a gate only when:
   - Workflow, scanner and policy files that define a gate are under code owners or come from outside the repository at a pinned ref, and where CODEOWNERS is used, CODEOWNERS owns itself (`outside.ci.workflow-protected`)
   - A CODEOWNERS entry names an owner for every file that configures the agent, including `.agents/`, `.claude/`, `CLAUDE.md`, `.mcp.json`, `.codex/`, `AGENTS.md`, `AGENTS.override.md`, `.devcontainer/`, the CI workflow files and the CODEOWNERS file itself, and the branch rule requires code-owner review (`outside.codeowners.agent-config`)
   - No broader credential or channel the agent can reach, such as a personal token or a metadata endpoint, bypasses the control (`outside.gate.no-broader-bypass`)
@@ -370,12 +372,12 @@ removed.
   - Where the control requires approval, approval comes from an identity other than the author, the last pusher and the launching user, and it resets on new pushes (`outside.merge.requester-cannot-approve`)
   - It targets the real refs and resources it protects, such as the default and release branches and tags or the production accounts (`outside.gate.real-refs`)
   - Its configuration is checked periodically, because gate configuration drifts silently (`outside.gate.periodic-verification`)
-- `outer-isolation` (part B): recommended, not verified. Precaution; availability available. It works as a gate only when:
+- **Isolation around the agent** (`outer-isolation`, part B): recommended, not verified. Not recorded as required for this part's goal. Recorded as available during intake; Harness Forge has not verified its setup or enforcement. Why: A bypass or no-prompt mode, an untrusted repository, or untrusted input combined with secrets and outbound access needs a boundary outside the harness. It works as a gate only when:
   - No broader credential or channel the agent can reach, such as a personal token or a metadata endpoint, bypasses the control (`outside.gate.no-broader-bypass`)
   - The agent's identity, including the bot, app, token and the human whose token it uses, is on no bypass or override list of the control (`outside.merge.no-agent-bypass`)
   - It targets the real refs and resources it protects, such as the default and release branches and tags or the production accounts (`outside.gate.real-refs`)
   - Its configuration is checked periodically, because gate configuration drifts silently (`outside.gate.periodic-verification`)
-- `codeowners-agent-config` (part C): recommended, not verified. Precaution; availability available. It works as a gate only when:
+- **Code-owner review of agent configuration** (`codeowners-agent-config`, part C): recommended, not verified. Not recorded as required for this part's goal. Recorded as available during intake; Harness Forge has not verified its setup or enforcement. Why: The agent's own configuration files decide what it may do, so a change to them, also one made through a pull request, takes effect only after a code owner approves it. It works as a gate only when:
   - Workflow, scanner and policy files that define a gate are under code owners or come from outside the repository at a pinned ref, and where CODEOWNERS is used, CODEOWNERS owns itself (`outside.ci.workflow-protected`)
   - A CODEOWNERS entry names an owner for every file that configures the agent, including `.agents/`, `.claude/`, `CLAUDE.md`, `.mcp.json`, `.codex/`, `AGENTS.md`, `AGENTS.override.md`, `.devcontainer/`, the CI workflow files and the CODEOWNERS file itself, and the branch rule requires code-owner review (`outside.codeowners.agent-config`)
   - No broader credential or channel the agent can reach, such as a personal token or a metadata endpoint, bypasses the control (`outside.gate.no-broader-bypass`)
@@ -384,12 +386,12 @@ removed.
   - Where the control requires approval, approval comes from an identity other than the author, the last pusher and the launching user, and it resets on new pushes (`outside.merge.requester-cannot-approve`)
   - It targets the real refs and resources it protects, such as the default and release branches and tags or the production accounts (`outside.gate.real-refs`)
   - Its configuration is checked periodically, because gate configuration drifts silently (`outside.gate.periodic-verification`)
-- `outer-isolation` (part C): recommended, not verified. Precaution; availability available. It works as a gate only when:
+- **Isolation around the agent** (`outer-isolation`, part C): recommended, not verified. Not recorded as required for this part's goal. Recorded as available during intake; Harness Forge has not verified its setup or enforcement. Why: A bypass or no-prompt mode, an untrusted repository, or untrusted input combined with secrets and outbound access needs a boundary outside the harness. It works as a gate only when:
   - No broader credential or channel the agent can reach, such as a personal token or a metadata endpoint, bypasses the control (`outside.gate.no-broader-bypass`)
   - The agent's identity, including the bot, app, token and the human whose token it uses, is on no bypass or override list of the control (`outside.merge.no-agent-bypass`)
   - It targets the real refs and resources it protects, such as the default and release branches and tags or the production accounts (`outside.gate.real-refs`)
   - Its configuration is checked periodically, because gate configuration drifts silently (`outside.gate.periodic-verification`)
-- `codeowners-agent-config` (part D): recommended, not verified. Precaution; availability available. It works as a gate only when:
+- **Code-owner review of agent configuration** (`codeowners-agent-config`, part D): recommended, not verified. Not recorded as required for this part's goal. Recorded as available during intake; Harness Forge has not verified its setup or enforcement. Why: The agent's own configuration files decide what it may do, so a change to them, also one made through a pull request, takes effect only after a code owner approves it. It works as a gate only when:
   - Workflow, scanner and policy files that define a gate are under code owners or come from outside the repository at a pinned ref, and where CODEOWNERS is used, CODEOWNERS owns itself (`outside.ci.workflow-protected`)
   - A CODEOWNERS entry names an owner for every file that configures the agent, including `.agents/`, `.claude/`, `CLAUDE.md`, `.mcp.json`, `.codex/`, `AGENTS.md`, `AGENTS.override.md`, `.devcontainer/`, the CI workflow files and the CODEOWNERS file itself, and the branch rule requires code-owner review (`outside.codeowners.agent-config`)
   - No broader credential or channel the agent can reach, such as a personal token or a metadata endpoint, bypasses the control (`outside.gate.no-broader-bypass`)
@@ -398,7 +400,7 @@ removed.
   - Where the control requires approval, approval comes from an identity other than the author, the last pusher and the launching user, and it resets on new pushes (`outside.merge.requester-cannot-approve`)
   - It targets the real refs and resources it protects, such as the default and release branches and tags or the production accounts (`outside.gate.real-refs`)
   - Its configuration is checked periodically, because gate configuration drifts silently (`outside.gate.periodic-verification`)
-- `outer-isolation` (part D): recommended, not verified. Precaution; availability available. It works as a gate only when:
+- **Isolation around the agent** (`outer-isolation`, part D): recommended, not verified. Not recorded as required for this part's goal. Recorded as available during intake; Harness Forge has not verified its setup or enforcement. Why: A bypass or no-prompt mode, an untrusted repository, or untrusted input combined with secrets and outbound access needs a boundary outside the harness. It works as a gate only when:
   - No broader credential or channel the agent can reach, such as a personal token or a metadata endpoint, bypasses the control (`outside.gate.no-broader-bypass`)
   - The agent's identity, including the bot, app, token and the human whose token it uses, is on no bypass or override list of the control (`outside.merge.no-agent-bypass`)
   - It targets the real refs and resources it protects, such as the default and release branches and tags or the production accounts (`outside.gate.real-refs`)
