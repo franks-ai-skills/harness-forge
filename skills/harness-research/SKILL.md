@@ -113,7 +113,9 @@ instruction, and stop; never install or download anything yourself.
    accepts none; it replaces that part's requirements in
    `.harness/research/<slug>.rules.yaml`, bound to the part's brief,
    keeps the other parts' and records the revision in the decision. The
-   changed contract needs a new confirmation. Its output lists
+   changed configuration needs a new confirmation: before building, prepare
+   it with `prepare-contract --purpose configuration` and ask about the
+   configuration proposal. Its output lists
    `dropped_parts`: requirements of parts the decision no longer has,
    or, when an older revision named no single part, every other part it
    held. Tell the user, and accept each remaining dropped part again.
@@ -177,7 +179,7 @@ instruction, and stop; never install or download anything yourself.
 When a kept finding contradicts a pinned Harness KB rule, record it:
 `scripts/forge.py drift --root <repository> --slug <slug> --finding <id>
 --rule <rule id> --category security|compatibility|ordinary --summary
-<what changed>`. Recorded drift is part of the contract, so the next
+<what changed>`. Recorded drift is part of what the user confirms, so the next
 command needs a new confirmation. Drift on a security rule or a
 compatibility change blocks the affected parts until the user decides;
 ordinary drift leaves the pinned rule in force. Never change a rule because of drift on your
@@ -222,5 +224,5 @@ the new finding supersedes the old entry.
 
 Record the answer with `scripts/forge.py drift-decision --decision
 <record> --root <repository> --rule <rule id> --finding <id> --choice
-keep|adopt --reason <reason>`. The changed contract needs a new
+keep|adopt --reason <reason>`. The changed configuration needs a new
 confirmation, which also adopts the override.

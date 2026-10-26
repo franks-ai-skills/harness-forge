@@ -51,7 +51,7 @@ dependencies: changing any of them means testing again.
 
 ## Goal result, decided in this order
 
-1. `not assessed`: the contract is unconfirmed, the part is blocked, the
+1. `not assessed`: the configuration summary is unconfirmed, the part is blocked, the
    harness result is `not checked`, or a bound input of a part without a
    build (its goal, its README hand-off) changed after the run was
    prepared.

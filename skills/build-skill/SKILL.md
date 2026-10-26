@@ -46,7 +46,8 @@ instruction, and stop; never install or download anything yourself.
   never confirms anything in a later session.
 - **Build only what was confirmed.** The part must be confirmed in this
   session, and the decision record must name the same accepted Idea KB
-  revision the contract showed. Otherwise stop and send the user back to
+  revision the configuration proposal showed (the summary of
+  `prepare-contract --purpose configuration`). Otherwise stop and send the user back to
   harness-intake.
 - **Only accepted requirements go in.** Never add a requirement the user
   rejected or did not answer, and never copy fetched page text into the

@@ -16,6 +16,15 @@ once it supports such dependencies.
 
 ### Confirmation
 
+- What the user confirms is named by its purpose instead of
+  "contract": a research proposal, a configuration proposal before
+  building, or a configuration summary before verification.
+  `prepare-contract` needs `--purpose research|configuration|verification`
+  (breaking), which sets the summary's and the details file's title and
+  the file's name; it does not change the digest. Forge's diagnostics,
+  CLI help and skills follow, and the report labels the digest
+  "Confirmed configuration digest". The command name, stored fields and
+  file names stay; historical records and reports are unchanged (#85).
 - Breaking: `prepare-contract` needs `--run-dir` and returns a Markdown
   `summary` and a `details` file (path and sha256) instead of the full
   `text`. The summary holds what the user decides on: goals, each part's

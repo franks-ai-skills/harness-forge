@@ -115,6 +115,18 @@ class ForgeTextTest(unittest.TestCase):
             with self.subTest(command=name):
                 self.assertFalse(mentions(command.format_help()), command.format_help())
 
+    def test_no_guidance_or_readme_prose_says_contract(self):
+        paths = [*(FORGE / "skills").glob("*/SKILL.md"), *(FORGE / "skills").glob("*/references/*.md"),
+                 FORGE / "README.md"]
+        for path in paths:
+            with self.subTest(path=str(path.relative_to(FORGE))):
+                lines = [line for line in path.read_text(encoding="utf-8").splitlines() if mentions(line)]
+                self.assertEqual(lines, [])
+        intake = " ".join((FORGE / "skills/harness-intake/references/contract.md").read_text(encoding="utf-8")
+                          .split())
+        self.assertIn("`prepare-contract` is an internal command name: it prepares the research proposal, "
+                      "configuration proposal or configuration summary for the current step.", intake)
+
 
 class HistoryTest(unittest.TestCase):
     def test_a_report_with_the_historical_label_still_reads(self):
