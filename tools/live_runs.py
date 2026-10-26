@@ -197,7 +197,7 @@ class _Session:
         if not (self.repo / "README.md").exists():
             (self.repo / "README.md").write_text("# Reproduction checklists\n", encoding="utf-8")
 
-    def confirm(self, run_id, *extra):
+    def confirm(self, run_id, purpose, *extra):
         """The runner's own relay for the contract it just rendered (see TEST_RELAY)."""
         if self.run_dir is None:
             # One run directory for the session, as the skills allocate it; the details files land there.
@@ -206,7 +206,8 @@ class _Session:
                 return None
             self.run_dir = allocated["path"]
         code, contract = self.run(f"prepare-contract {run_id}", "prepare-contract", "--decision", self.decision,
-                                  "--evidence", self.evidence, "--run-dir", self.run_dir, *extra)
+                                  "--evidence", self.evidence, "--run-dir", self.run_dir,
+                                  "--purpose", purpose, *extra)
         if code:
             return None
         return _write_json(self.scratch / f"relay-{run_id}.json", {
@@ -220,7 +221,7 @@ class _Session:
         if code:
             return "stopped: a worker is unavailable or the login needs the cost question"
         self.evidence = _write_json(scratch / "workers.json", workers)
-        intake = self.confirm(f"{run_prefix}-intake")
+        intake = self.confirm(f"{run_prefix}-intake", "research")
         if intake is None:
             return "stopped: the contract could not be prepared"
         for pass_name, part_id in (("survey", None), ("deep", "A")):
@@ -256,7 +257,7 @@ class _Session:
         return None
 
     def build(self, run_id: str, *extra) -> int:
-        relay = self.confirm(run_id, "--revision", self.revision)
+        relay = self.confirm(run_id, "configuration", "--revision", self.revision)
         description = self.scratch / "description.txt"
         description.write_text(self.inputs["description"].strip(), encoding="utf-8")
         procedure = self.scratch / "procedure.md"
@@ -272,7 +273,7 @@ class _Session:
         ``refresh`` gives arguments asked again before each attempt, such as the
         scope choice, which every earlier run's report changes.
         """
-        relay = self.confirm(run_id, "--revision", self.revision)
+        relay = self.confirm(run_id, "verification", "--revision", self.revision)
         verify = ["verify", "--decision", self.decision, "--root", self.repo, "--revision", self.revision,
                   "--evidence", self.evidence, "--relay", relay, "--harness", self.harness, "--cases",
                   self.cases_path, "--slug", self.inputs["slug"], "--write", *extra]

@@ -119,7 +119,7 @@ class ResearchPassTest(unittest.TestCase):
             change(changed)
             for pass_name, part_id in (("deep", "A"), ("survey", None)):
                 with self.subTest(field=field, pass_name=pass_name), \
-                        self.assertRaisesRegex(ValueError, "changed after the contract was confirmed"):
+                        self.assertRaisesRegex(ValueError, "changed after the confirmation"):
                     research_pass(changed, pass_name, part_id, "claude-code", contract=contract,
                                   confirmation=confirmation, worker_evidence=planned, run_id="intake-1",
                                   runner=runner, environ=PARENT, fetch=fetch_page)

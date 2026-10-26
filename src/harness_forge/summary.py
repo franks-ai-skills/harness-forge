@@ -1,7 +1,10 @@
 # SPDX-License-Identifier: AGPL-3.0-only
 # Licensed under AGPLv3 together with the Harness Forge Generated Output
 # Exception; see LICENSE-OUTPUT-EXCEPTION.
-"""The contract as the user confirms it: a short Markdown summary, and a details file with everything it binds.
+"""What the user confirms: a short Markdown summary, and a details file with everything it binds.
+
+The title says what the confirmation is for: a research proposal, a configuration proposal before building, or a
+configuration summary before verification. It is presentation only.
 
 The summary is shown in the conversation as Markdown, so every record text in it is escaped to literal text.
 The details file holds the full readable contract and the exact bound content inside code fences, where nothing
@@ -24,7 +27,9 @@ from harness_forge.models import Contract
 
 _ESCAPED = frozenset("\\`*_[]<>#|~!&")
 _BLOCK_START = re.compile(r"([-+=])|(\d+)([.)])")
-DETAILS_PREFIX = "contract-details-"
+# By the purpose of the confirmation, which the guidance names.
+TITLES = {"research": "Research proposal", "configuration": "Configuration proposal",
+          "verification": "Configuration summary"}
 
 
 def text(value, indent: str = "") -> str:
@@ -156,7 +161,7 @@ def _override_change(checked: dict) -> list[str]:
     return lines
 
 
-def render_summary(contract: Contract, record: dict, *, checked_overrides: list[dict], refused: list[dict],
+def render_summary(contract: Contract, record: dict, *, title: str, checked_overrides: list[dict], refused: list[dict],
                    research: list[dict], drift: list[dict], conditions: dict[str, str], details_path: str,
                    drift_states: list[str]) -> str:
     """The summary the agent shows unchanged before the confirmation question.
@@ -166,7 +171,7 @@ def render_summary(contract: Contract, record: dict, *, checked_overrides: list[
     """
     conditions = {**conditions, **FORGE_CONDITIONS}
     hosting = record["hosting"]
-    lines = [f"## Contract summary: {heading(record['idea'])}", "", "**Goals**", ""]
+    lines = [f"## {title}: {heading(record['idea'])}", "", "**Goals**", ""]
     lines += [f"- {text(goal, '  ')}" for goal in record["goals"]]
     lines += ["", f"**Scope:** {_targets(record['targets'])} · reach {text(record['reach'])} · hosting "
               f"{text(hosting['platform'])}, {text(hosting['plan'])} plan, {text(hosting['visibility'])}", ""]
@@ -204,9 +209,9 @@ def render_summary(contract: Contract, record: dict, *, checked_overrides: list[
     return "\n".join(lines)
 
 
-def render_details(contract: Contract, record: dict, *, worker_evidence: list[dict] | tuple) -> str:
+def render_details(contract: Contract, record: dict, *, title: str, worker_evidence: list[dict] | tuple) -> str:
     """Everything the confirmation digest binds, readable and exact, as literal blocks."""
-    lines = [f"# Contract details: {heading(record['idea'])}", "",
+    lines = [f"# {title} details: {heading(record['idea'])}", "",
              f"- The confirmation digest {code(contract.digest)} is what a confirmation names; Forge checks it.",
              "- This file's own sha256 is returned by prepare-contract and is not inside it.",
              "- Neither is a decision for you.", "",
@@ -227,7 +232,7 @@ def render_details(contract: Contract, record: dict, *, worker_evidence: list[di
     return "\n".join(lines)
 
 
-def details_name(details: str) -> tuple[str, str]:
+def details_name(details: str, title: str) -> tuple[str, str]:
     """The details file's name and its sha256: the name carries the checksum, so a name holds one content."""
     digest = hashlib.sha256(details.encode("utf-8")).hexdigest()
-    return f"{DETAILS_PREFIX}{digest[:16]}.md", digest
+    return f"{title.lower().replace(' ', '-')}-{digest[:16]}.md", digest

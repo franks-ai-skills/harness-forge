@@ -239,5 +239,5 @@ def effective_rules(pinned: list[Rule], overrides: list[dict], confirmation: Con
     """
     if overrides and confirmation is None:
         ids = ", ".join(sorted(override["rule_id"] for override in overrides))
-        raise OverridesPending(f"rule overrides ({ids}) apply only after a contract confirmation in this session")
+        raise OverridesPending(f"rule overrides ({ids}) apply only after a confirmation in this session")
     return apply_overrides(pinned, overrides)

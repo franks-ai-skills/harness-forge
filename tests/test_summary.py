@@ -75,7 +75,7 @@ def summary(record, revision, overrides=(), checked=(), drift=DRIFT, states=("ke
             refused=None, research=None):
     contract = render_contract(record, revision, list(overrides), worker_evidence=EVIDENCE, drift=list(drift))
     shown = render_summary(
-        contract, record.record, checked_overrides=list(checked),
+        contract, record.record, title="Research proposal", checked_overrides=list(checked),
         refused=refused if refused is not None else [{"part_id": "C", "problem": "its selection is stale"}],
         research=research if research is not None else [
             {"part_id": "A", "accepted": "stale", "deep_research": "none",
@@ -103,7 +103,7 @@ class SummaryContentTest(unittest.TestCase):
         self.plain = " ".join(self.summary.replace("\\", "").split())
 
     def test_it_shows_the_idea_goals_scope_and_each_part(self):
-        for expected in ("## Contract summary: Turn approved bug reports into reproduction checklists",
+        for expected in ("## Research proposal: Turn approved bug reports into reproduction checklists",
                          "- Reproduction checklists from approved bug reports",
                          "**Scope:** Claude Code and Codex · reach repository · hosting github, free plan, public",
                          "### Part A: part-a", "- **Goal:** Write a reproduction checklist when asked",
@@ -209,7 +209,7 @@ class SummaryContainmentTest(unittest.TestCase):
         drift = [{**DRIFT[0], "finding": {**DRIFT[0]["finding"], "quote": hostile, "context": hostile}}]
         record, revision = scenario()
         contract = render_contract(record, revision, [], worker_evidence=EVIDENCE, drift=drift)
-        details = render_details(contract, record.record, worker_evidence=EVIDENCE)
+        details = render_details(contract, record.record, title="Research proposal", worker_evidence=EVIDENCE)
         parsed = tokens(details)
         fences = [token for token in parsed if token.type == "fence"]
         self.assertEqual([token.info for token in fences], ["text", "json", "json"])
@@ -244,7 +244,7 @@ class DetailsFileTest(unittest.TestCase):
 
     def prepare(self, run, *extra):
         return self.cli("prepare-contract", "--decision", self.decision, "--evidence", self.evidence,
-                        "--run-dir", run, *extra)
+                        "--run-dir", run, "--purpose", "research", *extra)
 
     def test_the_file_matches_its_checksum_and_the_digest(self):
         run = self.run_dir()
@@ -256,7 +256,7 @@ class DetailsFileTest(unittest.TestCase):
         data = path.read_bytes()
         import hashlib
         self.assertEqual(hashlib.sha256(data).hexdigest(), output["details"]["sha256"])
-        self.assertTrue(path.name.startswith("contract-details-" + output["details"]["sha256"][:16]))
+        self.assertTrue(path.name.startswith("research-proposal-" + output["details"]["sha256"][:16]))
         parsed = tokens(data.decode("utf-8"))
         blocks = [token.content for token in parsed if token.type == "fence" and token.info == "json"]
         self.assertEqual(canonical_digest(json.loads(blocks[0])), output["digest"])

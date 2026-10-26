@@ -68,14 +68,17 @@ files there without following symbolic links and never overwrites one.
 They stay until you delete them, and none of them confirms anything in
 a later session.
 
-Before each confirmation, `prepare-contract` returns a short Markdown
-summary that the agent shows in the conversation: the goals, each part's
-goal, outcome and mechanism, every accepted requirement, override
-changes and warnings, goal conflicts, open research and drift, and a
-link to `contract-details-<checksum>.md` in the run directory. That
-file holds everything the confirmation binds: the full readable
-contract, the exact bound content, each override and the worker
-configurations. Confirming covers the summary and the linked details.
+Before each confirmation, the agent shows a short Markdown summary,
+named by what it is for: a research proposal before research, a
+configuration proposal before building, a configuration summary before
+verification. It holds the goals, each part's goal, outcome and
+mechanism, every accepted requirement, override changes and warnings,
+goal conflicts, open research and drift, and a link to a details file
+in the run directory, such as `research-proposal-<checksum>.md`. That
+file holds everything the confirmation binds: the full readable text,
+the exact bound content, each override and the worker configurations.
+Confirming covers the summary and the linked details.
+(`prepare-contract` is the internal command that prepares both.)
 
 ### Dependencies
 
@@ -167,7 +170,7 @@ Fresh sessions and instructions reduce intended context and actions; they
 do not prove that the harness cannot discover more. Accepting findings
 afterward cannot undo an earlier read, write or transmission.
 
-Each run's contract and `.harness/reports/<slug>.md` disclose the
+Each run's configuration summary and `.harness/reports/<slug>.md` disclose the
 configured controls, observed behavior and unknowns.
 Generated artifacts do not need a generic Forge-isolation README section;
 their own runtime limitations and required outside controls still belong

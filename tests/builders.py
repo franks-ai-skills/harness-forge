@@ -66,11 +66,14 @@ def revision(*requirements: tuple[str, str, str]) -> AcceptedRevision:
 
 
 def with_run_dir(arguments) -> list[str]:
-    """prepare-contract's arguments with a run directory of the decision's repository, as run-dir allocates one."""
+    """prepare-contract's arguments with a run directory of the decision's repository, as run-dir allocates one,
+    and a purpose: research unless the test names one."""
     arguments = [str(argument) for argument in arguments]
     if arguments[:1] == ["prepare-contract"] and "--run-dir" not in arguments and "--decision" in arguments:
         from pathlib import Path
         run = Path(arguments[arguments.index("--decision") + 1]).resolve().parents[2] / ".harness-forge/runs/test-run"
         run.mkdir(parents=True, exist_ok=True)
         arguments += ["--run-dir", str(run)]
+    if arguments[:1] == ["prepare-contract"] and "--purpose" not in arguments:
+        arguments += ["--purpose", "research"]
     return arguments

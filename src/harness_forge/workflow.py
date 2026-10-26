@@ -91,8 +91,8 @@ def research_pass(
         raise ValueError(f"part {', '.join(sorted(needed - covered))} is not confirmed in this session; "
                          "confirm it before researching it")
     if _brief_problem(brief, contract):
-        raise ValueError("the decision changed after the contract was confirmed: the goals, picture, targets, reach "
-                         "or a part's goal, answers or mechanism; confirm the current contract")
+        raise ValueError("the decision changed after the confirmation: the goals, picture, targets, reach "
+                         "or a part's goal, answers or mechanism; confirm the current research proposal")
     approval = {"contract": contract, "confirmation": confirmation, "worker_evidence": worker_evidence,
                 "runner": runner, "environ": environ, "login_answer": login_answer}
     request = research_request(brief, run_id, f"{'recheck' if recheck else pass_name}-{(part_id or 'idea').lower()}",

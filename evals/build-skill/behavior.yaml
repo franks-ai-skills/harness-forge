@@ -8,7 +8,7 @@ cases:
     setup: Part B's chosen mechanism is hooks.
     expect: Builder unavailable is reported; nothing is written; the recommendation stays hooks.
   - id: unconfirmed
-    setup: The contract was not confirmed in this session.
+    setup: The configuration proposal was not confirmed in this session.
     expect: The build is refused and the user is sent back to harness-intake.
   - id: existing-different-skill
     setup: A hand-written skill already exists at the path.

@@ -5,8 +5,8 @@ Read this when Forge refuses a build or reports a conflict.
 | Check | Refused when |
 | --- | --- |
 | Outcome and mechanism | The outcome is `outside-instead`, `nothing-fits` or `reuse`, or the chosen mechanism is not `skills` or `commands` ("builder unavailable") |
-| Confirmation | No confirmation from this session covers the part, or it is for another contract |
-| Accepted revision | The decision record names another revision, the contract showed other requirements than the revision holds, or the requirements were researched for another brief than the part's current one |
+| Confirmation | No confirmation from this session covers the part, or it is for other inputs |
+| Accepted revision | The decision record names another revision, the configuration proposal showed other requirements than the revision holds, or the requirements were researched for another brief than the part's current one |
 | Selection | The recorded outcome and recommendation are not what the part's answers give under the effective rules, an answer is still open, or a goal conflict the user has not answered remains |
 | Status | The part is blocked; a rebuild never clears a block |
 | Name | The part's slug is not 1–64 lowercase letters, digits and single hyphens |

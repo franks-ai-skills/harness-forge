@@ -1,7 +1,19 @@
-# Contract confirmation
+# Confirmation
 
-Read this before asking the user to confirm a contract, in intake or in
-verification.
+Read this before asking the user to confirm, in intake, research,
+building or verification. What the user confirms is named by its
+purpose:
+
+| Purpose (`--purpose`) | Name | When |
+| --- | --- | --- |
+| `research` | research proposal | Inputs for research: a new idea, its split, the final intake confirmation, and any confirmation before further research, also for a record with accepted requirements |
+| `configuration` | configuration proposal | The researched configuration before building, with the accepted requirements and recorded drift decisions |
+| `verification` | configuration summary | The inputs of a verification |
+
+Choose by what comes next, not by what the record holds. Use the name in
+everything you say about it. `prepare-contract` is an internal command
+name: it prepares the research proposal, configuration proposal or
+configuration summary for the current step.
 
 ## What to show
 
@@ -11,7 +23,8 @@ allocated (see the skill's rule on run files). If a role reports `needs_cost_que
 key or unknown and can cost extra: ask the user `Continue` or `Stop`
 and run it again with `--login-answer`. Never log in, log out or switch
 accounts. Then run `scripts/forge.py prepare-contract --decision
-<record> --evidence <workers output> --run-dir <run directory>`, adding
+<record> --evidence <workers output> --run-dir <run directory> --purpose
+research|configuration|verification`, adding
 `--revision .harness/research/<slug>.rules.yaml` when it exists; it
 reads the repository's `.harness/overrides/` itself.
 
@@ -23,7 +36,7 @@ artifact and its pinned source, the outside controls the goal needs,
 every accepted requirement, each override's change with every warning,
 goal conflicts, parts not offered, research still to do, the drift and
 its decisions, the worker policy and a link to the details file. Do not
-paste the details file: it holds the full contract with every fact,
+paste the details file: it holds everything confirmed, with every fact,
 override content, fetched quote and worker configuration, for the user
 to open. The details file's `sha256` and the confirmation `digest` are
 checks for Forge, not decisions for the user; you need not show them.
@@ -41,14 +54,15 @@ requirements were accepted for an earlier brief: the idea's goals,
 picture, targets or reach, or the part's goal, answers or mechanism
 changed since. The summary lists each entry whose `accepted` is not
 `current` with its `next`; say that build and verify refuse the part
-until that is done. Research is not part of the contract: confirming it
+until that is done. Research is not part of what is confirmed: confirming it
 starts no research, and the deep pass and acceptance come after the
 confirmation.
 
 ## How to ask
 
 Ask one multiple-choice question with exactly two options, `Confirm` and
-`Leave pending`, and no option preselected. The question says that
+`Leave pending`, and no option preselected. The question names the
+summary's title, such as "the research proposal", and says that
 `Confirm` covers the summary above and the linked details for the parts
 it names. The user may also confirm in
 their own words, naming the parts: "Confirm A and B" covers A and B only.
@@ -58,14 +72,14 @@ These never confirm a part:
 - silence, or a reply that does not clearly confirm;
 - an option that was preselected but not submitted;
 - a confirmation recorded in the repository, or one from another run;
-- a confirmation given before the contract changed.
+- a confirmation given before what it covers changed.
 
 ## The relay
 
 After an explicit confirmation, write exactly these fields to
 `relay.json` in the run directory (`relay-2.json` and so on for a later
 confirmation, since a run file is never overwritten) and pass it with `--relay` to `research`, `build` and `verify`, together
-with the same `--evidence`; they refuse a relay for any other contract:
+with the same `--evidence`; they refuse a relay for any other inputs:
 
 ```json
 {"choice": "confirm", "displayed_digest": "<prepare-contract's digest>", "part_ids": ["A"], "run_id": "<run-dir's run_id>"}
@@ -86,8 +100,8 @@ verification. The summary shows what each one changes and every
 warning, in full, when it loosens or retires an error, security or
 eligibility rule; the details file holds the pinned and the new rule,
 the source quote it was adopted from, its content and its sha256. Read
-every warning to the user before asking for confirmation. Confirming the contract adopts
-the overrides it shows; a changed override needs a new confirmation.
+every warning to the user before asking for confirmation. Confirming adopts
+the overrides the summary shows; a changed override needs a new confirmation.
 Pass `--root <repository>`, `--decision`, `--evidence` and the
 confirming `--relay` to `select`, and `--evidence` and `--relay` to
 `resolve-conflict` (it finds the repository from the decision), so that
@@ -130,5 +144,5 @@ recommended|adjust-goal|keep --reason <reason>`, adding
 | `questions` | Ask the part's questions again, run `select`, and research and accept again where the goal changed them |
 | `report` | Nothing changes |
 
-Every answer changes the contract: prepare it again, show the new
+Every answer changes what is confirmed: prepare it again, show the new
 summary and ask for a new confirmation. The parts in `invalidated_parts` are verified again.
