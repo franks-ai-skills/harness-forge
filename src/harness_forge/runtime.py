@@ -201,8 +201,8 @@ def claude_skill_origins(runner: Runner, environ: Mapping[str, str], *, timeout:
 
 
 # A plugin skill loads through plugin installation, which the throwaway workspace does not perform.
-PLUGIN_RUNTIME = ("unavailable: runtime cases for a skill shipped in a plugin are not supported yet; its static "
-                  "checks and review still apply")
+PLUGIN_RUNTIME = ("unavailable: the runtime test workspace does not install plugins, so it cannot run cases for a "
+                  "skill shipped in a plugin; its static checks and review still apply")
 
 UNKNOWN_ORIGINS = ("unavailable: an empty Claude Code launch failed, timed out or listed no skills, so Harness Forge cannot "
                    "tell bundled skills from the user's")

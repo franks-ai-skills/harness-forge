@@ -1510,8 +1510,9 @@ def _plugin_behavior_problem(decision: Decision, cases: list[dict]) -> str | Non
     for case in cases:
         part = parts.get(case["part_id"])
         if case.get("kind") == BEHAVIOR and part is not None and skill_home(part) == "plugin":
-            return (f"behavior case {case['id']}: part {case['part_id']} is a skill shipped in a plugin, whose "
-                    "runtime cases cannot run yet; leave its behavior cases out")
+            return (f"behavior case {case['id']}: part {case['part_id']} is a skill shipped in a plugin, and the "
+                    "runtime test workspace does not install plugins, so its runtime cases cannot run; leave its "
+                    "behavior cases out")
     return None
 
 
