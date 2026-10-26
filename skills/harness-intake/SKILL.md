@@ -244,12 +244,14 @@ time, read [references/inputs.md](references/inputs.md) for their shapes.
      cover only part of the repository; that others who copy the skill
      need clear terms, and neither a public repository nor Harness
      Forge's generated-output exception establishes rights in every
-     input or third-party component; and its `guidance` link. Recommend
-     clarifying the terms before public reuse, then ask one question:
-     point to where the terms are, or continue without choosing a
-     license. Record the answer as `licensing` with the reported
-     `basis`: `answer: location` with the user's text as `location`
-     (their information, not verified terms), or `answer: continue`.
+     input or third-party component; and its `guidance` link. Then ask
+     one question with two options in this order, neither marked
+     recommended: point to where the terms are, or continue without
+     choosing a license. Record the answer as `licensing` with the
+     reported `basis`: `answer: location` with the user's text as
+     `location` (their information, not verified terms), or `answer:
+     continue`. Only after a `continue` answer, when you acknowledge it,
+     recommend clarifying the terms before public reuse.
    - With `identified`, say which files or README parts it found, and
      ask nothing.
 
