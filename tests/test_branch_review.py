@@ -18,7 +18,7 @@ from harness_forge.models import AcceptedRevision
 from harness_forge.research import accept_requirements, load_revision, revision_digest, write_revision
 from harness_forge import verify
 from harness_forge.verify import bound_inputs, prepare_run
-from tests.builders import EVIDENCE, decision, part
+from tests.builders import EVIDENCE, decision, part, with_run_dir
 from tests.test_build_skill import NAME, REVISION, idea_rule, reference_decision
 from tests.test_checks import BOTH, skill, snapshot_rule
 from tests.test_verify import GATE, RULES, Scenario, skill_decision
@@ -36,7 +36,7 @@ def forge_cli():
 def run_cli(*arguments):
     stdout, stderr = io.StringIO(), io.StringIO()
     with contextlib.redirect_stdout(stdout), contextlib.redirect_stderr(stderr):
-        code = forge_cli().main(list(arguments))
+        code = forge_cli().main(with_run_dir(arguments))
     return code, stdout.getvalue(), stderr.getvalue()
 
 

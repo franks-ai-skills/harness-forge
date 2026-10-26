@@ -31,6 +31,10 @@ class RunFilesError(ValueError):
     pass
 
 
+class RunFileExists(RunFilesError):
+    pass
+
+
 def new_run_id() -> str:
     """The UTC time to the second and eight random hex digits: sorts by time and does not collide by chance."""
     return datetime.datetime.now(datetime.timezone.utc).strftime("%Y%m%dT%H%M%SZ") + "-" + secrets.token_hex(4)
@@ -98,11 +102,10 @@ def _open_file(path: str | os.PathLike, flags: int) -> tuple[int, int, str] | No
     try:
         descriptor = os.open(names[-1], flags | os.O_NOFOLLOW | os.O_NONBLOCK, 0o644, dir_fd=directory)
     except OSError as error:
-        if error.errno == errno.EEXIST:
-            reason = "already exists; a run file is never overwritten, use a new name"
-        else:
-            reason = "a symbolic link" if error.errno == errno.ELOOP else error.strerror or str(error)
         os.close(directory)
+        if error.errno == errno.EEXIST:
+            raise RunFileExists(f"{path}: already exists; a run file is never overwritten, use a new name") from error
+        reason = "a symbolic link" if error.errno == errno.ELOOP else error.strerror or str(error)
         raise RunFilesError(f"{path}: {reason}") from error
     try:
         regular = stat.S_ISREG(os.fstat(descriptor).st_mode)
@@ -154,6 +157,31 @@ def create(path: str | os.PathLike, text: str) -> bool:
     os.close(descriptor)
     os.close(directory)
     return True
+
+
+def run_directory(path: str | os.PathLike, root: str | os.PathLike) -> Path:
+    """An allocated run directory of the repository at root, <root>/.harness-forge/runs/<run id>/, reached
+    without links."""
+    found = located(Path(path) / "file")
+    if found is None or len(found[1]) != 4 or found[1][1] != "runs":
+        raise RunFilesError(f"{path}: not a run directory .harness-forge/runs/<run id>/; allocate one with run-dir")
+    try:
+        same = os.path.samefile(found[0], root)
+    except OSError as error:
+        raise RunFilesError(f"{path}: {error.strerror or error}") from error
+    if not same:
+        raise RunFilesError(f"{path}: a run directory of another repository than {root}")
+    os.close(_descend(_open_root(found[0]), found[1][:-1], found[0]))
+    return found[0].joinpath(*found[1][:-1])
+
+
+def create_once(path: str | os.PathLike, text: str) -> None:
+    """Write a new file below .harness-forge, or accept one that already holds exactly this text."""
+    try:
+        create(path, text)
+    except RunFileExists:
+        if read_bytes(path) != text.encode("utf-8"):
+            raise RunFilesError(f"{path}: already exists with other content; it is left unchanged") from None
 
 
 def _gitignore(directory: int, shown: Path) -> str:

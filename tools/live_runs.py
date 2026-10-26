@@ -171,7 +171,7 @@ class _Session:
         self.login_answer = login_answer
         self.summary = {"case": case, "harness": harness, "confirmation": TEST_RELAY, "stages": [],
                         "status": "stopped", "clean": None, "repository": str(self.repo), "login_answer": login_answer}
-        self.decision = self.evidence = self.revision = None
+        self.decision = self.evidence = self.revision = self.run_dir = None
 
     def stage(self, name, result):
         code, payload, stderr = result
@@ -199,8 +199,14 @@ class _Session:
 
     def confirm(self, run_id, *extra):
         """The runner's own relay for the contract it just rendered (see TEST_RELAY)."""
+        if self.run_dir is None:
+            # One run directory for the session, as the skills allocate it; the details files land there.
+            code, allocated = self.run("run-dir", "run-dir", "--root", self.repo)
+            if code:
+                return None
+            self.run_dir = allocated["path"]
         code, contract = self.run(f"prepare-contract {run_id}", "prepare-contract", "--decision", self.decision,
-                                  "--evidence", self.evidence, *extra)
+                                  "--evidence", self.evidence, "--run-dir", self.run_dir, *extra)
         if code:
             return None
         return _write_json(self.scratch / f"relay-{run_id}.json", {

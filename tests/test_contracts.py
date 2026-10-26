@@ -14,7 +14,7 @@ from harness_forge.documents import canonical_digest, validate
 from harness_forge.verify import prepare_run
 from harness_forge.models import Confirmation
 from harness_forge.research import FETCHED_LABEL, contained
-from tests.builders import EVIDENCE, decision, part, revision
+from tests.builders import EVIDENCE, decision, part, revision, with_run_dir
 
 NAMED = [{"name": "repro-steps", "source": "https://example.com/repro-steps", "part_id": "A"}]
 
@@ -346,11 +346,11 @@ class PrepareContractCliTest(unittest.TestCase):
             path = write_decision(Path(directory), record, slug="repro", date="2026-10-09")
             stdout = io.StringIO()
             with contextlib.redirect_stdout(stdout), contextlib.redirect_stderr(io.StringIO()):
-                code = module.main(["prepare-contract", "--decision", str(path)])
+                code = module.main(with_run_dir(["prepare-contract", "--decision", str(path)]))
         output = json.loads(stdout.getvalue())
         self.assertEqual(code, 0)
         self.assertEqual(output["digest"], render_contract(record, None, []).digest)
-        self.assertIn("Write a reproduction checklist when asked", output["text"])
+        self.assertIn("Write a reproduction checklist when asked", output["summary"])
         self.assertEqual(output["confirmed_part_ids"], [])
         self.assertEqual(output["relay_fields"], ["choice", "displayed_digest", "part_ids", "run_id"])
 

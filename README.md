@@ -68,6 +68,15 @@ files there without following symbolic links and never overwrites one.
 They stay until you delete them, and none of them confirms anything in
 a later session.
 
+Before each confirmation, `prepare-contract` returns a short Markdown
+summary that the agent shows in the conversation: the goals, each part's
+goal, outcome and mechanism, every accepted requirement, override
+changes and warnings, goal conflicts, open research and drift, and a
+link to `contract-details-<checksum>.md` in the run directory. That
+file holds everything the confirmation binds: the full readable
+contract, the exact bound content, each override and the worker
+configurations. Confirming covers the summary and the linked details.
+
 ### Dependencies
 
 Forge needs Python 3.11 or newer and nothing else: its runtime

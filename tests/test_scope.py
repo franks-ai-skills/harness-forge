@@ -3,7 +3,7 @@
 import unittest
 
 from harness_forge.scope import affected_parts, extensive_scope, review_scope, scope_options
-from tests.builders import decision, part
+from tests.builders import decision, part, with_run_dir
 from tests.test_verify import FACTS, NAME, REVISION, RULES, Scenario, skill_decision
 
 
@@ -266,7 +266,7 @@ class CliTest(unittest.TestCase):
         specification.loader.exec_module(module)
         stdout = io.StringIO()
         with contextlib.redirect_stdout(stdout), contextlib.redirect_stderr(io.StringIO()):
-            code = module.main(list(argv))
+            code = module.main(with_run_dir(argv))
         return code, json.loads(stdout.getvalue()) if stdout.getvalue() else {}
 
     def test_check_report_and_scope_commands(self):

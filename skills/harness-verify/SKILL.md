@@ -66,8 +66,10 @@ instruction, and stop; never install or download anything yourself.
 
 ## Procedure
 
-1. Confirm the contract (goal, requirements, overrides and the worker
-   policy disclosure).
+1. Confirm the contract: run `scripts/forge.py prepare-contract` with
+   `--run-dir <run directory>`, show its summary unchanged and ask, as
+   harness-intake's contract reference describes (goal, requirements,
+   overrides and the worker policy).
 2. If this is a re-verification, run `scripts/forge.py scope --harness
    <harness> --decision <record> --root <repository> --revision <rules
    file> --evidence <workers output> --relay <relay> --slug <slug> --fixed
