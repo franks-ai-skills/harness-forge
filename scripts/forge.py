@@ -67,6 +67,7 @@ from harness_forge.research import (  # noqa: E402
     write_revision,
 )
 from harness_forge.licensing import check as licensing_check  # noqa: E402
+from harness_forge.licensing import LICENSE_ID, LICENSE_SHA256, LicenseNotAdded, add_license  # noqa: E402
 from harness_forge import runfiles  # noqa: E402
 from harness_forge.summary import TITLES, details_name, render_details, render_summary  # noqa: E402
 from harness_forge.provenance import forge_provenance  # noqa: E402
@@ -1218,13 +1219,45 @@ def _compare_requirements(arguments: argparse.Namespace) -> int:
 
 
 def _licensing(arguments: argparse.Namespace) -> int:
-    """For a publicly shared result: whether conventional locations identify licensing information."""
+    """Whether conventional locations identify licensing information, and whether Forge offers its own license."""
     root = Path(arguments.root).resolve()
     try:
         decision = load_decision(Path(arguments.decision))
     except ValueError as error:
         raise _InvalidInput(str(error)) from error
     emit({"command": "licensing", **licensing_check(decision.record, root)})
+    return 0
+
+
+def _license(arguments: argparse.Namespace) -> int:
+    """Add Forge's own license after the user's explicit "Yes, please" in this session (#91), and record it."""
+    root = Path(arguments.root).resolve()
+    path = Path(arguments.decision)
+    try:
+        decision = load_decision(path)
+        if path.resolve().parent != root / ".harness" / "decisions":
+            raise ValueError(f"{path} is not a decision record of {root}")
+        # Checked before anything is written: the record is rewritten in place, never through a link.
+        safe_path(root, path.resolve().relative_to(root).as_posix())
+        probe = {**decision.record, "licensing": {"answer": "added", "license": LICENSE_ID, "sha256": LICENSE_SHA256,
+                                                  "basis": "0" * 64}}
+        validate(probe, "decision")
+    except (OSError, ValueError) as error:
+        raise _InvalidInput(str(error)) from error
+    date, slug = _decision_name(path)
+    try:
+        added = add_license(decision.record, root)
+    except LicenseNotAdded as error:
+        raise _InvalidInput(str(error)) from error
+    answer = {"answer": "added", "license": added["license"], "sha256": added["sha256"], "basis": added["basis"]}
+    try:
+        write_decision(root, Decision(record={**decision.record, "licensing": answer}, body=decision.body),
+                       slug=slug, date=date)
+    except (OSError, ValueError) as error:
+        raise _InvalidInput(f"the answer could not be recorded: {error}; already written: "
+                            f"{', '.join(added['written'])}") from error
+    emit({"command": "license", "ok": True, "written": added["written"], "license": added["license"],
+          "sha256": added["sha256"], "status": added["status"], "recorded": answer})
     return 0
 
 
@@ -1748,6 +1781,13 @@ def build_parser() -> argparse.ArgumentParser:
     prepare.add_argument("--run-dir", required=True,
                          help="this run's directory from run-dir; the details file is written there")
     prepare.set_defaults(handler=_prepare_contract)
+    license_command = commands.add_parser("license", help="add Forge's own license, AGPL-3.0-only, after the user's "
+                                                          "explicit answer to the offer")
+    license_command.add_argument("--decision", required=True)
+    license_command.add_argument("--root", required=True, help="target repository root")
+    license_command.add_argument("--add", required=True, choices=("agpl-3.0-only",),
+                                 help="the license to add; Forge offers only its own")
+    license_command.set_defaults(handler=_license)
     readme = commands.add_parser("readme", help="write the result README's Outside controls and where-skills-load sections")
     readme.add_argument("--decision", required=True, help=".harness/decisions/<date>-<slug>.md")
     readme.add_argument("--root", required=True, help="target repository root")
@@ -1798,8 +1838,8 @@ def build_parser() -> argparse.ArgumentParser:
     accept.add_argument("--choices", required=True, help="JSON: rule id to accept, reject or {edit: rule}")
     accept.add_argument("--slug", required=True)
     accept.set_defaults(handler=_accept)
-    licensing = commands.add_parser("licensing", help="check a publicly shared result repository for "
-                                                       "licensing information; changes nothing")
+    licensing = commands.add_parser("licensing", help="check a result repository for licensing information and "
+                                                       "whether Forge's own license can be offered; changes nothing")
     licensing.add_argument("--decision", required=True)
     licensing.add_argument("--root", required=True, help="target repository root")
     licensing.set_defaults(handler=_licensing)
