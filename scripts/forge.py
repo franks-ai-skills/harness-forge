@@ -67,6 +67,7 @@ from harness_forge.research import (  # noqa: E402
     write_revision,
 )
 from harness_forge.licensing import check as licensing_check  # noqa: E402
+from harness_forge import runfiles  # noqa: E402
 from harness_forge.provenance import forge_provenance  # noqa: E402
 from harness_forge.behavior import BEHAVIOR, case_digest  # noqa: E402
 from harness_forge.runtime import load_cases  # noqa: E402
@@ -135,6 +136,19 @@ def _environment(arguments: argparse.Namespace) -> int:
     return 0 if not found else 2
 
 
+def _run_dir(arguments: argparse.Namespace) -> int:
+    """Allocate this run's directory for the files written for Forge that are not part of the built product."""
+    root = Path(arguments.root)
+    if not root.is_dir():
+        raise _InvalidInput(f"--root {root}: not a directory")
+    try:
+        allocated = runfiles.allocate(root)
+    except (OSError, ValueError) as error:
+        raise _InvalidInput(str(error)) from error
+    emit({"command": "run-dir", "ok": True, **allocated})
+    return 0
+
+
 def _validate_kb(arguments: argparse.Namespace) -> int:
     root = Path(arguments.kb)
     if not root.is_dir():
@@ -144,13 +158,25 @@ def _validate_kb(arguments: argparse.Namespace) -> int:
     return 0 if not errors else 1
 
 
-def _read_json(path: str) -> dict:
+def _read_text(path: str) -> str:
+    """An input file's text; one below .harness-forge is opened without following links and bounded as it is read."""
     try:
+        data = runfiles.read_bytes(path)
+        if data is not None:
+            return data.decode("utf-8")
         source = Path(path)
         if source.stat().st_size > 1024 * 1024:
             raise _InvalidInput(f"{path}: larger than 1 MiB")
-        value = parse_json(source.read_text(encoding="utf-8"))
+        return source.read_text(encoding="utf-8")
     except (OSError, ValueError) as error:
+        raise _InvalidInput(str(error)) from error
+
+
+def _read_json(path: str) -> dict:
+    text = _read_text(path)
+    try:
+        value = parse_json(text)
+    except ValueError as error:
         raise _InvalidInput(str(error)) from error
     if not isinstance(value, dict):
         raise _InvalidInput(f"{path}: expected a JSON object")
@@ -179,7 +205,15 @@ def _open_regular(path: str, flags: int) -> int:
 
 
 def _write_proposal(path: str, text: str) -> None:
-    """Write drift-issue's proposal: nothing changes before the opened file is known to be regular."""
+    """Write drift-issue's proposal: nothing changes before the opened file is known to be regular.
+
+    Below .harness-forge it is always a new file: a run file is never overwritten.
+    """
+    try:
+        if runfiles.create(path, text):
+            return
+    except (OSError, ValueError) as error:
+        raise _InvalidInput(str(error)) from error
     descriptor = _open_regular(path, os.O_WRONLY | os.O_CREAT)
     try:
         os.ftruncate(descriptor, 0)
@@ -194,19 +228,28 @@ def _write_proposal(path: str, text: str) -> None:
 
 def _read_proposal(path: str) -> dict:
     """Read publish-issue's proposal the way drift-issue wrote it, bounded while it is read."""
-    descriptor = _open_regular(path, os.O_RDONLY)
     try:
-        chunks, size = [], 0
-        while chunk := os.read(descriptor, 65536):
-            size += len(chunk)
-            if size > 1024 * 1024:
-                raise _InvalidInput(f"{path}: larger than 1 MiB")
-            chunks.append(chunk)
-        value = parse_json(b"".join(chunks).decode("utf-8"))
+        data = runfiles.read_bytes(path)
     except (OSError, ValueError) as error:
+        raise _InvalidInput(str(error)) from error
+    if data is None:
+        descriptor = _open_regular(path, os.O_RDONLY)
+        try:
+            chunks, size = [], 0
+            while chunk := os.read(descriptor, 65536):
+                size += len(chunk)
+                if size > 1024 * 1024:
+                    raise _InvalidInput(f"{path}: larger than 1 MiB")
+                chunks.append(chunk)
+            data = b"".join(chunks)
+        except OSError as error:
+            raise _InvalidInput(f"{path}: {error}") from error
+        finally:
+            os.close(descriptor)
+    try:
+        value = parse_json(data.decode("utf-8"))
+    except ValueError as error:
         raise _InvalidInput(f"{path}: {error}") from error
-    finally:
-        os.close(descriptor)
     if not isinstance(value, dict):
         raise _InvalidInput(f"{path}: expected a JSON object")
     return value
@@ -1216,8 +1259,8 @@ def _build(arguments: argparse.Namespace) -> int:
     if stale:
         raise _InvalidInput(stale)
     try:
-        description = Path(arguments.description).read_text(encoding="utf-8")
-        procedure = Path(arguments.procedure).read_text(encoding="utf-8")
+        description = _read_text(arguments.description)
+        procedure = _read_text(arguments.procedure)
         checklist = _read_json(arguments.checklist) if arguments.checklist else None
         planned = plan_skill(decision, arguments.part, revision, pinned, confirmation=approval["confirmation"],
                              worker_evidence=approval["worker_evidence"], description=description, procedure=procedure,
@@ -1600,6 +1643,9 @@ def build_parser() -> argparse.ArgumentParser:
     commands = parser.add_subparsers(dest="command", required=True, parser_class=_Parser)
     environment = commands.add_parser("environment", help="check Python and the bundled dependencies")
     environment.set_defaults(handler=_environment)
+    run_dir = commands.add_parser("run-dir", help="allocate this run's directory in <repository>/.harness-forge/runs/")
+    run_dir.add_argument("--root", required=True, help="target repository root, the directory that holds .harness/")
+    run_dir.set_defaults(handler=_run_dir)
     validate = commands.add_parser("validate-kb", help="validate a Harness KB checkout or snapshot")
     validate.add_argument("--kb", required=True, help="KB root directory")
     validate.set_defaults(handler=_validate_kb)

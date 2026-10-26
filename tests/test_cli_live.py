@@ -25,6 +25,8 @@ from tests.test_verify import skill_decision
 from tests.test_workflow import ResearchRunner, fetch_page, finding
 
 FORGE = Path(__file__).resolve().parents[1]
+# Where the agent writes Forge's inputs (#83), so every CLI test reads them through the run-file protections.
+SCRATCH = Path(".harness-forge/runs/test-run")
 KB_VERSION = json.loads((FORGE / "snapshot" / "kb-manifest.json").read_text(encoding="utf-8"))["kb_version"]
 
 
@@ -77,13 +79,13 @@ class Cli:
         return code, json.loads(stdout.getvalue()) if stdout.getvalue() else None, stderr.getvalue()
 
     def write(self, name, value):
-        path = self.root / ".scratch" / name
-        path.parent.mkdir(exist_ok=True)
+        path = self.root / SCRATCH / name
+        path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(json.dumps(value) if not isinstance(value, str) else value, encoding="utf-8")
         return path
 
     def confirm(self, decision, run_id, *extra):
-        code, contract, stderr = self("prepare-contract", "--decision", decision, "--evidence", self.root / ".scratch/workers.json",
+        code, contract, stderr = self("prepare-contract", "--decision", decision, "--evidence", self.root / SCRATCH / "workers.json",
                                       *extra)
         assert code == 0, stderr
         return self.write(f"relay-{run_id}.json", {"choice": "confirm", "displayed_digest": contract["digest"],
@@ -167,7 +169,7 @@ class LiveCommandsTest(unittest.TestCase):
         relay = arguments[arguments.index("--relay") + 1]
         code, _, stderr = cli("scope", "--harness", "codex", "--decision", self.decision, "--root", self.root,
                               "--revision", self.root / ".harness/research/repro.rules.yaml", "--slug", "repro",
-                              "--evidence", self.root / ".scratch/workers.json", "--relay", relay)
+                              "--evidence", self.root / SCRATCH / "workers.json", "--relay", relay)
         self.assertEqual(code, 2)
         self.assertIn("not one of the decision's target harnesses", stderr)
         self.assertEqual(len(runner.worker_calls), workers, "nothing launches")
@@ -346,8 +348,8 @@ class LiveCommandsTest(unittest.TestCase):
         self.assertTrue(whole.startswith(first["diff"]))
         self.assertIn("-Hand-written line 2999.", whole)
         self.assertEqual({path: path.read_bytes() for path in self.root.rglob("*") if path.is_file()
-                          and ".scratch" not in path.parts}, {path: data for path, data in snapshot.items()
-                                                              if ".scratch" not in path.parts},
+                          and ".harness-forge" not in path.parts}, {path: data for path, data in snapshot.items()
+                                                              if ".harness-forge" not in path.parts},
                          "reporting and previewing conflicts change no file and no record")
 
         code, _, stderr = build("--show-diff", "README.md")
@@ -433,7 +435,7 @@ class LiveCommandsTest(unittest.TestCase):
 
         cli, arguments = self.build_ready(Editing([finding()]))
         # A copy: the shared smoke cases in the repository stay unchanged.
-        copy = self.root / ".scratch" / "cases.yaml"
+        copy = self.root / SCRATCH / "cases.yaml"
         copy.write_text((FORGE / "evals/smoke/vertical.yaml").read_text(encoding="utf-8"), encoding="utf-8")
         arguments[arguments.index("--cases") + 1] = str(copy)
         cases_path.append(copy)
@@ -695,7 +697,7 @@ class LiveCommandsTest(unittest.TestCase):
         # The contract the user confirms shows the loosening warning: the digest binds the override, from which
         # the warning follows; prepare-contract always shows it (design: adversarial fixtures).
         code, shown, stderr = cli("prepare-contract", "--decision", self.decision, "--evidence",
-                                  self.root / ".scratch/workers.json", "--revision",
+                                  self.root / SCRATCH / "workers.json", "--revision",
                                   self.root / ".harness/research/repro.rules.yaml")
         self.assertEqual(code, 0, stderr)
         self.assertIn("Warning: it changes its parameters for the error rule skills.description.length, which may "
@@ -795,7 +797,7 @@ class LiveCommandsTest(unittest.TestCase):
         revision = self.root / ".harness/research/repro.rules.yaml"
         relay = cli.confirm(self.decision, "intake-3", "--revision", revision)
         code, output, stderr = cli("select", "--input", selection, "--root", self.root, "--decision", self.decision,
-                                   "--revision", revision, "--evidence", self.root / ".scratch/workers.json",
+                                   "--revision", revision, "--evidence", self.root / SCRATCH / "workers.json",
                                    "--relay", relay)
         self.assertEqual(code, 0, stderr)
         self.assertEqual(output["overrides"], ["selection.eligibility.own-context-skills"])
@@ -819,7 +821,7 @@ class LiveCommandsTest(unittest.TestCase):
         revision = self.root / ".harness/research/repro.rules.yaml"
         relay = cli.confirm(self.decision, "intake-3", "--revision", revision)
         code, output, stderr = cli("select", "--input", selection, "--root", self.root, "--decision", self.decision,
-                                   "--revision", revision, "--evidence", self.root / ".scratch/workers.json",
+                                   "--revision", revision, "--evidence", self.root / SCRATCH / "workers.json",
                                    "--relay", relay)
         self.assertEqual(code, 0, stderr)
         self.assertEqual((output["pending_question"], (output["question"] or {}).get("id")),
@@ -1047,7 +1049,7 @@ class LiveCommandsTest(unittest.TestCase):
                                             "category": "compatibility", "state": "open", "blocking": True,
                                             "blocking_parts": ["A"], "issue": None}])
 
-        proposal_path = self.root / ".scratch/proposal.json"
+        proposal_path = self.root / SCRATCH / "proposal.json"
         code, proposal, stderr = cli("drift-issue", "--root", self.root, "--rule", "skills.description.length",
                                      "--finding", "F1", "--run-id", "drift-1", "--out", proposal_path)
         self.assertEqual(code, 0, stderr)
@@ -1118,7 +1120,7 @@ class LiveCommandsTest(unittest.TestCase):
                               "--reason", "The vendor raised the limit.")
         self.assertEqual(code, 0, stderr)
 
-        proposal_path = self.root / ".scratch/proposal.json"
+        proposal_path = self.root / SCRATCH / "proposal.json"
         _, proposal, _ = cli("drift-issue", "--root", self.root, "--rule", "skills.description.length",
                              "--finding", "F1", "--run-id", "drift-1", "--out", proposal_path)
         relay = cli.write("approve.json", {"choice": "approve", "displayed_digest": proposal["digest"],
@@ -1150,7 +1152,7 @@ class LiveCommandsTest(unittest.TestCase):
         finally:
             Cli.confirm = original_confirm
         revision = ["--revision", self.root / ".harness/research/repro.rules.yaml"]
-        workers = self.root / ".scratch/workers.json"
+        workers = self.root / SCRATCH / "workers.json"
 
         def scope(fixed="A"):
             relay = arguments[arguments.index("--relay") + 1]
@@ -1265,7 +1267,7 @@ class LiveCommandsTest(unittest.TestCase):
                                              encoding="utf-8")
         code, output, stderr = cli("scope", "--harness", "claude-code", "--decision", self.decision, "--root", self.root, "--revision",
                                    self.root / ".harness/research/repro.rules.yaml", "--slug", "repro", "--fixed", "",
-                                   "--evidence", self.root / ".scratch/workers.json",
+                                   "--evidence", self.root / SCRATCH / "workers.json",
                                    "--relay", arguments[arguments.index("--relay") + 1])
         self.assertEqual(code, 0, stderr)
         self.assertEqual((output["changed"], output["options"][0]["parts"]), (["A"], ["A"]))
@@ -1278,7 +1280,7 @@ class LiveCommandsTest(unittest.TestCase):
         relay = arguments[arguments.index("--relay") + 1]
         code, output, stderr = cli("scope", "--harness", "claude-code", "--decision", self.decision, "--root", self.root, "--revision",
                                    self.root / ".harness/research/repro.rules.yaml", "--slug", "repro", "--fixed", "",
-                                   "--evidence", self.root / ".scratch/workers.json", "--relay", relay,
+                                   "--evidence", self.root / SCRATCH / "workers.json", "--relay", relay,
                                    "--cases", arguments[arguments.index("--cases") + 1])
         self.assertEqual(code, 0, stderr)
         review = output["options"][0]
@@ -1316,7 +1318,7 @@ class LiveCommandsTest(unittest.TestCase):
         relay = arguments[arguments.index("--relay") + 1]
         code, output, stderr = cli("scope", "--harness", "claude-code", "--decision", self.decision, "--root",
                                    self.root, "--revision", self.root / ".harness/research/repro.rules.yaml",
-                                   "--slug", "repro", "--fixed", "", "--evidence", self.root / ".scratch/workers.json",
+                                   "--slug", "repro", "--fixed", "", "--evidence", self.root / SCRATCH / "workers.json",
                                    "--relay", relay, "--cases", arguments[arguments.index("--cases") + 1])
         self.assertEqual(code, 0, stderr)
         choice = cli.write("scope-keep.json", {"choice": "review", "displayed_digest": output["options"][0]["digest"],
@@ -1397,7 +1399,7 @@ class LiveCommandsTest(unittest.TestCase):
         code, output, stderr = cli("scope", "--harness", harness, "--decision", self.decision, "--root", self.root,
                                    "--revision", self.root / ".harness/research/repro.rules.yaml", "--slug", "repro",
                                    "--fixed", fixed,
-                                   "--evidence", self.root / ".scratch/workers.json",
+                                   "--evidence", self.root / SCRATCH / "workers.json",
                                    "--relay", arguments[arguments.index("--relay") + 1],
                                    "--cases", FORGE / "evals/smoke/vertical.yaml")
         self.assertEqual(code, 0, stderr)
@@ -1435,7 +1437,7 @@ class LiveCommandsTest(unittest.TestCase):
         changed = cli.write("changed-cases.yaml", yaml.safe_dump(cases))
         code, output, stderr = cli("scope", "--harness", "claude-code", "--decision", self.decision, "--root", self.root, "--revision",
                                    self.root / ".harness/research/repro.rules.yaml", "--slug", "repro", "--fixed", "",
-                                   "--evidence", self.root / ".scratch/workers.json",
+                                   "--evidence", self.root / SCRATCH / "workers.json",
                                    "--relay", arguments[arguments.index("--relay") + 1], "--cases", changed)
         self.assertEqual(code, 0, stderr)
         self.assertEqual(output["options"][0]["parts"], ["A"], "a changed case is a changed input of its part")
@@ -1464,7 +1466,7 @@ class LiveCommandsTest(unittest.TestCase):
         relay = cli.confirm(self.decision, "intake-3", "--revision", self.root / ".harness/research/repro.rules.yaml")
         code, _, stderr = cli("resolve-conflict", "--decision", self.decision, "--part", "A", "--choice", "keep",
                               "--reason", "x", "--revision", self.root / ".harness/research/repro.rules.yaml",
-                              "--evidence", self.root / ".scratch/workers.json", "--relay", relay)
+                              "--evidence", self.root / SCRATCH / "workers.json", "--relay", relay)
         self.assertEqual(code, 2, "under a confirmation the retired rule leaves no conflict, as select shows")
         self.assertIn("no goal conflict", stderr)
 
@@ -1517,6 +1519,46 @@ class LiveCommandsTest(unittest.TestCase):
         code, output, stderr = cli("publish-issue", "--root", self.root, "--proposal", existing, "--relay", relay)
         self.assertEqual((code, output["issue"]), (0, "https://github.com/k/b/issues/3"), stderr)
 
+    def test_a_proposal_in_the_run_directory_is_a_new_file_reached_without_links(self):
+        cli, _ = self.build_ready(ResearchRunner([finding()]))
+        cli.module.ISSUES = (lambda rule_id: [], lambda proposal: "https://github.com/k/b/issues/3")
+        self.record_drift(cli)
+        code, output, stderr = cli("run-dir", "--root", self.root)
+        self.assertEqual(code, 0, stderr)
+        run = Path(output["path"])
+        outside = Path(self.enterContext(tempfile.TemporaryDirectory()))
+
+        def propose_to(path):
+            return cli("drift-issue", "--root", self.root, "--rule", "skills.description.length", "--finding", "F1",
+                       "--run-id", output["run_id"], "--out", path)
+
+        code, proposal, stderr = propose_to(run / "issue.json")
+        self.assertEqual(code, 0, stderr)
+        written = (run / "issue.json").read_bytes()
+        code, _, stderr = propose_to(run / "issue.json")
+        self.assertEqual(code, 2)
+        self.assertIn("a run file is never overwritten", stderr)
+        self.assertEqual((run / "issue.json").read_bytes(), written)
+        code, _, stderr = propose_to(run / "issue-2.json")
+        self.assertEqual(code, 0, stderr)
+
+        (run.parent / "linked").symlink_to(outside)
+        code, _, stderr = propose_to(run.parent / "linked" / "issue.json")
+        self.assertEqual(code, 2)
+        self.assertIn("linked: a symbolic link", stderr)
+        self.assertEqual(list(outside.iterdir()), [], "nothing is written through a linked directory")
+
+        relay = cli.write("issue-relay.json", {"choice": "approve", "displayed_digest": proposal["digest"],
+                                               "run_id": output["run_id"]})
+        (run / "issue-link.json").symlink_to(run / "issue.json")
+        code, _, stderr = cli("publish-issue", "--root", self.root, "--proposal", run / "issue-link.json",
+                              "--relay", relay)
+        self.assertEqual(code, 2)
+        self.assertIn("a symbolic link", stderr)
+        code, result, stderr = cli("publish-issue", "--root", self.root, "--proposal", run / "issue.json",
+                                   "--relay", relay)
+        self.assertEqual((code, result["issue"]), (0, "https://github.com/k/b/issues/3"), stderr)
+
     def test_a_missing_github_cli_is_reported(self):
         cli, _ = self.build_ready(ResearchRunner([finding()]))
         self.record_drift(cli)
@@ -1526,7 +1568,7 @@ class LiveCommandsTest(unittest.TestCase):
 
         cli.module.ISSUES = (missing, missing)
         code, _, stderr = cli("drift-issue", "--root", self.root, "--rule", "skills.description.length",
-                              "--finding", "F1", "--run-id", "drift-1", "--out", self.root / ".scratch/p.json")
+                              "--finding", "F1", "--run-id", "drift-1", "--out", self.root / SCRATCH / "p.json")
         self.assertEqual(code, 2)
         self.assertIn("searching the KB's issues failed", stderr)
 
@@ -1777,8 +1819,8 @@ class LiveCommandsTest(unittest.TestCase):
         self.assertEqual(code, 2)
         self.assertIn("accept the requirements of any part again", stderr)
         code, output, stderr = cli("accept", "--decision", self.decision, "--part", "A", "--proposed",
-                                   self.root / ".scratch/proposed-A.json", "--choices",
-                                   self.root / ".scratch/choices-A.json", "--root", self.root, "--slug", "repro")
+                                   self.root / SCRATCH / "proposed-A.json", "--choices",
+                                   self.root / SCRATCH / "choices-A.json", "--root", self.root, "--slug", "repro")
         self.assertEqual(code, 0, stderr)
         self.assertEqual(output["dropped_parts"], ["B"])
         self.assertEqual(sorted(load_revision(revision).brief_digests), ["A"])
