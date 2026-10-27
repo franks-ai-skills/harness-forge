@@ -14,6 +14,15 @@ once it supports such dependencies.
 
 ## Unreleased
 
+### Security guidance
+
+- harness-intake and harness-research show every fetched claim, quote
+  and context inside a backtick fence longer than any backtick run in
+  it, after a line labeling it untrusted (#95).
+- harness-intake and harness-verify check every path component for a
+  symbolic link before the agent writes a record under `.harness/`
+  itself, and stop at one (#96).
+
 ### Licensing
 
 - Forge inspects every result repository for licensing information, not
