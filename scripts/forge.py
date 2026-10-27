@@ -69,7 +69,7 @@ from harness_forge.research import (  # noqa: E402
 )
 from harness_forge.licensing import check as licensing_check  # noqa: E402
 from harness_forge.licensing import LICENSE_ID, LICENSE_SHA256, LicenseNotAdded, add_license  # noqa: E402
-from harness_forge import acceptance, runfiles  # noqa: E402
+from harness_forge import acceptance, runfiles, written_reports  # noqa: E402
 from harness_forge.comparison import Unavailable as ComparisonUnavailable  # noqa: E402
 from harness_forge.comparison import compare as compare_contents  # noqa: E402
 from harness_forge.comparison import load as compare_with  # noqa: E402
@@ -772,28 +772,85 @@ def _report(arguments: argparse.Namespace) -> int:
     return 0
 
 
-def _earlier(root: Path, slug: str, *, required: bool = False) -> tuple | None:
-    """The run and part results that .harness/reports/<slug>.md records, or None.
-
-    Only a Review needs them (``required``): an earlier report that cannot
-    be compared, such as one written before re-verification existed, rules
-    out a Review and leaves an Extensive review possible.
-    """
-    try:
-        path = safe_path(root, f".harness/reports/{slug}.md")
-        return earlier_run(path.read_text(encoding="utf-8")) if path.is_file() else None
-    except (OSError, ValueError) as error:
-        if required:
-            raise _InvalidInput(f"the earlier report cannot be compared: {error}; run an Extensive review") from error
-        return None
-
-
 def _fixed(arguments: argparse.Namespace, decision: Decision) -> set[str]:
     fixed = {item for item in (arguments.fixed or "").split(",") if item}
     unknown = fixed - {part["id"] for part in decision.record["parts"]}
     if unknown:
         raise _InvalidInput(f"unknown parts: {', '.join(sorted(unknown))}")
     return fixed
+
+
+def _computed_scope(arguments: argparse.Namespace, root: Path, decision: Decision, revision, approval: dict,
+                    overrides: list[dict], files, symlinks, rules, cases: list[dict]) -> dict:
+    """The parts verification judges again and the ones it keeps, with why: Forge chooses, nobody is asked (#102).
+
+    A Review keeps earlier results only from the report Forge recorded writing for this repository, unchanged;
+    anything else judges every part, and so does ``--scope extensive``. scope previews exactly this.
+    """
+    every = sorted(part["id"] for part in decision.record["parts"])
+    fixed = _fixed(arguments, decision)
+
+    def all_parts(reason: str) -> dict:
+        return {"kind": "every part", "reason": reason, "judged": [{"part_id": p, "why": reason} for p in every],
+                "kept": [], "plan": None}
+
+    if getattr(arguments, "scope", None) == "extensive":
+        return all_parts("--scope extensive asks for every part")
+    try:
+        path = safe_path(root, f".harness/reports/{arguments.slug}.md")
+    except ValueError as error:
+        return all_parts(f"the earlier report cannot be read: {error}")
+    if not path.is_file():
+        return all_parts("there is no earlier report")
+    try:
+        earlier = earlier_run(path.read_text(encoding="utf-8"))
+        written_reports.check(_environ(), root, path)
+    except written_reports.NotRecorded as error:
+        return all_parts(str(error))
+    except (OSError, ValueError) as error:
+        return all_parts(f"the earlier report cannot be compared: {error}")
+    confirmation = approval["confirmation"]
+    try:
+        owners = prepare_run(decision, files, rules, None, symlinks=symlinks, revision=revision,
+                             kb_version=_kb_version(), worker_evidence=approval["worker_evidence"])
+    except ValueError as error:
+        raise _InvalidInput(str(error)) from error
+    plan = _review_plan(earlier, decision, _current(decision, files, symlinks, rules, revision, overrides,
+                                                    approval["worker_evidence"], cases),
+                        fixed, confirmation.contract_digest, confirmation.part_ids, owners, arguments.harness, cases)
+    linked = review_scope(decision, fixed, set(plan["changed"]))
+
+    def why(part_id: str) -> str:
+        if part_id in fixed:
+            return "the builder fixed it"
+        if part_id in plan["changed"]:
+            return "its bound inputs changed"
+        if part_id in linked:
+            return "it is linked to a part judged again"
+        return "its earlier result cannot be kept"
+
+    return {"kind": "review", "reason": "the earlier report Forge wrote is unchanged",
+            "judged": [{"part_id": part_id, "why": why(part_id)} for part_id in plan["judged"]],
+            "kept": [{"part_id": part_id, "attempt_id": plan["earlier_attempt"], "run_id": plan["earlier_run"]}
+                     for part_id in sorted(plan["kept"])], "plan": plan}
+
+
+def _scope_label(computed: dict) -> str:
+    """The report's Review scope line: what Forge chose and why."""
+    judged = ", ".join(f"{item['part_id']} ({item['why']})" for item in computed["judged"]) or "no part"
+    if computed["kind"] != "review":
+        return f"Every part judged ({computed['reason']}): {', '.join(i['part_id'] for i in computed['judged'])}"
+    label = f"Review: judged {judged}"
+    if computed["kept"]:
+        first = computed["kept"][0]
+        where = (f"attempt {first['attempt_id']} of run {first['run_id']}" if first["attempt_id"]
+                 else f"run {first['run_id']}")
+        label += f"; kept {', '.join(item['part_id'] for item in computed['kept'])} from {where}"
+    return label
+
+
+def _shown_scope(computed: dict) -> dict:
+    return {key: computed[key] for key in ("kind", "reason", "judged", "kept")}
 
 
 def _review_plan(earlier, decision: Decision, current: dict, fixed: set[str], contract_digest: str,
@@ -803,8 +860,9 @@ def _review_plan(earlier, decision: Decision, current: dict, fixed: set[str], co
     It judges the fixed parts, the parts linked to them and every part whose
     bound inputs changed; any part that the confirmation does not preserve
     (an unchanged contract confirmed for it) is judged too. The others keep
-    their earlier results, which the user sees and chooses through the
-    plan's digest: a repository report proves nothing on its own.
+    their earlier results; verify keeps them only from a report Forge
+    recorded writing (written_reports), since a repository report proves
+    nothing on its own.
     ``owners`` is a run prepared from the current decision, whose file
     ownership counts beside the earlier report's. Only a settled earlier
     result is kept, with runtime evidence that holds for ``harness`` and
@@ -832,7 +890,7 @@ def _review_plan(earlier, decision: Decision, current: dict, fixed: set[str], co
                                "contract": contract_digest, "confirmed": sorted(confirmed_parts),
                                "harness": harness})
     return {"earlier_run": run.run_id, "earlier_attempt": run.attempt_id, "changed": sorted(changed),
-            "judged": sorted(judged), "kept": kept,
+            "judged": sorted(judged), "preserved": sorted(preserved), "kept": kept,
             "kept_runtime": kept_runtime, "digest": digest}
 
 
@@ -874,58 +932,17 @@ def _cases(arguments: argparse.Namespace) -> list[dict]:
 
 
 def _scope(arguments: argparse.Namespace) -> int:
-    """The two re-verification choices, each with its exact parts, kept results and judged-rule count."""
+    """A preview of the scope verify will choose, computed the same way; it asks nothing (#102)."""
     root = Path(arguments.root).resolve()
     decision, revision = _decision_and_revision(arguments, root)
     _require_target(decision, arguments.harness)
     # The scope is computed for the contract confirmed in this run, as verify then computes it.
     approval, overrides = _approval(arguments, decision, revision)
-    confirmation, evidence = approval["confirmation"], approval["worker_evidence"]
-    rules = effective_rules(_pinned_rules(), overrides, confirmation)
+    rules = effective_rules(_pinned_rules(), overrides, approval["confirmation"])
     files, symlinks = collect_target(root, decision)
-    fixed = _fixed(arguments, decision)
-    try:
-        run = prepare_run(decision, files, rules, None, symlinks=symlinks, revision=revision,
-                          kb_version=_kb_version(), worker_evidence=evidence)
-    except ValueError as error:
-        raise _InvalidInput(str(error)) from error
-    earlier = _earlier(root, arguments.slug)
-    every = sorted(part["id"] for part in decision.record["parts"])
-    counts: dict[str, int] = {}
-    for request in run.judged_requests:
-        counts[request["part_id"]] = counts.get(request["part_id"], 0) + 1
-    options = []
-    if earlier is not None:
-        plan = _review_plan(earlier, decision, _current(decision, files, symlinks, rules, revision, overrides,
-                                                        evidence, _cases(arguments)), fixed,
-                            confirmation.contract_digest, confirmation.part_ids, run, arguments.harness,
-                            _cases(arguments))
-        options.append({"label": "Review (recommended)", "parts": plan["judged"],
-                        "judged_rules": sum(counts.get(p, 0) for p in plan["judged"]), "link_checks": True,
-                        "kept": [{"part_id": part_id, "run_id": plan["earlier_run"],
-                                  "attempt_id": plan["earlier_attempt"], "status": result["status"],
-                                  "harness_result": result["harness_result"], "goal_result": result["goal_result"],
-                                  "goal_verdict": result.get("goal_verdict"),
-                                  # Every kept judgment, as the user must see what the choice keeps.
-                                  "judgments": [{key: item.get(key) for key in ("rule_id", "result", "reason",
-                                                                                 "citation")}
-                                                for item in result["rule_results"] if item["check"] == "judged"],
-                                  # Its runtime evidence, which an inventory gap qualifies.
-                                  "runtime": [{key: item[key] for key in ("case_id", "harness", "result", "reason",
-                                                                          "inventory")}
-                                              for item in plan["kept_runtime"] if item["part_id"] == part_id]}
-                                 for part_id, result in plan["kept"].items()],
-                        "digest": plan["digest"]})
-    options.append({"label": "Extensive review (rarely needed)", "parts": every,
-                    "judged_rules": sum(counts.get(p, 0) for p in every), "link_checks": True, "kept": []})
-    built = [f"`{part['slug']}`" for part in decision.record["parts"] if part["chosen"] in ("skills", "commands")]
-    question = (f"Verification checks the skills Forge built in this repository ({', '.join(built) or 'none'}) "
-                "against their confirmed configuration summary, not the current conversation's other work. Which parts should "
-                "it judge again?")
-    emit({"command": "scope", "question": question, "fixed": sorted(fixed),
-          "changed": plan["changed"] if earlier else every,
-          "earlier_run": earlier[0].run_id if earlier else None,
-          "earlier_attempt": earlier[0].attempt_id if earlier else None, "options": options})
+    computed = _computed_scope(arguments, root, decision, revision, approval, overrides, files, symlinks, rules,
+                               _cases(arguments))
+    emit({"command": "scope", "scope": _shown_scope(computed), "label": _scope_label(computed)})
     return 0
 
 
@@ -1721,44 +1738,16 @@ def _verify(arguments: argparse.Namespace) -> int:
     unresolved = [entry for entry in drift if drift_state(entry, decision.record, overrides) == "open"]
     rules = effective_rules(_pinned_rules(), overrides, approval["confirmation"])
     every = {part["id"] for part in decision.record["parts"]}
-    earlier = _earlier(root, arguments.slug, required=arguments.scope == "review")
-    fixed = _fixed(arguments, decision)
+    computed = _computed_scope(arguments, root, decision, revision, approval, overrides, files, symlinks, rules,
+                               cases)
     scope, kept, kept_runtime, earlier_attempt = None, {}, [], None
-    if arguments.scope == "review":
-        if earlier is None:
-            raise _InvalidInput("a Review compares with an earlier run, and there is no earlier report "
-                                f".harness/reports/{arguments.slug}.md; run an Extensive review")
-        if not arguments.scope_relay:
-            raise _InvalidInput("a Review keeps earlier results only on the user's choice: show scope's options and "
-                                "pass the answer with --scope-relay")
-        confirmation = approval["confirmation"]
-        try:
-            owners = prepare_run(decision, files, rules, None, symlinks=symlinks, revision=revision,
-                                 kb_version=_kb_version(), worker_evidence=approval["worker_evidence"])
-        except ValueError as error:
-            raise _InvalidInput(str(error)) from error
-        plan = _review_plan(earlier, decision, _current(decision, files, symlinks, rules, revision, overrides,
-                                                        approval["worker_evidence"], cases),
-                            fixed, confirmation.contract_digest, confirmation.part_ids, owners, arguments.harness,
-                            cases)
-        relay = _read_json(arguments.scope_relay)
-        if (set(relay) != {"choice", "displayed_digest", "run_id"} or relay["choice"] != "review"
-                or relay["displayed_digest"] != plan["digest"] or relay["run_id"] != confirmation.run_id):
-            raise _InvalidInput("this is not the Review the user chose: its parts or kept results differ from the "
-                                "options shown; run scope again and ask")
+    plan = computed["plan"]
+    if plan is not None:
         scope = set(plan["judged"])
         kept = {part_id: {"run_id": plan["earlier_run"], "attempt_id": plan["earlier_attempt"], "result": result}
                 for part_id, result in plan["kept"].items()}
         kept_runtime, earlier_attempt = plan["kept_runtime"], plan["earlier_attempt"]
-        label = f"Review (recommended): judged {', '.join(sorted(scope)) or 'no part'}"
-        if kept:
-            where = (f"attempt {earlier_attempt} of run {earlier[0].run_id}" if earlier_attempt
-                     else f"run {earlier[0].run_id}")
-            label += f"; kept from {where}: {', '.join(sorted(kept))}"
-    elif earlier is None:
-        label = f"First run: judged {', '.join(sorted(every))}"
-    else:
-        label = f"Extensive review (rarely needed): judged {', '.join(sorted(every))}"
+    label = _scope_label(computed)
     selection_rules = effective_rules(_selection_rules(), overrides, approval["confirmation"])
     failures, conflicts = selection_failures(decision, selection_rules, domains=_domains(_selection_document()))
     cited = selection_citations(decision, selection_rules)
@@ -1785,6 +1774,14 @@ def _verify(arguments: argparse.Namespace) -> int:
             written = str(write_report(root, arguments.slug, rendered))
     except (OSError, ValueError) as error:
         raise _InvalidInput(f"the report could not be written: {error}") from error
+    # Recorded only once the report is written, so that a later Review may keep its results (#102).
+    recorded = None
+    if written:
+        try:
+            written_reports.record(_environ(), root, Path(written))
+            recorded = "recorded"
+        except written_reports.NotRecorded as error:
+            recorded = f"{error}; the next verification judges every part"
     parts = [{"part_id": r.part_id, "status": r.status, "harness_result": r.harness_result, "goal_result": r.goal_result}
              for r in results]
     runtime = [{"case_id": r.case_id, "result": r.result, "reason": r.reason, "inventory": r.inventory}
@@ -1792,7 +1789,8 @@ def _verify(arguments: argparse.Namespace) -> int:
     unresolved = [{"part_id": r.part_id, "rule_id": rule["rule_id"], "reason": rule["reason"].removesuffix(NEEDS_CONFIRMATION),
                    "confirmation": f"{r.part_id}:{rule['rule_id']}:{exclusion_token(run, r.part_id, rule['rule_id'])}"}
                   for r in results for rule in r.rule_results if rule["result"] == "unresolved"]
-    emit({"command": "verify", "run_id": run.run_id, "attempt_id": run.attempt_id, "parts": parts, "runtime": runtime, "unresolved": unresolved,
+    emit({"command": "verify", "run_id": run.run_id, "attempt_id": run.attempt_id, "scope": _shown_scope(computed),
+          "report_record": recorded, "parts": parts, "runtime": runtime, "unresolved": unresolved,
           "goal_conflicts": conflicts,
           "drift": _drift_report(drift, decision, overrides,
                                  open_blocking_drift(drift, decision, overrides, affecting_rules(run, cited))),
@@ -1983,14 +1981,11 @@ def build_parser() -> argparse.ArgumentParser:
                              "that the rule does not apply; repeatable")
     verify.add_argument("--slug", required=True)
     verify.add_argument("--write", action="store_true", help="write .harness/reports/<slug>.md")
-    verify.add_argument("--scope", choices=("review", "extensive"), default="extensive",
-                        help="the user's re-verification choice; review needs an earlier report")
+    verify.add_argument("--scope", choices=("extensive",), default=None,
+                        help="judge every part again; without it Forge chooses the scope (#102)")
     verify.add_argument("--fixed", help="comma-separated ids of the parts the builder fixed")
-    verify.add_argument("--scope-relay",
-                        help="JSON relay of the user's scope answer: choice review, displayed_digest of the "
-                             "Review option scope showed, run_id")
     verify.set_defaults(handler=_verify)
-    scope = commands.add_parser("scope", help="show the re-verification choices with exact parts and judged counts")
+    scope = commands.add_parser("scope", help="preview the re-verification scope verify will choose, and why")
     scope.add_argument("--decision", required=True)
     scope.add_argument("--root", required=True, help="target repository root")
     scope.add_argument("--revision", help=".harness/research/<slug>.rules.yaml")

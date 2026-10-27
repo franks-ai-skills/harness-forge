@@ -78,28 +78,21 @@ instruction, and stop; never install or download anything yourself.
    verification`, plus `--compare-with` the relay of the last
    confirmation when there is one, show its summary unchanged and ask its
    question, as harness-intake's confirmation reference describes.
-2. If this is a re-verification, run `scripts/forge.py scope --harness
-   <harness> --decision <record> --root <repository> --revision <rules
-   file> --evidence <workers output> --relay <relay> --slug <slug> --fixed
-   <parts the builder fixed> --cases <runtime cases>` with the
-   confirmation from step 1 and the harness and cases step 3 will run
-   (only that harness's earlier runtime evidence can be kept), and ask
-   its `question` once, word for word, with the options
-   `Review (recommended)` or `Extensive review (rarely needed)`, showing
-   each option's parts and judged-rule count. Review judges the fixed
-   parts, every part linked to them and every part whose inputs or
-   confirmation changed. For each part it keeps, show every kept
-   judgment and the goal verdict with its run and attempt (the plan's
-   `earlier_run` and `earlier_attempt`): they come from the
-   earlier report, which the repository can hold in any form, and the
-   user's choice is what keeps them. Every part's scripts and link
-   checks run again either way. For Review, pass `--scope review --fixed
-   <parts> --scope-relay <file>` to step 3, the relay in the run
-   directory as `scope-relay.json` (a new name each time) holding `choice`
-   review, the option's `displayed_digest` and the confirmation's
-   `run_id`; for Extensive review, pass `--scope extensive`. Each verify
-   run writes a new report, so ask the scope question again before
-   running step 3 again, also after confirming a rule as not applicable.
+2. If this is a re-verification, Forge chooses what to judge again; ask
+   nothing about it. To tell the user beforehand, run `scripts/forge.py
+   scope --harness <harness> --decision <record> --root <repository>
+   --revision <rules file> --evidence <workers output> --relay <relay>
+   --slug <slug> --fixed <parts the builder fixed> --cases <runtime
+   cases>` with the confirmation from step 1 and the harness and cases
+   step 3 will run, and say what its `scope` shows: the parts judged
+   again, each with `why`, and the parts kept with the attempt and run
+   whose results they keep; or, when `kind` is `every part`, its
+   `reason`. Forge keeps earlier results only from the report it
+   recorded writing, unchanged, so an edited or foreign report means
+   every part is judged. Pass the same `--fixed <parts>` to step 3; only
+   when the user asks to judge every part again, pass `--scope
+   extensive`. Every part's scripts and link checks run again either
+   way.
 3. For a built skill, write its runtime cases to `.harness/cases.yaml`
    in the repository, so they stay with the report, shaped like
    `evals/smoke/vertical.yaml` in the Forge plugin root: an `explicit`

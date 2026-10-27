@@ -90,13 +90,17 @@ session; that confirmation settles only whether the rule applies.
 
 ## Re-verification scope
 
-A Review run sends the reviewer only its scope: the fixed parts, the
-parts linked to them and every part whose bound inputs changed. Every
+Forge chooses the scope itself and asks nothing. A Review run sends the
+reviewer only its scope: the fixed parts, the parts linked to them,
+every part whose bound inputs or confirmation changed and every part
+whose earlier result or runtime evidence cannot be kept. It keeps
+results only from the report Forge recorded writing for this repository
+(outside it, in Forge's own data directory), unchanged; an edited,
+foreign or unrecorded report, or `--scope extensive`, judges every part,
+and the report's "Review scope" line says which and why. Every
 part's script rules and link checks run again in every run. A part
 outside the scope keeps its earlier judged results and goal verdict,
 each marked "kept from attempt A of run X" (or "kept from run X" from a
 report made before attempts were recorded), with its runtime evidence
 marked the same way, and stays verified only if it was
-verified then and its scripts pass now. Earlier results come from the
-earlier report, which is a repository file; an Extensive review judges
-every part again.
+verified then and its scripts pass now.

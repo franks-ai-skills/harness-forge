@@ -44,16 +44,6 @@ def extensive_scope(decision: Decision) -> set[str]:
     return {part["id"] for part in decision.record["parts"]}
 
 
-def scope_options(decision: Decision, fixed: set[str], changed: set[str], judged_counts: dict[str, int]) -> list[dict]:
-    """The two choices, each with its exact parts and judged-rule count."""
-    options = []
-    for label, parts in (("Review (recommended)", review_scope(decision, fixed, changed)),
-                         ("Extensive review (rarely needed)", extensive_scope(decision))):
-        options.append({"label": label, "parts": sorted(parts),
-                        "judged_rules": sum(judged_counts.get(part_id, 0) for part_id in parts), "link_checks": True})
-    return options
-
-
 def affected_parts(run: VerificationRun, current: dict, owners: VerificationRun | None = None) -> set[str]:
     """Parts whose bound inputs differ between the frozen run and now.
 

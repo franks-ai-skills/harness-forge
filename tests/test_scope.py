@@ -2,7 +2,7 @@
 
 import unittest
 
-from harness_forge.scope import affected_parts, extensive_scope, review_scope, scope_options
+from harness_forge.scope import affected_parts, extensive_scope, review_scope
 from tests.builders import decision, part, with_run_dir
 from tests.test_verify import FACTS, NAME, REVISION, RULES, Scenario, skill_decision
 
@@ -28,18 +28,6 @@ class ReviewScopeTest(unittest.TestCase):
     def test_extensive_review_covers_every_part(self):
         self.assertEqual(extensive_scope(chain()), {"A", "B", "C", "D"})
 
-    def test_options_show_exact_sets_and_judged_counts(self):
-        counts = {"A": 5, "B": 3, "C": 2, "D": 7}
-        options = scope_options(chain(), fixed={"C"}, changed=set(), judged_counts=counts)
-        self.assertEqual([o["label"] for o in options], ["Review (recommended)", "Extensive review (rarely needed)"])
-        self.assertEqual(options[0]["parts"], ["A", "B", "C"])
-        self.assertEqual(options[0]["judged_rules"], 10)
-        self.assertTrue(options[0]["link_checks"])
-        self.assertEqual(options[1]["parts"], ["A", "B", "C", "D"])
-        self.assertEqual(options[1]["judged_rules"], 17)
-
-
-class InvalidationTest(unittest.TestCase):
     def setUp(self):
         second = part("B", "Never merge without review", outcome="outside-instead", recommended=None, chosen=None,
                       outside_controls=[{"control": "event-gate", "prerequisites": ["outside.merge.no-agent-bypass"],
@@ -112,7 +100,7 @@ def two_skills():
     def prepare(scope=None, changed_files=None):
         return prepare_run(record, {**files, **(changed_files or {})}, RULES, confirmation, symlinks={**links_a, **links_c},
                            revision=REVISION, kb_version="0.1.0", worker_evidence=EVIDENCE, scope=scope,
-                           scope_label="Review (recommended)" if scope else "Extensive review (rarely needed)")
+                           scope_label="Review" if scope else "Every part judged")
     return record, prepare
 
 
@@ -338,5 +326,7 @@ class CliTest(unittest.TestCase):
                                         str(revision_path), "--evidence", str(evidence), "--relay", str(relay),
                                         "--slug", "repro", "--fixed", "A")
             self.assertEqual(code, 0, output)
-            self.assertEqual(output["options"][0]["parts"], ["A"])
-            self.assertTrue(output["earlier_run"].startswith("unattended-"), "the report written above is the earlier run")
+            # The report command's unattended report is not one verify wrote, so nothing of it is kept (#102).
+            self.assertEqual(output["scope"]["kind"], "every part")
+            self.assertIn("Forge has no record of", output["scope"]["reason"])
+            self.assertNotIn("question", output)
