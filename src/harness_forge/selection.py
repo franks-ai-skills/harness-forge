@@ -459,6 +459,27 @@ def recommend(answers: dict, whole_idea: dict, rules: list[Rule], candidates: li
     )
 
 
+# The keys of an alternative the decision record keeps; the rest of select's entry is for the user.
+_RECORDED_ALTERNATIVE = ("concept", "pros", "cons", "rules", "why_not_chosen")
+
+
+def record_fields(recommendation: Recommendation) -> dict:
+    """The part's ``alternatives``, ``assessment`` and ``outside_controls`` in the decision record's shape.
+
+    The agent copies them into the part as they are; only a control's
+    ``required_for_goal`` may change, when the user says the goal needs it.
+    """
+    return {
+        "alternatives": [{key: entry[key] for key in _RECORDED_ALTERNATIVE if key in entry}
+                         for entry in recommendation.alternatives],
+        "assessment": [dict(entry) for entry in recommendation.assessment],
+        "outside_controls": [{"control": control["id"], "prerequisites": list(control["prerequisites"]),
+                              "availability": control["availability"],
+                              "required_for_goal": control["required_for_goal"]}
+                             for control in recommendation.controls],
+    }
+
+
 def next_question(part: dict, whole_idea: dict, selection: dict, candidates: Iterable[dict] = ()) -> dict | None:
     """The next question that could change the part's result, or None."""
     facts, qualifying = _facts(part.get("answers", {}), whole_idea, candidates)

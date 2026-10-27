@@ -81,7 +81,8 @@ from harness_forge.verify import (  # noqa: E402
 )
 from harness_forge.models import ReviewResponse, RuntimeResult  # noqa: E402
 from harness_forge.selection import (  # noqa: E402
-    CONCEPTS, CONFLICT_CHOICES, answers_problem, conflict_kept, goal_conflict, next_question, recommend, selection_state,
+    CONCEPTS, CONFLICT_CHOICES, answers_problem, conflict_kept, goal_conflict, next_question, recommend, record_fields,
+    selection_state,
 )
 
 MAX_OUTPUT_BYTES = 64 * 1024
@@ -326,7 +327,8 @@ def _select(arguments: argparse.Namespace) -> int:
 
     def outcome(rules: list[Rule]) -> dict:
         recommendation = recommend(answers, whole_idea, rules, candidates)
-        result = {**asdict(recommendation), "question": None, "goal_conflict": None}
+        result = {**asdict(recommendation), "record": record_fields(recommendation), "question": None,
+                  "goal_conflict": None}
         if recommendation.pending_question:
             effective = {**selection, "rules": [rule.to_dict() for rule in rules]}
             result["question"] = next_question({"answers": answers}, whole_idea, effective, candidates)

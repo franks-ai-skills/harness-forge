@@ -12,6 +12,15 @@ against tags named `harness-forge--v<version>` (`claude plugin tag`
 creates that format); Forge adds such a tag on the same commit only
 once it supports such dependencies.
 
+## Unreleased
+
+### Intake
+
+- `select` returns `record`, the part's `alternatives`, `assessment`
+  and `outside_controls` in the decision record's shape; harness-intake
+  copies them from there, so a record written as `inputs.md` says is
+  accepted (#104).
+
 ## 0.4.0 (2026-10-27)
 
 Still pins agent-harness-kb 0.6.0. Run files get their own ignored
