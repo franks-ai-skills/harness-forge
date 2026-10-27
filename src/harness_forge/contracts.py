@@ -748,18 +748,21 @@ def _reach_section(decision: Decision) -> str | None:
              if part["outcome"] in ("harness-only", "outside-alongside") and part["chosen"] in BUILDABLE]
     if record["reach"] == "repository" or not names:
         return None
-    locations = " and ".join(f"`{USER_SKILL_ROOTS[target]}<name>/` for {TARGET_NAMES[target]}"
+    # One built skill is named in its paths and spoken of in the singular; several share `<name>`.
+    folder, it, skill = (names[0], "it", "the skill") if len(names) == 1 else ("<name>", "them", "each skill")
+    locations = " and ".join(f"`{USER_SKILL_ROOTS[target]}{folder}/` for {TARGET_NAMES[target]}"
                              for target in record["targets"] if target in USER_SKILL_ROOTS)
     if record["reach"] == "user":
-        wanted, use = ("you want to use them in all of your repositories",
-                       "To use them everywhere, copy each skill's folder to your user skills location")
+        wanted, use = (f"you want to use {it} in all of your repositories",
+                       f"To use {it} everywhere, copy {skill}'s folder to your user skills location")
     else:
-        wanted, use = ("you plan to share them publicly", "This release packages no plugin: publish this repository, "
-                       "and each user copies each skill's folder to their user skills location")
+        wanted, use = (f"you plan to share {it} publicly", "This release packages no plugin: publish this repository, "
+                       f"and each user copies {skill}'s folder to their user skills location")
+    verified = "the skill" if len(names) == 1 else "the skills"
     return (f"## {REACH_HEADING}\n\n"
             f"{REACH_START}{', '.join(f'`{name}`' for name in names)} into this repository "
-            f"(`.agents/skills/<name>/`), and a skill there loads only in this repository, although {wanted}. "
-            f"{use}: {locations}. Harness Forge verifies the skills in this repository, not a copy.\n")
+            f"(`.agents/skills/{folder}/`), and a skill there loads only in this repository, although {wanted}. "
+            f"{use}: {locations}. Harness Forge verifies {verified} in this repository, not a copy.\n")
 
 
 def _replace_section(readme: str, heading: str, section: str | None) -> str:

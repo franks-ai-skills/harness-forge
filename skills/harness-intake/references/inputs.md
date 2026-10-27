@@ -79,7 +79,11 @@ split_confirmed: true
 ```
 
 Copy `alternatives`, `assessment` and `outside_controls` from the
-`select` output, not from memory. A reuse part adds `reuse` with `name`,
+`record` object of the `select` output, as they are and not from
+memory: they are already in the record's shape, unlike the top-level
+`alternatives` and `controls`. Change only a control's
+`required_for_goal`, to `true`, when the user says the part's goal
+depends on it (step 7 of the skill). A reuse part adds `reuse` with `name`,
 `source` (pinned to a commit, such as `.../tree/<sha>/<path>`),
 `license`, `maintenance`, and for a skill already in the repository
 `path` and `skill_home`. When the reused skill runs code outside its

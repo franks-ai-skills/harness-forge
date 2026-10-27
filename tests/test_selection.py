@@ -218,3 +218,49 @@ class SelectCliTest(unittest.TestCase):
             with self.subTest(answers=answers):
                 code, _ = self.run_select({"answers": answers, "whole_idea": case["whole_idea"], "candidates": []})
                 self.assertEqual(code, 2)
+
+    def test_the_record_object_fits_the_decision_record(self):
+        # inputs.md tells the agent to copy these three fields from `record` as they are (#104).
+        from harness_forge.documents import schema_errors, schema_named
+
+        properties = schema_named("decision")["properties"]["parts"]["items"]["properties"]
+        seen_alternatives = seen_controls = 0
+        for name, case in CASES.items():
+            with self.subTest(case=name):
+                code, output = self.run_select({"answers": case["answers"], "whole_idea": case["whole_idea"],
+                                                "candidates": case["candidates"]})
+                self.assertEqual(code, 0)
+                self.assertEqual(sorted(output["record"]), ["alternatives", "assessment", "outside_controls"])
+                for key, value in output["record"].items():
+                    self.assertEqual(schema_errors(value, properties[key]), [], key)
+                self.assertEqual(output["record"]["assessment"], output["assessment"])
+                self.assertEqual([entry["concept"] for entry in output["record"]["alternatives"]],
+                                 [entry["concept"] for entry in output["alternatives"]])
+                self.assertEqual([control["control"] for control in output["record"]["outside_controls"]],
+                                 [control["id"] for control in output["controls"]])
+                if output["alternatives"]:
+                    # The top-level entries carry what the user is shown, which the record refuses.
+                    self.assertNotEqual(schema_errors(output["alternatives"], properties["alternatives"]), [])
+                seen_alternatives += bool(output["alternatives"])
+                seen_controls += len(output["controls"]) > 1
+        self.assertTrue(seen_alternatives and seen_controls, "the cases include alternatives and several controls")
+
+    def test_a_record_built_from_select_is_written_and_read_back(self):
+        import tempfile
+
+        from harness_forge.contracts import load_decision, update_readme, write_decision
+        from tests.builders import decision, part
+
+        for name in ("concept-commands", "outcome-outside-instead-merge", "reference-reproduction-checklist"):
+            case = CASES[name]
+            with self.subTest(case=name), tempfile.TemporaryDirectory() as directory:
+                _, output = self.run_select({"answers": case["answers"], "whole_idea": case["whole_idea"],
+                                             "candidates": []})
+                record = decision(part("A", "A goal", answers=case["answers"], outcome=output["outcome"],
+                                       recommended=output["mechanism"], chosen=output["mechanism"],
+                                       **output["record"]), facts=case["whole_idea"])
+                path = write_decision(Path(directory), record, slug="probe", date="2026-10-27")
+                loaded = load_decision(path)
+                self.assertEqual(loaded.part("A")["alternatives"], output["record"]["alternatives"])
+                self.assertIn("## Outside controls", update_readme("# Probe\n", loaded))
+

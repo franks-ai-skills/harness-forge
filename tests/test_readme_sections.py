@@ -3,7 +3,7 @@
 import copy
 import unittest
 
-from harness_forge.checks.outside import FORGE_URL, KB_URL
+from harness_forge.checks.outside import FORGE_URL, KB_URL, foreign_lines
 from harness_forge.checks.runner import run_check
 from harness_forge.contracts import pinned_controls, pinned_kb_version, update_readme
 from tests.builders import decision, part
@@ -91,11 +91,57 @@ class ReachSectionTest(unittest.TestCase):
     def test_the_reach_section_names_and_links_harness_forge_in_plain_words(self):
         readme = update_readme("# Repro\n", one_part(reach="public"))
         self.assertIn(f"[Harness Forge]({FORGE_URL}) builds `part-a` into this repository", readme)
-        self.assertIn("although you plan to share them publicly.", readme)
-        self.assertIn("Harness Forge verifies the skills in this repository, not a copy.", readme)
         self.assertNotIn("reach is", readme)
+
+    def test_one_skill_is_spoken_of_in_the_singular(self):
+        # #109: "them" and "each skill's folder" had no plural to refer to.
+        public = update_readme("# Repro\n", one_part(reach="public"))
+        self.assertIn("into this repository (`.agents/skills/part-a/`), and a skill there loads only in this "
+                      "repository, although you plan to share it publicly. This release packages no plugin: publish "
+                      "this repository, and each user copies the skill's folder to their user skills location: "
+                      "`~/.claude/skills/part-a/` for Claude Code and `~/.agents/skills/part-a/` for Codex. Harness "
+                      "Forge verifies the skill in this repository, not a copy.", public)
         user = update_readme("# Repro\n", one_part(reach="user"))
-        self.assertIn("although you want to use them in all of your repositories.", user)
+        self.assertIn("although you want to use it in all of your repositories. To use it everywhere, copy the "
+                      "skill's folder to your user skills location: `~/.claude/skills/part-a/`", user)
+        for readme in (public, user):
+            self.assertNotIn(" them", readme.split("## Where the skills load", 1)[1])
+            self.assertNotIn("each skill", readme)
+
+    def test_several_skills_keep_the_plural(self):
+        for reach, wanted, use in (
+                ("public", "although you plan to share them publicly.",
+                 "and each user copies each skill's folder to their user skills location: `~/.claude/skills/<name>/`"),
+                ("user", "although you want to use them in all of your repositories.",
+                 "To use them everywhere, copy each skill's folder to your user skills location")):
+            with self.subTest(reach=reach):
+                record = decision(part("A", "Write a reproduction checklist", outside_controls=[]),
+                                  part("B", "Summarize the report", outside_controls=[]), reach=reach,
+                                  facts={**decision().record["facts"], "reach": reach})
+                readme = update_readme("# Repro\n", record)
+                self.assertIn("builds `part-a`, `part-b` into this repository (`.agents/skills/<name>/`)", readme)
+                self.assertIn(wanted, readme)
+                self.assertIn(use, readme)
+                self.assertIn("Harness Forge verifies the skills in this repository, not a copy.", readme)
+
+    def test_the_earlier_plural_wording_for_one_skill_is_read_and_replaced(self):
+        record = one_part(reach="public")
+        earlier = ("# Repro\n\n## Where the skills load\n\n"
+                   f"[Harness Forge]({FORGE_URL}) builds `part-a` into this repository (`.agents/skills/<name>/`), and "
+                   "a skill there loads only in this repository, although you plan to share them publicly. This "
+                   "release packages no plugin: publish this repository, and each user copies each skill's folder to "
+                   "their user skills location: `~/.claude/skills/<name>/` for Claude Code and "
+                   "`~/.agents/skills/<name>/` for Codex. Harness Forge verifies the skills in this repository, not "
+                   "a copy.\n")
+        current = update_readme("# Repro\n", record)
+        for readme in (earlier, current):
+            section = readme[readme.index("## Where the skills load"):]
+            self.assertEqual(foreign_lines(section, "Where the skills load"), [])
+        upgraded = update_readme(earlier, record)
+        reach = current[current.index("## Where the skills load"):]
+        self.assertIn(reach, upgraded, "replaced in place by the singular wording")
+        self.assertNotIn("share them publicly", upgraded)
+        self.assertEqual(update_readme(upgraded, record), upgraded)
 
 
 class LegacyUpgradeTest(unittest.TestCase):

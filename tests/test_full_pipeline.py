@@ -66,12 +66,14 @@ class FullPipelineTest(unittest.TestCase):
                      "availability": control["availability"], "required_for_goal": control["required_for_goal"]}
                     for control in controls]
 
+        # select's `record` holds the fields in the record's shape; it maps the controls as this test once did.
+        for selected in (checklist, publishing):
+            self.assertEqual(selected["record"]["outside_controls"], recorded(selected["controls"]))
         record.part("A1").update(slug=NAME, answers=dict(ANSWERS), outcome="harness-only", recommended="skills",
-                                 chosen="skills", outside_controls=recorded(checklist["controls"]))
+                                 chosen="skills", **checklist["record"])
         record.part("A2").update(slug="publish-checklist", answers={**ANSWERS, "irreversible": True},
                                  outcome="outside-instead", recommended=None, chosen=None, connects_to=[
-                                     {"to": "A1", "how": "uses"}],
-                                 outside_controls=recorded(publishing["controls"]))
+                                     {"to": "A1", "how": "uses"}], **publishing["record"])
         write_decision(root, record, slug="repro", date="2026-10-12")
         self.run_ok("readme", "--decision", decision_path, "--root", root)
 

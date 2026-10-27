@@ -791,6 +791,7 @@ class LiveCommandsTest(unittest.TestCase):
         code, output, stderr = cli("select", "--input", selection, "--root", self.root)
         self.assertEqual(code, 0, stderr)
         self.assertEqual(output["goal_conflict"]["severity"], "error", "unconfirmed, the pinned rules decide")
+        pinned_record = output["record"]
         preview = output["override_preview"]
         self.assertEqual(preview["overrides"], ["selection.eligibility.own-context-skills"])
         self.assertIn("applies once the user confirms a summary that shows these overrides", preview["note"])
@@ -804,6 +805,9 @@ class LiveCommandsTest(unittest.TestCase):
         self.assertEqual(code, 0, stderr)
         self.assertEqual(output["overrides"], ["selection.eligibility.own-context-skills"])
         self.assertNotEqual((output["goal_conflict"] or {}).get("severity"), "error")
+        # The record fields come from the confirmed, effective rules, not the pinned ones (#104).
+        self.assertEqual(output["record"]["assessment"], output["assessment"])
+        self.assertNotEqual(output["record"]["assessment"], pinned_record["assessment"])
 
     def test_an_override_asks_its_own_new_question(self):
         cli, _ = self.build_ready(ResearchRunner([finding()]))
