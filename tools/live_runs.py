@@ -241,10 +241,20 @@ class _Session:
         proposed = [{**requirement, "concept": "idea", "severity": "error", "check": "judged",
                      "applies_to": {"harnesses": targets}, "evidence": "Research", "sources": sources,
                      "contested": False} for requirement in inputs["requirements"]]
-        code, _ = self.run("accept", "accept", "--decision", self.decision, "--root", repo, "--part", "A",
-                           "--proposed", _write_json(scratch / "proposed.json", {"requirements": proposed}),
-                           "--choices", _write_json(scratch / "choices.json", inputs["choices"]),
-                           "--slug", inputs["slug"])
+        common = ("--decision", self.decision, "--root", repo, "--part", "A", "--slug", inputs["slug"],
+                  "--proposed", _write_json(scratch / "proposed.json", {"requirements": proposed}))
+        # The scripted user answers each requirement as Forge shows it (#100): one decision per item.
+        code, shown = self.run("compare-requirements", "compare-requirements", *common)
+        if code or not shown or shown.get("compact"):
+            return "stopped: the requirements could not be shown"
+        items = {item["requirement"]["id"]: item for item in shown["new"]}
+        decisions = [{"choice": choice, "item_ids": [items[rule_id]["item_id"]],
+                      "displayed_digest": items[rule_id]["digest"]}
+                     for rule_id, choice in inputs["choices"].items() if rule_id in items]
+        relay = _write_json(scratch / "acceptance-relay.json", {"run_id": f"{run_prefix}-accept", "part_id": "A",
+                                                                 "decisions": decisions})
+        code, _ = self.run("accept", "accept", *common,
+                           "--choices", _write_json(scratch / "choices.json", inputs["choices"]), "--relay", relay)
         if code:
             return "stopped: the requirements were not accepted"
         self.revision = repo / ".harness" / "research" / f"{inputs['slug']}.rules.yaml"

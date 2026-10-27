@@ -14,6 +14,23 @@ once it supports such dependencies.
 
 ## Unreleased
 
+### Requirement acceptance
+
+- Accepting requirements is bound to what the user was shown (#100).
+  `compare-requirements` runs also for a first acceptance and for an
+  older revision that names no single part, and gives every item an
+  `item_id`, the `display` the agent shows as it is (every field
+  acceptance keeps, the differences, each finding fenced as untrusted)
+  and a `digest` over the display and the complete rule; the unchanged
+  ones also as one `group`. Too large for one output, it lists ids and
+  digests and `--item` gives each whole; `--edited` shows an edit back.
+  `accept` needs `--relay` with one decision per item and its digest:
+  a stale digest, a contradicting choice, an edit not shown back, or a
+  requirement accepted before without an explicit accept, edit, reject
+  or drop refuses the whole acceptance. harness-research shows each
+  item before asking and records only explicit answers; harness-intake
+  and build-skill show what they ask about first.
+
 ### Confirmation
 
 - Every confirmation summary stays within 24 lines, 242 words and

@@ -64,7 +64,10 @@ command prints bounded JSON.
   immediately before the question, or include it in the question and
   its choices. Reasoning and tool results alone do not count as
   presenting it. Do not refer only to an unseen table, finding ids or
-  other omitted content. Ask each inferred fact separately: before the
+  other omitted content. This holds for goal wording and licensing
+  explanations too: a question about content not shown in that reply is
+  not asked, and an earlier answer does not cover content that changed
+  since. Ask each inferred fact separately: before the
   question, show as visible text what you inferred and from which part
   of the user's description, then ask neutrally, without marking the
   inferred answer as preferred or moving it first. If the user says the content is missing, show

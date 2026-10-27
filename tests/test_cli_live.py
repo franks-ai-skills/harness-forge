@@ -73,10 +73,49 @@ class Cli:
         self.parts = ["A"]  # the parts a confirmation names
 
     def __call__(self, *arguments):
+        if arguments[:1] == ("accept",) and "--relay" not in arguments:
+            arguments = self.with_acceptance_relay(arguments)
         stdout, stderr = io.StringIO(), io.StringIO()
         with contextlib.redirect_stdout(stdout), contextlib.redirect_stderr(stderr):
             code = self.module.main(with_run_dir(arguments))
         return code, json.loads(stdout.getvalue()) if stdout.getvalue() else None, stderr.getvalue()
+
+    def with_acceptance_relay(self, arguments):
+        """accept's arguments with the relay an agent writes after showing each item and asking (#100).
+
+        The choices file's answers are taken as the user's, each for the item compare-requirements showed; every
+        requirement no longer proposed is dropped, as the choices file's silence about it meant before.
+        """
+        values = dict(zip(arguments[1::2], arguments[2::2]))
+        compare = ["compare-requirements", *[item for key in ("--decision", "--root", "--part", "--proposed", "--slug")
+                                             for item in (key, values[key])]]
+        code, shown, stderr = self(*compare)
+        if code != 0 or shown.get("compact"):
+            # accept then refuses for the same reason, which the test sees.
+            empty = self.write("acceptance-relay-empty.json", {"run_id": "test-run", "part_id": values["--part"],
+                                                               "decisions": []})
+            return (*arguments, "--relay", empty)
+        choices = json.loads(Path(values["--choices"]).read_text(encoding="utf-8"))
+        items = {item["requirement"]["id"]: item for name in ("unchanged", "unsupported", "changed", "new")
+                 for item in shown[name]}
+        decisions = []
+        for rule_id, choice in choices.items():
+            item = items.get(rule_id)
+            if item is None:
+                continue
+            decision = {"item_ids": [item["item_id"]], "displayed_digest": item["digest"]}
+            if isinstance(choice, dict):
+                edited = self.write(f"edited-{rule_id}.json", {"requirements": [choice["edit"]]})
+                _, back, _ = self(*compare, "--edited", edited)
+                decision.update(choice="edit", edited_digest=back["edited"][0]["digest"])
+            else:
+                decision["choice"] = choice
+            decisions.append(decision)
+        decisions += [{"choice": "drop", "item_ids": [item["item_id"]], "displayed_digest": item["digest"]}
+                      for item in shown["removed"]]
+        relay = self.write(f"acceptance-relay-{values['--part']}.json",
+                           {"run_id": "test-run", "part_id": values["--part"], "decisions": decisions})
+        return (*arguments, "--relay", relay)
 
     def write(self, name, value):
         path = self.root / SCRATCH / name
