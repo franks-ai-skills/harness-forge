@@ -14,6 +14,16 @@ once it supports such dependencies.
 
 ## Unreleased
 
+### Verification
+
+- Every `verify` invocation has its own attempt id, in its output, the
+  report data and the report's "Verification attempt" line; the run id
+  still names the session confirmation. Kept judgments and kept runtime
+  evidence say "kept from attempt <id> of run <run id>" (a report from
+  before keeps "kept from run <run id>"), a twice-kept result still
+  names the attempt that judged it, and the Review plan binds and names
+  the earlier attempt (#106).
+
 ### Requirement acceptance
 
 - Accepting requirements is bound to what the user was shown (#100).

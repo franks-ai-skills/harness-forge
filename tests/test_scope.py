@@ -233,6 +233,27 @@ class EarlierRunTest(unittest.TestCase):
         self.assertEqual(set(results), {"A"})
         self.assertIn("parts", run.frozen_inputs)
 
+    def test_an_attempt_id_is_read_back_and_an_older_report_keeps_its_absence(self):
+        """#106: a run without an attempt (an older report, or not a verify invocation) records none."""
+        from harness_forge.report import render_report
+        from harness_forge.scope import earlier_run
+        from harness_forge.verify import finish_run, kept_note, validate_review
+        from tests.test_verify import passing_review
+        scenario = Scenario(skill_decision())
+        run = scenario.run
+        results = finish_run(run, validate_review(run, passing_review(run)), [], scenario.current())
+        older = render_report(run, results)
+        self.assertNotIn("Verification attempt", older)
+        self.assertNotIn('"attempt_id"', older)
+        earlier, _ = earlier_run(older)
+        self.assertIsNone(earlier.attempt_id)
+        run.attempt_id = "20261027T120000Z-aaaaaaaa"
+        newer, _ = earlier_run(render_report(run, results))
+        self.assertEqual(newer.attempt_id, "20261027T120000Z-aaaaaaaa")
+        self.assertEqual(kept_note("pass", "verify-1", None), "pass (kept from run verify-1)")
+        self.assertEqual(kept_note("pass", "verify-1", "a1"), "pass (kept from attempt a1 of run verify-1)")
+        self.assertEqual(kept_note("pass (kept from run verify-0)", "verify-1", "a1"), "pass (kept from run verify-0)")
+
     def test_edited_or_incomplete_history_is_refused(self):
         import json
         from harness_forge.scope import earlier_run

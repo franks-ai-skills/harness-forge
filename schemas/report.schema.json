@@ -8,6 +8,11 @@
       "type": "string",
       "minLength": 1
     },
+    "attempt_id": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 200
+    },
     "decision_digest": {
       "type": "string",
       "pattern": "^[0-9a-f]{64}$"

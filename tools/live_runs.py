@@ -456,7 +456,7 @@ def flows(harness: str, out: Path, *, forge: Forge | None = None,
     checks["review judged the repaired part and kept the other"] = (
         reviewed is not None and _reviewed_parts(session.out / "streams", streams) == {"A"}
         and (reviewed.get("judged_parts"), reviewed.get("kept_parts")) == (["A"], ["B"])
-        and "(kept from run" in report.split("## Part B", 1)[-1].split("## Runtime tests", 1)[0])
+        and "(kept from " in report.split("## Part B", 1)[-1].split("## Runtime tests", 1)[0])
     streams = len(list((session.out / "streams").glob("*.json")))
     code, extensive = session.verify("flows-verify-4", "verify an Extensive review", "--scope", "extensive")
     checks["extensive review verified"] = session.verified(code, extensive)

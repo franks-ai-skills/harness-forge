@@ -1318,8 +1318,9 @@ class LiveCommandsTest(unittest.TestCase):
         self.assertEqual([p["harness_result"] for p in output["parts"]], ["verified", "not applicable"])
         self.assertEqual(runner.roles[roles:], ["review", "baseline", "baseline", "runtime", "runtime", "runtime"])
         report = (self.root / ".harness/reports/repro.md").read_text(encoding="utf-8")
-        self.assertIn("- Review scope: Review (recommended): judged A; kept from run verify-1: B", report)
-        self.assertIn("(kept from run verify-1)", report)
+        self.assertRegex(report, r"- Review scope: Review \(recommended\): judged A; kept from attempt \S+ of run "
+                                 r"verify-1: B")
+        self.assertRegex(report, r"\(kept from attempt \S+ of run verify-1\)")
 
         code, output, stderr = cli("verify", *arguments, "--scope", "extensive")
         self.assertEqual(code, 0, stderr)
@@ -1385,7 +1386,44 @@ class LiveCommandsTest(unittest.TestCase):
         self.assertEqual([item["case_id"] for item in output["runtime"]], [item["case_id"] for item in first["runtime"]])
         report = (self.root / ".harness/reports/repro.md").read_text(encoding="utf-8")
         runtime = report[report.index("## Runtime tests"):report.index("## Checked files")]
-        self.assertEqual(runtime.count("(kept from run verify-1) |"), len(first["runtime"]))
+        note = f"(kept from attempt {first['attempt_id']} of run verify-1) |"
+        self.assertEqual(runtime.count(note), len(first["runtime"]))
+
+    def test_each_verification_attempt_has_its_own_id_and_kept_results_name_it(self):
+        """#106: one session confirmation, several verify invocations, each its own attempt."""
+        cli, arguments = self.build_ready(ResearchRunner([finding()]))
+        attempts = iter(["20261027T120000Z-aaaaaaaa", "20261027T120001Z-bbbbbbbb", "20261027T120002Z-cccccccc"])
+        cli.module.ATTEMPT_ID = lambda: next(attempts)
+        report = self.root / ".harness/reports/repro.md"
+        code, first, stderr = cli("verify", *arguments)
+        self.assertEqual(code, 0, stderr)
+        self.assertEqual((first["run_id"], first["attempt_id"]), ("verify-1", "20261027T120000Z-aaaaaaaa"))
+        self.assertIn("- Verification attempt: `20261027T120000Z-aaaaaaaa`", report.read_text(encoding="utf-8"))
+        relay = arguments[arguments.index("--relay") + 1]
+        scope = ["scope", "--harness", "claude-code", "--decision", self.decision, "--root", self.root, "--revision",
+                 self.root / ".harness/research/repro.rules.yaml", "--slug", "repro", "--fixed", "",
+                 "--evidence", self.root / SCRATCH / "workers.json", "--relay", relay,
+                 "--cases", arguments[arguments.index("--cases") + 1]]
+        digests = []
+        # The plan names the attempt whose report it reads; the kept results inside keep the one that judged them.
+        for number, attempt in ((1, "20261027T120000Z-aaaaaaaa"), (2, "20261027T120001Z-bbbbbbbb")):
+            code, plan, stderr = cli(*scope)
+            self.assertEqual(code, 0, stderr)
+            self.assertEqual((plan["earlier_run"], plan["earlier_attempt"]), ("verify-1", attempt))
+            [kept] = plan["options"][0]["kept"]
+            self.assertEqual(kept["attempt_id"], attempt)
+            digests.append(plan["options"][0]["digest"])
+            choice = cli.write(f"scope-{number}.json", {"choice": "review", "displayed_digest": digests[-1],
+                                                        "run_id": "verify-1"})
+            code, output, stderr = cli("verify", *arguments, "--scope", "review", "--fixed", "", "--scope-relay",
+                                       choice)
+            self.assertEqual(code, 0, stderr)
+            text = report.read_text(encoding="utf-8")
+            # Kept twice, a result still names the attempt that produced it.
+            self.assertIn("(kept from attempt 20261027T120000Z-aaaaaaaa of run verify-1)", text)
+            self.assertNotIn("(kept from attempt 20261027T12000", text.replace("20261027T120000Z-aaaaaaaa", ""))
+        self.assertEqual(output["attempt_id"], "20261027T120002Z-cccccccc")
+        self.assertNotEqual(digests[0], digests[1], "a plan from another attempt is another plan")
 
     def test_the_build_record_reaches_the_report_and_survives_verification_and_review(self):
         from harness_forge.checks.outside import FORGE_URL

@@ -149,7 +149,7 @@ def earlier_run(report_text: str) -> tuple[VerificationRun, dict[str, dict]]:
                           part_files=part_map["files"], part_dirs=part_map["dirs"], part_links=part_map["links"],
                           part_dependencies=part_map.get("dependencies", {}),
                           part_dependency_roots=part_map.get("dependency_roots", {}),
-                          requirement_parts=part_map["requirement_parts"])
+                          requirement_parts=part_map["requirement_parts"], attempt_id=data.get("attempt_id"))
     # Its runtime evidence, inventory included, stays with any result a Review keeps.
     run.runtime_results = [RuntimeResult(**item) for item in data["runtime_results"]]
     return run, {result["part_id"]: result for result in data["parts"]}
