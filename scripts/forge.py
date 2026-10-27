@@ -576,8 +576,10 @@ def _prepare_contract(arguments: argparse.Namespace) -> int:
     listing = render_listing(shown["contract"], shown["record"], checked_overrides=shown["checked_overrides"],
                              refused=refused, research=research, drift=shown["drift"],
                              drift_states=shown["drift_states"], conditions=shown["conditions"])
+    offered = [part["id"] for part in contract.parts if part["id"] not in {item["part_id"] for item in refused}]
     details = render_details(contract, decision.record, title=title, worker_evidence=evidence,
-                             decision_path=decision_path, listing=listing, changes=render_changes(comparison, reason))
+                             decision_path=decision_path, listing=listing, changes=render_changes(comparison, reason),
+                             offered=offered)
     name, checksum = details_name(details, title)
     path = run_directory / name
     try:
@@ -592,7 +594,6 @@ def _prepare_contract(arguments: argparse.Namespace) -> int:
             conditions=shown["conditions"], details_path=str(path), comparison=comparison, comparison_reason=reason)
     except SummaryTooLong as error:
         raise _InvalidInput(str(error)) from error
-    offered = [part["id"] for part in contract.parts if part["id"] not in {item["part_id"] for item in refused}]
     emit({
         "command": "prepare-contract", "purpose": arguments.purpose, "title": title, "digest": contract.digest,
         "summary": summary, "question": render_question(title, offered), "options": list(QUESTION_OPTIONS),

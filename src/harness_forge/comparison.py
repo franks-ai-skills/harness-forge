@@ -23,6 +23,8 @@ _PART_ID = re.compile(r"[A-Z][0-9]*")
 MAX_CANDIDATES = 50
 DECISION_LINE = "- Decision record: "
 WEAKER = {"must": "should", "must-not": "should-not"}
+_PART_COMPARED = ("id", "goal", "outcome", "mechanism", "requirements")
+_IDEA_COMPARED = ("parts", "goals", "overrides", "revision_digest")
 
 
 class Unavailable(ValueError):
@@ -132,6 +134,8 @@ def compare(earlier: dict, part_ids: list[str], current: dict) -> dict:
             continue
         old, new = before[part_id], now[part_id]
         fields = [field for field in ("goal", "outcome", "mechanism") if old.get(field) != new.get(field)]
+        # Every other bound field of the part, by name, so that no change goes unreported.
+        other = sorted(key for key in set(old) | set(new) if key not in _PART_COMPARED and old.get(key) != new.get(key))
         old_rules, new_rules = _requirements(old), _requirements(new)
         weakened, changed, added, removed = [], [], [], []
         for rule_id in sorted(set(old_rules) | set(new_rules)):
@@ -148,16 +152,33 @@ def compare(earlier: dict, part_ids: list[str], current: dict) -> dict:
                 else:
                     changed.append({"rule_id": rule_id, "kind": [was["kind"], now_rule["kind"]],
                                     "wording": was["statement"] != now_rule["statement"]})
-        if fields or weakened or changed or added or removed:
-            parts.append({"id": part_id, "status": "changed", "fields": fields, "weakened": weakened,
+        if fields or other or weakened or changed or added or removed:
+            parts.append({"id": part_id, "status": "changed", "fields": fields + other, "weakened": weakened,
                           "changed": changed, "new": added, "removed": removed})
-    overrides = ({entry["rule_id"] for entry in earlier.get("overrides", [])},
-                 {entry["rule_id"] for entry in current["overrides"]})
-    return {"parts": parts, "goals_changed": earlier.get("goals") != current["goals"],
-            "overrides_added": sorted(overrides[1] - overrides[0]),
-            "overrides_removed": sorted(overrides[0] - overrides[1])}
+    before_overrides = {entry["rule_id"]: entry.get("digest") for entry in earlier.get("overrides", [])}
+    now_overrides = {entry["rule_id"]: entry.get("digest") for entry in current["overrides"]}
+    # The idea's other bound content, by key. Requirements are compared per part; revision_digest only follows them.
+    other = sorted(key for key in set(earlier) | set(current) if key not in _IDEA_COMPARED
+                   and earlier.get(key) != current.get(key))
+    result = {"parts": parts, "goals_changed": earlier.get("goals") != current["goals"],
+              "overrides_added": sorted(set(now_overrides) - set(before_overrides)),
+              "overrides_removed": sorted(set(before_overrides) - set(now_overrides)),
+              "overrides_changed": sorted(rule_id for rule_id in set(now_overrides) & set(before_overrides)
+                                          if now_overrides[rule_id] != before_overrides[rule_id]),
+              "other": other}
+    # The compared fields cover everything bound; if the content still differs, say so rather than "nothing".
+    if unchanged(result) and _confirmed_view(earlier, part_ids) != _confirmed_view(current, part_ids):
+        result["other"] = ["other bound content"]
+    return result
+
+
+def _confirmed_view(content: dict, part_ids: list[str]) -> str:
+    """The bound content limited to the confirmed parts, for the final no-change check."""
+    view = {key: value for key, value in content.items() if key not in ("parts", "revision_digest")}
+    view["parts"] = [part for part in content.get("parts", []) if part.get("id") in part_ids]
+    return canonical_digest(view)
 
 
 def unchanged(changes: dict) -> bool:
     return not (changes["parts"] or changes["goals_changed"] or changes["overrides_added"]
-                or changes["overrides_removed"])
+                or changes["overrides_removed"] or changes.get("overrides_changed") or changes.get("other"))

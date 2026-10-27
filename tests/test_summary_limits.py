@@ -77,7 +77,8 @@ class LargeDecisionTest(unittest.TestCase):
 
     def test_a_long_part_list_falls_back_in_the_question(self):
         question = render_question("Configuration proposal", [f"A{n}" for n in range(40)])
-        self.assertEqual(question, "Confirm the configuration proposal above and its linked details for the listed parts?")
+        self.assertEqual(question, "Confirm the configuration proposal above and its linked details for the 40 parts "
+                                   "offered there?")
         self.assertEqual(render_question("Research proposal", []),
                          "Confirm the research proposal above and its linked details for the idea?")
 
@@ -116,6 +117,35 @@ class CompareTest(unittest.TestCase):
         self.assertEqual(parts["A"]["fields"], ["goal"])
         self.assertEqual(parts["B"]["status"], "unconfirmed", "B was in the content but not confirmed")
         self.assertEqual((parts["C"]["status"], parts["D"]["status"]), ("unconfirmed", "removed"))
+
+
+class CompareCoverageTest(unittest.TestCase):
+    """Nothing bound changes unreported (review of PR #116)."""
+
+    def test_other_part_fields_idea_content_and_override_content_are_reported(self):
+        before = {**_content(("A", "g", [])), "targets": ["claude-code"],
+                  "overrides": [{"rule_id": "o1", "digest": "1" * 64}]}
+        before["parts"][0]["outside_controls"] = []
+        after = {**_content(("A", "g", [])), "targets": ["claude-code", "codex"],
+                 "overrides": [{"rule_id": "o1", "digest": "2" * 64}]}
+        after["parts"][0]["outside_controls"] = [{"control": "x"}]
+        changes = compare(before, ["A"], after)
+        self.assertEqual(changes["parts"][0]["fields"], ["outside_controls"])
+        self.assertEqual((changes["other"], changes["overrides_changed"]), (["targets"], ["o1"]))
+
+    def test_any_remaining_difference_is_never_called_nothing(self):
+        before = _content(("A", "g", [("r1", "must", "x"), ("r2", "must", "y")]))
+        after = _content(("A", "g", [("r2", "must", "y"), ("r1", "must", "x")]))
+        self.assertEqual(compare(before, ["A"], after)["other"], ["other bound content"])
+
+    def test_weakened_requirements_of_every_part_come_first(self):
+        from harness_forge.summary import _change_items
+        before = _content(("A", "g", [(f"a{n}", "should", "x") for n in range(5)]), ("B", "g", [("b1", "must", "x")]))
+        after = _content(("A", "g2", [(f"a{n}", "should", "changed") for n in range(5)]), ("B", "g", [("b1", "should", "x")]))
+        items = _change_items({"changes": compare(before, ["A", "B"], after)})
+        self.assertEqual([item.kind for item in items], ["weakened requirements", "other changes",
+                                                          "other requirement changes"])
+        self.assertIn("Part B: 1 weakened (`b1`)", items[0].variants[0][0])
 
 
 class CompareCliTest(unittest.TestCase):
@@ -221,8 +251,13 @@ class CompareCliTest(unittest.TestCase):
         output = self.prepare(run, None, "--compare-with", relay)
         status = output["summary"].split("\n")[2]
         self.assertIn("and 34 more parts", status)
+        self.assertRegex(output["summary"], r"Not shown here, see the details: .*\b(3[4-9]|[4-9][0-9]) parts")
         self.assertLessEqual(len(status), 200)
         self.assertTrue(fits(output["summary"], SUMMARY_LIMITS))
+        self.assertEqual(output["question"], "Confirm the research proposal above and its linked details for the 40 "
+                                             "parts offered there?")
+        details = Path(output["details"]["path"]).read_text(encoding="utf-8")
+        self.assertIn("- Offered for confirmation: parts " + ", ".join(f"A{n}" for n in range(40)) + "\n", details)
 
     def test_every_omitted_kind_is_in_the_details_file(self):
         record, revision, checked, refused, research = large()

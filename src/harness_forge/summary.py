@@ -226,9 +226,12 @@ def render_changes(comparison: dict | None, reason: str | None) -> str:
         return "\n".join(lines + ["Nothing changed.", ""])
     if changes["goals_changed"]:
         lines.append("- The idea's goals changed.")
-    for label, ids in (("added", changes["overrides_added"]), ("removed", changes["overrides_removed"])):
+    for label, ids in (("added", changes["overrides_added"]), ("removed", changes["overrides_removed"]),
+                       ("changed", changes.get("overrides_changed", []))):
         if ids:
             lines.append(f"- Overrides {label}: {', '.join(code(rule_id) for rule_id in ids)}")
+    if changes.get("other"):
+        lines.append(f"- Also changed: {', '.join(text(key) for key in changes['other'])}")
     for part in changes["parts"]:
         if part["status"] == "removed":
             lines.append(f"- Part {text(part['id'])}: removed")
@@ -307,55 +310,68 @@ class _Item:
         self.count = count or {kind: 1}  # what leaving the whole line out leaves out
 
 
+def _named_counts(label: str, ids: list[str], kind: str) -> list[tuple[str, dict]]:
+    """``label`` with its count and as many names as room allows, richest first, with the names left out."""
+    variants = []
+    for shown in range(len(ids), -1, -1):
+        rest = len(ids) - shown
+        names = f" ({_names(ids[:shown])}" + (f" and {rest} more)" if rest else ")") if shown else ""
+        variants.append((f"{len(ids)} {label}{names}", {kind: rest} if rest else {}))
+    return variants
+
+
 def _change_items(comparison: dict) -> list[_Item]:
-    changes, items = comparison["changes"], []
+    """What changed, in this order: weakened requirements of every part, parts removed or not confirmed before,
+    other changes of the idea and the parts, then the other requirement changes."""
+    changes = comparison["changes"]
+    weakened, parts, others, requirements = [], [], [], []
     if changes["goals_changed"]:
-        items.append(_Item("other changes", [("- The idea's goals changed.", {})]))
-    added, removed = changes["overrides_added"], changes["overrides_removed"]
-    if added or removed:
-        line = "- Overrides " + "; ".join(part for part in (f"added {_names(added)}" if added else "",
-                                                           f"removed {_names(removed)}" if removed else "") if part)
-        items.append(_Item("other changes", [(line + ".", {})]))
+        others.append(_Item("other changes", [("- The idea's goals changed.", {})]))
+    pieces = [f"{label} {_names(changes[key])}" for label, key in (
+        ("added", "overrides_added"), ("removed", "overrides_removed"), ("changed", "overrides_changed"))
+        if changes.get(key)]
+    if pieces:
+        others.append(_Item("other changes", [(f"- Overrides {'; '.join(pieces)}.", {})]))
+    if changes.get("other"):
+        others.append(_Item("other changes", [(f"- Also changed: {', '.join(text(key) for key in changes['other'])}.",
+                                               {})]))
     for part in changes["parts"]:
         name = text(part["id"])
         if part["status"] in ("removed", "unconfirmed"):
             label = "removed" if part["status"] == "removed" else "not confirmed before"
-            items.append(_Item("parts", [(f"- Part {name}: {label}.", {})]))
+            parts.append(_Item("parts", [(f"- Part {name}: {label}.", {})]))
             continue
+        if part["weakened"]:
+            weakened.append(_Item("weakened requirements", [
+                (f"- Part {name}: {line}.", leaves)
+                for line, leaves in _named_counts("weakened", part["weakened"], "weakened requirements")],
+                {"weakened requirements": len(part["weakened"])}))
         if part["fields"]:
-            items.append(_Item("parts", [(f"- Part {name}: {' and '.join(part['fields'])} changed.", {})]))
-        weakened = part["weakened"]
-        other = ([("changed", entry["rule_id"]) for entry in part["changed"]] + [("new", rule_id) for rule_id in part["new"]]
-                 + [("removed", entry["rule_id"]) for entry in part["removed"] if entry["rule_id"] not in weakened])
-        if not weakened and not other:
-            continue
-        counts = {"weakened requirements": len(weakened), "other requirement changes": len(other)}
-        variants = []
-        # Names go from the end first: the other changes, then the weakened ones, then only counts remain.
-        for shown_weak in range(len(weakened), -1, -1):
-            for shown_other in (range(len(other), -1, -1) if shown_weak == len(weakened) else (0,)):
-                pieces = []
-                if weakened:
-                    named = _names(weakened[:shown_weak])
-                    rest = len(weakened) - shown_weak
-                    pieces.append(f"{_plural(len(weakened), 'weakened')}" + (f" ({named}" + (
-                        f" and {rest} more)" if rest else ")") if shown_weak else ""))
-                groups = {}
-                for label, rule_id in other[:shown_other]:
-                    groups.setdefault(label, []).append(rule_id)
-                for label in ("changed", "new", "removed"):
-                    total = sum(1 for entry in other if entry[0] == label)
-                    if total:
-                        named = groups.get(label, [])
-                        pieces.append(f"{total} {label}" + (f" ({_names(named)}" + (
-                            f" and {total - len(named)} more)" if total > len(named) else ")") if named else ""))
-                omitted = {"weakened requirements": len(weakened) - shown_weak,
-                           "other requirement changes": len(other) - shown_other}
-                variants.append((f"- Part {name} requirements: {'; '.join(pieces)}.",
-                                 {key: value for key, value in omitted.items() if value}))
-        items.append(_Item("other requirement changes", variants,
-                           {key: value for key, value in counts.items() if value}))
-    return items
+            others.append(_Item("other changes", [(f"- Part {name}: {', '.join(text(f) for f in part['fields'])} "
+                                                   "changed.", {})]))
+        groups = [(label, ids) for label, ids in (
+            ("changed", [entry["rule_id"] for entry in part["changed"]]), ("new", part["new"]),
+            ("removed", [entry["rule_id"] for entry in part["removed"] if entry["rule_id"] not in part["weakened"]]))
+            if ids]
+        if groups:
+            # Names go first from the last group, then from the ones before it; counts always stay.
+            variants = []
+            options = [_named_counts(label, ids, "other requirement changes") for label, ids in groups]
+            for depth in range(sum(len(option) - 1 for option in options) + 1):
+                picks, left = [], depth
+                for option in reversed(options):
+                    step = min(left, len(option) - 1)
+                    picks.insert(0, option[step])
+                    left -= step
+                leaves = {}
+                for _, omitted in picks:
+                    for key, value in omitted.items():
+                        leaves[key] = leaves.get(key, 0) + value
+                variants.append((f"- Part {name}, other requirement changes: {'; '.join(line for line, _ in picks)}.",
+                                 leaves))
+            requirements.append(_Item("other requirement changes", variants,
+                                      {"other requirement changes": sum(len(ids) for _, ids in groups)}))
+    return weakened + parts + others + requirements
 
 
 def _status(comparison: dict | None, reason: str | None, nothing: bool) -> str:
@@ -379,7 +395,10 @@ def render_question(title: str, part_ids: list[str]) -> str:
     else:
         target = ("part " if len(part_ids) == 1 else "parts ") + ", ".join(part_ids)
     question = f"Confirm the {what} above and its linked details for {target}?"
-    return question if fits(question + "\n", QUESTION_LIMITS) else f"Confirm the {what} above and its linked details for the listed parts?"
+    if fits(question + "\n", QUESTION_LIMITS):
+        return question
+    # Too many to name: the details file lists exactly the parts offered for confirmation.
+    return f"Confirm the {what} above and its linked details for the {len(part_ids)} parts offered there?"
 
 
 def render_summary(contract: Contract, record: dict, *, title: str, checked_overrides: list[dict], refused: list[dict],
@@ -453,7 +472,10 @@ def render_summary(contract: Contract, record: dict, *, title: str, checked_over
             merged[key] = merged.get(key, 0) + value
         return merged
 
-    nothing_shown = {}
+    # Part ids the status line names as "and N more parts" are left out too.
+    cut = {"parts": len(comparison["part_ids"]) - _SHOWN_PARTS} if comparison and len(
+        comparison["part_ids"]) > _SHOWN_PARTS else {}
+    nothing_shown = dict(cut)
     for item in items:
         nothing_shown = add(nothing_shown, item.count)
     if not fits(render([], nothing_shown), SUMMARY_LIMITS):
@@ -464,7 +486,7 @@ def render_summary(contract: Contract, record: dict, *, title: str, checked_over
     chosen: dict[int, int] = {}
 
     def state(picks: dict[int, int]) -> str:
-        omitted = {}
+        omitted = dict(cut)
         for index, item in enumerate(items):
             omitted = add(omitted, usable[index][picks[index]][1] if index in picks else item.count)
         return render([usable[index][picks[index]][0] for index in sorted(picks)], omitted)
@@ -493,7 +515,8 @@ def _too_long(head: list[str], link: str, minimal: str) -> str:
 
 
 def render_details(contract: Contract, record: dict, *, title: str, worker_evidence: list[dict] | tuple,
-                   decision_path: str | None = None, listing: str | None = None, changes: str | None = None) -> str:
+                   decision_path: str | None = None, listing: str | None = None, changes: str | None = None,
+                   offered: list[str] | None = None) -> str:
     """Everything the confirmation digest binds, readable and exact, as literal blocks.
 
     ``decision_path`` names the record (repository-relative), so a later comparison can tell which record this
@@ -506,6 +529,9 @@ def render_details(contract: Contract, record: dict, *, title: str, worker_evide
              "- Neither is a decision for you."]
     if decision_path is not None:
         lines.append(f"{DECISION_LINE}{code(decision_path)}")
+    if offered is not None:
+        lines.append("- Offered for confirmation: " + (("parts " + ", ".join(text(part_id) for part_id in offered))
+                                                       if offered else "the idea, which has no parts yet"))
     lines.append("")
     if changes is not None:
         lines += ["## Changes since the earlier confirmation", "", changes.rstrip("\n"), ""]
