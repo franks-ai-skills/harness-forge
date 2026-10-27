@@ -14,6 +14,24 @@ once it supports such dependencies.
 
 ## Unreleased
 
+### Confirmation
+
+- Every confirmation summary stays within 25 lines, 245 words and
+  1,450 characters, so with Forge's own one-line question and its two
+  options it stays within the owner's limit of 27 lines, 265 words and
+  1,575 characters. Its title names only the purpose. It shows, as room
+  allows and in this order: what changed since the confirmation the
+  agent names with `--compare-with <relay>` (weakened requirements
+  first), goal conflicts, overrides and warnings, open drift, parts not
+  offered, research to do, then each part's outcome and mechanism. What
+  it leaves out is counted by kind before the details link, its last
+  line. The details file holds everything in full, now also the parts
+  not offered, research to do, override warnings, the comparison and
+  the decision record it belongs to; the digest and the relay are
+  unchanged. `prepare-contract` returns `question`, `options` and
+  `compared_with`, and stops with the cause when the mandatory lines
+  cannot fit (#99).
+
 ### Build
 
 - `build` replaces or removes an existing file without a question when

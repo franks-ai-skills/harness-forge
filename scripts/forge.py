@@ -69,7 +69,13 @@ from harness_forge.research import (  # noqa: E402
 from harness_forge.licensing import check as licensing_check  # noqa: E402
 from harness_forge.licensing import LICENSE_ID, LICENSE_SHA256, LicenseNotAdded, add_license  # noqa: E402
 from harness_forge import runfiles  # noqa: E402
-from harness_forge.summary import TITLES, details_name, render_details, render_summary  # noqa: E402
+from harness_forge.comparison import Unavailable as ComparisonUnavailable  # noqa: E402
+from harness_forge.comparison import compare as compare_contents  # noqa: E402
+from harness_forge.comparison import load as compare_with  # noqa: E402
+from harness_forge.summary import (  # noqa: E402
+    OPTIONS as QUESTION_OPTIONS, TITLES, SummaryTooLong, details_name, render_changes, render_details, render_listing,
+    render_question, render_summary,
+)
 from harness_forge.provenance import forge_provenance  # noqa: E402
 from harness_forge.behavior import BEHAVIOR, case_digest  # noqa: E402
 from harness_forge.runtime import load_cases  # noqa: E402
@@ -554,7 +560,24 @@ def _prepare_contract(arguments: argparse.Namespace) -> int:
     research = _research_states(decision, revision, Path(arguments.decision))
     checked = {override["rule_id"]: result for override, result in _check_all(root)}
     title = TITLES[arguments.purpose]
-    details = render_details(contract, decision.record, title=title, worker_evidence=evidence)
+    decision_path = Path(arguments.decision).resolve().relative_to(root).as_posix()
+    comparison, reason = None, None
+    if arguments.compare_with:
+        try:
+            comparison = compare_with(arguments.compare_with, root, decision_path)
+            comparison["changes"] = compare_contents(comparison["content"], comparison["part_ids"], contract.content)
+        except ComparisonUnavailable as error:
+            reason = f"Comparison unavailable: {error}."
+    shown = {"contract": contract, "record": decision.record, "refused": refused, "research": research,
+             "checked_overrides": [checked[entry["rule_id"]] for entry in contract.overrides],
+             "drift": contract.content["drift"],
+             "drift_states": [drift_state(entry, decision.record, overrides) for entry in drift],
+             "conditions": {rule.id: rule.statement for rule in _pinned_rules()}}
+    listing = render_listing(shown["contract"], shown["record"], checked_overrides=shown["checked_overrides"],
+                             refused=refused, research=research, drift=shown["drift"],
+                             drift_states=shown["drift_states"], conditions=shown["conditions"])
+    details = render_details(contract, decision.record, title=title, worker_evidence=evidence,
+                             decision_path=decision_path, listing=listing, changes=render_changes(comparison, reason))
     name, checksum = details_name(details, title)
     path = run_directory / name
     try:
@@ -562,14 +585,19 @@ def _prepare_contract(arguments: argparse.Namespace) -> int:
         runfiles.create_once(path, details)
     except (OSError, ValueError) as error:
         raise _InvalidInput(str(error)) from error
-    summary = render_summary(
-        contract, decision.record, title=title, checked_overrides=[checked[entry["rule_id"]] for entry in contract.overrides],
-        refused=refused, research=research, drift=contract.content["drift"],
-        drift_states=[drift_state(entry, decision.record, overrides) for entry in drift],
-        conditions={rule.id: rule.statement for rule in _pinned_rules()}, details_path=str(path))
+    try:
+        summary = render_summary(
+            contract, decision.record, title=title, checked_overrides=shown["checked_overrides"], refused=refused,
+            research=research, drift=shown["drift"], drift_states=shown["drift_states"],
+            conditions=shown["conditions"], details_path=str(path), comparison=comparison, comparison_reason=reason)
+    except SummaryTooLong as error:
+        raise _InvalidInput(str(error)) from error
+    offered = [part["id"] for part in contract.parts if part["id"] not in {item["part_id"] for item in refused}]
     emit({
         "command": "prepare-contract", "purpose": arguments.purpose, "title": title, "digest": contract.digest,
-        "summary": summary,
+        "summary": summary, "question": render_question(title, offered), "options": list(QUESTION_OPTIONS),
+        "compared_with": ({key: comparison[key] for key in ("relay", "run_id", "digest", "part_ids")}
+                          if comparison else None),
         "details": {"path": str(path), "sha256": checksum},
         "parts": contract.parts, "overrides": contract.overrides, "worker_policy": contract.worker_policy,
         "confirmed_part_ids": [], "relay_fields": sorted(RELAY_KEYS), "refused_parts": refused,
@@ -1799,6 +1827,8 @@ def build_parser() -> argparse.ArgumentParser:
     prepare.add_argument("--purpose", required=True, choices=sorted(TITLES),
                          help="what the confirmation is for: research (a research proposal), configuration (a "
                               "configuration proposal before building) or verification (a configuration summary)")
+    prepare.add_argument("--compare-with", metavar="RELAY",
+                         help="the relay of the user's last confirmation of this record, to show what changed since")
     prepare.add_argument("--run-dir", required=True,
                          help="this run's directory from run-dir; the details file is written there")
     prepare.set_defaults(handler=_prepare_contract)

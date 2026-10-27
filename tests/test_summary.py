@@ -17,7 +17,7 @@ from markdown_it import MarkdownIt
 from harness_forge.contracts import render_contract, write_decision
 from harness_forge.documents import canonical_digest
 from harness_forge.models import AcceptedRevision
-from harness_forge.summary import fenced, render_details, render_summary, text
+from harness_forge.summary import fenced, render_details, render_listing, render_summary, text
 from tests.builders import EVIDENCE, decision, part
 
 FORGE = Path(__file__).resolve().parents[1]
@@ -88,6 +88,21 @@ def summary(record, revision, overrides=(), checked=(), drift=DRIFT, states=("ke
     return contract, shown
 
 
+def listing(record, revision, overrides=(), checked=(), drift=DRIFT, states=("kept", "open"), refused=None,
+            research=None):
+    contract = render_contract(record, revision, list(overrides), worker_evidence=EVIDENCE, drift=list(drift))
+    return contract, render_listing(
+        contract, record.record, checked_overrides=list(checked),
+        refused=refused if refused is not None else [{"part_id": "C", "problem": "its selection is stale"}],
+        research=research if research is not None else [
+            {"part_id": "A", "accepted": "stale", "deep_research": "none",
+             "next": "run the deep pass for part A, then accept its requirements, even none"},
+            {"part_id": "B", "accepted": "current", "deep_research": "current", "next": "nothing"}],
+        drift=contract.content["drift"], drift_states=list(states),
+        conditions={"outside.codeowners.agent-config": "CODEOWNERS covers the agent configuration",
+                    "outside.merge.no-agent-bypass": "No agent can bypass the merge rules"})
+
+
 def tokens(markdown):
     return MarkdownIt("commonmark").enable("table").enable("strikethrough").parse(markdown)
 
@@ -96,14 +111,16 @@ def inline_children(markdown):
     return [child for token in tokens(markdown) if token.type == "inline" for child in token.children or []]
 
 
-class SummaryContentTest(unittest.TestCase):
+class ListingContentTest(unittest.TestCase):
+    """The details file's full listing: what the summary showed in full before #99."""
+
     def setUp(self):
         self.record, self.revision = scenario()
-        self.contract, self.summary = summary(self.record, self.revision, [OVERRIDE], CHECKED)
-        self.plain = " ".join(self.summary.replace("\\", "").split())
+        self.contract, self.listing = listing(self.record, self.revision, [OVERRIDE], CHECKED)
+        self.plain = " ".join(self.listing.replace("\\", "").split())
 
     def test_it_shows_the_idea_goals_scope_and_each_part(self):
-        for expected in ("## Research proposal: Turn approved bug reports into reproduction checklists",
+        for expected in ("### Idea: Turn approved bug reports into reproduction checklists",
                          "- Reproduction checklists from approved bug reports",
                          "**Scope:** Claude Code and Codex · reach repository · hosting github, free plan, public",
                          "### Part A: part-a", "- **Goal:** Write a reproduction checklist when asked",
@@ -111,24 +128,24 @@ class SummaryContentTest(unittest.TestCase):
                          "### Part B: part-b", "- **Reused:** repro-steps, pinned source "
                          "https://example.com/repro-steps/commit/abc123",
                          "**Workers:** best-effort, isolation not certified."):
-            self.assertIn(expected, self.summary)
+            self.assertIn(expected, self.listing)
 
     def test_every_requirement_is_listed_in_full_with_its_kind(self):
         for expected in (f"  - Must: {text(LONG, '    ')}", "  - Must not: The checklist uploads logs to the tracker",
                          "  - Should: The checklist names the environment",
                          "  - Should not: The checklist guesses missing steps"):
-            self.assertIn(expected, self.summary)
+            self.assertIn(expected, self.listing)
         self.assertIn(LONG, self.plain, "a long statement is never cut")
         self.assertGreater(len(LONG), 1500)
 
     def test_only_controls_required_for_the_goal_with_readable_prerequisites(self):
-        self.assertIn("**Outside controls required for the goal** (recommended, not verified):", self.summary)
-        self.assertIn("Recorded as available during intake. It works as a gate only when:", self.summary)
+        self.assertIn("**Outside controls required for the goal** (recommended, not verified):", self.listing)
+        self.assertIn("Recorded as available during intake. It works as a gate only when:", self.listing)
         for condition in ("CODEOWNERS covers the agent configuration", "No agent can bypass the merge rules",
                           "It targets the real refs and resources it protects"):
             self.assertIn(condition, self.plain)
-        self.assertNotIn("branch-protection-precaution", self.summary)
-        self.assertNotIn("outside.merge.no-agent-bypass", self.summary, "prerequisites read as statements")
+        self.assertNotIn("branch-protection-precaution", self.listing)
+        self.assertNotIn("outside.merge.no-agent-bypass", self.listing, "prerequisites read as statements")
 
     def test_conflicts_overrides_refusals_research_and_drift(self):
         self.assertIn("kept as it is (The team accepts the error.). It stays an error, so the part is never verified.",
@@ -139,16 +156,46 @@ class SummaryContentTest(unittest.TestCase):
                       "  - params.max\\_chars: from 1024 to 2048\n"
                       "  - severity: from \u201cerror\u201d to \u201cwarning\u201d\n"
                       "  - statement: from \u201cThe description is present and at most 1,024 characters\u201d to "
-                      "\u201cThe description is present and at most 2,048 characters\u201d\n", self.summary)
+                      "\u201cThe description is present and at most 2,048 characters\u201d\n", self.listing)
         for warning in CHECKED[0]["warnings"]:
             self.assertIn(f"Warning: it {warning}", self.plain)
-        self.assertIn("- Part C: its selection is stale", self.summary)
-        self.assertIn("- Part A: accepted requirements stale, deep research none; next: run the deep pass for part "
-                      "A, then accept its requirements, even none", self.summary)
-        self.assertNotIn("Part B: accepted requirements current", self.summary)
+        self.assertIn("### Override warnings", self.listing)
+        self.assertIn("### Parts not offered for confirmation\n\n- Part C: its selection is stale", self.listing)
+        self.assertIn("### Research to do\n\n- Part A: accepted requirements stale, deep research none; next: run the "
+                      "deep pass for part A, then accept its requirements, even none", self.listing)
+        self.assertNotIn("Part B: accepted requirements current", self.listing)
         self.assertIn("- `skills.description.length` (finding F1 of research `repro`): The vendor raised the "
-                      "limit.; kept the pinned rule", self.summary)
-        self.assertIn("(finding F2 of research `repro`): Names may hold digits.; decision pending", self.summary)
+                      "limit.; kept the pinned rule", self.listing)
+        self.assertIn("(finding F2 of research `repro`): Names may hold digits.; decision pending", self.listing)
+
+    def test_identifiers_in_the_users_text_and_full_warnings_stay(self):
+        record, revision = scenario(goals=["Keep sha256 " + "a" * 64 + " and model claude-opus-5-5 as written"])
+        _, shown = listing(record, revision, checked=[{**CHECKED[0], "warnings": ["names sha256 " + "b" * 64]}])
+        self.assertIn("Keep sha256 " + "a" * 64 + " and model claude-opus-5-5 as written", shown)
+        self.assertIn("Warning: it names sha256 " + "b" * 64, shown)
+
+    def test_a_new_idea_without_parts(self):
+        record = decision()
+        record.record["parts"] = []
+        _, shown = listing(record, None, drift=(), states=(), refused=[], research=[])
+        self.assertIn("No parts yet: this confirms the idea and its goals.", shown)
+
+
+class SummaryContentTest(unittest.TestCase):
+    def setUp(self):
+        self.record, self.revision = scenario()
+        self.contract, self.summary = summary(self.record, self.revision, [OVERRIDE], CHECKED)
+
+    def test_the_title_names_only_the_purpose(self):
+        self.assertTrue(self.summary.startswith("## Research proposal\n\n"))
+        self.assertNotIn("Turn approved bug reports", self.summary)
+
+    def test_it_puts_conflicts_and_warnings_before_refusals_research_and_parts(self):
+        order = ["Goal conflict, part A", "Warning: it lowers", "Drift on `skills.name-format`",
+                 "Not offered, part C", "Research to do, part A", "- Part A (`part-a`): harness-only · skills; "
+                 "4 accepted requirements; 1 outside control required for the goal.", "- Part B (`part-b`)"]
+        positions = [self.summary.index(item) for item in order]
+        self.assertEqual(positions, sorted(positions))
 
     def test_no_forge_diagnostics_or_fetched_text(self):
         self.assertIsNone(re.search(r"\b[0-9a-f]{64}\b", self.summary))
@@ -156,16 +203,11 @@ class SummaryContentTest(unittest.TestCase):
                        "Up to 2048.", "Digits allowed.", "docs.example.com", "Untrusted content", "Picture"):
             self.assertNotIn(absent, self.summary)
 
-    def test_identifiers_in_the_users_text_and_full_warnings_stay(self):
-        record, revision = scenario(goals=["Keep sha256 " + "a" * 64 + " and model claude-opus-5-5 as written"])
-        _, shown = summary(record, revision, checked=[{**CHECKED[0], "warnings": ["names sha256 " + "b" * 64]}])
-        self.assertIn("Keep sha256 " + "a" * 64 + " and model claude-opus-5-5 as written", shown)
-        self.assertIn("Warning: it names sha256 " + "b" * 64, shown)
-
-    def test_the_details_link_decodes_to_the_file(self):
+    def test_the_details_link_is_the_last_line_and_decodes_to_the_file(self):
         links = [child for child in inline_children(self.summary) if child.type == "link_open"]
         self.assertEqual(len(links), 1)
         self.assertEqual(urllib.parse.unquote(links[0].attrs["href"]), DETAILS)
+        self.assertTrue(self.summary.rstrip("\n").split("\n")[-1].startswith("**Details:** ["))
 
     def test_a_new_idea_without_parts(self):
         record = decision()
@@ -185,20 +227,28 @@ class SummaryContainmentTest(unittest.TestCase):
                                         "choice": "keep", "reason": self.HOSTILE, "date": "2026-10-10",
                                         "chosen": "skills", "rule_ids": ["selection.skills.side-effects"]})])
         drift = [{**DRIFT[0], "summary": self.HOSTILE}]
-        _, shown = summary(record, revision, drift=drift, states=("open",),
-                           refused=[{"part_id": "A", "problem": self.HOSTILE}],
-                           research=[{"part_id": "A", "accepted": "none", "deep_research": "none",
-                                      "next": self.HOSTILE}])
+        arguments = {"drift": drift, "states": ("open",), "refused": [{"part_id": "A", "problem": self.HOSTILE}],
+                     "research": [{"part_id": "A", "accepted": "none", "deep_research": "none", "next": self.HOSTILE}]}
+        _, full = listing(record, revision, **arguments)
+        _, short = summary(record, revision, **arguments)
+        # The summary has its title only; the listing the idea, part A, refused parts, research and drift.
+        for shown, count in ((short, 1), (full, 5)):
+            with self.subTest(count=count):
+                self.check_text_only(shown, count)
+
+    def check_text_only(self, shown, count):
         parsed = tokens(shown)
         headings = [parsed[index + 1].content for index, token in enumerate(parsed) if token.type == "heading_open"]
-        self.assertEqual(len(headings), 5, headings)  # the summary, part A, refused parts, research and drift
+        self.assertEqual(len(headings), count, headings)
         self.assertTrue(all(token.type not in ("html_block", "fence", "code_block", "hr", "table_open",
                                                "ordered_list_open") for token in parsed),
                         [token.type for token in parsed])
         children = inline_children(shown)
-        self.assertEqual([child.type for child in children if child.type in ("link_open", "image")], ["link_open"])
+        self.assertEqual([child.type for child in children if child.type in ("link_open", "image")],
+                         ["link_open"] if count == 1 else [])
         self.assertFalse([child.type for child in children if child.type in ("html_inline", "s_open", "em_open")])
-        self.assertIn("\\u2028after\\u0085", shown)
+        if count > 1:  # the summary cuts record text to one line, where line separators are spaces
+            self.assertIn("\\u2028after\\u0085", shown)
         rendered = MarkdownIt("commonmark").render(shown)
         self.assertNotIn("<script>", rendered)
         self.assertIn("&lt;script&gt;", rendered)
@@ -307,7 +357,7 @@ class DetailsFileTest(unittest.TestCase):
         write_decision(self.root, self.record, slug="repro", date="2026-10-10")
         _, changed, _ = self.prepare(run)
         self.assertNotEqual(changed["digest"], first["digest"])
-        self.assertIn("- A weakened goal", changed["summary"])
+        self.assertIn("- A weakened goal", Path(changed["details"]["path"]).read_text(encoding="utf-8"))
 
     def test_an_oversized_result_is_refused_whole(self):
         record, _ = scenario(parts=[part(letter, letter + " goal " + "x" * 19000) for letter in "ABCDE"])

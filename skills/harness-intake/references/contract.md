@@ -28,18 +28,30 @@ research|configuration|verification`, adding
 `--revision .harness/research/<slug>.rules.yaml` when it exists; it
 reads the repository's `.harness/overrides/` itself.
 
-It returns a `summary` and writes the complete details to a file in the
-run directory (`details.path`). Show the `summary` in full and unchanged
-as part of your reply, as Markdown outside a code block: the idea and its
-goals, the scope, each part's goal, outcome and mechanism, a reused
-artifact and its pinned source, the outside controls the goal needs,
-every accepted requirement, each override's change with every warning,
-goal conflicts, parts not offered, research still to do, the drift and
-its decisions, the worker policy and a link to the details file. Do not
-paste the details file: it holds everything confirmed, with every fact,
-override content, fetched quote and worker configuration, for the user
-to open. The details file's `sha256` and the confirmation `digest` are
-checks for Forge, not decisions for the user; you need not show them.
+When the user confirmed this record before, add `--compare-with
+<relay>`, naming the relay you wrote after the last confirmation of this
+record (`relay.json`, `relay-2.json`, … in its run directory). Forge
+then says what changed since, as far as the local files show it; if it
+cannot use the relay, the summary gives the reason. Say nothing about
+earlier confirmations beyond what the summary says.
+
+It returns a `summary`, a `question` and its `options`, and writes the
+complete details to a file in the run directory (`details.path`). Show
+the `summary` in full and unchanged as your whole reply, as Markdown
+outside a code block: add no heading, introduction, restatement or list
+of your own. It is at most 25 lines, 245 words and 1,450 characters, so
+that it fits on one screen with the question. It holds, in this order
+and as far as room allows: what changed since the named confirmation
+(weakened requirements first), goal conflicts, overrides and their
+warnings, open drift decisions, parts not offered and research still to
+do, each part's outcome and mechanism, and the link to the details file
+as its last line. Anything not shown is counted by kind in its "Not shown
+here" line and is in the details file, which holds everything confirmed
+in full: every requirement, override change and warning, condition,
+fact, fetched quote and worker configuration, for the user to open. Do
+not paste the details file. The details file's `sha256` and the
+confirmation `digest` are checks for Forge, not decisions for the user;
+you need not show them.
 
 `refused_parts` names each part whose recorded selection build would
 refuse, with the reason: a stale selection, an open question or an
@@ -60,9 +72,9 @@ confirmation.
 
 ## How to ask
 
-Ask one multiple-choice question with exactly two options, `Confirm` and
-`Leave pending`, and no option preselected. The question names the
-summary's title, such as "the research proposal", and says that
+Ask `question` exactly as returned, as one multiple-choice question
+with exactly its two `options`, `Confirm` and `Leave pending`, and no
+option preselected. It names the summary's title and says that
 `Confirm` covers the summary above and the linked details for the parts
 it names. The user may also confirm in
 their own words, naming the parts: "Confirm A and B" covers A and B only.

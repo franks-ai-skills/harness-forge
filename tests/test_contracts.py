@@ -350,7 +350,7 @@ class PrepareContractCliTest(unittest.TestCase):
         output = json.loads(stdout.getvalue())
         self.assertEqual(code, 0)
         self.assertEqual(output["digest"], render_contract(record, None, []).digest)
-        self.assertIn("Write a reproduction checklist when asked", output["summary"])
+        self.assertIn("- Part A (`part-a`): harness-only · skills", output["summary"])
         self.assertEqual(output["confirmed_part_ids"], [])
         self.assertEqual(output["relay_fields"], ["choice", "displayed_digest", "part_ids", "run_id"])
 
