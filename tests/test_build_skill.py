@@ -1,6 +1,8 @@
 """Portable skill builds from confirmed, accepted inputs."""
 
 import os
+import shlex
+import subprocess
 import tempfile
 import unittest
 from pathlib import Path
@@ -9,6 +11,8 @@ from harness_forge.build_skill import (
     CONFLICT_TOTAL_LIMIT,
     BuilderUnavailable,
     ConflictError,
+    build_outputs,
+    committed_state,
     conflict_report,
     conflicts,
     mark_built,
@@ -370,6 +374,216 @@ class NoAcceptedRequirementsTest(unittest.TestCase):
         self.assertNotIn("references/requirements.md", skill_md)
         self.assertNotIn(f".agents/skills/{NAME}/references/requirements.md", planned)
         self.assertTrue(skill_md.endswith("## Procedure\n\n" + PROCEDURE), skill_md)
+
+
+SKILL_MD = f".agents/skills/{NAME}/SKILL.md"
+LINK = f".claude/skills/{NAME}"
+
+
+def run_git(directory, *arguments):
+    """A test's own git command: no user or system configuration, so commits work the same everywhere."""
+    environment = {key: value for key, value in os.environ.items() if not key.startswith("GIT_")}
+    environment.update(GIT_CONFIG_GLOBAL=os.devnull, GIT_CONFIG_NOSYSTEM="1")
+    return subprocess.run(["git", "-c", "user.name=Test", "-c", "user.email=test@example.invalid",
+                           "-c", "commit.gpgsign=false", "-C", str(directory), *arguments],
+                          check=True, capture_output=True, env=environment).stdout
+
+
+def changed(planned):
+    """The plan with a different SKILL.md, as a later build with new inputs would have it."""
+    return {**planned, SKILL_MD: planned[SKILL_MD] + "\nA later build.\n"}
+
+
+class ReplacementBasisTest(unittest.TestCase):
+    """#101: build replaces its own or committed output without a question and stops at anything else."""
+
+    def setUp(self):
+        self._directory = tempfile.TemporaryDirectory(prefix="forge-basis-")
+        self.root = Path(self._directory.name) / "repo"
+        self.root.mkdir()
+        self.planned = plan()
+
+    def tearDown(self):
+        self._directory.cleanup()
+
+    def commit_all(self, directory=None):
+        directory = directory or self.root
+        if not (directory / ".git").exists():
+            run_git(directory, "init", "-q")
+        run_git(directory, "add", "-A")
+        run_git(directory, "commit", "-q", "-m", "build")
+        return run_git(directory, "rev-parse", "HEAD").decode().strip()
+
+    def stop_reason(self, planned, **kwargs):
+        with self.assertRaises(ConflictError) as raised:
+            write_skill(self.root, planned, **kwargs)
+        return raised.exception.reasons
+
+    def test_a_file_matching_the_recorded_build_is_replaced(self):
+        write_skill(self.root, self.planned)
+        recorded = build_outputs(self.root, self.planned)
+        written = write_skill(self.root, changed(self.planned), recorded=recorded)
+        self.assertEqual(written.changes, [{"path": SKILL_MD, "basis": "recorded-build", "recorded_build": "matched",
+                                            "earlier": written.changes[0]["earlier"], "action": "replaced"}])
+        self.assertIn("keeps only its checksum", written.changes[0]["earlier"])
+        self.assertIn("A later build.", (self.root / SKILL_MD).read_text(encoding="utf-8"))
+
+    def test_a_link_matching_the_recorded_build_is_replaced(self):
+        (self.root / "elsewhere").mkdir()
+        link = self.root / LINK
+        link.parent.mkdir(parents=True)
+        link.symlink_to("../../elsewhere")
+        written = write_skill(self.root, self.planned, recorded={LINK: "link:../../elsewhere"})
+        self.assertEqual([(c["path"], c["basis"]) for c in written.changes], [(LINK, "recorded-build")])
+        self.assertEqual(str(link.readlink()), f"../../.agents/skills/{NAME}")
+
+    def test_a_committed_file_is_replaced_and_its_earlier_version_can_be_shown(self):
+        write_skill(self.root, self.planned)
+        commit = self.commit_all()
+        before = (self.root / SKILL_MD).read_bytes()
+        written = write_skill(self.root, changed(self.planned))
+        change = written.changes[0]
+        self.assertEqual((change["basis"], change["recorded_build"], change["commit"]), ("committed", "none", commit))
+        self.assertEqual(Path(change["repository"]), self.root.resolve())
+        shown = subprocess.run(shlex.split(change["show"]), check=True, capture_output=True).stdout
+        self.assertEqual(shown, before)
+
+    def test_an_uncommitted_hand_edit_stops_the_build(self):
+        write_skill(self.root, self.planned)
+        commit = self.commit_all()
+        (self.root / SKILL_MD).write_text("Hand-written.\n", encoding="utf-8")
+        reasons = self.stop_reason(changed(self.planned))
+        self.assertEqual(reasons[SKILL_MD], "no build of this part is recorded for it; it differs from the version "
+                                            f"committed in {commit[:12]}")
+        self.assertEqual((self.root / SKILL_MD).read_text(encoding="utf-8"), "Hand-written.\n")
+
+    def test_an_edit_against_the_recorded_build_says_so(self):
+        write_skill(self.root, self.planned)
+        recorded = build_outputs(self.root, self.planned)
+        (self.root / SKILL_MD).write_text("Hand-written.\n", encoding="utf-8")
+        reason = self.stop_reason(changed(self.planned), recorded=recorded)[SKILL_MD]
+        self.assertTrue(reason.startswith("it differs from Forge's last build of this part; Forge could not confirm "
+                                          "that it matches a committed version: "), reason)
+
+    def test_a_staged_change_stops_the_build(self):
+        write_skill(self.root, self.planned)
+        self.commit_all()
+        (self.root / SKILL_MD).write_text("Staged.\n", encoding="utf-8")
+        run_git(self.root, "add", SKILL_MD)
+        reason = self.stop_reason(changed(self.planned))[SKILL_MD]
+        self.assertIn("its staged version differs from commit", reason)
+
+    def test_an_untracked_file_in_a_repository_stops_the_build(self):
+        (self.root / "README.md").write_text("# Repro\n", encoding="utf-8")
+        self.commit_all()
+        write_skill(self.root, self.planned)
+        self.assertIn("it is not committed", self.stop_reason(changed(self.planned))[SKILL_MD])
+
+    def test_outside_a_repository_nothing_can_be_confirmed(self):
+        write_skill(self.root, self.planned)
+        reason = self.stop_reason(changed(self.planned))[SKILL_MD]
+        self.assertIn("Forge could not confirm that it matches a committed version", reason)
+
+    def test_a_failing_git_command_never_authorizes_a_replacement(self):
+        write_skill(self.root, self.planned)
+        self.commit_all()
+        from harness_forge.provenance import git_bytes
+
+        def failing_read(root, *arguments):
+            return None if "cat-file" in arguments else git_bytes(root, *arguments)
+
+        reason = self.stop_reason(changed(self.planned), git=failing_read)[SKILL_MD]
+        self.assertIn("git could not read the committed version", reason)
+
+    def test_one_stop_leaves_every_file_as_it_was(self):
+        write_skill(self.root, self.planned)
+        recorded = build_outputs(self.root, self.planned)
+        reference = next(key for key in self.planned if key.endswith("references/requirements.md"))
+        (self.root / reference).write_text("Hand-written.\n", encoding="utf-8")
+        later = {**changed(self.planned), reference: self.planned[reference] + "\nLater.\n"}
+        with self.assertRaises(ConflictError) as raised:
+            write_skill(self.root, later, recorded=recorded)
+        self.assertEqual([key for key, _ in raised.exception.conflicts], [reference])
+        self.assertNotIn("A later build.", (self.root / SKILL_MD).read_text(encoding="utf-8"),
+                         "the replaceable SKILL.md is not written either")
+
+    def test_a_stale_output_goes_on_the_same_bases(self):
+        command = plan(reference_decision(recommended="commands", chosen="commands"))
+        write_skill(self.root, command)
+        leftover = f".agents/skills/{NAME}/agents/openai.yaml"
+        recorded = build_outputs(self.root, command)
+        reasons = self.stop_reason(self.planned)
+        self.assertIn(leftover, reasons)
+        written = write_skill(self.root, self.planned, recorded=recorded)
+        self.assertIn((leftover, "recorded-build", "removed"),
+                      [(c["path"], c["basis"], c["action"]) for c in written.changes])
+        self.assertFalse((self.root / leftover).exists())
+
+    def test_a_named_path_is_discarded_and_says_so(self):
+        (self.root / SKILL_MD).parent.mkdir(parents=True)
+        (self.root / SKILL_MD).write_text("Hand-written.\n", encoding="utf-8")
+        written = write_skill(self.root, self.planned, replace=[SKILL_MD])
+        self.assertEqual((written.changes[0]["basis"], written.changes[0]["recorded_build"]), ("named", "none"))
+        self.assertIn("discarded as named in --replace", written.changes[0]["earlier"])
+
+
+class CommittedStateTest(unittest.TestCase):
+    def setUp(self):
+        self._directory = tempfile.TemporaryDirectory(prefix="forge-committed-")
+        self.top = Path(self._directory.name) / "top dir"
+        self.top.mkdir()
+        run_git(self.top, "init", "-q")
+
+    def tearDown(self):
+        self._directory.cleanup()
+
+    def commit(self):
+        run_git(self.top, "add", "-A")
+        run_git(self.top, "commit", "-q", "-m", "c")
+        return run_git(self.top, "rev-parse", "HEAD").decode().strip()
+
+    def test_exact_bytes_are_compared_and_a_non_utf8_file_matches(self):
+        (self.top / "data.bin").write_bytes(b"\xff\xfe\x00 raw\r\n")
+        self.commit()
+        self.assertEqual(committed_state(self.top, "data.bin")["status"], "match")
+        (self.top / "data.bin").write_bytes(b"\xff\xfe\x00 raw\n")
+        self.assertEqual(committed_state(self.top, "data.bin")["status"], "mismatch")
+
+    def test_a_path_is_literal_never_a_glob(self):
+        (self.top / "a bX.md").write_text("committed\n", encoding="utf-8")
+        self.commit()
+        (self.top / "a b*.md").write_text("committed\n", encoding="utf-8")
+        state = committed_state(self.top, "a b*.md")
+        self.assertEqual((state["status"], state["reason"]), ("mismatch", "it is not committed"))
+        run_git(self.top, "add", "a b*.md")
+        commit = self.commit()
+        state = committed_state(self.top, "a b*.md")
+        self.assertEqual(state["status"], "match")
+        self.assertEqual(shlex.split(state["show"]), ["git", "-C", str(self.top.resolve()), "show", f"{commit}:a b*.md"])
+
+    def test_the_file_type_must_match_the_commit(self):
+        (self.top / "link").symlink_to("target")
+        self.commit()
+        self.assertEqual(committed_state(self.top, "link")["status"], "match")
+        (self.top / "link").unlink()
+        (self.top / "link").write_text("target", encoding="utf-8")
+        self.assertEqual(committed_state(self.top, "link")["status"], "mismatch")
+
+    def test_a_root_below_the_top_uses_paths_relative_to_the_top(self):
+        root = self.top / "sub"
+        (root / "skill").mkdir(parents=True)
+        (root / "skill" / "SKILL.md").write_text("x\n", encoding="utf-8")
+        commit = self.commit()
+        state = committed_state(root, "skill/SKILL.md")
+        self.assertEqual((state["status"], state["path"]), ("match", "sub/skill/SKILL.md"))
+        shown = subprocess.run(shlex.split(state["show"]), check=True, capture_output=True).stdout
+        self.assertEqual(shown, b"x\n")
+        self.assertEqual(state["commit"], commit)
+
+    def test_a_repository_without_a_commit_is_unavailable(self):
+        (self.top / "f").write_text("x", encoding="utf-8")
+        self.assertEqual(committed_state(self.top, "f")["status"], "unavailable")
+
 
 
 class StatusTest(unittest.TestCase):
