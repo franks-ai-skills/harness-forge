@@ -74,6 +74,9 @@ def report_data(run: VerificationRun, results: list[PartResult]) -> dict:
         data["part_map"]["dependencies"] = dict(run.part_dependencies)
     if run.part_dependency_roots:
         data["part_map"]["dependency_roots"] = dict(run.part_dependency_roots)
+    # Only a run that found a changed judgment records them, so earlier reports keep their exact form.
+    if run.changed_judgments:
+        data["changed_judgments"] = [dict(item) for item in run.changed_judgments]
     # Only a run whose first review reply was rejected records its attempts.
     if run.review_attempts:
         data["review_attempts"] = [dict(attempt) for attempt in run.review_attempts]
@@ -170,6 +173,17 @@ def render_report(run: VerificationRun, results: list[PartResult]) -> str:
 
     activation = [item for item in run.runtime_results if item.kind != "behavior"]
     behavior = [item for item in run.runtime_results if item.kind == "behavior"]
+    if run.changed_judgments:
+        # A fresh judgment can find what an earlier one missed: it counts as usual; the change is only shown (#108).
+        lines += ["## Changed judgments on unchanged inputs", "",
+                  "The same reviewed inputs got another verdict. The current one counts.", ""]
+        for item in run.changed_judgments:
+            earlier, current = item["earlier"], item["current"]
+            where = (f"attempt `{earlier['attempt_id']}` of run `{earlier['run_id']}`" if earlier["attempt_id"]
+                     else f"run `{earlier['run_id']}`")
+            lines.append(f"- Part {item['part_id']}, `{item['rule_id']}`: {earlier['result']} in {where}, now "
+                         f"{current['result']} ({_one_line(current['reason'])})")
+        lines.append("")
     lines += ["## Runtime tests", ""]
     if activation:
         lines += ["| Part | Case | Harness | Result | Observed | Reason |", "| --- | --- | --- | --- | --- | --- |"]

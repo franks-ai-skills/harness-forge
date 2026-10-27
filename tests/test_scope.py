@@ -330,3 +330,51 @@ class CliTest(unittest.TestCase):
             self.assertEqual(output["scope"]["kind"], "every part")
             self.assertIn("Forge has no record of", output["scope"]["reason"])
             self.assertNotIn("question", output)
+
+
+class ChangedJudgmentsTest(unittest.TestCase):
+    """#108: only a reviewer's own verdicts are compared, and each earlier one names the attempt that made it."""
+
+    def compare(self, earlier_items, current_items, *, attempt="a1", contract="c", goals=(None, None)):
+        from types import SimpleNamespace
+        from unittest import mock
+
+        from harness_forge.verify import changed_judgments
+        earlier = SimpleNamespace(contract_digest="c", run_id="r1", attempt_id=attempt, frozen_inputs={})
+        run = SimpleNamespace(contract_digest=contract, run_id="r1", attempt_id="a3", frozen_inputs={})
+        rule = lambda result, reason="why": {"rule_id": "x.y", "check": "judged", "result": result, "reason": reason}
+        results = [SimpleNamespace(part_id="A", rule_results=[rule(*item) for item in current_items],
+                                   goal_verdict=goals[1])]
+        with mock.patch("harness_forge.scope.affected_parts", return_value=set()):
+            return changed_judgments(earlier, {"A": {"rule_results": [rule(*item) for item in earlier_items],
+                                                     "goal_verdict": goals[0]}}, run, results)
+
+    def test_a_pass_that_became_a_fail_is_reported(self):
+        [changed] = self.compare([("pass",)], [("fail",)])
+        self.assertEqual((changed["earlier"]["result"], changed["earlier"]["attempt_id"], changed["current"]["result"]),
+                         ("pass", "a1", "fail"))
+
+    def test_worker_failures_unresolved_rules_and_confirmed_exclusions_are_no_change_of_judgment(self):
+        for before, after in (("missing", "pass"), ("error", "fail"), ("unresolved", "not-applicable"),
+                              ("not-applicable", "pass"), ("pass", "pass")):
+            with self.subTest(before=before, after=after):
+                self.assertEqual(self.compare([(before,)], [(after,)]), [])
+
+    def test_a_kept_judgment_names_its_attempt_and_an_older_report_names_none(self):
+        [changed] = self.compare([("pass", "why (kept from attempt a0 of run r0)")], [("fail",)])
+        self.assertEqual((changed["earlier"]["attempt_id"], changed["earlier"]["run_id"], changed["earlier"]["reason"]),
+                         ("a0", "r0", "why"))
+        [older] = self.compare([("pass", "why (kept from run r0)")], [("fail",)], attempt=None)
+        self.assertEqual((older["earlier"]["attempt_id"], older["earlier"]["run_id"]), (None, "r0"))
+        [own] = self.compare([("pass",)], [("fail",)], attempt=None)
+        self.assertEqual((own["earlier"]["attempt_id"], own["earlier"]["run_id"]), (None, "r1"))
+
+    def test_another_confirmation_or_a_kept_current_result_compares_nothing(self):
+        self.assertEqual(self.compare([("pass",)], [("fail",)], contract="other"), [])
+        self.assertEqual(self.compare([("pass",)], [("fail", "why (kept from attempt a1 of run r1)")]), [])
+
+    def test_a_goal_verdict_that_changed_is_reported(self):
+        [changed] = self.compare([], [], goals=({"verdict": "met", "reason": "ok"},
+                                               {"verdict": "not met", "reason": "no"}))
+        self.assertEqual((changed["rule_id"], changed["earlier"]["result"], changed["current"]["result"]),
+                         ("goal", "met", "not met"))

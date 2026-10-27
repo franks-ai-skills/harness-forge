@@ -16,6 +16,11 @@ once it supports such dependencies.
 
 ### Verification
 
+- The report and `verify`'s output name each reviewer verdict that
+  changed although the part's review inputs did not, compared with the
+  report Forge recorded writing: rule, earlier and current verdict and
+  the attempts that made them. Only pass and fail, and a met or not met
+  goal, are compared; the current verdict counts as usual (#108).
 - A change confined to a part's runtime cases or fixtures no longer
   re-judges its files: a part verified last time keeps its file
   judgments and its runtime cases run again, and it stays verified only

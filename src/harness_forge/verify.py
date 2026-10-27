@@ -310,6 +310,64 @@ def bound_inputs(
     }
 
 
+_KEPT = re.compile(r" \(kept from (?:attempt (?P<attempt>\S+) of )?run (?P<run>[^)]+)\)$")
+_VERDICTS = {"pass", "fail"}
+_GOALS = {"met", "not met"}
+
+
+def _origin(reason: str, run_id: str, attempt_id: str | None) -> tuple[str, str | None, str]:
+    """The reason without a kept note, and the run and attempt that judged it: the note's, else the report's."""
+    found = _KEPT.search(reason or "")
+    if found:
+        return reason[:found.start()], found["attempt"], found["run"]
+    return reason, attempt_id, run_id
+
+
+def changed_judgments(earlier: VerificationRun, earlier_results: dict[str, dict], run: VerificationRun,
+                      results: list[PartResult]) -> list[dict]:
+    """Reviewer verdicts that changed although the part's review inputs did not (#108).
+
+    ``earlier`` is the run of a report Forge recorded writing. A part counts only when the same contract is
+    confirmed now and none of its inputs a judgment rests on changed (affected_parts without cases): identical
+    SKILL.md bytes alone are not enough. Only a reviewer's own verdicts are compared, pass or fail and a met or not
+    met goal: a missing or failed worker, an unresolved rule or a confirmed exclusion is no change of judgment.
+    The fresh judgment keeps its normal effect; this only reports the difference.
+    """
+    from harness_forge.scope import affected_parts
+
+    if not earlier.contract_digest or earlier.contract_digest != run.contract_digest:
+        return []
+    changed_inputs = affected_parts(earlier, run.frozen_inputs, run, cases=False)
+    found = []
+    for result in results:
+        before = earlier_results.get(result.part_id)
+        if before is None or result.part_id in changed_inputs:
+            continue
+        old = {item["rule_id"]: item for item in before.get("rule_results", []) if item.get("check") == "judged"}
+        for item in result.rule_results:
+            if item.get("check") != "judged" or "(kept from " in item.get("reason", ""):
+                continue  # a kept result is the earlier judgment itself
+            was = old.get(item["rule_id"])
+            if was is None or {was["result"], item["result"]} - _VERDICTS or was["result"] == item["result"]:
+                continue
+            reason, attempt, run_id = _origin(was["reason"], earlier.run_id, earlier.attempt_id)
+            found.append({"part_id": result.part_id, "rule_id": item["rule_id"],
+                          "earlier": {"result": was["result"], "reason": reason, "attempt_id": attempt,
+                                      "run_id": run_id},
+                          "current": {"result": item["result"], "reason": item["reason"],
+                                      "attempt_id": run.attempt_id, "run_id": run.run_id}})
+        was, now = before.get("goal_verdict"), result.goal_verdict
+        if (was and now and was.get("verdict") in _GOALS and now.get("verdict") in _GOALS
+                and was["verdict"] != now["verdict"] and "(kept from " not in now.get("reason", "")):
+            reason, attempt, run_id = _origin(was.get("reason", ""), earlier.run_id, earlier.attempt_id)
+            found.append({"part_id": result.part_id, "rule_id": "goal",
+                          "earlier": {"result": was["verdict"], "reason": reason, "attempt_id": attempt,
+                                      "run_id": run_id},
+                          "current": {"result": now["verdict"], "reason": now["reason"],
+                                      "attempt_id": run.attempt_id, "run_id": run.run_id}})
+    return found
+
+
 def kept_note(reason: str, run_id: str, attempt_id: str | None) -> str:
     """A kept result's reason naming the verification attempt that produced it (#106); a note already there stays,
     and a report from before attempt ids names only its run."""

@@ -240,6 +240,7 @@ class VerificationRun:
     overrides: list[dict] = field(default_factory=list)  # each adopted override's rule id and digest
     scope_parts: list[str] | None = None  # the parts judged in a Review run; None judges every part
     attempt_id: str | None = None  # one verify invocation's own id (#106); run_id names its session confirmation
+    changed_judgments: list[dict] = field(default_factory=list)  # verdicts that changed on unchanged inputs (#108)
 
 
 @dataclass(frozen=True)

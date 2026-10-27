@@ -86,7 +86,8 @@ from harness_forge.scope import (  # noqa: E402
 )
 from harness_forge.verify import (  # noqa: E402
     NEEDS_CONFIRMATION, affecting_rules, bound_inputs, case_alias, exclusion_token, finish_run, open_blocking_drift,
-    kept_note, part_kind, plugin_manifests, prepare_run, selection_citations, selection_failures, skill_home,
+    changed_judgments, kept_note, part_kind, plugin_manifests, prepare_run, selection_citations, selection_failures,
+    skill_home,
 )
 from harness_forge.models import ReviewResponse, RuntimeResult  # noqa: E402
 from harness_forge.selection import (  # noqa: E402
@@ -792,25 +793,29 @@ def _computed_scope(arguments: argparse.Namespace, root: Path, decision: Decisio
     every = sorted(part["id"] for part in decision.record["parts"])
     fixed = _fixed(arguments, decision)
 
-    def all_parts(reason: str) -> dict:
+    def all_parts(reason: str, earlier=None) -> dict:
+        # ``earlier`` is the report Forge recorded writing, also when every part is judged: its judgments are
+        # compared with the fresh ones (#108).
         return {"kind": "every part", "reason": reason, "judged": [{"part_id": p, "why": reason} for p in every],
-                "kept": [], "plan": None}
+                "kept": [], "plan": None, "earlier": earlier}
 
-    if getattr(arguments, "scope", None) == "extensive":
-        return all_parts("--scope extensive asks for every part")
+    extensive = getattr(arguments, "scope", None) == "extensive"
+    asked = "--scope extensive asks for every part"
     try:
         path = safe_path(root, f".harness/reports/{arguments.slug}.md")
     except ValueError as error:
-        return all_parts(f"the earlier report cannot be read: {error}")
+        return all_parts(asked if extensive else f"the earlier report cannot be read: {error}")
     if not path.is_file():
-        return all_parts("there is no earlier report")
+        return all_parts(asked if extensive else "there is no earlier report")
     try:
         earlier = earlier_run(path.read_text(encoding="utf-8"))
         written_reports.check(_environ(), root, path)
     except written_reports.NotRecorded as error:
-        return all_parts(str(error))
+        return all_parts(asked if extensive else str(error))
     except (OSError, ValueError) as error:
-        return all_parts(f"the earlier report cannot be compared: {error}")
+        return all_parts(asked if extensive else f"the earlier report cannot be compared: {error}")
+    if extensive:
+        return all_parts(asked, earlier)
     confirmation = approval["confirmation"]
     try:
         owners = prepare_run(decision, files, rules, None, symlinks=symlinks, revision=revision,
@@ -837,7 +842,7 @@ def _computed_scope(arguments: argparse.Namespace, root: Path, decision: Decisio
                       # Kept file judgments, its runtime cases run again: they changed, or their evidence no longer
                       # holds (#107).
                       **({"runtime": "its runtime cases run again"} if part_id in plan["runtime_scope"] else {})}
-                     for part_id in sorted(plan["kept"])], "plan": plan}
+                     for part_id in sorted(plan["kept"])], "plan": plan, "earlier": earlier}
 
 
 def _scope_label(computed: dict) -> str:
@@ -1783,6 +1788,9 @@ def _verify(arguments: argparse.Namespace) -> int:
                                    diagnostics=diagnostics, attempt_id=ATTEMPT_ID(), runtime_scope=runtime_scope)
     except ValueError as error:
         raise _InvalidInput(str(error)) from error
+    # Verdicts that changed on unchanged review inputs, against the report Forge recorded writing (#108).
+    if computed["earlier"] is not None:
+        run.changed_judgments = changed_judgments(*computed["earlier"], run, results)
     # A kept part's runtime results stand as its runtime evidence, attributed to the attempt that produced them.
     run.runtime_results += [RuntimeResult(**{**item, "reason": kept_note(item["reason"], item["run_id"],
                                                                           earlier_attempt)})
@@ -1810,6 +1818,7 @@ def _verify(arguments: argparse.Namespace) -> int:
                    "confirmation": f"{r.part_id}:{rule['rule_id']}:{exclusion_token(run, r.part_id, rule['rule_id'])}"}
                   for r in results for rule in r.rule_results if rule["result"] == "unresolved"]
     emit({"command": "verify", "run_id": run.run_id, "attempt_id": run.attempt_id, "scope": _shown_scope(computed),
+          "changed_judgments": run.changed_judgments,
           "report_record": recorded, "parts": parts, "runtime": runtime, "unresolved": unresolved,
           "goal_conflicts": conflicts,
           "drift": _drift_report(drift, decision, overrides,

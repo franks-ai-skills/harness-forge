@@ -49,6 +49,23 @@ class NotApplicableRunner(ResearchRunner):
         return answer
 
 
+class FlippingRunner(ResearchRunner):
+    """The reviewer fails ``flip`` when it is set and passes the rest, as a fresh judgment may (#108)."""
+
+    flip = None
+
+    def __call__(self, command, *, cwd, env, stdin, timeout):
+        answer = super().__call__(command, cwd=cwd, env=env, stdin=stdin, timeout=timeout)
+        if self.flip and self.roles and self.roles[-1] == "review" and stdin and "```json" in stdin:
+            event = json.loads(answer.stdout.splitlines()[-1])
+            output = json.loads(event["result"])
+            for verdict in output["verdicts"]:
+                if verdict["rule_id"] == self.flip:
+                    verdict.update(verdict="fail", reason="Flipped on a second look.")
+            return Completed(0, claude_stream(output, calls=("Read",)), "", False)
+        return answer
+
+
 def outside_only(record, part_id="B", goal="Never merge without review"):
     """An outside-only part as select records it: irreversible, so only outside controls enforce it."""
     from harness_forge.selection import selection_state
@@ -1529,6 +1546,65 @@ class LiveCommandsTest(unittest.TestCase):
         code, output, _ = cli("verify", *arguments)
         self.assertEqual((code, output["parts"][0]["harness_result"]), (1, "not verified"))
         self.assertEqual(self.scope_parts(cli, arguments), ["A"], "an unresolved earlier result is not kept")
+
+    def judged_rule(self):
+        """A judged rule part A passed in the stored report."""
+        text = (self.root / ".harness/reports/repro.md").read_text(encoding="utf-8")
+        start = text.index("```json\n", text.index("## Report data")) + len("```json\n")
+        data = json.loads(text[start:text.index("\n```", start)])
+        return next(item["rule_id"] for item in data["parts"][0]["rule_results"]
+                    if item["check"] == "judged" and item["result"] == "pass")
+
+    def test_a_changed_verdict_on_unchanged_inputs_is_reported_and_counts(self):
+        runner = FlippingRunner([finding()])
+        cli, arguments = self.build_ready(runner)
+        attempts = iter([f"20261028T00000{n}Z-0000000{n}" for n in range(1, 8)])
+        cli.module.ATTEMPT_ID = lambda: next(attempts)
+        self.assertEqual(cli("verify", *arguments)[0], 0)
+        rule = self.judged_rule()
+        code, output, stderr = cli("verify", *arguments, "--fixed", "A")
+        self.assertEqual((code, output["changed_judgments"]), (0, []), "the same verdict is no change")
+        runner.flip = rule
+        code, output, stderr = cli("verify", *arguments, "--fixed", "A")
+        text = (self.root / ".harness/reports/repro.md").read_text(encoding="utf-8")
+        start = text.index("```json\n", text.index("## Report data")) + len("```json\n")
+        data = json.loads(text[start:text.index("\n```", start)])
+        self.assertEqual([item["result"] for item in data["parts"][0]["rule_results"] if item["rule_id"] == rule],
+                         ["fail"], "the fresh verdict counts")
+        [changed] = output["changed_judgments"]
+        self.assertEqual((changed["part_id"], changed["rule_id"]), ("A", rule))
+        self.assertEqual((changed["earlier"]["result"], changed["earlier"]["attempt_id"]),
+                         ("pass", "20261028T000002Z-00000002"))
+        self.assertEqual((changed["current"]["result"], changed["current"]["attempt_id"]),
+                         ("fail", "20261028T000003Z-00000003"))
+        report = (self.root / ".harness/reports/repro.md").read_text(encoding="utf-8")
+        self.assertIn("## Changed judgments on unchanged inputs", report)
+        self.assertIn(f"- Part A, `{rule}`: pass in attempt `20261028T000002Z-00000002` of run `verify-1`, now fail",
+                      report)
+
+    def test_a_kept_judgment_is_compared_with_the_attempt_that_made_it(self):
+        runner = FlippingRunner([finding()])
+        cli, arguments = self.build_ready(runner)
+        attempts = iter([f"20261028T00000{n}Z-0000000{n}" for n in range(1, 8)])
+        cli.module.ATTEMPT_ID = lambda: next(attempts)
+        self.assertEqual(cli("verify", *arguments)[0], 0)
+        rule = self.judged_rule()
+        self.assertEqual(cli("verify", *arguments)[1]["kept_parts"], ["A"], "attempt 2 keeps attempt 1's judgments")
+        runner.flip = rule
+        code, output, stderr = cli("verify", *arguments, "--scope", "extensive")
+        [changed] = output["changed_judgments"]
+        self.assertEqual(changed["earlier"]["attempt_id"], "20261028T000001Z-00000001")
+        self.assertNotIn("(kept from", changed["earlier"]["reason"])
+
+    def test_no_change_is_reported_when_the_review_inputs_changed(self):
+        runner = FlippingRunner([finding()])
+        cli, arguments = self.build_ready(runner)
+        self.assertEqual(cli("verify", *arguments)[0], 0)
+        runner.flip = self.judged_rule()
+        readme = self.root / "README.md"
+        readme.write_text(readme.read_text(encoding="utf-8") + "\nMore.\n", encoding="utf-8")
+        code, output, stderr = cli("verify", *arguments)
+        self.assertEqual(output["changed_judgments"], [], stderr)
 
     def changed_cases(self, cli, name="changed-cases.yaml"):
         cases = yaml.safe_load((FORGE / "evals/smoke/vertical.yaml").read_text(encoding="utf-8"))
