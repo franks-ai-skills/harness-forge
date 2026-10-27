@@ -14,6 +14,17 @@ once it supports such dependencies.
 
 ## Unreleased
 
+### Build
+
+- `build` replaces or removes an existing file without a question when
+  it is the part's last build output or matches the version committed
+  in git, on disk and in the index, and names each one under `replaced`
+  and `removed` with its basis and how its earlier version can be seen.
+  Any other existing file stops the build before it writes, with the
+  reason and how to keep or discard the edits; a failed git check never
+  counts as a match. build-skill no longer asks the user to approve
+  replacements (#101).
+
 ### Intake
 
 - `select` returns `record`, the part's `alternatives`, `assessment`

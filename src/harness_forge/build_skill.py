@@ -16,7 +16,9 @@ import hashlib
 import json
 import os
 import re
+import shlex
 from pathlib import Path
+from typing import NamedTuple
 
 import yaml
 
@@ -24,6 +26,7 @@ from harness_forge.checks.skills import NAME, PLACEHOLDER
 from harness_forge.contracts import KIND_LABELS, confirmation_problem
 from harness_forge.documents import canonical_digest
 from harness_forge.models import AcceptedRevision, Confirmation, Decision, PartResult, Rule
+from harness_forge.provenance import git_bytes
 
 TEMPLATES = Path(__file__).resolve().parents[2] / "templates" / "skill"
 BUILDABLE = ("skills", "commands")
@@ -41,9 +44,10 @@ CONFLICT_TOTAL_LIMIT = 60000
 class ConflictError(RuntimeError):
     """Existing content differs from the planned skill: each conflicting path with its own diff."""
 
-    def __init__(self, message: str, conflicts: list[tuple[str, str]]):
+    def __init__(self, message: str, conflicts: list[tuple[str, str]], reasons: dict[str, str] | None = None):
         super().__init__(message)
         self.conflicts = conflicts
+        self.reasons = reasons or {}
         self.diff = "\n".join(diff for _, diff in conflicts)
 
 
@@ -292,43 +296,156 @@ def _checked(root: Path, planned: dict[str, str]) -> tuple[Path, str]:
     return root, name
 
 
-def _conflicts(root: Path, name: str, planned: dict[str, str],
-               replace: list[str] | tuple) -> tuple[list[tuple[str, str]], list[Path]]:
-    """Each path whose existing content differs, with its diff, and the leftovers the user agreed to remove."""
-    entries = []
+def _state(path: Path) -> str | None:
+    """A path's state as build records it: ``sha256:<hex>`` of a file's bytes, ``link:<target>``, else None."""
+    if path.is_symlink():
+        return f"link:{os.readlink(path)}"
+    if path.is_file():
+        return f"sha256:{hashlib.sha256(path.read_bytes()).hexdigest()}"
+    return None
+
+
+def committed_state(root: Path, key: str, git=git_bytes) -> dict:
+    """Whether ``root/key`` on disk, in the index and in ``HEAD`` is the same file: ``match``, ``mismatch`` or
+    ``unavailable``, with a reason, and for a match the repository, commit and path relative to its top.
+
+    Reads only. A failed or timed-out git command is ``unavailable``, never a match.
+    """
+    def unavailable(reason: str) -> dict:
+        return {"status": "unavailable", "reason": reason}
+
+    def mismatch(reason: str, commit: str) -> dict:
+        return {"status": "mismatch", "reason": reason, "commit": commit}
+
+    top = git(root, "rev-parse", "--show-toplevel")
+    if top is None:
+        return unavailable("it is not in a git work tree, or git did not answer")
+    top = Path(os.fsdecode(top.rstrip(b"\n"))).resolve()
+    path = Path(root).resolve() / key
+    try:
+        relative = path.relative_to(top).as_posix()
+    except ValueError:
+        return unavailable("it is outside the git work tree")
+    commit = git(top, "rev-parse", "--verify", "--quiet", "HEAD^{commit}")
+    if commit is None:
+        return unavailable("the repository has no commit to compare with")
+    commit = commit.decode("ascii", "replace").strip()
+    # Paths are literal, never globs; ls-tree and ls-files name paths relative to the top, where git runs.
+    tree = git(top, "--literal-pathspecs", "ls-tree", "-z", commit, "--", relative)
+    index = git(top, "--literal-pathspecs", "ls-files", "-s", "-z", "--", relative)
+    if tree is None or index is None:
+        return unavailable("git could not list the committed or the staged version")
+    entries = [entry for entry in tree.split(b"\0") if entry]
+    if not entries:
+        return mismatch("it is not committed", commit)
+    meta, _, named = entries[0].partition(b"\t")
+    fields = meta.split(b" ")
+    if len(entries) != 1 or len(fields) != 3 or fields[1] != b"blob" or named != os.fsencode(relative):
+        return mismatch(f"it is not a single file in commit {commit[:12]}", commit)
+    mode, blob = fields[0], fields[2]
+    staged = [entry for entry in index.split(b"\0") if entry]
+    if len(staged) != 1 or staged[0].partition(b"\t")[0].split(b" ") != [mode, blob, b"0"]:
+        return mismatch(f"its staged version differs from commit {commit[:12]}", commit)
+    content = git(top, "cat-file", "blob", blob.decode("ascii", "replace"))
+    if content is None:
+        return unavailable("git could not read the committed version")
+    if mode == b"120000":
+        same = path.is_symlink() and os.fsencode(os.readlink(path)) == content
+    elif mode in (b"100644", b"100755"):
+        same = not path.is_symlink() and path.is_file() and path.read_bytes() == content
+    else:
+        same = False
+    if not same:
+        return mismatch(f"it differs from the version committed in {commit[:12]}", commit)
+    return {"status": "match", "repository": str(top), "commit": commit, "path": relative,
+            "show": f"git -C {shlex.quote(str(top))} show {shlex.quote(f'{commit}:{relative}')}"}
+
+
+_EARLIER = {
+    "recorded-build": "Forge's own output from the last build of this part; Forge keeps only its checksum, so the "
+                      "earlier content is recoverable only from a commit or backup that holds it",
+    "named": "discarded as named in --replace; recoverable only from a commit or backup that holds it",
+}
+# What build says once for every path it stops at.
+STOP_HOW = ("To keep your edits, commit the file or move it away and build again. To discard them, build again with "
+            "--replace <path>; Forge then replaces exactly the named paths.")
+
+
+def _classify(root: Path, key: str, replace, recorded: dict | None, git) -> tuple[dict | None, str | None]:
+    """Why an existing path may be replaced or removed without a question, or why build stops at it."""
+    current = _state(root / key)
+    known = (recorded or {}).get(key)
+    recorded_build = "none" if known is None else ("matched" if known == current else "differed")
+    if key in replace:
+        return {"path": key, "basis": "named", "recorded_build": recorded_build, "earlier": _EARLIER["named"]}, None
+    if recorded_build == "matched":
+        return {"path": key, "basis": "recorded-build", "recorded_build": recorded_build,
+                "earlier": _EARLIER["recorded-build"]}, None
+    committed = committed_state(root, key, git)
+    if committed["status"] == "match":
+        return {"path": key, "basis": "committed", "recorded_build": recorded_build,
+                "earlier": f"committed in {committed['commit'][:12]}; `show` prints it",
+                **{field: committed[field] for field in ("repository", "commit", "show")}}, None
+    built = ("it differs from Forge's last build of this part" if recorded_build == "differed"
+             else "no build of this part is recorded for it")
+    found = (committed["reason"] if committed["status"] == "mismatch"
+             else f"Forge could not confirm that it matches a committed version: {committed['reason']}")
+    return None, f"{built}; {found}"
+
+
+def _conflicts(root: Path, name: str, planned: dict[str, str], replace: list[str] | tuple,
+               recorded: dict | None = None, git=git_bytes) -> tuple[list[tuple[str, str]], dict[str, str], list[dict]]:
+    """Each path build stops at, with its diff and why; and each path it replaces or removes, with its basis.
+
+    A path is replaced or removed without a question only when it is named in ``replace``, matches the part's
+    recorded build output, or matches the version committed at ``HEAD`` on disk and in the index.
+    """
+    entries, reasons, changes = [], {}, []
+
+    def judge(key: str, diff: str, action: str) -> None:
+        change, reason = _classify(root, key, replace, recorded, git)
+        if change is None:
+            entries.append((key, diff))
+            reasons[key] = reason
+        else:
+            changes.append({**change, "action": action})
+
     for key, value in planned.items():
         target = root / key
         if isinstance(value, SymlinkTarget):
             if target.is_symlink():
-                if str(target.readlink()) != value and key not in replace:
-                    entries.append((key, f"{key}: links to {target.readlink()}, planned {value}"))
+                if str(target.readlink()) != value:
+                    judge(key, f"{key}: links to {target.readlink()}, planned {value}", "replaced")
             elif target.exists():
                 entries.append((key, f"{key}: exists and is not a symbolic link"))
+                reasons[key] = "a symbolic link is planned there; move it away"
         elif target.is_symlink() or (target.exists() and not target.is_file()):
             entries.append((key, f"{key}: exists and is not a regular file"))
+            reasons[key] = "a regular file is planned there; move it away"
         elif target.exists():
             current = target.read_text(encoding="utf-8")
-            if current != value and key not in replace:
-                entries.append((key, "".join(difflib.unified_diff(current.splitlines(True), value.splitlines(True),
-                                                                   f"existing/{key}", f"planned/{key}"))))
+            if current != value:
+                judge(key, "".join(difflib.unified_diff(current.splitlines(True), value.splitlines(True),
+                                                        f"existing/{key}", f"planned/{key}")), "replaced")
     # A file Forge wrote earlier that the plan no longer has, such as the
     # requirements reference of a part left without requirements or a
-    # command's agents/openai.yaml, would keep acting unseen: it goes only
-    # when the user agrees to replace it.
-    leftovers = []
+    # command's agents/openai.yaml, would keep acting unseen: it goes on the
+    # same bases as a replacement.
     for key in _stale_outputs(root, name, planned):
         target = root / key
-        if key in replace and (target.is_symlink() or target.is_file()):
-            leftovers.append(target)
+        if target.is_symlink() or target.is_file():
+            judge(key, f"{key}: exists and is not part of the planned skill", "removed")
         else:
             entries.append((key, f"{key}: exists and is not part of the planned skill"))
-    return entries, leftovers
+            reasons[key] = "it is not a regular file; move it away"
+    return entries, reasons, changes
 
 
-def conflicts(root: Path, planned: dict[str, str], *, replace: list[str] | tuple = ()) -> list[tuple[str, str]]:
-    """What write_skill would refuse, each path with its complete diff; reads only."""
+def conflicts(root: Path, planned: dict[str, str], *, replace: list[str] | tuple = (),
+              recorded: dict | None = None, git=git_bytes) -> list[tuple[str, str]]:
+    """What write_skill would stop at, each path with its complete diff; reads only."""
     root, name = _checked(root, planned)
-    return _conflicts(root, name, planned, replace)[0]
+    return _conflicts(root, name, planned, replace, recorded, git)[0]
 
 
 def serialized_size(char: str) -> int:
@@ -376,16 +493,31 @@ def conflict_report(entries: list[tuple[str, str]], *, size: int | None = None) 
     return {"conflicts": report, "diff": "\n".join(shown), "incomplete": incomplete}
 
 
-def write_skill(root: Path, planned: dict[str, str], *, replace: list[str] | tuple = ()) -> list[Path]:
-    """Write the planned skill; keep matching files; refuse conflicts unless replaced."""
+class Written(NamedTuple):
+    """What a build wrote, and each existing path it replaced or removed with its basis."""
+
+    paths: list[Path]
+    changes: list[dict]
+
+
+def write_skill(root: Path, planned: dict[str, str], *, replace: list[str] | tuple = (),
+                recorded: dict | None = None, git=git_bytes) -> Written:
+    """Write the planned skill; keep matching files; replace or remove only on a basis, else stop before writing.
+
+    ``recorded`` is the part's ``build.outputs`` from its last build. Every path is judged before anything is
+    written, so one stop leaves every file as it was.
+    """
     root, name = _checked(root, planned)
-    entries, leftovers = _conflicts(root, name, planned, replace)
+    entries, reasons, changes = _conflicts(root, name, planned, replace, recorded, git)
     if entries:
-        raise ConflictError(f"existing content differs: {', '.join(key for key, _ in entries)}", entries)
+        raise ConflictError(f"existing content differs: {', '.join(key for key, _ in entries)}", entries, reasons)
 
     skill_dir = root / ".agents" / "skills" / name
-    for path in leftovers:
-        path.unlink()
+    for change in changes:
+        if change["action"] != "removed":
+            continue
+        path = root / change["path"]
+        path.unlink()  # the link only, never its target
         parent = path.parent
         while parent != skill_dir and not any(parent.iterdir()):
             parent.rmdir()
@@ -396,13 +528,13 @@ def write_skill(root: Path, planned: dict[str, str], *, replace: list[str] | tup
         target.parent.mkdir(parents=True, exist_ok=True)
         if isinstance(value, SymlinkTarget):
             if target.is_symlink() and str(target.readlink()) != value:
-                target.unlink()  # the link only, never its target; the user named it in --replace
+                target.unlink()  # the link only, never its target
             if not target.is_symlink():
                 target.symlink_to(value)
         elif not target.exists() or target.read_text(encoding="utf-8") != value:
             target.write_text(value, encoding="utf-8")
         written.append(target)
-    return written
+    return Written(written, changes)
 
 
 def _refuse_blocked(part: dict) -> None:

@@ -27,18 +27,24 @@ VERIFIER_PREFIX = "harness-forge-verifier-"
 _GIT_TIMEOUT = 10
 
 
-def _git(root: Path, *arguments: str) -> str | None:
-    """Git's output in ``root``, or None when it is missing, fails or times out."""
+def git_bytes(root: Path, *arguments: str) -> bytes | None:
+    """Git's output in ``root`` as bytes, or None when it is missing, fails or times out."""
     # No repository configuration may run a program here, and the caller's GIT_* variables
     # cannot point Git at another repository.
     environment = {key: value for key, value in os.environ.items() if not key.startswith("GIT_")}
     try:
         completed = subprocess.run(["git", "--no-optional-locks", "-c", "core.fsmonitor=false", "-C", str(root),
-                                    *arguments], capture_output=True, text=True, timeout=_GIT_TIMEOUT,
+                                    *arguments], capture_output=True, timeout=_GIT_TIMEOUT,
                                    env=environment, stdin=subprocess.DEVNULL, check=False)
     except (OSError, subprocess.SubprocessError):
         return None
     return completed.stdout if completed.returncode == 0 else None
+
+
+def _git(root: Path, *arguments: str) -> str | None:
+    """Git's output in ``root`` as text, or None when it is missing, fails or times out."""
+    output = git_bytes(root, *arguments)
+    return None if output is None else output.decode("utf-8", "replace")
 
 
 def _version(root: Path) -> str:

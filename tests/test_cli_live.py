@@ -299,14 +299,45 @@ class LiveCommandsTest(unittest.TestCase):
         self.assertEqual(code, 2)
         self.assertIn("missing idea.repro.a.platform", stderr)
         self.assertEqual(skill.read_bytes(), before)
-        code, output, _ = build({"idea.repro.a.platform": "Name the platform the reproducer runs on"})
-        self.assertEqual((code, output["built"]), (1, False))
-        self.assertIn("+1. Name the platform the reproducer runs on.", output["diff"])
-        code, _, stderr = build({"idea.repro.a.platform": "Name the platform the reproducer runs on"},
-                                "--replace", f".agents/skills/{NAME}/SKILL.md,"
-                                             f".agents/skills/{NAME}/references/requirements.md")
-        self.assertEqual(code, 0, stderr)
+        # The files are still the last build's output, so the new checklist replaces them without a question (#101).
+        code, output, stderr = build({"idea.repro.a.platform": "Name the platform the reproducer runs on"})
+        self.assertEqual((code, output["built"]), (0, True), stderr)
+        self.assertEqual([(entry["path"], entry["basis"]) for entry in output["replaced"]],
+                         [(f".agents/skills/{NAME}/SKILL.md", "recorded-build"),
+                          (f".agents/skills/{NAME}/references/requirements.md", "recorded-build")])
+        self.assertEqual(output["removed"], [])
         self.assertIn("1. Name the platform the reproducer runs on.", skill.read_text(encoding="utf-8"))
+
+    def test_build_stops_at_hand_edits_until_replace_names_them(self):
+        cli, arguments = self.build_ready(ResearchRunner([finding()]))
+        values = dict(zip(arguments[::2], arguments[1::2]))
+        skill = self.root / f".agents/skills/{NAME}/SKILL.md"
+        reference = self.root / f".agents/skills/{NAME}/references/requirements.md"
+        for path in (skill, reference):
+            path.write_text("Hand-written.\n", encoding="utf-8")
+
+        def build(*extra):
+            relay = cli.confirm(self.decision, f"edits-{len(extra)}", "--revision", values["--revision"])
+            return cli("build", "--decision", self.decision, "--part", "A", "--revision", values["--revision"],
+                       "--evidence", values["--evidence"], "--relay", relay, "--root", self.root,
+                       "--description", cli.write("description.txt", DESCRIPTION),
+                       "--procedure", cli.write("procedure.md", PROCEDURE), *extra)
+
+        code, output, _ = build()
+        self.assertEqual((code, output["built"]), (1, False))
+        self.assertEqual({item["path"]: item["why"].split(";")[0] for item in output["conflicts"]},
+                         {f".agents/skills/{NAME}/SKILL.md": "it differs from Forge's last build of this part",
+                          f".agents/skills/{NAME}/references/requirements.md":
+                              "it differs from Forge's last build of this part"})
+        self.assertIn("--replace <path>", output["how"])
+        self.assertEqual(skill.read_text(encoding="utf-8"), "Hand-written.\n", "a stop writes nothing")
+        code, output, stderr = build("--replace", f".agents/skills/{NAME}/SKILL.md,"
+                                                  f".agents/skills/{NAME}/references/requirements.md")
+        self.assertEqual(code, 0, stderr)
+        self.assertEqual(sorted((entry["path"], entry["basis"]) for entry in output["replaced"]),
+                         [(f".agents/skills/{NAME}/SKILL.md", "named"),
+                          (f".agents/skills/{NAME}/references/requirements.md", "named")])
+        self.assertNotIn("Hand-written.", reference.read_text(encoding="utf-8"))
 
     def test_a_cut_conflict_diff_is_named_and_shown_whole_page_by_page(self):
         cli, arguments = self.build_ready(ResearchRunner([finding()]))
@@ -1958,9 +1989,11 @@ class LiveCommandsTest(unittest.TestCase):
         self.assertEqual(code, 2)
         self.assertIn("part A is a built skill: pass its runtime cases with --cases", stderr)
 
-    def test_a_rebuild_over_a_changed_skill_shows_the_diff(self):
+    def test_a_rebuild_over_a_hand_edited_skill_shows_the_diff(self):
         cli, arguments = self.build_ready(ResearchRunner([finding()]))
         option = dict(zip(arguments[::2], arguments[1::2]))
+        skill = self.root / f".agents/skills/{NAME}/SKILL.md"
+        skill.write_text(skill.read_text(encoding="utf-8") + "A note of my own.\n", encoding="utf-8")
         procedure = cli.write("procedure-2.md", PROCEDURE + "\n5. Name the browser version.\n")
         code, output, stderr = cli("build", "--decision", self.decision, "--part", "A", "--root", self.root,
                                    *[item for key in ("--revision", "--evidence", "--relay") for item in (key, option[key])],
@@ -1968,6 +2001,7 @@ class LiveCommandsTest(unittest.TestCase):
         self.assertEqual(code, 1, stderr)
         self.assertFalse(output["built"])
         self.assertIn("+5. Name the browser version.", output["diff"])
+        self.assertIn("-A note of my own.", output["diff"])
 
     def test_readme_writes_the_outside_controls_with_their_conditions(self):
         cli = Cli(FakeRunner(), self.root)

@@ -38,8 +38,8 @@ import stat  # noqa: E402
 
 from harness_forge.adapters.base import preflight, run_command  # noqa: E402
 from harness_forge.build_skill import (  # noqa: E402
-    CONFLICT_DIFF_LIMIT, BuilderUnavailable, ConflictError, bounded_prefix, build_outputs, conflict_report, mark_built,
-    plan_skill, write_skill,
+    CONFLICT_DIFF_LIMIT, STOP_HOW, BuilderUnavailable, ConflictError, bounded_prefix, build_outputs, conflict_report,
+    mark_built, plan_skill, write_skill,
 )
 from harness_forge.build_skill import conflicts as build_conflicts  # noqa: E402
 from harness_forge.contracts import (  # noqa: E402
@@ -1326,21 +1326,26 @@ def _build(arguments: argparse.Namespace) -> int:
         planned = plan_skill(decision, arguments.part, revision, pinned, confirmation=approval["confirmation"],
                              worker_evidence=approval["worker_evidence"], description=description, procedure=procedure,
                              overrides=overrides, drift=_drift(root), checklist=checklist)
+        # The last build's outputs: a file still matching them is Forge's own and is replaced without a question.
+        recorded = (decision.part(arguments.part).get("build") or {}).get("outputs")
         if arguments.show_diff:
-            return _show_diff(arguments, dict(build_conflicts(root, planned)))
-        written = write_skill(root, planned, replace=[item for item in (arguments.replace or "").split(",") if item])
+            return _show_diff(arguments, dict(build_conflicts(root, planned, recorded=recorded)))
+        replace = [item for item in (arguments.replace or "").split(",") if item]
+        written = write_skill(root, planned, replace=replace, recorded=recorded)
     except BuilderUnavailable as error:
         emit({"command": "build", "built": False, "reason": str(error)})
         return 1
     except ConflictError as error:
-        emit(_conflict_payload(str(error), error.conflicts))
+        emit(_conflict_payload(str(error), error.conflicts, error.reasons))
         return 1
     except (OSError, ValueError) as error:
         raise _InvalidInput(str(error)) from error
     # Recorded only now that the write succeeded: a refused or failed build keeps the earlier record.
     build = {"forge": dict(forge_provenance()), "outputs": build_outputs(root, planned)}
     _save_decision(arguments, mark_built(decision, arguments.part, build))
-    emit({"command": "build", "built": True, "written": [str(path.relative_to(root)) for path in written]})
+    emit({"command": "build", "built": True, "written": [str(path.relative_to(root)) for path in written.paths],
+          "replaced": [_change(entry) for entry in written.changes if entry["action"] == "replaced"],
+          "removed": [_change(entry) for entry in written.changes if entry["action"] == "removed"]})
     return 0
 
 
@@ -1348,14 +1353,24 @@ def _payload_size(payload: dict) -> int:
     return len(json.dumps(payload, ensure_ascii=False).encode("utf-8"))
 
 
-def _conflict_payload(reason: str, entries: list[tuple[str, str]]) -> dict:
+def _change(entry: dict) -> dict:
+    """A replaced or removed path as the build result names it, without the internal action."""
+    return {key: value for key, value in entry.items() if key != "action"}
+
+
+def _conflict_payload(reason: str, entries: list[tuple[str, str]], reasons: dict[str, str] | None = None) -> dict:
     """The conflict report, its shown diffs shrunk until the whole output fits the byte bound.
 
-    Every shown character is printed twice, under ``conflicts`` and in the joined ``diff``.
+    Every shown character is printed twice, under ``conflicts`` and in the joined ``diff``. Each conflict also
+    says why build stopped at it, and ``how`` says once how to keep or discard the edits.
     """
     size = MAX_OUTPUT_BYTES // 2
+    reasons = reasons or {}
     while True:
-        payload = {"command": "build", "built": False, "reason": reason, **conflict_report(entries, size=size)}
+        report = conflict_report(entries, size=size)
+        for item in report["conflicts"]:
+            item["why"] = reasons.get(item["path"], "")
+        payload = {"command": "build", "built": False, "reason": reason, **report, "how": STOP_HOW}
         excess = _payload_size(payload) - MAX_OUTPUT_BYTES
         if excess <= 0 or size == 0:
             return payload  # emit refuses one whose paths and marks alone are too long
@@ -1365,7 +1380,7 @@ def _conflict_payload(reason: str, entries: list[tuple[str, str]]) -> dict:
 def _show_diff(arguments: argparse.Namespace, diffs: dict[str, str]) -> int:
     """One page of one conflicting path's complete diff; writes nothing and records nothing."""
     if arguments.replace:
-        raise _InvalidInput("--show-diff only reads; run --replace separately once the user agreed")
+        raise _InvalidInput("--show-diff only reads; run --replace separately once the user said to discard the edits")
     diff = diffs.get(arguments.show_diff)
     if diff is None:
         raise _InvalidInput(f"{arguments.show_diff}: not a conflict of this build; conflicts: "
@@ -1858,7 +1873,9 @@ def build_parser() -> argparse.ArgumentParser:
     build.add_argument("--procedure", required=True, help="file with the procedure")
     build.add_argument("--checklist", help="JSON: each accepted requirement's id to its instruction line for "
                                            "SKILL.md's Requirements section")
-    build.add_argument("--replace", help="comma-separated paths the user agreed to replace, or to remove when the plan no longer has them")
+    build.add_argument("--replace",
+                       help="comma-separated paths whose edits the user said to discard: replaced, or removed when the "
+                            "plan no longer has them")
     build.add_argument("--show-diff", metavar="PATH",
                        help="read only: one conflicting path's complete diff, a page at a time; writes nothing")
     build.add_argument("--offset", type=int, default=0,
