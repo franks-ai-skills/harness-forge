@@ -232,7 +232,7 @@ class VerificationRun:
     worker_violations: list[str] = field(default_factory=list)
     review_attempts: list[dict] = field(default_factory=list)  # set only when a review reply was rejected
     kb_version: str = ""
-    scope: str = "Extensive review (rarely needed)"
+    scope: str = "Every part judged"
     tool_versions: dict[str, str] = field(default_factory=dict)
     targets: list[str] = field(default_factory=list)
     whole_idea: dict = field(default_factory=dict)

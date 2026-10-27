@@ -26,4 +26,4 @@ Every other existing file stops the build with a reason and a unified
 diff; `--replace` discards the edits in exactly the named files. To
 repair a part after a failed verification, rebuild it: a hand-edited
 file stops the build until the user says to discard or keep the edit;
-then harness-verify asks for the re-verification scope.
+then harness-verify re-verifies it, judging again what Forge chooses.

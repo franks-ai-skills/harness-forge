@@ -193,7 +193,8 @@ class RunFilesTest(unittest.TestCase):
         for name in ("workers.json", "relay.json"):
             self.assertIn(name, intake)
         self.assertIn("select-input.json", (FORGE / "skills/harness-intake/SKILL.md").read_text(encoding="utf-8"))
-        self.assertIn("scope-relay.json", (FORGE / "skills/harness-verify/SKILL.md").read_text(encoding="utf-8"))
+        self.assertNotIn("scope-relay", (FORGE / "skills/harness-verify/SKILL.md").read_text(encoding="utf-8"),
+                         "Forge chooses the scope; there is no scope answer to relay (#102)")
         self.assertTrue(re.search(r"exactly the single line `\*`",
                                   " ".join((FORGE / "skills/harness-intake/SKILL.md").read_text(encoding="utf-8").split())))
 

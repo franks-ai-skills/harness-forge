@@ -44,9 +44,15 @@ WORKER_COMMANDS = {"workers", "research", "verify"}
 
 
 class VerticalRunTest(unittest.TestCase):
+    def environ(self):
+        """The test environment with Forge's own data in a fresh directory, where verify records its reports."""
+        home = tempfile.TemporaryDirectory(prefix="forge-home-")
+        self.addCleanup(home.cleanup)
+        return {**PARENT, "HARNESS_FORGE_HOME": home.name}
+
     def run_vertical(self, runner, **options):
         forge = self.forge = RecordingForge()
-        forge.module.RUNNER, forge.module.FETCH, forge.module.ENVIRON = runner, fetch_page, PARENT
+        forge.module.RUNNER, forge.module.FETCH, forge.module.ENVIRON = runner, fetch_page, self.environ()
         with tempfile.TemporaryDirectory(prefix="forge-vertical-") as directory:
             summary = LIVE.vertical("claude-code", Path(directory) / "run", forge=forge, **options)
             on_disk = json.loads((Path(directory) / "run" / "summary.json").read_text(encoding="utf-8"))
@@ -143,11 +149,17 @@ def init(skills):
 
 
 class FlowsRunTest(unittest.TestCase):
+    def environ(self):
+        """The test environment with Forge's own data in a fresh directory, where verify records its reports."""
+        home = tempfile.TemporaryDirectory(prefix="forge-home-")
+        self.addCleanup(home.cleanup)
+        return {**PARENT, "HARNESS_FORGE_HOME": home.name}
+
     """T12's flows on top of the vertical: a goal conflict, fixture drift with an override, break, fix, both scopes."""
 
     def run_flows(self, runner):
         forge = LIVE.Forge()
-        forge.module.RUNNER, forge.module.FETCH, forge.module.ENVIRON = runner, fetch_page, PARENT
+        forge.module.RUNNER, forge.module.FETCH, forge.module.ENVIRON = runner, fetch_page, self.environ()
         with tempfile.TemporaryDirectory(prefix="forge-flows-") as directory:
             summary = LIVE.flows("claude-code", Path(directory) / "run", forge=forge)
             self.report = (Path(directory) / "run/repo/.harness/reports/repro.md").read_text(encoding="utf-8")
@@ -165,7 +177,7 @@ class FlowsRunTest(unittest.TestCase):
             "extensive review judged every part": True})
         self.assertTrue(all("FIXTURE" in text for text in summary["fixtures"].values()))
         self.assertEqual(runner.roles.count("review"), 4, "four verifications, each with a fresh reviewer")
-        self.assertIn("- Review scope: Extensive review (rarely needed): judged A, B", self.report)
+        self.assertIn("- Review scope: Every part judged (--scope extensive asks for every part): A, B", self.report)
         runtime_parts = {stage["stage"]: [case["case_id"] for case in (stage["output"] or {}).get("runtime", [])]
                          for stage in summary["stages"] if stage["stage"].startswith("verify a Review")}
         self.assertEqual(len(next(iter(runtime_parts.values()))), 3, "the Review ran A's three cases only")
@@ -174,7 +186,7 @@ class FlowsRunTest(unittest.TestCase):
     def test_the_review_check_reads_the_reviewer_requests_actually_sent(self):
         runner = ResearchRunner([finding()])
         forge = LIVE.Forge()
-        forge.module.RUNNER, forge.module.FETCH, forge.module.ENVIRON = runner, fetch_page, PARENT
+        forge.module.RUNNER, forge.module.FETCH, forge.module.ENVIRON = runner, fetch_page, self.environ()
         original = forge.module.verify_live
 
         def judge_everything(*arguments, **options):
@@ -230,6 +242,12 @@ class RoutingRunner(FakeRunner):
 
 
 class RoutingSmokeTest(unittest.TestCase):
+    def environ(self):
+        """The test environment with Forge's own data in a fresh directory, where verify records its reports."""
+        home = tempfile.TemporaryDirectory(prefix="forge-home-")
+        self.addCleanup(home.cleanup)
+        return {**PARENT, "HARNESS_FORGE_HOME": home.name}
+
     def run_smoke(self, runner, **options):
         with tempfile.TemporaryDirectory(prefix="forge-routing-") as directory:
             return LIVE.routing_smoke("claude-code", Path(directory), runner=runner, environ=PARENT, **options)
@@ -407,6 +425,12 @@ class RoutingSmokeTest(unittest.TestCase):
 
 
 class InventoryGapTest(unittest.TestCase):
+    def environ(self):
+        """The test environment with Forge's own data in a fresh directory, where verify records its reports."""
+        home = tempfile.TemporaryDirectory(prefix="forge-home-")
+        self.addCleanup(home.cleanup)
+        return {**PARENT, "HARNESS_FORGE_HOME": home.name}
+
     """Codex reports no inventory: its runs are best-effort, and the summary says what stays unknown."""
 
     def test_an_unobservable_inventory_is_a_stated_gap_not_a_failure(self):

@@ -176,7 +176,7 @@ def verify_live(
     collect: Callable[[], tuple[dict[str, bytes], dict[str, str], Decision, AcceptedRevision | None]] | None = None,
     confirmed_exclusions: set[tuple[str, str, str]] | frozenset = frozenset(), drift: list[dict] | tuple = (),
     selection: dict[str, list[dict]] | None = None, overrides: list[dict] | tuple = (),
-    scope: set[str] | None = None, scope_label: str = "Extensive review (rarely needed)",
+    scope: set[str] | None = None, scope_label: str = "Every part judged",
     kept: dict[str, dict] | None = None, cited: dict[str, list[str]] | None = None,
     recorded_drift: list[dict] | tuple = (), diagnostics: Diagnostics | None = None, attempt_id: str | None = None,
 ):

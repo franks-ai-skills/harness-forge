@@ -437,16 +437,8 @@ def flows(harness: str, out: Path, *, forge: Forge | None = None,
         broken["parts"][0]["harness_result"] == "not verified"
     session.build("flows-repair", "--replace", skill.relative_to(repo).as_posix())
     def review_choice(relay):
-        """The scope question asked again before each attempt, answered by the runner (see TEST_RELAY)."""
-        _, scope = session.run("scope", "scope", "--harness", session.harness, "--decision", session.decision,
-                               "--root", repo, "--revision",
-                               session.revision, "--evidence", session.evidence, "--relay", relay, "--slug",
-                               inputs["slug"], "--fixed", "A", "--cases", session.cases_path)
-        review = next((option for option in (scope or {}).get("options", [])
-                       if option["label"].startswith("Review")), {})
-        chosen = _write_json(scratch / "scope-relay.json", {"choice": "review", "displayed_digest": review.get("digest"),
-                                                            "run_id": "flows-verify-3"})
-        return ["--scope", "review", "--fixed", "A", "--scope-relay", chosen]
+        """Forge chooses the Review itself (#102): only the part the builder fixed is named."""
+        return ["--fixed", "A"]
 
     streams = len(list((session.out / "streams").glob("*.json")))
     code, reviewed = session.verify("flows-verify-3", "verify a Review", refresh=review_choice)

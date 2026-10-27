@@ -123,13 +123,11 @@ class FullPipelineTest(unittest.TestCase):
         output = self.run_ok(*build, code=1)
         self.assertIn("-name: Broken_Name", output["diff"])
         self.run_ok(*build, "--replace", f".agents/skills/{NAME}/SKILL.md")
-        options = self.run_ok("scope", "--harness", "claude-code", "--decision", decision_path, "--root", root, "--revision", revision,
-                              "--evidence", workers, "--relay", verify[verify.index("--relay") + 1], "--slug", "repro",
-                              "--fixed", "A1", "--cases", cases_path)["options"]
-        self.assertEqual(options[0]["parts"], ["A1", "A2"], "A2 links to the fixed A1")
-        chosen = cli.write("scope.json", {"choice": "review", "displayed_digest": options[0]["digest"],
-                                          "run_id": "verify-1"})
-        output = self.run_ok(*verify, "--scope", "review", "--fixed", "A1", "--scope-relay", chosen)
+        shown = self.run_ok("scope", "--harness", "claude-code", "--decision", decision_path, "--root", root, "--revision", revision,
+                            "--evidence", workers, "--relay", verify[verify.index("--relay") + 1], "--slug", "repro",
+                            "--fixed", "A1", "--cases", cases_path)["scope"]
+        self.assertEqual([item["part_id"] for item in shown["judged"]], ["A1", "A2"], "A2 links to the fixed A1")
+        output = self.run_ok(*verify, "--fixed", "A1")
         self.assertEqual(output["parts"][0]["harness_result"], "verified")
 
         # A stricter description limit, adopted from drift: building and checking both apply it.

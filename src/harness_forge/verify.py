@@ -323,7 +323,7 @@ def prepare_run(
     decision: Decision, files: dict[str, bytes], rules: list[Rule], confirmation: Confirmation | None, *,
     symlinks: dict[str, str] | None = None, revision: AcceptedRevision | None = None,
     overrides: list[dict] | tuple = (), kb_version: str = "", worker_evidence: list[dict] | tuple = (),
-    scope: set[str] | None = None, scope_label: str = "Extensive review (rarely needed)",
+    scope: set[str] | None = None, scope_label: str = "Every part judged",
     recorded_drift: list[dict] | tuple = (), cases: list[dict] | tuple = (), forge: dict[str, str] | None = None,
     attempt_id: str | None = None,
 ) -> VerificationRun:
