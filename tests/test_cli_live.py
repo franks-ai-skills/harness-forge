@@ -1442,13 +1442,16 @@ class LiveCommandsTest(unittest.TestCase):
         from harness_forge.provenance import forge_provenance
         self.assertEqual(load_decision(self.decision).part("A")["build"]["forge"], forge_provenance())
 
-    def test_a_review_keeps_no_part_whose_runtime_evidence_does_not_hold(self):
+    def test_a_review_runs_again_the_cases_whose_evidence_does_not_hold(self):
+        """#107: evidence that does not hold reruns the part's cases; its file judgments stay, as it was verified."""
         import json as json_module
+        from harness_forge import written_reports
         cli, arguments = self.build_ready(ResearchRunner([finding()]))
         self.assertEqual(cli("verify", *arguments)[0], 0)
         report = self.root / ".harness/reports/repro.md"
         original = report.read_text(encoding="utf-8")
         self.assertEqual(self.scope_parts(cli, arguments), [], "unchanged and settled: A is kept")
+        self.assertEqual(self.kept_runtime(cli, arguments), [("A", None)], "with its runtime evidence")
 
         def edited(change):
             start = original.index("```json\n", original.index("## Report data")) + len("```json\n")
@@ -1478,10 +1481,22 @@ class LiveCommandsTest(unittest.TestCase):
                              ("nothing ran", not_run), ("no explicit activation", near_miss_only)):
             with self.subTest(name):
                 report.write_text(edited(change), encoding="utf-8")
-                self.assertEqual(self.scope_parts(cli, arguments), ["A"])
+                written_reports.record(cli.module.ENVIRON, self.root, report)  # as if Forge had written it
+                self.assertEqual(self.scope_parts(cli, arguments), [])
+                self.assertEqual(self.kept_runtime(cli, arguments), [("A", "its runtime cases run again")])
         report.write_text(original, encoding="utf-8")
-        self.assertEqual(self.scope_parts(cli, arguments, harness="codex"), ["A"],
+        written_reports.record(cli.module.ENVIRON, self.root, report)
+        self.assertEqual(self.kept_runtime(cli, arguments, harness="codex"), [("A", "its runtime cases run again")],
                          "Claude's runtime evidence does not stand for Codex")
+
+    def kept_runtime(self, cli, arguments, harness="claude-code"):
+        code, output, stderr = cli("scope", "--harness", harness, "--decision", self.decision, "--root", self.root,
+                                   "--revision", self.root / ".harness/research/repro.rules.yaml", "--slug", "repro",
+                                   "--fixed", "", "--evidence", self.root / SCRATCH / "workers.json",
+                                   "--relay", arguments[arguments.index("--relay") + 1],
+                                   "--cases", FORGE / "evals/smoke/vertical.yaml")
+        self.assertEqual(code, 0, stderr)
+        return [(item["part_id"], item.get("runtime")) for item in output["scope"]["kept"]]
 
     def scope_parts(self, cli, arguments, fixed="", harness="claude-code"):
         code, output, stderr = cli("scope", "--harness", harness, "--decision", self.decision, "--root", self.root,
@@ -1515,21 +1530,93 @@ class LiveCommandsTest(unittest.TestCase):
         self.assertEqual((code, output["parts"][0]["harness_result"]), (1, "not verified"))
         self.assertEqual(self.scope_parts(cli, arguments), ["A"], "an unresolved earlier result is not kept")
 
-    def test_changed_runtime_cases_put_their_part_back_in_scope(self):
-        cli, arguments = self.build_ready(ResearchRunner([finding()]))
-        self.assertEqual(cli("verify", *arguments)[0], 0)
+    def changed_cases(self, cli, name="changed-cases.yaml"):
         cases = yaml.safe_load((FORGE / "evals/smoke/vertical.yaml").read_text(encoding="utf-8"))
         for item in cases["cases"]:
-            if item["mode"] == "negative":
-                item["prompt"] = "Summarize this changelog for me."
-        changed = cli.write("changed-cases.yaml", yaml.safe_dump(cases))
+            if item["mode"] == "implicit":
+                item["prompt"] += " Thank you."
+        return cli.write(name, yaml.safe_dump(cases))
+
+    def test_a_case_only_change_keeps_the_judgments_and_runs_the_cases_again(self):
+        """#107: the reviewer never sees runtime cases, so changing them does not re-judge the files."""
+        runner = ResearchRunner([finding()])
+        cli, arguments = self.build_ready(runner)
+        self.assertEqual(cli("verify", *arguments)[0], 0)
+        changed = self.changed_cases(cli)
+        relay = arguments[arguments.index("--relay") + 1]
         code, output, stderr = cli("scope", "--harness", "claude-code", "--decision", self.decision, "--root", self.root, "--revision",
                                    self.root / ".harness/research/repro.rules.yaml", "--slug", "repro", "--fixed", "",
-                                   "--evidence", self.root / SCRATCH / "workers.json",
-                                   "--relay", arguments[arguments.index("--relay") + 1], "--cases", changed)
+                                   "--evidence", self.root / SCRATCH / "workers.json", "--relay", relay,
+                                   "--cases", changed)
         self.assertEqual(code, 0, stderr)
-        self.assertEqual(output["scope"]["judged"], [{"part_id": "A", "why": "its bound inputs changed"}],
-                         "a changed case is a changed input of its part")
+        self.assertEqual(output["scope"]["judged"], [])
+        self.assertEqual([(item["part_id"], item.get("runtime")) for item in output["scope"]["kept"]],
+                         [("A", "its runtime cases run again")])
+        verify = list(arguments)
+        verify[verify.index("--cases") + 1] = changed
+        roles = len(runner.roles)
+        code, output, stderr = cli("verify", *verify)
+        self.assertEqual(code, 0, stderr)
+        self.assertEqual((output["judged_parts"], output["kept_parts"]), ([], ["A"]))
+        self.assertNotIn("review", runner.roles[roles:], "no file judgment is asked again")
+        self.assertEqual(runner.roles[roles:].count("runtime"), 3, "every case of the part runs again")
+        self.assertFalse([item for item in output["runtime"] if "(kept from " in item["reason"]], "fresh evidence")
+        self.assertEqual(output["parts"][0]["harness_result"], "verified")
+        report = (self.root / ".harness/reports/repro.md").read_text(encoding="utf-8")
+        self.assertIn("; runtime cases run again for A", report)
+        self.assertIn("(kept from attempt", report.split("## Runtime tests")[0], "the file judgments are kept")
+
+    def test_kept_judgments_never_keep_a_part_verified_over_a_failing_case(self):
+        class TimesOut(ResearchRunner):
+            """The explicit case times out while ``failing`` is set."""
+            failing = False
+
+            def __call__(self, command, *, cwd, env, stdin, timeout):
+                answer = super().__call__(command, cwd=cwd, env=env, stdin=stdin, timeout=timeout)
+                if self.failing and self.roles and self.roles[-1] == "runtime" and stdin and stdin.startswith(
+                        "Use the reproduction-checklist"):
+                    return Completed(0, "", "", True)
+                return answer
+
+        runner = TimesOut([finding()])
+        cli, arguments = self.build_ready(runner)
+        self.assertEqual(cli("verify", *arguments)[0], 0)
+        verify = list(arguments)
+        verify[verify.index("--cases") + 1] = self.changed_cases(cli)
+        runner.failing = True
+        code, output, stderr = cli("verify", *verify)
+        self.assertEqual((code, output["kept_parts"]), (1, ["A"]), stderr)
+        self.assertEqual(output["parts"][0]["harness_result"], "not verified")
+        # The next attempt judges the part again in full: it was not verified last time.
+        runner.failing = False
+        roles = len(runner.roles)
+        code, output, stderr = cli("verify", *verify)
+        self.assertEqual((code, output["judged_parts"]), (0, ["A"]), stderr)
+        self.assertIn("review", runner.roles[roles:])
+
+    def test_the_runtime_scope_is_bound_to_the_plan(self):
+        cli, arguments = self.build_ready(ResearchRunner([finding()]))
+        self.assertEqual(cli("verify", *arguments)[0], 0)
+        relay = arguments[arguments.index("--relay") + 1]
+        scope = ["scope", "--harness", "claude-code", "--decision", self.decision, "--root", self.root, "--revision",
+                 self.root / ".harness/research/repro.rules.yaml", "--slug", "repro", "--fixed", "",
+                 "--evidence", self.root / SCRATCH / "workers.json", "--relay", relay,
+                 "--cases", arguments[arguments.index("--cases") + 1]]
+        digests = []
+        original = cli.module._review_plan
+
+        def recording(*items, **options):
+            plan = original(*items, **options)
+            digests.append((plan["runtime_scope"], plan["digest"]))
+            return plan
+
+        cli.module._review_plan = recording
+        self.assertEqual(cli(*scope)[0], 0)
+        cli.module.case_changed_parts = lambda run, current: {"A"}  # the same inputs, another runtime scope
+        self.assertEqual(cli(*scope)[0], 0)
+        (first_scope, first), (second_scope, second) = digests
+        self.assertEqual((first_scope, second_scope), ([], ["A"]))
+        self.assertNotEqual(first, second)
 
     def test_a_report_from_before_re_verification_only_rules_out_a_review(self):
         cli, arguments = self.build_ready(ResearchRunner([finding()]))

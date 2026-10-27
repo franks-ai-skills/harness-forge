@@ -44,12 +44,15 @@ def extensive_scope(decision: Decision) -> set[str]:
     return {part["id"] for part in decision.record["parts"]}
 
 
-def affected_parts(run: VerificationRun, current: dict, owners: VerificationRun | None = None) -> set[str]:
+def affected_parts(run: VerificationRun, current: dict, owners: VerificationRun | None = None, *,
+                   cases: bool = True) -> set[str]:
     """Parts whose bound inputs differ between the frozen run and now.
 
     ``owners`` is a run prepared from the current decision: its file
     ownership maps changed paths too, so an earlier report's edited
-    ownership cannot hide a changed file.
+    ownership cannot hide a changed file. Without ``cases``, a part's
+    runtime cases and fixtures are left out: what its file judgments rest
+    on (#107). A fixture that is also a reviewed file still changes it.
     """
     frozen = run.frozen_inputs
     parts = set(frozen["parts"]) | set(current["parts"])
@@ -57,8 +60,8 @@ def affected_parts(run: VerificationRun, current: dict, owners: VerificationRun 
         return parts
     affected = {part_id for part_id in parts if frozen["parts"].get(part_id) != current["parts"].get(part_id)}
     # A part's runtime cases and fixtures; history without them counts as changed.
-    affected |= {part_id for part_id in parts
-                 if (frozen.get("cases") or {}).get(part_id) != (current.get("cases") or {}).get(part_id)}
+    if cases:
+        affected |= case_changed_parts(run, current)
     maps = [run] + ([owners] if owners is not None else [])
     if frozen["revision"] != current["revision"]:
         affected |= {part_id for owner in maps for part_id in owner.requirement_parts}
@@ -78,12 +81,23 @@ def affected_parts(run: VerificationRun, current: dict, owners: VerificationRun 
     return affected
 
 
+def case_changed_parts(run: VerificationRun, current: dict) -> set[str]:
+    """Parts whose runtime cases or fixtures differ between the frozen run and now; history without them counts."""
+    frozen = run.frozen_inputs
+    parts = set(frozen["parts"]) | set(current["parts"])
+    return {part_id for part_id in parts
+            if (frozen.get("cases") or {}).get(part_id) != (current.get("cases") or {}).get(part_id)}
+
+
 def preserved_parts(previous: VerificationRun, current: dict, confirmation,
-                    owners: VerificationRun | None = None) -> set[str]:
-    """Parts whose earlier results may be kept: inputs unchanged and the same contract confirmed now."""
+                    owners: VerificationRun | None = None, *, cases: bool = True) -> set[str]:
+    """Parts whose earlier results may be kept: inputs unchanged and the same contract confirmed now.
+
+    Without ``cases``, only the inputs file judgments rest on count (#107).
+    """
     if confirmation is None or confirmation.contract_digest != previous.contract_digest:
         return set()
-    unchanged = set(previous.frozen_inputs["parts"]) - affected_parts(previous, current, owners)
+    unchanged = set(previous.frozen_inputs["parts"]) - affected_parts(previous, current, owners, cases=cases)
     return unchanged & set(confirmation.part_ids)
 
 

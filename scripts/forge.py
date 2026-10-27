@@ -81,7 +81,9 @@ from harness_forge.provenance import forge_provenance  # noqa: E402
 from harness_forge.behavior import BEHAVIOR, case_digest  # noqa: E402
 from harness_forge.runtime import load_cases  # noqa: E402
 from harness_forge.workflow import research_pass, verify_live  # noqa: E402
-from harness_forge.scope import affected_parts, earlier_run, preserved_parts, review_scope, settled  # noqa: E402
+from harness_forge.scope import (  # noqa: E402
+    affected_parts, case_changed_parts, earlier_run, preserved_parts, review_scope, settled,
+)
 from harness_forge.verify import (  # noqa: E402
     NEEDS_CONFIRMATION, affecting_rules, bound_inputs, case_alias, exclusion_token, finish_run, open_blocking_drift,
     kept_note, part_kind, plugin_manifests, prepare_run, selection_citations, selection_failures, skill_home,
@@ -831,7 +833,10 @@ def _computed_scope(arguments: argparse.Namespace, root: Path, decision: Decisio
 
     return {"kind": "review", "reason": "the earlier report Forge wrote is unchanged",
             "judged": [{"part_id": part_id, "why": why(part_id)} for part_id in plan["judged"]],
-            "kept": [{"part_id": part_id, "attempt_id": plan["earlier_attempt"], "run_id": plan["earlier_run"]}
+            "kept": [{"part_id": part_id, "attempt_id": plan["earlier_attempt"], "run_id": plan["earlier_run"],
+                      # Kept file judgments, its runtime cases run again: they changed, or their evidence no longer
+                      # holds (#107).
+                      **({"runtime": "its runtime cases run again"} if part_id in plan["runtime_scope"] else {})}
                      for part_id in sorted(plan["kept"])], "plan": plan}
 
 
@@ -846,6 +851,9 @@ def _scope_label(computed: dict) -> str:
         where = (f"attempt {first['attempt_id']} of run {first['run_id']}" if first["attempt_id"]
                  else f"run {first['run_id']}")
         label += f"; kept {', '.join(item['part_id'] for item in computed['kept'])} from {where}"
+        again = [item["part_id"] for item in computed["kept"] if item.get("runtime")]
+        if again:
+            label += f"; runtime cases run again for {', '.join(again)}"
     return label
 
 
@@ -870,20 +878,31 @@ def _review_plan(earlier, decision: Decision, current: dict, fixed: set[str], co
     """
     run, results = earlier
     every = {part["id"] for part in decision.record["parts"]}
-    # A retired part's history stays behind; only current parts can be judged or kept.
-    changed = affected_parts(run, current, owners) & every
+    # A retired part's history stays behind; only current parts can be judged or kept. Runtime cases and fixtures
+    # do not decide what is judged: the reviewer never sees them (#107).
+    changed = affected_parts(run, current, owners, cases=False) & every
+    case_changed = case_changed_parts(run, current) & every
     confirmation = Confirmation(run_id="", contract_digest=contract_digest, part_ids=sorted(confirmed_parts))
-    preserved = {part_id for part_id in preserved_parts(run, current, confirmation, owners) & set(results)
-                 if settled(results[part_id]) and _runtime_holds(run, part_id, current, owners, harness, cases)}
+    judgments = {part_id for part_id in preserved_parts(run, current, confirmation, owners, cases=False)
+                 & set(results) if settled(results[part_id])}
+    with_runtime = {part_id for part_id in judgments - case_changed
+                    if _runtime_holds(run, part_id, current, owners, harness, cases)}
+    # Its file judgments stay, its runtime cases run again: only for a part verified last time, so that a part
+    # that failed at runtime is judged again in full on the next attempt.
+    runtime_only = {part_id for part_id in judgments - with_runtime
+                    if results[part_id].get("harness_result") == "verified"}
+    preserved = with_runtime | runtime_only
     judged = review_scope(decision, fixed, changed) | (every - preserved)
     kept = {part_id: results[part_id] for part_id in sorted(every - judged)}
+    runtime_scope = judged | (set(kept) & runtime_only)
     kept_runtime = [asdict(result) for result in run.runtime_results
-                    if result.part_id in kept and result.harness == harness]
+                    if result.part_id in kept and result.part_id not in runtime_scope and result.harness == harness]
     # The user's choice binds the parts, the kept results with their runtime evidence, the earlier inputs they
     # rest on and the inputs now: anything that changes after the choice makes it another plan.
     # The earlier attempt is bound only when its report names one, so plans from older reports keep their digest.
     digest = canonical_digest({"earlier_run": run.run_id, **({"earlier_attempt": run.attempt_id} if run.attempt_id
                                                               else {}), "judged": sorted(judged),
+                               "runtime_scope": sorted(runtime_scope),
                                "kept": {part_id: canonical_digest(result) for part_id, result in kept.items()},
                                "kept_runtime": kept_runtime,
                                "earlier_inputs": run.frozen_inputs, "current_inputs": current,
@@ -891,6 +910,7 @@ def _review_plan(earlier, decision: Decision, current: dict, fixed: set[str], co
                                "harness": harness})
     return {"earlier_run": run.run_id, "earlier_attempt": run.attempt_id, "changed": sorted(changed),
             "judged": sorted(judged), "preserved": sorted(preserved), "kept": kept,
+            "runtime_scope": sorted(runtime_scope), "case_changed": sorted(case_changed),
             "kept_runtime": kept_runtime, "digest": digest}
 
 
@@ -1740,10 +1760,10 @@ def _verify(arguments: argparse.Namespace) -> int:
     every = {part["id"] for part in decision.record["parts"]}
     computed = _computed_scope(arguments, root, decision, revision, approval, overrides, files, symlinks, rules,
                                cases)
-    scope, kept, kept_runtime, earlier_attempt = None, {}, [], None
+    scope, kept, kept_runtime, earlier_attempt, runtime_scope = None, {}, [], None, None
     plan = computed["plan"]
     if plan is not None:
-        scope = set(plan["judged"])
+        scope, runtime_scope = set(plan["judged"]), set(plan["runtime_scope"])
         kept = {part_id: {"run_id": plan["earlier_run"], "attempt_id": plan["earlier_attempt"], "result": result}
                 for part_id, result in plan["kept"].items()}
         kept_runtime, earlier_attempt = plan["kept_runtime"], plan["earlier_attempt"]
@@ -1760,7 +1780,7 @@ def _verify(arguments: argparse.Namespace) -> int:
                                    cases=cases, runner=RUNNER, environ=_environ(), kb_version=manifest["kb_version"],
                                    login_answer=arguments.login_answer, collect=lambda: _current_inputs(arguments, root, drift, overrides, cases),
                                    confirmed_exclusions=exclusions, drift=unresolved, selection=failures,
-                                   diagnostics=diagnostics, attempt_id=ATTEMPT_ID())
+                                   diagnostics=diagnostics, attempt_id=ATTEMPT_ID(), runtime_scope=runtime_scope)
     except ValueError as error:
         raise _InvalidInput(str(error)) from error
     # A kept part's runtime results stand as its runtime evidence, attributed to the attempt that produced them.
