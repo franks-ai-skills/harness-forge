@@ -84,7 +84,7 @@ from harness_forge.workflow import research_pass, verify_live  # noqa: E402
 from harness_forge.scope import affected_parts, earlier_run, preserved_parts, review_scope, settled  # noqa: E402
 from harness_forge.verify import (  # noqa: E402
     NEEDS_CONFIRMATION, affecting_rules, bound_inputs, case_alias, exclusion_token, finish_run, open_blocking_drift,
-    part_kind, plugin_manifests, prepare_run, selection_citations, selection_failures, skill_home,
+    kept_note, part_kind, plugin_manifests, prepare_run, selection_citations, selection_failures, skill_home,
 )
 from harness_forge.models import ReviewResponse, RuntimeResult  # noqa: E402
 from harness_forge.selection import (  # noqa: E402
@@ -100,6 +100,8 @@ HARNESSES = ("claude-code", "codex")
 ROLES = ("research", "source-support", "review")
 # Replaced by tests; the live commands launch real workers and fetch real pages.
 RUNNER = run_command
+# Each verify invocation's own id (#106), like a run directory's: replaced by tests.
+ATTEMPT_ID = runfiles.new_run_id
 FETCH = functools.partial(fetch_text, reject=source_rejection)  # every redirect hop meets the source policy
 ENVIRON = None
 # (search, publisher) for KB issues; None uses the GitHub CLI with the user's existing login.
@@ -821,13 +823,16 @@ def _review_plan(earlier, decision: Decision, current: dict, fixed: set[str], co
                     if result.part_id in kept and result.harness == harness]
     # The user's choice binds the parts, the kept results with their runtime evidence, the earlier inputs they
     # rest on and the inputs now: anything that changes after the choice makes it another plan.
-    digest = canonical_digest({"earlier_run": run.run_id, "judged": sorted(judged),
+    # The earlier attempt is bound only when its report names one, so plans from older reports keep their digest.
+    digest = canonical_digest({"earlier_run": run.run_id, **({"earlier_attempt": run.attempt_id} if run.attempt_id
+                                                              else {}), "judged": sorted(judged),
                                "kept": {part_id: canonical_digest(result) for part_id, result in kept.items()},
                                "kept_runtime": kept_runtime,
                                "earlier_inputs": run.frozen_inputs, "current_inputs": current,
                                "contract": contract_digest, "confirmed": sorted(confirmed_parts),
                                "harness": harness})
-    return {"earlier_run": run.run_id, "changed": sorted(changed), "judged": sorted(judged), "kept": kept,
+    return {"earlier_run": run.run_id, "earlier_attempt": run.attempt_id, "changed": sorted(changed),
+            "judged": sorted(judged), "kept": kept,
             "kept_runtime": kept_runtime, "digest": digest}
 
 
@@ -897,7 +902,8 @@ def _scope(arguments: argparse.Namespace) -> int:
                             _cases(arguments))
         options.append({"label": "Review (recommended)", "parts": plan["judged"],
                         "judged_rules": sum(counts.get(p, 0) for p in plan["judged"]), "link_checks": True,
-                        "kept": [{"part_id": part_id, "run_id": plan["earlier_run"], "status": result["status"],
+                        "kept": [{"part_id": part_id, "run_id": plan["earlier_run"],
+                                  "attempt_id": plan["earlier_attempt"], "status": result["status"],
                                   "harness_result": result["harness_result"], "goal_result": result["goal_result"],
                                   "goal_verdict": result.get("goal_verdict"),
                                   # Every kept judgment, as the user must see what the choice keeps.
@@ -918,7 +924,8 @@ def _scope(arguments: argparse.Namespace) -> int:
                 "it judge again?")
     emit({"command": "scope", "question": question, "fixed": sorted(fixed),
           "changed": plan["changed"] if earlier else every,
-          "earlier_run": earlier[0].run_id if earlier else None, "options": options})
+          "earlier_run": earlier[0].run_id if earlier else None,
+          "earlier_attempt": earlier[0].attempt_id if earlier else None, "options": options})
     return 0
 
 
@@ -1716,7 +1723,7 @@ def _verify(arguments: argparse.Namespace) -> int:
     every = {part["id"] for part in decision.record["parts"]}
     earlier = _earlier(root, arguments.slug, required=arguments.scope == "review")
     fixed = _fixed(arguments, decision)
-    scope, kept, kept_runtime = None, {}, []
+    scope, kept, kept_runtime, earlier_attempt = None, {}, [], None
     if arguments.scope == "review":
         if earlier is None:
             raise _InvalidInput("a Review compares with an earlier run, and there is no earlier report "
@@ -1740,11 +1747,14 @@ def _verify(arguments: argparse.Namespace) -> int:
             raise _InvalidInput("this is not the Review the user chose: its parts or kept results differ from the "
                                 "options shown; run scope again and ask")
         scope = set(plan["judged"])
-        kept = {part_id: {"run_id": plan["earlier_run"], "result": result} for part_id, result in plan["kept"].items()}
-        kept_runtime = plan["kept_runtime"]
+        kept = {part_id: {"run_id": plan["earlier_run"], "attempt_id": plan["earlier_attempt"], "result": result}
+                for part_id, result in plan["kept"].items()}
+        kept_runtime, earlier_attempt = plan["kept_runtime"], plan["earlier_attempt"]
         label = f"Review (recommended): judged {', '.join(sorted(scope)) or 'no part'}"
         if kept:
-            label += f"; kept from run {earlier[0].run_id}: {', '.join(sorted(kept))}"
+            where = (f"attempt {earlier_attempt} of run {earlier[0].run_id}" if earlier_attempt
+                     else f"run {earlier[0].run_id}")
+            label += f"; kept from {where}: {', '.join(sorted(kept))}"
     elif earlier is None:
         label = f"First run: judged {', '.join(sorted(every))}"
     else:
@@ -1761,12 +1771,12 @@ def _verify(arguments: argparse.Namespace) -> int:
                                    cases=cases, runner=RUNNER, environ=_environ(), kb_version=manifest["kb_version"],
                                    login_answer=arguments.login_answer, collect=lambda: _current_inputs(arguments, root, drift, overrides, cases),
                                    confirmed_exclusions=exclusions, drift=unresolved, selection=failures,
-                                   diagnostics=diagnostics)
+                                   diagnostics=diagnostics, attempt_id=ATTEMPT_ID())
     except ValueError as error:
         raise _InvalidInput(str(error)) from error
-    # A kept part's runtime results stand as its runtime evidence, attributed to the run that produced them.
-    run.runtime_results += [RuntimeResult(**{**item, "reason": item["reason"] if "(kept from run " in item["reason"]
-                                             else f"{item['reason']} (kept from run {item['run_id']})"})
+    # A kept part's runtime results stand as its runtime evidence, attributed to the attempt that produced them.
+    run.runtime_results += [RuntimeResult(**{**item, "reason": kept_note(item["reason"], item["run_id"],
+                                                                          earlier_attempt)})
                             for item in kept_runtime]
     written = None
     try:
@@ -1782,7 +1792,7 @@ def _verify(arguments: argparse.Namespace) -> int:
     unresolved = [{"part_id": r.part_id, "rule_id": rule["rule_id"], "reason": rule["reason"].removesuffix(NEEDS_CONFIRMATION),
                    "confirmation": f"{r.part_id}:{rule['rule_id']}:{exclusion_token(run, r.part_id, rule['rule_id'])}"}
                   for r in results for rule in r.rule_results if rule["result"] == "unresolved"]
-    emit({"command": "verify", "run_id": run.run_id, "parts": parts, "runtime": runtime, "unresolved": unresolved,
+    emit({"command": "verify", "run_id": run.run_id, "attempt_id": run.attempt_id, "parts": parts, "runtime": runtime, "unresolved": unresolved,
           "goal_conflicts": conflicts,
           "drift": _drift_report(drift, decision, overrides,
                                  open_blocking_drift(drift, decision, overrides, affecting_rules(run, cited))),

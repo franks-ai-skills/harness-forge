@@ -310,12 +310,22 @@ def bound_inputs(
     }
 
 
+def kept_note(reason: str, run_id: str, attempt_id: str | None) -> str:
+    """A kept result's reason naming the verification attempt that produced it (#106); a note already there stays,
+    and a report from before attempt ids names only its run."""
+    if "(kept from " in reason:
+        return reason
+    where = f"attempt {attempt_id} of run {run_id}" if attempt_id else f"run {run_id}"
+    return f"{reason} (kept from {where})"
+
+
 def prepare_run(
     decision: Decision, files: dict[str, bytes], rules: list[Rule], confirmation: Confirmation | None, *,
     symlinks: dict[str, str] | None = None, revision: AcceptedRevision | None = None,
     overrides: list[dict] | tuple = (), kb_version: str = "", worker_evidence: list[dict] | tuple = (),
     scope: set[str] | None = None, scope_label: str = "Extensive review (rarely needed)",
     recorded_drift: list[dict] | tuple = (), cases: list[dict] | tuple = (), forge: dict[str, str] | None = None,
+    attempt_id: str | None = None,
 ) -> VerificationRun:
     """Decide applicability, run script rules and freeze the bound inputs.
 
@@ -347,7 +357,7 @@ def prepare_run(
     confirmed = [] if unconfirmed_reason else sorted(confirmation.part_ids)
     run_id = confirmation.run_id if confirmation else "unattended-" + canonical_digest(inputs)[:12]
     run = VerificationRun(
-        run_id=run_id, decision_digest=canonical_digest(record),
+        run_id=run_id, attempt_id=attempt_id, decision_digest=canonical_digest(record),
         contract_digest=confirmation.contract_digest if confirmed else "",
         applicable_rules={}, frozen_inputs=inputs, confirmed_parts=confirmed, unconfirmed_reason=unconfirmed_reason,
         targets=list(record["targets"]),
@@ -631,8 +641,8 @@ def finish_run(
         if part_id not in outside:
             continue
         def noted(reason: str) -> str:
-            """A result kept twice names the run that judged it."""
-            return reason if "(kept from run " in reason else f"{reason} (kept from run {entry['run_id']})"
+            """A result kept twice names the attempt that judged it."""
+            return kept_note(reason, entry["run_id"], entry.get("attempt_id"))
 
         for item in entry["result"]["rule_results"]:
             if item["check"] == "judged":

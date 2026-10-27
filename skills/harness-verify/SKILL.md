@@ -89,7 +89,8 @@ instruction, and stop; never install or download anything yourself.
    each option's parts and judged-rule count. Review judges the fixed
    parts, every part linked to them and every part whose inputs or
    confirmation changed. For each part it keeps, show every kept
-   judgment and the goal verdict with its run: they come from the
+   judgment and the goal verdict with its run and attempt (the plan's
+   `earlier_run` and `earlier_attempt`): they come from the
    earlier report, which the repository can hold in any form, and the
    user's choice is what keeps them. Every part's scripts and link
    checks run again either way. For Review, pass `--scope review --fixed

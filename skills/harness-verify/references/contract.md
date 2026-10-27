@@ -94,7 +94,9 @@ A Review run sends the reviewer only its scope: the fixed parts, the
 parts linked to them and every part whose bound inputs changed. Every
 part's script rules and link checks run again in every run. A part
 outside the scope keeps its earlier judged results and goal verdict,
-each marked "kept from run X", and stays verified only if it was
+each marked "kept from attempt A of run X" (or "kept from run X" from a
+report made before attempts were recorded), with its runtime evidence
+marked the same way, and stays verified only if it was
 verified then and its scripts pass now. Earlier results come from the
 earlier report, which is a repository file; an Extensive review judges
 every part again.

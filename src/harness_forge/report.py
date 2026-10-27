@@ -52,7 +52,8 @@ def report_data(run: VerificationRun, results: list[PartResult]) -> dict:
     """The report's complete, schema-validated record of results and bound inputs."""
     frozen = run.frozen_inputs
     data = {
-        "run_id": run.run_id, "decision_digest": run.decision_digest, "contract_digest": run.contract_digest or None,
+        "run_id": run.run_id, **({"attempt_id": run.attempt_id} if run.attempt_id else {}),
+        "decision_digest": run.decision_digest, "contract_digest": run.contract_digest or None,
         "kb_version": run.kb_version or "unknown", "idea_digest": frozen["idea"], "rules_digest": frozen["rules"],
         "revision_digest": frozen["revision"], "confirmed_parts": list(run.confirmed_parts), "whole_idea": run.whole_idea,
         "answers": {part["id"]: part["answers"] for part in run.parts}, "scope": run.scope, "overrides": list(run.overrides),
@@ -86,6 +87,7 @@ def render_report(run: VerificationRun, results: list[PartResult]) -> str:
     lines = [
         "# Verification report", "",
         f"- Run: `{run.run_id}`",
+        *([f"- Verification attempt: `{run.attempt_id}`"] if run.attempt_id else []),
         f"- Harness KB version: {run.kb_version or 'unknown'}",
         f"- [Harness Forge]({FORGE_URL}) verifier: {describe(verifier(run.tool_versions))}",
         f"- Confirmed configuration digest: {run.contract_digest or 'none (' + (run.unconfirmed_reason or 'no live confirmation') + ')'}",
