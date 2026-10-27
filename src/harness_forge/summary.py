@@ -259,9 +259,14 @@ def render_changes(comparison: dict | None, reason: str | None) -> str:
 
 # The owner's limit for everything visible at a confirmation; the summary keeps headroom for the question.
 LIMITS = {"lines": 27, "words": 265, "chars": 1575}
-SUMMARY_LIMITS = {"lines": 25, "words": 245, "chars": 1450}
 QUESTION_LIMITS = {"lines": 1, "words": 20, "chars": 125}
 OPTIONS = ("Confirm", "Leave pending")
+# What the question (its limits count its newline) and its options can take at most, one per line, so the
+# summary keeps the rest.
+_ASKED = {"lines": QUESTION_LIMITS["lines"] + len(OPTIONS),
+          "words": QUESTION_LIMITS["words"] + sum(len(option.split()) for option in OPTIONS),
+          "chars": QUESTION_LIMITS["chars"] + sum(len(option) + 1 for option in OPTIONS)}
+SUMMARY_LIMITS = {key: LIMITS[key] - _ASKED[key] for key in LIMITS}
 ITEM_CHARS = 200
 _TEXT_CHARS = 120
 _SHOWN_PARTS = 6

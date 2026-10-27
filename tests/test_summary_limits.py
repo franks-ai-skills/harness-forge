@@ -8,7 +8,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from harness_forge.comparison import compare
+from harness_forge.comparison import REVISION_CHANGED, compare
 from harness_forge.contracts import render_contract, write_decision
 from harness_forge.summary import (
     LIMITS, OPTIONS, QUESTION_LIMITS, SUMMARY_LIMITS, TITLES, SummaryTooLong, fits, render_question, render_summary,
@@ -55,6 +55,20 @@ class CountingTest(unittest.TestCase):
         self.assertEqual(summary_size("a b\n")["words"], 2, "Unicode whitespace separates words")
         self.assertTrue(fits("x\n" * 27, LIMITS))
         self.assertFalse(fits("x\n" * 28, LIMITS))
+
+
+class HeadroomTest(unittest.TestCase):
+    def test_the_fullest_summary_question_and_options_stay_within_the_owners_limits(self):
+        # A summary at every limit, the longest question allowed and the two options, one per line.
+        body = " ".join(["w"] * SUMMARY_LIMITS["words"])
+        body += "x" * (SUMMARY_LIMITS["chars"] - SUMMARY_LIMITS["lines"] - len(body))
+        shown = body + "\n" * SUMMARY_LIMITS["lines"]
+        self.assertEqual(summary_size(shown), SUMMARY_LIMITS)
+        question = " ".join(["q"] * (QUESTION_LIMITS["words"] - 1)) + " "
+        question += "x" * (QUESTION_LIMITS["chars"] - 1 - len(question))
+        self.assertEqual(summary_size(question + "\n"), {**QUESTION_LIMITS})
+        visible = shown + question + "\n" + "".join(option + "\n" for option in OPTIONS)
+        self.assertEqual(summary_size(visible), LIMITS)
 
 
 class LargeDecisionTest(unittest.TestCase):
@@ -132,6 +146,11 @@ class CompareCoverageTest(unittest.TestCase):
         changes = compare(before, ["A"], after)
         self.assertEqual(changes["parts"][0]["fields"], ["outside_controls"])
         self.assertEqual((changes["other"], changes["overrides_changed"]), (["targets"], ["o1"]))
+
+    def test_a_changed_accepted_revision_is_reported(self):
+        before = {**_content(("A", "g", [])), "revision_digest": "1" * 64}
+        after = {**_content(("A", "g", [])), "revision_digest": "2" * 64}
+        self.assertEqual(compare(before, ["A"], after)["other"], [REVISION_CHANGED])
 
     def test_any_remaining_difference_is_never_called_nothing(self):
         before = _content(("A", "g", [("r1", "must", "x"), ("r2", "must", "y")]))

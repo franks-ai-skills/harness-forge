@@ -39,8 +39,9 @@ It returns a `summary`, a `question` and its `options`, and writes the
 complete details to a file in the run directory (`details.path`). Show
 the `summary` in full and unchanged as your whole reply, as Markdown
 outside a code block: add no heading, introduction, restatement or list
-of your own. It is at most 25 lines, 245 words and 1,450 characters, so
-that it fits on one screen with the question. It holds, in this order
+of your own. It is at most 24 lines, 242 words and 1,428 characters, so
+that with the question and its two options it stays within 27 lines,
+265 words and 1,575 characters. It holds, in this order
 and as far as room allows: what changed since the named confirmation
 (weakened requirements first), goal conflicts, overrides and their
 warnings, open drift decisions, parts not offered and research still to

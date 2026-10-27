@@ -25,6 +25,8 @@ DECISION_LINE = "- Decision record: "
 WEAKER = {"must": "should", "must-not": "should-not"}
 _PART_COMPARED = ("id", "goal", "outcome", "mechanism", "requirements")
 _IDEA_COMPARED = ("parts", "goals", "overrides", "revision_digest")
+# The bound requirements hold id, kind and statement; the revision digest also covers severity, check and sources.
+REVISION_CHANGED = "the accepted revision (a requirement's severity, check or sources may have changed)"
 
 
 class Unavailable(ValueError):
@@ -160,6 +162,8 @@ def compare(earlier: dict, part_ids: list[str], current: dict) -> dict:
     # The idea's other bound content, by key. Requirements are compared per part; revision_digest only follows them.
     other = sorted(key for key in set(earlier) | set(current) if key not in _IDEA_COMPARED
                    and earlier.get(key) != current.get(key))
+    if earlier.get("revision_digest") != current.get("revision_digest"):
+        other.append(REVISION_CHANGED)
     result = {"parts": parts, "goals_changed": earlier.get("goals") != current["goals"],
               "overrides_added": sorted(set(now_overrides) - set(before_overrides)),
               "overrides_removed": sorted(set(before_overrides) - set(now_overrides)),

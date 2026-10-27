@@ -16,8 +16,8 @@ once it supports such dependencies.
 
 ### Confirmation
 
-- Every confirmation summary stays within 25 lines, 245 words and
-  1,450 characters, so with Forge's own one-line question and its two
+- Every confirmation summary stays within 24 lines, 242 words and
+  1,428 characters, so with Forge's own one-line question and its two
   options it stays within the owner's limit of 27 lines, 265 words and
   1,575 characters. Its title names only the purpose. It shows, as room
   allows and in this order: what changed since the confirmation the
