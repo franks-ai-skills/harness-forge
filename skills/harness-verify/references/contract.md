@@ -107,5 +107,6 @@ verified then and its scripts pass now. Runtime cases and fixtures are
 not shown to the reviewer: when only they changed, or a part's earlier
 runtime evidence no longer holds, a part verified last time keeps its
 judgments and its runtime cases run again, and it stays verified only if
-each required case passes now; a part not verified last time is judged
-again in full.
+the obligations of a fresh run hold now: an explicit activation passed
+and every behavior case for this harness passed; a part not verified
+last time is judged again in full.
