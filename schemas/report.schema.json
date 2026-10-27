@@ -196,6 +196,21 @@
         "$ref": "urn:harness-forge:schema:worker-evidence"
       }
     },
+    "changed_judgments": {
+      "description": "Reviewer verdicts that changed although the part's review inputs did not (#108).",
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "part_id": {"type": "string", "minLength": 1},
+          "rule_id": {"type": "string", "minLength": 1},
+          "earlier": {"$ref": "#/definitions/judgment"},
+          "current": {"$ref": "#/definitions/judgment"}
+        },
+        "required": ["part_id", "rule_id", "earlier", "current"],
+        "additionalProperties": false
+      }
+    },
     "review_attempts": {
       "description": "Present only when the first review reply was rejected: each review launch and its outcome.",
       "type": "array",
@@ -501,6 +516,17 @@
     "symlinks"
   ],
   "definitions": {
+    "judgment": {
+      "type": "object",
+      "properties": {
+        "result": {"type": "string", "minLength": 1},
+        "reason": {"type": "string"},
+        "attempt_id": {"type": ["string", "null"]},
+        "run_id": {"type": "string", "minLength": 1}
+      },
+      "required": ["result", "reason", "attempt_id", "run_id"],
+      "additionalProperties": false
+    },
     "part_result": {
       "type": "object",
       "properties": {

@@ -145,7 +145,11 @@ instruction, and stop; never install or download anything yourself.
    `drift` entry that is `blocking`, offer the harness-research skill's
    drift choices; the part stays blocked until the user decides.
 6. Show each part's harness and goal result, every failing rule with its
-   source, and each runtime case that did not run, with its reason.
+   source, and each runtime case that did not run, with its reason. For
+   each entry in `changed_judgments`, say that the same reviewed inputs
+   got another verdict than in the named earlier attempt, with both
+   verdicts: a sign that the judgment varies, not a new defect and not a
+   fix. The current verdict counts.
 
 Result meanings and the goal-result precedence are in
 [references/contract.md](references/contract.md); read it before
