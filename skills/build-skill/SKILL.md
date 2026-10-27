@@ -117,8 +117,8 @@ instruction, and stop; never install or download anything yourself.
    the same command with `--show-diff <path>` added, then with
    `--offset <next_offset>` until `next_offset` is null: it only reads
    and changes no file or record. When the user says to discard the
-   edits, run the build again with `--replace` listing those paths
-   comma-separated.
+   edits, run the build again with one `--replace` listing those paths
+   comma-separated, or one `--replace` per path.
 6. Run harness-verify on the result: it judges each requirement by its
    accepted statement, so a checklist line that drops part of it fails
    there.

@@ -24,6 +24,8 @@ once it supports such dependencies.
   reason and how to keep or discard the edits; a failed git check never
   counts as a match. build-skill no longer asks the user to approve
   replacements (#101).
+- `--replace` may be given more than once; every occurrence adds its
+  comma-separated paths (#105).
 
 ### Intake
 

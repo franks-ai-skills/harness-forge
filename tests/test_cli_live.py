@@ -308,7 +308,18 @@ class LiveCommandsTest(unittest.TestCase):
         self.assertEqual(output["removed"], [])
         self.assertIn("1. Name the platform the reproducer runs on.", skill.read_text(encoding="utf-8"))
 
-    def test_build_stops_at_hand_edits_until_replace_names_them(self):
+    def test_repeated_and_comma_separated_replace_name_the_same_paths(self):
+        cli = Cli(ResearchRunner([finding()]), self.root)
+        paths = cli.module._replace_paths
+        self.assertEqual(paths(["a/x,b/y"]), paths(["a/x", "b/y"]))
+        self.assertEqual(paths(["a/x,", "", "b/y,a/x"]), ["a/x", "b/y"], "empty items and repeats add nothing")
+        self.assertEqual(paths(None), [])
+        required = [item for flag in ("--decision", "--root", "--part", "--evidence", "--relay", "--description",
+                                      "--procedure") for item in (flag, "x")]
+        parsed = cli.module.build_parser().parse_args(["build", *required, "--replace", "a/x", "--replace", "b/y,c/z"])
+        self.assertEqual(paths(parsed.replace), ["a/x", "b/y", "c/z"])
+
+    def test_build_stops_at_hand_edits_and_replace_may_be_repeated(self):
         cli, arguments = self.build_ready(ResearchRunner([finding()]))
         values = dict(zip(arguments[::2], arguments[1::2]))
         skill = self.root / f".agents/skills/{NAME}/SKILL.md"
@@ -331,8 +342,9 @@ class LiveCommandsTest(unittest.TestCase):
                               "it differs from Forge's last build of this part"})
         self.assertIn("--replace <path>", output["how"])
         self.assertEqual(skill.read_text(encoding="utf-8"), "Hand-written.\n", "a stop writes nothing")
-        code, output, stderr = build("--replace", f".agents/skills/{NAME}/SKILL.md,"
-                                                  f".agents/skills/{NAME}/references/requirements.md")
+        # #105: each --replace adds its paths, so two flags discard both files.
+        code, output, stderr = build("--replace", f".agents/skills/{NAME}/SKILL.md",
+                                     "--replace", f".agents/skills/{NAME}/references/requirements.md")
         self.assertEqual(code, 0, stderr)
         self.assertEqual(sorted((entry["path"], entry["basis"]) for entry in output["replaced"]),
                          [(f".agents/skills/{NAME}/SKILL.md", "named"),

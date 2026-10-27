@@ -1330,8 +1330,7 @@ def _build(arguments: argparse.Namespace) -> int:
         recorded = (decision.part(arguments.part).get("build") or {}).get("outputs")
         if arguments.show_diff:
             return _show_diff(arguments, dict(build_conflicts(root, planned, recorded=recorded)))
-        replace = [item for item in (arguments.replace or "").split(",") if item]
-        written = write_skill(root, planned, replace=replace, recorded=recorded)
+        written = write_skill(root, planned, replace=_replace_paths(arguments.replace), recorded=recorded)
     except BuilderUnavailable as error:
         emit({"command": "build", "built": False, "reason": str(error)})
         return 1
@@ -1351,6 +1350,11 @@ def _build(arguments: argparse.Namespace) -> int:
 
 def _payload_size(payload: dict) -> int:
     return len(json.dumps(payload, ensure_ascii=False).encode("utf-8"))
+
+
+def _replace_paths(values: list[str] | None) -> list[str]:
+    """Every --replace adds its comma-separated paths; together they are the paths the user said to discard."""
+    return sorted({item for value in values or [] for item in value.split(",") if item})
 
 
 def _change(entry: dict) -> dict:
@@ -1873,9 +1877,9 @@ def build_parser() -> argparse.ArgumentParser:
     build.add_argument("--procedure", required=True, help="file with the procedure")
     build.add_argument("--checklist", help="JSON: each accepted requirement's id to its instruction line for "
                                            "SKILL.md's Requirements section")
-    build.add_argument("--replace",
+    build.add_argument("--replace", action="append",
                        help="comma-separated paths whose edits the user said to discard: replaced, or removed when the "
-                            "plan no longer has them")
+                            "plan no longer has them; may be given more than once")
     build.add_argument("--show-diff", metavar="PATH",
                        help="read only: one conflicting path's complete diff, a page at a time; writes nothing")
     build.add_argument("--offset", type=int, default=0,
