@@ -62,7 +62,7 @@ class PurposeTest(unittest.TestCase):
             with self.subTest(purpose=purpose):
                 output = self.prepare(purpose)
                 self.assertEqual((output["purpose"], output["title"]), (purpose, title))
-                self.assertTrue(output["summary"].startswith(f"## {title}: Keep the contract between bug reports"))
+                self.assertTrue(output["summary"].startswith(f"## {title}\n"), "the title names only the purpose")
                 path = Path(output["details"]["path"])
                 self.assertTrue(path.name.startswith(title.lower().replace(" ", "-") + "-"))
                 details = path.read_text(encoding="utf-8")
@@ -81,8 +81,8 @@ class PurposeTest(unittest.TestCase):
         self.decision = write_decision(self.root, reference_decision(), slug="repro", date="2026-10-10")
         rules = write_revision(self.root, "repro", REVISION)
         output = self.prepare("research", "--revision", rules)
-        self.assertTrue(output["summary"].startswith("## Research proposal: "))
-        self.assertIn("- **Accepted requirements:**\n  - ", output["summary"])
+        self.assertTrue(output["summary"].startswith("## Research proposal\n"))
+        self.assertIn("- **Accepted requirements:**\n  - ", Path(output["details"]["path"]).read_text(encoding="utf-8"))
         self.assertEqual(self.prepare("configuration", "--revision", rules)["digest"], output["digest"])
 
     def test_a_purpose_is_required(self):

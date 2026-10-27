@@ -175,6 +175,18 @@ def run_directory(path: str | os.PathLike, root: str | os.PathLike) -> Path:
     return found[0].joinpath(*found[1][:-1])
 
 
+def names(path: str | os.PathLike) -> list[str]:
+    """The entry names of a directory below .harness-forge, reached without links, sorted."""
+    found = located(Path(path) / "file")
+    if found is None:
+        raise RunFilesError(f"{path}: not below a .harness-forge directory")
+    directory = _descend(_open_root(found[0]), found[1][:-1], found[0])
+    try:
+        return sorted(os.listdir(directory))
+    finally:
+        os.close(directory)
+
+
 def create_once(path: str | os.PathLike, text: str) -> None:
     """Write a new file below .harness-forge, or accept one that already holds exactly this text."""
     try:

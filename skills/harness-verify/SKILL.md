@@ -75,9 +75,9 @@ instruction, and stop; never install or download anything yourself.
 
 1. Confirm the configuration summary: run `scripts/forge.py
    prepare-contract` with `--run-dir <run directory> --purpose
-   verification`, show its summary unchanged and ask, as harness-intake's
-   confirmation reference describes (goal, requirements,
-   overrides and the worker policy).
+   verification`, plus `--compare-with` the relay of the last
+   confirmation when there is one, show its summary unchanged and ask its
+   question, as harness-intake's confirmation reference describes.
 2. If this is a re-verification, run `scripts/forge.py scope --harness
    <harness> --decision <record> --root <repository> --revision <rules
    file> --evidence <workers output> --relay <relay> --slug <slug> --fixed

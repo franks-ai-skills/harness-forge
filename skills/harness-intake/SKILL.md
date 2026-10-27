@@ -100,9 +100,10 @@ command prints bounded JSON.
 - **No unattended confirmation.** Without a user in the session, leave
   every part pending; its goal stays not assessed.
 - **Overrides apply only through a confirmation.** `prepare-contract`'s
-  summary shows what each file in `.harness/overrides/` changes and its
-  warnings, and its details file the old and new rule and the source
-  quote; an override applies once the user confirms that summary. An override that cannot be adopted stops every command:
+  summary names each file in `.harness/overrides/` and its warnings as
+  room allows, and its details file shows what each one changes, every
+  warning, the old and new rule and the source quote; an override
+  applies once the user confirms that summary. An override that cannot be adopted stops every command:
   run `scripts/forge.py overrides --root <repository>` and show why.
 
 ## Procedure
