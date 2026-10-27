@@ -179,6 +179,7 @@ def verify_live(
     scope: set[str] | None = None, scope_label: str = "Every part judged",
     kept: dict[str, dict] | None = None, cited: dict[str, list[str]] | None = None,
     recorded_drift: list[dict] | tuple = (), diagnostics: Diagnostics | None = None, attempt_id: str | None = None,
+    runtime_scope: set[str] | None = None,
 ):
     """Static checks, a fresh review worker, runtime cases, then results in the design's precedence.
 
@@ -234,9 +235,11 @@ def verify_live(
         if attempts[0]["outcome"] == "rejected":
             run.review_attempts = attempts
     runtime = []
-    # A Review run tests the parts in its scope; a kept part's earlier result stands for its runtime tests.
+    # A Review run tests the parts in its runtime scope: the judged ones and those keeping their file judgments
+    # whose cases changed (#107); a kept part's earlier result stands for the other runtime tests.
+    tested = scope if runtime_scope is None else runtime_scope
     built = {part["id"] for part in run.parts if part_kind(part) in ("build", "local-reuse")
-             and part["id"] in run.confirmed_parts and (scope is None or part["id"] in scope)}
+             and part["id"] in run.confirmed_parts and (tested is None or part["id"] in tested)}
     part_cases = [case for case in cases if case["part_id"] in built]
     if part_cases and harness in run.targets:
         runtime = run_skill_runtime(run, harness, part_cases, files=files, runner=runner, environ=environ,
@@ -256,8 +259,8 @@ def verify_live(
                              and case.get("kind") != BEHAVIOR
                              and case["mode"] == "explicit" and case["expected"] == "activates"}
                 for part in run.parts if part_kind(part) == "build" and part["id"] in run.confirmed_parts
-                and harness in run.targets and (scope is None or part["id"] in scope)}
-    behavior = behavior_obligations(run, cases, harness, scope)
+                and harness in run.targets and (tested is None or part["id"] in tested)}
+    behavior = behavior_obligations(run, cases, harness, tested)
     results = finish_run(run, review, runtime, current, worker_observations=observations,
                          confirmed_exclusions=frozenset(confirmed_exclusions), required_activation=required,
                          required_behavior=behavior,

@@ -103,4 +103,9 @@ outside the scope keeps its earlier judged results and goal verdict,
 each marked "kept from attempt A of run X" (or "kept from run X" from a
 report made before attempts were recorded), with its runtime evidence
 marked the same way, and stays verified only if it was
-verified then and its scripts pass now.
+verified then and its scripts pass now. Runtime cases and fixtures are
+not shown to the reviewer: when only they changed, or a part's earlier
+runtime evidence no longer holds, a part verified last time keeps its
+judgments and its runtime cases run again, and it stays verified only if
+each required case passes now; a part not verified last time is judged
+again in full.

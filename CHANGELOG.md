@@ -16,6 +16,12 @@ once it supports such dependencies.
 
 ### Verification
 
+- A change confined to a part's runtime cases or fixtures no longer
+  re-judges its files: a part verified last time keeps its file
+  judgments and its runtime cases run again, and it stays verified only
+  if each required case passes now. A part not verified last time is
+  judged again in full, and a fixture that is also a reviewed file is a
+  file change (#107).
 - Every `verify` invocation has its own attempt id, in its output, the
   report data and the report's "Verification attempt" line; the run id
   still names the session confirmation. Kept judgments and kept runtime
