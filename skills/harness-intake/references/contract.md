@@ -73,7 +73,9 @@ confirmation.
 
 ## How to ask
 
-Ask `question` exactly as returned, as one multiple-choice question
+When `question` is null, every part is refused and nothing can be
+confirmed: ask nothing, and fix each refused part as described above
+first. Otherwise ask `question` exactly as returned, as one multiple-choice question
 with exactly its two `options`, `Confirm` and `Leave pending`, and no
 option preselected. It names the summary's title and says that
 `Confirm` covers the summary above and the linked details for the parts

@@ -262,6 +262,26 @@ class CompareCliTest(unittest.TestCase):
                            encoding="utf-8")
         self.assertIsNone(self.prepare(run, None, "--compare-with", relay)["compared_with"])
 
+    def test_every_part_refused_offers_no_question(self):
+        self.record.record["parts"][0]["outcome"] = self.record.record["parts"][1]["outcome"] = "harness-only"
+        for part in self.record.record["parts"]:
+            part["recommended"] = "hooks"  # select gives skills, so build would refuse the stale selection
+        write_decision(self.root, self.record, slug="repro", date="2026-10-10")
+        output = self.prepare(self.run_dir())
+        self.assertEqual(sorted(item["part_id"] for item in output["refused_parts"]), ["A", "B"])
+        self.assertEqual((output["question"], output["options"]), (None, []))
+        self.assertIn("- Offered for confirmation: nothing, every part is refused",
+                      Path(output["details"]["path"]).read_text(encoding="utf-8"))
+
+    def test_an_idea_without_parts_is_confirmed_as_the_idea(self):
+        self.record.record["parts"] = []
+        write_decision(self.root, self.record, slug="repro", date="2026-10-10")
+        output = self.prepare(self.run_dir())
+        self.assertEqual(output["question"], "Confirm the research proposal above and its linked details for the idea?")
+        self.assertEqual(output["options"], ["Confirm", "Leave pending"])
+        self.assertIn("- Offered for confirmation: the idea, which has no parts yet",
+                      Path(output["details"]["path"]).read_text(encoding="utf-8"))
+
     def test_many_confirmed_parts_keep_the_status_line_bounded(self):
         self.record = decision(*[part(f"A{n}", f"Goal {n}") for n in range(40)])
         self.decision = write_decision(self.root, self.record, slug="repro", date="2026-10-10")

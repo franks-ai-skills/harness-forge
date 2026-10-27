@@ -587,6 +587,8 @@ def _prepare_contract(arguments: argparse.Namespace) -> int:
         runfiles.create_once(path, details)
     except (OSError, ValueError) as error:
         raise _InvalidInput(str(error)) from error
+    # With every part refused nothing can be confirmed: no question, and the agent fixes the parts first.
+    question = render_question(title, offered, has_parts=bool(contract.parts))
     try:
         summary = render_summary(
             contract, decision.record, title=title, checked_overrides=shown["checked_overrides"], refused=refused,
@@ -596,7 +598,7 @@ def _prepare_contract(arguments: argparse.Namespace) -> int:
         raise _InvalidInput(str(error)) from error
     emit({
         "command": "prepare-contract", "purpose": arguments.purpose, "title": title, "digest": contract.digest,
-        "summary": summary, "question": render_question(title, offered), "options": list(QUESTION_OPTIONS),
+        "summary": summary, "question": question, "options": list(QUESTION_OPTIONS) if question else [],
         "compared_with": ({key: comparison[key] for key in ("relay", "run_id", "digest", "part_ids")}
                           if comparison else None),
         "details": {"path": str(path), "sha256": checksum},

@@ -392,9 +392,14 @@ def _status(comparison: dict | None, reason: str | None, nothing: bool) -> str:
     return f"Nothing changed since the confirmation of {where}." if nothing else f"Changes since the confirmation of {where}:"
 
 
-def render_question(title: str, part_ids: list[str]) -> str:
-    """The confirmation question the skills ask as it is, within QUESTION_LIMITS."""
+def render_question(title: str, part_ids: list[str], *, has_parts: bool = False) -> str | None:
+    """The confirmation question the skills ask as it is, within QUESTION_LIMITS.
+
+    None when the idea has parts but every one is refused: nothing could be confirmed.
+    """
     what = title[0].lower() + title[1:]
+    if not part_ids and has_parts:
+        return None
     if not part_ids:
         target = "the idea"
     else:
@@ -535,8 +540,9 @@ def render_details(contract: Contract, record: dict, *, title: str, worker_evide
     if decision_path is not None:
         lines.append(f"{DECISION_LINE}{code(decision_path)}")
     if offered is not None:
-        lines.append("- Offered for confirmation: " + (("parts " + ", ".join(text(part_id) for part_id in offered))
-                                                       if offered else "the idea, which has no parts yet"))
+        lines.append("- Offered for confirmation: " + (
+            "parts " + ", ".join(text(part_id) for part_id in offered) if offered
+            else "nothing, every part is refused" if contract.parts else "the idea, which has no parts yet"))
     lines.append("")
     if changes is not None:
         lines += ["## Changes since the earlier confirmation", "", changes.rstrip("\n"), ""]
