@@ -268,7 +268,7 @@ class ReadmeTest(unittest.TestCase):
         self.assertIn("`codex-review-run`", section)
         self.assertIn("loads only in this repository", section)
         self.assertIn("all of your repositories", section)
-        self.assertIn("`~/.claude/skills/<name>/`", section)
+        self.assertIn("`~/.claude/skills/codex-review-run/`", section, "one skill is named in its path")
         self.assertNotIn("~/.agents/skills", section, "Codex is no target of this idea")
         self.assertNotIn("part-b", section)
         self.assertEqual(update_readme(readme, record), readme, "a second run replaces the section in place")
@@ -277,8 +277,8 @@ class ReadmeTest(unittest.TestCase):
         from harness_forge.contracts import update_readme
         record = decision(reach="public")
         section = update_readme("# Repro\n", record).split("## Where the skills load", 1)[1]
-        self.assertIn("`~/.claude/skills/<name>/`", section)
-        self.assertIn("`~/.agents/skills/<name>/`", section)
+        self.assertIn("`~/.claude/skills/part-a/`", section)
+        self.assertIn("`~/.agents/skills/part-a/`", section)
         self.assertIn("publish this repository", section)
 
     def test_repository_reach_or_no_built_skill_needs_no_section(self):

@@ -20,6 +20,9 @@ once it supports such dependencies.
   and `outside_controls` in the decision record's shape; harness-intake
   copies them from there, so a record written as `inputs.md` says is
   accepted (#104).
+- The README's "Where the skills load" section speaks of one built
+  skill in the singular and names its folder; several skills keep the
+  plural, and the earlier wording is still read and replaced (#109).
 
 ## 0.4.0 (2026-10-27)
 
