@@ -59,7 +59,8 @@ from harness_forge.overrides import (  # noqa: E402
 )
 from harness_forge.report import render_report, write_report  # noqa: E402
 from harness_forge.research import (  # noqa: E402
-    _BLOCKING_DRIFT, UNTRUSTED_NOTE, _catalog, accept_requirements, drift_category, drift_digest, drift_state, finding_problem,
+    _BLOCKING_DRIFT, UNTRUSTED_NOTE, _catalog, accept_requirements, drift_category, drift_digest, drift_state,
+    finding_problem, _check_entry as _check_idea_entry,
     load_research, load_revision, source_rejection,
     make_brief, merge_revision,
     UnassignedRevision, compare_requirements, dangling_drift, provenance_findings, provenance_sources,
@@ -68,7 +69,7 @@ from harness_forge.research import (  # noqa: E402
 )
 from harness_forge.licensing import check as licensing_check  # noqa: E402
 from harness_forge.licensing import LICENSE_ID, LICENSE_SHA256, LicenseNotAdded, add_license  # noqa: E402
-from harness_forge import runfiles  # noqa: E402
+from harness_forge import acceptance, runfiles  # noqa: E402
 from harness_forge.comparison import Unavailable as ComparisonUnavailable  # noqa: E402
 from harness_forge.comparison import compare as compare_contents  # noqa: E402
 from harness_forge.comparison import load as compare_with  # noqa: E402
@@ -1180,10 +1181,11 @@ def _provenance_problem(root: Path, slug: str, part_id: str, brief: str, accepte
 
 
 def _recorded_revision(decision: Decision, root: Path, slug: str):
-    """The revision the decision records, and the parts of an older one that names no single part.
+    """The revision the decision records, or an older one that names no single part.
 
-    Returns (revision, None); (None, its parts, possibly none) for an older revision that names no
-    single part; or (None, None) when the decision records none. The file must be the recorded one.
+    Returns (revision, None); (None, the UnassignedRevision with its parts and rules) for an older
+    revision that names no single part; or (None, None) when the decision records none. The file must
+    be the recorded one.
     """
     recorded = (decision.record.get("accepted_revision") or {}).get("digest")
     if not recorded:
@@ -1192,7 +1194,7 @@ def _recorded_revision(decision: Decision, root: Path, slug: str):
         previous = load_revision(safe_path(root, f".harness/research/{slug}.rules.yaml"), root=root)
         digest, unassigned = previous.digest, None
     except UnassignedRevision as error:
-        previous, digest, unassigned = None, error.digest, error.parts
+        previous, digest, unassigned = None, error.digest, error
     except (OSError, ValueError) as error:
         raise _InvalidInput(f"the recorded requirements cannot be read: {error}") from error
     if digest != recorded:
@@ -1200,24 +1202,43 @@ def _recorded_revision(decision: Decision, root: Path, slug: str):
     return previous, unassigned
 
 
+def _comparison(arguments: argparse.Namespace, root: Path, decision: Decision, previous, unassigned) -> tuple:
+    """The part's annotated comparison (acceptance.annotate) and its brief, as compare-requirements shows it.
+
+    An older revision that names no single part is compared as nothing accepted for this part, and each of its
+    rules is listed as no longer proposed: the next acceptance replaces it whole, so each needs its own drop.
+    """
+    rules = [Rule.from_dict(rule) for rule in _read_json(arguments.proposed).get("requirements", [])]
+    for rule in rules:  # a requirement of another part is named before anything else is read
+        _check_idea_entry(arguments.part, rule)
+    brief = make_brief(decision, "deep", arguments.part).digest
+    record = _deep_research(root, arguments.slug, arguments.part, brief)
+    groups = compare_requirements(previous, rules, arguments.part, provenance_findings(record, arguments.part, brief))
+    if unassigned is not None:
+        groups["removed"] = [{"requirement": entry["rule"]} for entry in unassigned.rules]
+    return rules, brief, acceptance.annotate(groups)
+
+
 def _accept(arguments: argparse.Namespace) -> int:
-    """Write the accepted revision from the user's choices and record it in the decision."""
+    """Write the accepted revision from the user's choices, each bound to what was shown, and record it."""
     root = Path(arguments.root).resolve()
     decision, _ = _decision_and_revision(arguments, root, matching=False)
     # Other parts' accepted requirements stay; this part's are replaced. An older revision without a
     # single part is replaced whole, dropping what it held.
-    previous, unassigned = _recorded_revision(decision, root, arguments.slug)
-    proposed = _read_json(arguments.proposed).get("requirements", [])
+    previous, legacy = _recorded_revision(decision, root, arguments.slug)
     choices = _read_json(arguments.choices)
+    relay = _read_json(arguments.relay)
     try:
-        rules = [Rule.from_dict(rule) for rule in proposed]
-        brief = make_brief(decision, "deep", arguments.part).digest
+        rules, brief, annotated = _comparison(arguments, root, decision, previous, legacy)
+        problems = acceptance.check(annotated, choices, relay, arguments.part)
+        if problems:
+            raise _InvalidInput("the acceptance is not bound to what was shown: " + "; ".join(problems))
         accepted = accept_requirements(rules, choices, brief, part_id=arguments.part)
         problem = _provenance_problem(root, arguments.slug, arguments.part, brief, accepted)
         if problem:
             raise _InvalidInput(problem)
         parts = {part["id"] for part in decision.record["parts"]}
-        dropped = sorted(set(previous.brief_digests) - parts) if previous else [p for p in unassigned or []
+        dropped = sorted(set(previous.brief_digests) - parts) if previous else [p for p in (legacy.parts if legacy else [])
                                                                                  if p != arguments.part]
         revision = merge_revision(previous, accepted, parts)
         path = write_revision(root, arguments.slug, revision)
@@ -1231,23 +1252,47 @@ def _accept(arguments: argparse.Namespace) -> int:
 
 
 def _compare_requirements(arguments: argparse.Namespace) -> int:
-    """Group a part's proposed requirements against the ones accepted for it before; changes nothing."""
+    """Each decision about a part's proposed requirements, with what to show and its digest; changes nothing."""
     root = Path(arguments.root).resolve()
     decision, _ = _decision_and_revision(arguments, root, matching=False)
-    previous, unassigned = _recorded_revision(decision, root, arguments.slug)
-    if unassigned is not None:
-        raise _InvalidInput("the recorded requirements are an older revision that names no single part, so they "
-                            "cannot be compared; ask about each proposed requirement one at a time")
+    previous, legacy = _recorded_revision(decision, root, arguments.slug)
     try:
-        rules = [Rule.from_dict(rule) for rule in _read_json(arguments.proposed).get("requirements", [])]
-        brief = make_brief(decision, "deep", arguments.part).digest
-        record = _deep_research(root, arguments.slug, arguments.part, brief)
-        groups = compare_requirements(previous, rules, arguments.part,
-                                      provenance_findings(record, arguments.part, brief))
+        rules, brief, annotated = _comparison(arguments, root, decision, previous, legacy)
+        if arguments.edited:
+            proposed_ids = {rule.id for rule in rules}
+            shown = []
+            for value in _read_json(arguments.edited).get("requirements", []):
+                rule = Rule.from_dict(value)
+                if rule.id not in proposed_ids:
+                    raise ValueError(f"{rule.id}: an edit must keep the id of a proposed requirement")
+                _check_idea_entry(arguments.part, rule)
+                shown.append(acceptance.edited(rule.to_dict()))
+            emit({"command": "compare-requirements", "part_id": arguments.part, "edited": shown})
+            return 0
     except (ValueError, KeyError, TypeError) as error:
         raise _InvalidInput(str(error)) from error
-    emit({"command": "compare-requirements", "part_id": arguments.part, "brief_digest": brief,
-          "untrusted": UNTRUSTED_NOTE, **groups})
+    head = {"command": "compare-requirements", "part_id": arguments.part, "brief_digest": brief,
+            "untrusted": UNTRUSTED_NOTE}
+    if arguments.item:
+        item = acceptance.find_item(annotated, arguments.item)
+        if item is None:
+            raise _InvalidInput(f"{arguments.item}: not an item of this comparison")
+        payload = {**head, "item": item}
+        if _payload_size(payload) > MAX_OUTPUT_BYTES:
+            raise _InvalidInput(f"{arguments.item} needs {_payload_size(payload)} bytes, more than the "
+                                f"{MAX_OUTPUT_BYTES}-byte bound, so it cannot be shown whole; shorten the proposal")
+        emit(payload)
+        return 0
+    full = {**head, "compact": False, **annotated}
+    if _payload_size(full) <= MAX_OUTPUT_BYTES:
+        emit(full)
+        return 0
+    # Too large to show at once: ids and digests only; --item gives each one whole. Nothing is cut.
+    short = {**head, "compact": True, **acceptance.compact(annotated)}
+    if _payload_size(short) > MAX_OUTPUT_BYTES:
+        count = sum(len(annotated[name]) for name in acceptance.GROUPS)
+        raise _InvalidInput(f"{count} requirements are too many to list even by id; propose fewer at a time")
+    emit(short)
     return 0
 
 
@@ -1891,6 +1936,8 @@ def build_parser() -> argparse.ArgumentParser:
     accept.add_argument("--proposed", required=True, help="JSON with the proposed requirements as idea rules")
     accept.add_argument("--choices", required=True, help="JSON: rule id to accept, reject or {edit: rule}")
     accept.add_argument("--slug", required=True)
+    accept.add_argument("--relay", required=True,
+                        help="JSON: each decision the user made, with the digest of the item shown (compare-requirements)")
     accept.set_defaults(handler=_accept)
     licensing = commands.add_parser("licensing", help="check a result repository for licensing information and "
                                                        "whether Forge's own license can be offered; changes nothing")
@@ -1904,6 +1951,8 @@ def build_parser() -> argparse.ArgumentParser:
     compare.add_argument("--part", required=True)
     compare.add_argument("--proposed", required=True, help="JSON with the proposed requirements as idea rules")
     compare.add_argument("--slug", required=True)
+    compare.add_argument("--item", help="one item_id (or group:unchanged) to show whole")
+    compare.add_argument("--edited", help="JSON with edited requirements to show back before they are recorded")
     compare.set_defaults(handler=_compare_requirements)
     build.add_argument("--part", required=True)
     build.add_argument("--description", required=True, help="file with the one-line skill description")

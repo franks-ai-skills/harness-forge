@@ -563,9 +563,9 @@ def write_revision(root: Path, slug: str, revision: AcceptedRevision) -> Path:
 class UnassignedRevision(ValueError):
     """An intact older revision that names no single part: the next acceptance replaces it whole."""
 
-    def __init__(self, message: str, *, digest: str, parts: list[str]):
+    def __init__(self, message: str, *, digest: str, parts: list[str], rules: list[dict] | None = None):
         super().__init__(message)
-        self.digest, self.parts = digest, parts
+        self.digest, self.parts, self.rules = digest, parts, list(rules or [])
 
 
 def load_revision(path: Path, *, root: Path | None = None) -> AcceptedRevision:
@@ -581,7 +581,7 @@ def load_revision(path: Path, *, root: Path | None = None) -> AcceptedRevision:
         owners = {entry["part_id"] for entry in value["rules"]}
         if digest == value["digest"] and len(owners) != 1:
             raise UnassignedRevision(f"{path}: an older revision names no single part; accept its part's "
-                                     "requirements again", digest=digest, parts=sorted(owners))
+                                     "requirements again", digest=digest, parts=sorted(owners), rules=value["rules"])
         value = {**value, "briefs": {owner: value["brief_digest"] for owner in owners}}
     else:
         digest = revision_digest(value["briefs"], value["rules"])

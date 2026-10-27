@@ -190,19 +190,23 @@ class CompareCommandTest(RecheckCase):
         self.assertEqual(code, 2)
         self.assertIn("not the one the decision records", stderr)
 
-    def test_an_older_revision_without_a_part_is_not_guessed(self):
+    def test_an_older_revision_without_a_part_lists_its_rules_as_no_longer_proposed(self):
         code, _, stderr = self.research("--write")
         self.assertEqual(code, 0, stderr)
-        legacy = {"brief_digest": "0" * 64, "rules": []}
+        other = copy.deepcopy({**PLATFORM, "id": "idea.repro.b.platform"})
+        legacy = {"brief_digest": "0" * 64, "rules": [{"part_id": "A", "rule": copy.deepcopy(PLATFORM)},
+                                                      {"part_id": "B", "rule": other}]}
         legacy["digest"] = canonical_digest(legacy)
         self.revision.write_text(yaml.safe_dump(legacy), encoding="utf-8")
         record = load_decision(self.decision)
-        record.record["accepted_revision"] = {"digest": legacy["digest"], "rule_ids": []}
+        record.record["accepted_revision"] = {"digest": legacy["digest"], "rule_ids": [PLATFORM["id"], other["id"]]}
         write_decision(self.root, record, slug="repro", date="2026-10-10")
-        code, _, stderr = self.compare(PLATFORM)
-        self.assertEqual(code, 2)
-        self.assertIn("names no single part", stderr)
-        self.assertIn("one at a time", stderr)
+        code, output, stderr = self.compare(PLATFORM)
+        self.assertEqual(code, 0, stderr)
+        # The same rule id is a new proposal and a legacy rule; each is its own item (#100).
+        self.assertEqual([item["item_id"] for item in output["new"]], [f"new:{PLATFORM['id']}"])
+        self.assertEqual([item["item_id"] for item in output["removed"]],
+                         [f"removed:{PLATFORM['id']}", "removed:idea.repro.b.platform"])
 
     def test_a_foreign_proposal_is_refused(self):
         self.accepted_then_goal_changed()
