@@ -410,10 +410,10 @@ def observe_claude(stdout: str) -> dict:
                 else:
                     unreadable.append(request["tool"])
                 if block.get("is_error") is True:
-                    content = block.get("content")
                     request["error"] = _short(content if isinstance(content, str) else
-                                              " ".join(item.get("text", "") for item in content or []
-                                                       if isinstance(item, dict)))
+                                              " ".join(item["text"] for item in content
+                                                       if isinstance(item, dict) and isinstance(item.get("text"), str))
+                                              if isinstance(content, list) else "")
         if event.get("type") == "result":
             complete = event.get("subtype") == "success" and event.get("is_error") is False
             for denial in event.get("permission_denials") or []:

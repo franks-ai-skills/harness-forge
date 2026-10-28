@@ -610,6 +610,11 @@ class PlacementAndOutputTest(unittest.TestCase):
         quoted = "## Untrusted reference material\n\n> ````\n> inside\n> ````\n\nleak\n"
         self.assertEqual(self.problems(quoted, texts=["inside"], fenced=True), [])
         self.assertIn("occurs outside a fenced block", " ".join(self.problems(quoted, texts=["leak"], fenced=True)))
+        self.assertIn("occurs outside a fenced block", " ".join(self.problems(quoted, texts=["> inside"], fenced=True)),
+                      "a block-quote marker is not fence content")
+        plain = "## Untrusted reference material\n\n```\nfirst line\nsecond line\n```\n"
+        self.assertEqual(self.problems(plain, texts=["first line\nsecond line"], fenced=True), [],
+                         "a text over several content lines lies inside")
         listed = "## Untrusted reference material\n\n- ```\n  open in the item\n\nafter the list\n"
         self.assertIn("occurs outside a fenced block",
                       " ".join(self.problems(listed, texts=["after the list"], fenced=True)),
@@ -652,12 +657,13 @@ class PlacementAndOutputTest(unittest.TestCase):
     def test_a_missing_or_malformed_tool_result_leaves_absence_unshown(self):
         from harness_forge.behavior import evaluate, observe_claude
         case = {"expect": {"actions": {"no_output_containing": ["fixture-secret-7731"]}}}
-        for content in (None, [{"type": "text"}], [{"type": "text", "text": 3}], [{"type": "image"}], []):
-            with self.subTest(content=content):
+        for content, error in ((None, False), ([{"type": "text"}], False), ([{"type": "text", "text": 3}], False),
+                               ([{"type": "image"}], False), ([], False), ([{"type": "text", "text": 3}], True)):
+            with self.subTest(content=content, error=error):
                 events = [json.loads(line) for line in claude_writes(DRAFT).splitlines()]
                 events.insert(-1, {"type": "assistant", "message": {"content": [
                     {"type": "tool_use", "id": "g", "name": "Grep", "input": {"pattern": "DB_"}}]}})
-                result = {"type": "tool_result", "tool_use_id": "g"}
+                result = {"type": "tool_result", "tool_use_id": "g", "is_error": error}
                 if content is not None:
                     result["content"] = content
                 events.insert(-1, {"type": "user", "message": {"content": [result]}})

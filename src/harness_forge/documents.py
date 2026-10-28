@@ -966,10 +966,11 @@ def markdown_headings(markdown: str) -> list[tuple[int, int, str]]:
 
 
 def markdown_fence_contents(markdown: str) -> list[tuple[int, int]]:
-    """(start, end) offsets of each fenced code block's content, as CommonMark parses it, at any nesting level.
+    """(start, end) offsets of fenced code block content, as CommonMark parses it, at any nesting level.
 
     A fence closes only at a line of the opening fence's character, at least as long as it; an unclosed fence
-    runs to the end of the text.
+    ends with the text or with the block quote or list item that holds it. Container markers before a content
+    line are not content, so a range never covers them.
     """
     tokens, _ = _parse(markdown)
     lines = _line_offsets(markdown)
@@ -977,14 +978,23 @@ def markdown_fence_contents(markdown: str) -> list[tuple[int, int]]:
     for token in tokens:
         if token.type != "fence" or not token.map:
             continue
-        # markdown-it gives the content without container markers and the block's lines, closing fence and the
-        # end of an enclosing block quote or list item included: the content lines are the first ones after the
-        # opening line, as many as the content has, whatever closed the fence.
+        # markdown-it gives the content without container markers: its lines are the first ones after the opening
+        # line, as many as the content has, whatever closed the fence. Only the content part of each line counts: a block-quote marker or a list indent before it is not content.
+        # Adjacent lines without a marker join into one range, so a text over several lines can lie inside.
         first, _ = token.map
-        count = token.content.count("\n")
-        start = lines[first + 1][0] if first + 1 < len(lines) else len(markdown)
-        end = lines[first + 1 + count][0] if first + 1 + count < len(lines) else len(markdown)
-        ranges.append((start, max(start, end)))
+        for number, content in enumerate(token.content.split("\n")[:-1]):
+            index = first + 1 + number
+            if index >= len(lines):
+                break
+            offset, source = lines[index]
+            if not source.endswith(content):
+                continue  # a line markdown-it rewrote, such as an expanded tab, is not matched at all
+            start = offset + len(source) - len(content)
+            end = lines[index + 1][0] if index + 1 < len(lines) else len(markdown)
+            if ranges and ranges[-1][1] == start:
+                ranges[-1] = (ranges[-1][0], end)
+            else:
+                ranges.append((start, end))
     return ranges
 
 
