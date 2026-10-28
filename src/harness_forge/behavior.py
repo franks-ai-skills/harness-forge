@@ -105,7 +105,8 @@ def permits(path: str, writes: Iterable[str]) -> bool:
 SHELL_UNAVAILABLE = (
     "unavailable: Claude Code's sandbox documentation does not establish that writes inside the working directory "
     "can be limited to the declared paths (it documents allowWrite for paths outside it and denyWrite for specific "
-    "paths, but no re-opening of a path inside a denied region), so Forge cannot run a shell in this case without "
+    "paths, but does not establish a way to re-open a write path inside a denied region), so Forge cannot run a "
+    "shell in this case without "
     "widening its write boundary; run the case in Codex, or without a shell (https://code.claude.com/docs/en/sandboxing)")
 
 # The repository a case's git fixture makes: fixed identity and time, so commit ids are the same on every run.
@@ -264,7 +265,7 @@ def case_problem(case: dict, harness: str, protected: Iterable[str]) -> str | No
     problem = layout_problem(case, protected)
     if problem:
         return problem
-    if case.get("shell") and list(case.get("harnesses") or []) != ["claude-code"]:
+    if "shell" in case and list(case.get("harnesses") or []) != ["claude-code"]:
         return ("shell applies only to a case for Claude Code alone: a Codex case runs its commands in Codex's own "
                 "sandbox already")
     taken = {fold_name(path) for path in protected}

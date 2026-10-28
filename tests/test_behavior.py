@@ -711,12 +711,27 @@ class ShellCaseTest(BehaviorCase):
         self.assertIn("https://code.claude.com/docs/en/sandboxing", result.reason)
         self.assertFalse(runner.worker_calls, "no harness starts")
 
+    def test_the_public_runner_launches_no_discovery_for_a_shell_case_alone(self):
+        """Without a given baseline, discovery would start two Claude sessions; a shell case needs none."""
+        runner = WritingRunner(lambda workspace: None, worker=claude_writes(DRAFT))
+        results = run_skill_runtime(self.scenario.run, "claude-code", [behavior(harnesses=["claude-code"], shell=True)],
+                                    files=self.files, runner=runner, environ=PARENT)
+        self.assertEqual([item.result for item in results], ["unavailable"])
+        self.assertTrue(results[0].reason.startswith("unavailable: Claude Code's sandbox documentation"))
+        self.assertFalse(runner.worker_calls, "no discovery, no case: nothing launched")
+
     def test_shell_belongs_to_a_case_for_claude_code_alone(self):
         for harnesses in (["codex"], ["claude-code", "codex"]):
-            with self.subTest(harnesses=harnesses):
-                problem = case_problem(behavior(harnesses=harnesses, shell=True), "codex", {})
-                self.assertIn("shell applies only to a case for Claude Code alone", problem)
-        self.assertIsNone(case_problem(behavior(harnesses=["claude-code"], shell=True), "claude-code", {}))
+            for value in (True, False):
+                with self.subTest(harnesses=harnesses, value=value):
+                    problem = case_problem(behavior(harnesses=harnesses, shell=value), "codex", {})
+                    self.assertIn("shell applies only to a case for Claude Code alone", problem)
+        for value in (True, False):
+            self.assertIsNone(case_problem(behavior(harnesses=["claude-code"], shell=value), "claude-code", {}))
+        activation = yaml.safe_load((Path(__file__).resolve().parents[1] / "evals/smoke/vertical.yaml")
+                                    .read_text(encoding="utf-8"))["cases"][:1]
+        with self.assertRaises(ValueError, msg="an activation case has no shell"):
+            validate({"cases": [{**activation[0], "shell": True}]}, "runtime-cases")
 
     def test_the_guidance_sends_a_case_that_needs_a_shell_to_codex(self):
         text = " ".join((Path(__file__).resolve().parents[1] / "skills/harness-verify/SKILL.md")
