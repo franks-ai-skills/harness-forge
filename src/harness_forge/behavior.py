@@ -147,9 +147,28 @@ def layout_problem(case: dict, protected: Iterable[str]) -> str | None:
         problem = claim(path, kind)
         if problem:
             return problem
+    outside: dict[str, str] = {}
     for link in links.values():
-        if link["in"] == "outside" and not _plain(link["path"]):
+        if link["in"] != "outside":
+            continue
+        if not _plain(link["path"]):
             return f"outside link target {link['path']!r} is not a plain relative path"
+        folded = fold_name(link["path"])
+        if folded in outside:
+            return f"outside link target {link['path']} is declared twice"
+        outside[folded] = link["kind"]
+    # A target below a file cannot be made, and one at or below a missing target would make it present.
+    for space, targets in (("outside", outside), ("workspace", {
+            fold_name(link["path"]): link["kind"] for link in links.values() if link["in"] == "workspace"})):
+        paths = set(targets) | (set(kinds) if space == "workspace" else set())
+        for key in paths:
+            parts = key.split("/")
+            for count in range(1, len(parts)):
+                above = "/".join(parts[:count])
+                if targets.get(above) == "file":
+                    return f"{space} path {key} lies below the link target {above}, which is a file"
+                if targets.get(above) == "missing":
+                    return f"{space} path {key} would make the missing link target {above} present"
     folded_links = {fold_name(path) for path in links}
     files = {key for key, kind in kinds.items() if kind != "link target"} | {
         fold_name(link["path"]) for link in links.values() if link["in"] == "workspace" and link["kind"] == "file"}
@@ -552,7 +571,10 @@ def behavior_case(
             destination = safe_path(workspace, path)
             destination.parent.mkdir(parents=True, exist_ok=True)
             destination.write_text(text, encoding="utf-8")
-        make_links(workspace, outside, case.get("links") or {})
+        try:
+            make_links(workspace, outside, case.get("links") or {})
+        except OSError as error:  # layout_problem rules these out; nothing half made may run
+            return done("error", f"the links could not be made: {error}")
         if harness == "claude-code":
             wanted = links if links is not None else {f".claude/skills/{target.rsplit('/', 1)[-1]}": f"../../{target}"}
             for path, link_target in wanted.items():

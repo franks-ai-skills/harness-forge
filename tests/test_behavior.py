@@ -552,11 +552,21 @@ class FixtureLayoutTest(BehaviorCase):
             "would replace a staged file": behavior(links={"x.md": {"in": "workspace", "path": f"{SKILL_DIR}/SKILL.md",
                                                                     "kind": "file"}}),
         }
+        # Outside targets that cannot both exist, or that would make a missing one present, in either order.
+        for first, second, reason in ((("x", "file"), ("x/y", "file"), "which is a file"),
+                                      (("x", "missing"), ("x/y", "directory"), "would make the missing link target"),
+                                      (("x", "directory"), ("x", "file"), "declared twice")):
+            for order in ((first, second), (second, first)):
+                links = {f"l{n}": {"in": "outside", "path": path, "kind": kind} for n, (path, kind) in enumerate(order)}
+                cases[f"{reason} ({order[0][0]} first)"] = behavior(links=links)
+        cases["would make the missing link target (workspace)"] = behavior(
+            links={"l": {"in": "workspace", "path": "m", "kind": "missing"}}, fixtures={"m/x.md": "x"})
         for reason, test_case in cases.items():
             with self.subTest(reason):
                 problem = case_problem(test_case, "claude-code", self.files)
                 self.assertIsNotNone(problem)
-                self.assertIn(reason if reason != "would replace a staged file" else "replace", problem)
+                expected = {"would replace a staged file": "replace"}.get(reason, reason.split(" (")[0])
+                self.assertIn(expected, problem)
 
     def test_the_schema_takes_the_new_fields(self):
         activation = yaml.safe_load((Path(__file__).resolve().parents[1] / "evals/smoke/vertical.yaml")
