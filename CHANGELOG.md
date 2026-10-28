@@ -12,7 +12,20 @@ against tags named `harness-forge--v<version>` (`claude plugin tag`
 creates that format); Forge adds such a tag on the same commit only
 once it supports such dependencies.
 
-## Unreleased
+## 0.5.0 (2026-10-28)
+
+Still pins agent-harness-kb 0.6.0. From the owner's prompt-me test of
+0.4.0: confirmation summaries stay within a hard size limit and say what
+changed since the last confirmation, requirement acceptance is bound to
+what the user was shown, build replaces its own or committed output
+without asking, and verification chooses its scope, names each attempt,
+keeps file judgments when only runtime cases change, reports changed
+verdicts and runtime evidence per target harness. Behavior cases gain
+git and link fixtures and new assertions. Breaking: `accept` needs
+`--relay`; `verify --scope review` and `--scope-relay` are gone (Forge
+chooses the scope; `--scope extensive` remains); `prepare-contract`
+returns a bounded summary with its own `question`; a Claude Code
+behavior case cannot have a shell.
 
 ### Verification
 
