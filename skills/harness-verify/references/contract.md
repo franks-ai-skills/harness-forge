@@ -6,7 +6,7 @@ Read this before explaining a verification result.
 
 | Result | When |
 | --- | --- |
-| `verified` | Confirmed in this session; every applicable rule has a result; no error rule failed, errored or stayed unresolved; the links between parts hold; the recorded selection is current and no goal conflict remains, a kept one included; no security or compatibility drift is open; the goal verdict is met; executed runtime tests passed; every declared behavior case passed in this harness; a built skill's explicit activation was observed live; no bound input changed. With adopted overrides the report says "verified with N overrides" and names them |
+| `verified` | Confirmed in this session; every applicable rule has a result; no error rule failed, errored or stayed unresolved; the links between parts hold; the recorded selection is current and no goal conflict remains, a kept one included; no security or compatibility drift is open; the goal verdict is met; executed runtime tests passed; every declared behavior case passed in this harness; for a skill Forge built, its explicit activation was observed live (a reused skill available locally needs no observed activation: its checks, review and behavior cases decide); no bound input changed. With adopted overrides the report says "verified with N overrides" and names them |
 | `not verified` | Something was built or vendored, and at least one condition above fails |
 | `not applicable` | Nothing is built: an outside-only or nothing-fits part, or a mechanism without a builder in this release |
 | `not checked` | A reused artifact that is not available locally |

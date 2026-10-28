@@ -16,6 +16,13 @@ once it supports such dependencies.
 
 ### Verification
 
+- harness-verify's results reference says that only a skill Forge built
+  needs an observed explicit activation to be `verified`; a reused skill
+  available locally is judged by its checks, review and behavior cases.
+  Forge's own self-verification now states build-skill's overwrite
+  requirement as #101 decided: no question for a file that is the
+  part's last build output or the committed version, and every replaced
+  or removed file named (#127).
 - A Claude Code behavior case can ask for a shell with `shell: true`,
   but it is unavailable, with the reason, and launches nothing: Claude
   Code's sandbox documentation does not establish that writes inside the
