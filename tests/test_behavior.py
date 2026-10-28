@@ -698,3 +698,44 @@ class PlacementAndOutputTest(unittest.TestCase):
         bad = behavior(expect={"files": [{"path": DRAFT, "exists": True}],
                                "actions": {"no_file_requests_matching": ["("]}})
         self.assertIn("is not a regular expression", case_problem(bad, "claude-code", {}))
+
+
+class ShellCaseTest(BehaviorCase):
+    """#113: a Claude Code case never runs with a shell its sandbox cannot be shown to confine."""
+
+    def test_a_claude_case_asking_for_a_shell_is_unavailable_and_launches_nothing(self):
+        test_case = behavior(harnesses=["claude-code"], shell=True)
+        (result,), runner = self.run_case("claude-code", claude_writes(DRAFT), test_case, act=write(DRAFT))
+        self.assertEqual(result.result, "unavailable")
+        self.assertIn("does not establish that writes inside the working directory can be limited", result.reason)
+        self.assertIn("https://code.claude.com/docs/en/sandboxing", result.reason)
+        self.assertFalse(runner.worker_calls, "no harness starts")
+
+    def test_the_public_runner_launches_no_discovery_for_a_shell_case_alone(self):
+        """Without a given baseline, discovery would start two Claude sessions; a shell case needs none."""
+        runner = WritingRunner(lambda workspace: None, worker=claude_writes(DRAFT))
+        results = run_skill_runtime(self.scenario.run, "claude-code", [behavior(harnesses=["claude-code"], shell=True)],
+                                    files=self.files, runner=runner, environ=PARENT)
+        self.assertEqual([item.result for item in results], ["unavailable"])
+        self.assertTrue(results[0].reason.startswith("unavailable: Claude Code's sandbox documentation"))
+        self.assertFalse(runner.worker_calls, "no discovery, no case: nothing launched")
+
+    def test_shell_belongs_to_a_case_for_claude_code_alone(self):
+        for harnesses in (["codex"], ["claude-code", "codex"]):
+            for value in (True, False):
+                with self.subTest(harnesses=harnesses, value=value):
+                    problem = case_problem(behavior(harnesses=harnesses, shell=value), "codex", {})
+                    self.assertIn("shell applies only to a case for Claude Code alone", problem)
+        for value in (True, False):
+            self.assertIsNone(case_problem(behavior(harnesses=["claude-code"], shell=value), "claude-code", {}))
+        activation = yaml.safe_load((Path(__file__).resolve().parents[1] / "evals/smoke/vertical.yaml")
+                                    .read_text(encoding="utf-8"))["cases"][:1]
+        with self.assertRaises(ValueError, msg="an activation case has no shell"):
+            validate({"cases": [{**activation[0], "shell": True}]}, "runtime-cases")
+
+    def test_the_guidance_sends_a_case_that_needs_a_shell_to_codex(self):
+        text = " ".join((Path(__file__).resolve().parents[1] / "skills/harness-verify/SKILL.md")
+                        .read_text(encoding="utf-8").split())
+        self.assertIn("`shell: true` makes it unavailable", text)
+        self.assertIn("Write a case that needs a shell for Codex.", text)
+

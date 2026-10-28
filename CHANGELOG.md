@@ -16,6 +16,13 @@ once it supports such dependencies.
 
 ### Verification
 
+- A Claude Code behavior case can ask for a shell with `shell: true`,
+  but it is unavailable, with the reason, and launches nothing: Claude
+  Code's sandbox documentation does not establish that writes inside the
+  working directory can be limited to the declared paths, so Forge never
+  runs such a case with a wider write boundary. `shell` applies only to
+  a case for Claude Code alone; a case that needs a shell runs in
+  Codex (#113).
 - Behavior cases gain three assertions (#112): `only_in`, that a text
   occurs only inside a named Markdown section and optionally inside a
   fenced block there, as CommonMark parses it; `no_output_containing`,

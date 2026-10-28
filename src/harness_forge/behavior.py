@@ -101,6 +101,14 @@ def permits(path: str, writes: Iterable[str]) -> bool:
     return False
 
 
+# Why a Claude Code case that needs a shell does not run (#113), from the vendor's own documentation.
+SHELL_UNAVAILABLE = (
+    "unavailable: Claude Code's sandbox documentation does not establish that writes inside the working directory "
+    "can be limited to the declared paths (it documents allowWrite for paths outside it and denyWrite for specific "
+    "paths, but does not establish a way to re-open a write path inside a denied region), so Forge cannot run a "
+    "shell in this case without "
+    "widening its write boundary; run the case in Codex, or without a shell (https://code.claude.com/docs/en/sandboxing)")
+
 # The repository a case's git fixture makes: fixed identity and time, so commit ids are the same on every run.
 FIXTURE_IDENTITY = ("Forge Fixture", "fixture@example.invalid")
 FIXTURE_TIME = "2026-01-01T00:00:00+0000"
@@ -257,6 +265,9 @@ def case_problem(case: dict, harness: str, protected: Iterable[str]) -> str | No
     problem = layout_problem(case, protected)
     if problem:
         return problem
+    if "shell" in case and list(case.get("harnesses") or []) != ["claude-code"]:
+        return ("shell applies only to a case for Claude Code alone: a Codex case runs its commands in Codex's own "
+                "sandbox already")
     taken = {fold_name(path) for path in protected}
     for entry in case.get("writes") or []:
         scope = write_scope(entry)
@@ -304,6 +315,8 @@ def unsupported(case: dict, harness: str, version: str) -> str | None:
         if exact:
             return (f"Codex cannot limit a write to the exact path {exact[0]}: its sandbox would grant the whole "
                     f"subtree; declare {exact[0]}/** if that may change, or test the case in Claude Code")
+    if harness == "claude-code" and case.get("shell"):
+        return SHELL_UNAVAILABLE.removeprefix("unavailable: ")
     if harness == "claude-code":
         found = re.search(r"(\d+)\.(\d+)\.(\d+)", version or "")
         if not found or tuple(int(number) for number in found.groups()) < CLAUDE_READ_BLOCK:

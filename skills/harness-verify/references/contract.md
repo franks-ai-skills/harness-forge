@@ -43,6 +43,12 @@ Code reports; Codex does not report refused file operations inside its
 commands, so a case asking for it there is unavailable. A command check
 sees the recorded command text, not what a script it starts does.
 
+A Claude Code case never gets a shell. Asking for one with `shell: true`
+makes the case unavailable: Claude Code's sandbox documentation does not
+establish that writes inside the working directory can be limited to the
+declared paths, so a shell there would widen the case's write boundary.
+A case that needs a shell runs in Codex.
+
 `only_in` requires each text to occur in the saved file, every occurrence
 wholly inside the named section (from its heading to the next heading of
 the same or a higher level) and, with `fenced`, inside one fenced block's

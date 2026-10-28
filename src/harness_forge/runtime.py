@@ -31,7 +31,9 @@ from typing import Callable, Iterable, Mapping
 from harness_forge.access import inside, tool_paths
 from harness_forge.adapters import codex
 from harness_forge.adapters.base import Completed, Runner, preflight, run_command, worker_environment
-from harness_forge.behavior import BEHAVIOR, CLAUDE_TOOLS, CODEX_ITEMS, behavior_case, case_digest, plain_path
+from harness_forge.behavior import (
+    BEHAVIOR, CLAUDE_TOOLS, CODEX_ITEMS, SHELL_UNAVAILABLE, behavior_case, case_digest, plain_path,
+)
 from harness_forge.checks.common import frontmatter
 from harness_forge.diagnostics import Diagnostics
 from harness_forge.documents import fold_name, load_document, parse_yaml, safe_path
@@ -930,6 +932,11 @@ def judge_run(harness: str, completed: Completed, files: Mapping[str, bytes], ta
     return outcome, reason, observed["activation"], observed["inventory"]
 
 
+def _shell_case(harness: str, test_case: dict) -> bool:
+    """A Claude Code behavior case asking for a shell, which never runs (#113)."""
+    return harness == "claude-code" and test_case.get("kind") == BEHAVIOR and test_case.get("shell") is True
+
+
 def run_skill_runtime(
     run: VerificationRun, harness: str, cases: list[dict], *, files: Mapping[str, bytes], runner: Runner = run_command,
     environ: Mapping[str, str] | None = None, login_answer: str | None = None,
@@ -975,7 +982,8 @@ def run_skill_runtime(
         diagnostics.open(run.run_id)
     if baseline_skills is None:
         # Two launches tell Claude's bundled skills from the user's; only a case that runs needs them.
-        launches = any(test_case["part_id"] not in plugin_parts for test_case in cases)
+        launches = any(test_case["part_id"] not in plugin_parts and not _shell_case(harness, test_case)
+                       for test_case in cases)
         baseline_skills, user_skills, cause = (
             baseline_origins(runner, environ, timeout=timeout, workspace_root=workspace_root, diagnostics=diagnostics)
             if harness == "claude-code" and checked["available"] and launches else (set(), set(), None))
@@ -1040,6 +1048,10 @@ def run_skill_runtime(
             continue
         if test_case["part_id"] in plugin_parts:
             results.append(stopped("not-run", PLUGIN_RUNTIME))
+            continue
+        if _shell_case(harness, test_case):
+            # Before any discovery or shadowing result: its own reason, and nothing launched for it (#113).
+            results.append(stopped("not-run", SHELL_UNAVAILABLE))
             continue
         if behavior:
             outside = sorted(path for path in test_case.get("dependencies") or []
