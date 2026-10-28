@@ -65,6 +65,11 @@ GAPS = {
     ],
 }
 COMMON_GAP = "a file written and removed again during the run is not in the before-and-after comparison"
+OUTPUT_GAP = ("absence from recorded output does not prove a file was never read, nor that unreported or truncated "
+              "output did not contain the text")
+# Claude Code's file tools and the input fields that name a path (#112). Grep's pattern is what it searches for.
+FILE_TOOLS = {"Read": ("file_path",), "Edit": ("file_path",), "Write": ("file_path",), "Grep": ("path",),
+              "Glob": ("path", "pattern")}
 
 
 def plain_path(path: str) -> bool:
@@ -275,11 +280,12 @@ def case_problem(case: dict, harness: str, protected: Iterable[str]) -> str | No
                      - KNOWN_TOOLS[harness])
     if unknown:
         return f"no_tools names {', '.join(unknown)}, which {harness} does not have"
-    for pattern in ((case.get("expect") or {}).get("actions") or {}).get("no_commands_matching") or []:
-        try:
-            re.compile(pattern)
-        except re.error as error:
-            return f"no_commands_matching {pattern!r} is not a regular expression: {error}"
+    for key in ("no_commands_matching", "no_file_requests_matching"):
+        for pattern in ((case.get("expect") or {}).get("actions") or {}).get(key) or []:
+            try:
+                re.compile(pattern)
+            except re.error as error:
+                return f"{key} {pattern!r} is not a regular expression: {error}"
     return None
 
 
@@ -288,6 +294,9 @@ def unsupported(case: dict, harness: str, version: str) -> str | None:
     actions = (case.get("expect") or {}).get("actions") or {}
     if harness == "codex" and actions.get("no_denied"):
         return "Codex does not report refused file operations inside its commands, so no_denied cannot be observed"
+    if harness == "codex" and actions.get("no_file_requests_matching"):
+        return ("Codex reads files only through shell commands and records no file-tool request, so "
+                "no_file_requests_matching cannot be observed")
     if harness == "codex":
         # Codex's sandbox grants a whole subtree for a directory or a path that does not exist yet, and a command
         # can turn a granted file into a directory before the next command: an exact write is never exact there.
@@ -366,6 +375,8 @@ def observe_claude(stdout: str) -> dict:
     events, broken = _events(stdout)
     requests: dict[str, dict] = {}
     denied: list[str] = []
+    outputs: list[tuple[str, str]] = []
+    unreadable: list[str] = []
     complete = False
     for event in events:
         message = event.get("message")
@@ -377,8 +388,9 @@ def observe_claude(stdout: str) -> dict:
                 arguments = block.get("input") if isinstance(block.get("input"), dict) else {}
                 if str(block.get("id")) in requests:
                     broken += 1
+                # The input as recorded, also when malformed: a path assertion must not read it as empty (#112).
                 requests[str(block.get("id"))] = {"tool": str(block.get("name")), "input": arguments, "error": None,
-                                                  "answered": False}
+                                                  "answered": False, "raw": block.get("input")}
             elif event.get("type") == "user" and block.get("type") == "tool_result":
                 request = requests.get(str(block.get("tool_use_id")))
                 if request is None or request["answered"]:
@@ -386,6 +398,16 @@ def observe_claude(stdout: str) -> dict:
                     broken += 1
                     continue
                 request["answered"] = True
+                content = block.get("content")
+                if isinstance(content, str):
+                    outputs.append((request["tool"], content))
+                elif isinstance(content, list) and all(isinstance(item, dict) for item in content):
+                    outputs.append((request["tool"], "\n".join(str(item.get("text", "")) for item in content
+                                                               if item.get("type", "text") == "text")))
+                    if any(item.get("type", "text") != "text" for item in content):
+                        unreadable.append(request["tool"])
+                elif content is not None:
+                    unreadable.append(request["tool"])
                 if block.get("is_error") is True:
                     content = block.get("content")
                     request["error"] = _short(content if isinstance(content, str) else
@@ -406,6 +428,9 @@ def observe_claude(stdout: str) -> dict:
                          + (f" (error: {request['error']})" if request["error"] else "")
                          + ("" if request["answered"] else " (no result)") for request in requests.values()],
             "tools": [request["tool"] for request in requests.values()], "commands": [], "denied": denied,
+            "file_requests": [{"tool": request["tool"], "input": request["raw"]} for request in requests.values()
+                              if request["tool"] in FILE_TOOLS],
+            "outputs": outputs, "unreadable": unreadable,
             "complete": complete and not broken and not unanswered, "broken": broken}
 
 
@@ -425,9 +450,14 @@ def observe_codex(stdout: str) -> dict:
             complete = True
         if event.get("type") in ("turn.failed", "error"):
             errored = True
-    requests, tools, commands = [], [], []
+    requests, tools, commands, outputs, unreadable = [], [], [], [], []
     for kept in items.values():
         kind, item = kept["type"], kept["item"]
+        if kind == "command_execution" and kept["finished"]:
+            if isinstance(item.get("aggregated_output"), str):
+                outputs.append((f"command {_short(item.get('command', ''))}", item["aggregated_output"]))
+            else:
+                unreadable.append(f"command {_short(item.get('command', ''))}")
         if kind in ("agent_message", "reasoning", "todo_list"):
             continue
         tools.append(kind)
@@ -443,7 +473,8 @@ def observe_codex(stdout: str) -> dict:
     # A command or file change counts only once Codex finished it; one still in progress leaves the record open.
     unfinished = [kept for kept in items.values() if kept["type"] in CODEX_ITEMS
                   and (not kept["finished"] or kept["item"].get("status") in (None, "in_progress"))]
-    return {"requests": requests, "tools": tools, "commands": commands, "denied": [],
+    return {"requests": requests, "tools": tools, "commands": commands, "denied": [], "file_requests": [],
+            "outputs": outputs, "unreadable": unreadable,
             "complete": complete and not errored and not broken and not unfinished, "broken": broken}
 
 
@@ -480,6 +511,8 @@ def evaluate(case: dict, harness: str, workspace: Path, after: Mapping[str, str]
             for needle in item.get("not_contains") or []:
                 if needle in text:
                     failed.append(f"{path}: contains {needle!r}")
+            if "only_in" in item:
+                failed += [f"{path}: {problem}" for problem in only_in_problems(text, item["only_in"])]
     actions = expect.get("actions") or {}
     for tool in actions.get("no_tools") or []:
         if tool in observed["tools"]:
@@ -490,7 +523,69 @@ def evaluate(case: dict, harness: str, workspace: Path, after: Mapping[str, str]
         hits = [command for command in observed["commands"] if re.search(pattern, command)]
         if hits:
             failed.append(f"ran a command matching {pattern!r}: {_short(hits[0])}")
+    for needle in actions.get("no_output_containing") or []:
+        # A match and missing evidence both fail, each with its own reason (#112).
+        if not observed["complete"]:
+            failed.append(f"absence of {needle!r} cannot be shown: the run's record is incomplete")
+        elif observed.get("unreadable"):
+            failed.append(f"absence of {needle!r} cannot be shown: the output of {observed['unreadable'][0]} could "
+                          "not be read")
+        else:
+            hits = [source for source, output in observed.get("outputs") or [] if needle in output]
+            if hits:
+                failed.append(f"{needle!r} appears in recorded output of {hits[0]}")
+    for pattern in actions.get("no_file_requests_matching") or []:
+        if not observed["complete"]:
+            failed.append(f"no file request matching {pattern!r} cannot be shown: the run's record is incomplete")
+            continue
+        for request in observed.get("file_requests") or []:
+            fields = FILE_TOOLS[request["tool"]]
+            arguments = request["input"]
+            if not isinstance(arguments, dict):
+                failed.append(f"cannot read the path of a {request['tool']} request")
+                continue
+            for field in fields:
+                value = arguments.get(field, "." if request["tool"] in ("Grep", "Glob") and field == "path" else None)
+                if not isinstance(value, str):
+                    failed.append(f"cannot read the {field} of a {request['tool']} request")
+                elif re.search(pattern, value):
+                    failed.append(f"requested {request['tool']} {value} matching {pattern!r}")
     return failed
+
+
+def only_in_problems(text: str, spec: dict) -> list[str]:
+    """Each text must occur, and every occurrence lie wholly inside the named section, and with ``fenced`` inside
+    one fenced block's content there (#112)."""
+    from harness_forge.documents import UnreadableMarkdown, markdown_fence_contents, markdown_headings
+
+    level, heading = spec.get("level", 2), spec["heading"]
+    try:
+        headings = markdown_headings(text)
+        fences = markdown_fence_contents(text)
+    except UnreadableMarkdown as error:
+        return [f"cannot be read as Markdown: {error}"]
+    found = [offset for offset, found_level, title in headings if found_level == level and title.strip() == heading]
+    if len(found) != 1:
+        return [f"the section {'#' * level} {heading} is {'missing' if not found else 'ambiguous'}"]
+    start = found[0]
+    end = next((offset for offset, found_level, _ in headings if offset > start and found_level <= level), len(text))
+    problems = []
+    for needle in spec["texts"]:
+        positions = [match.start() for match in re.finditer(re.escape(needle), text)] if needle else []
+        if not positions:
+            problems.append(f"does not contain {needle!r}")
+            continue
+        for position in positions:
+            stop = position + len(needle)
+            inside = start <= position and stop <= end
+            if inside and spec.get("fenced"):
+                inside = any(begin <= position and stop <= finish and start <= begin and finish <= end
+                             for begin, finish in fences)
+            if not inside:
+                where = "a fenced block of " if spec.get("fenced") else ""
+                problems.append(f"{needle!r} occurs outside {where}the section {'#' * level} {heading}")
+                break
+    return problems
 
 
 def case_digest(case: dict, dependency_hashes: Mapping[str, str]) -> str:
@@ -540,6 +635,8 @@ def behavior_case(
         details["gaps"].append(INDEX_GAP)
     if case.get("links"):
         details["gaps"].append(OUTSIDE_GAP)
+    if ((case.get("expect") or {}).get("actions") or {}).get("no_output_containing"):
+        details["gaps"].append(OUTPUT_GAP)
 
     def done(result: str, reason: str, activation: str | None = None, completed: Completed | None = None,
              **context) -> tuple[str, str, str | None, dict]:

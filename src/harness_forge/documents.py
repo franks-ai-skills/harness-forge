@@ -965,6 +965,30 @@ def markdown_headings(markdown: str) -> list[tuple[int, int, str]]:
             for index, token in enumerate(tokens) if token.type == "heading_open" and token.level == 0]
 
 
+def markdown_fence_contents(markdown: str) -> list[tuple[int, int]]:
+    """(start, end) offsets of each fenced code block's content, as CommonMark parses it, at any nesting level.
+
+    A fence closes only at a line of the opening fence's character, at least as long as it; an unclosed fence
+    runs to the end of the text.
+    """
+    tokens, _ = _parse(markdown)
+    lines = _line_offsets(markdown)
+    ranges = []
+    for token in tokens:
+        if token.type != "fence" or not token.map:
+            continue
+        first, last = token.map
+        start = lines[first + 1][0] if first + 1 < len(lines) else len(markdown)
+        end = len(markdown)
+        if last - 1 > first and last - 1 < len(lines):
+            closing = lines[last - 1][1].strip()
+            marker = token.markup
+            if closing and set(closing) == {marker[0]} and len(closing) >= len(marker):
+                end = lines[last - 1][0]
+        ranges.append((start, max(start, end)))
+    return ranges
+
+
 def markdown_links(markdown: str) -> list[str]:
     """Destinations of every link, image and reference definition, as written with escapes resolved."""
     tokens, references = _parse(markdown)

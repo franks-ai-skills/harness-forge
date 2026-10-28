@@ -16,6 +16,15 @@ once it supports such dependencies.
 
 ### Verification
 
+- Behavior cases gain three assertions (#112): `only_in`, that a text
+  occurs only inside a named Markdown section and optionally inside a
+  fenced block there, as CommonMark parses it; `no_output_containing`,
+  that no recorded tool result or command output contains a text, which
+  an incomplete or unreadable record also fails; and
+  `no_file_requests_matching`, that no Claude Code file-tool request,
+  refused ones included, names a matching path (unavailable in Codex).
+  The report's gaps say that absence from recorded output does not
+  prove a file was never read.
 - A behavior case can set up a git history and symbolic links before
   it runs (#111). `git` makes its commits one at a time in a repository
   built from nothing (no caller configuration, template or hook; a fixed

@@ -43,6 +43,19 @@ Code reports; Codex does not report refused file operations inside its
 commands, so a case asking for it there is unavailable. A command check
 sees the recorded command text, not what a script it starts does.
 
+`only_in` requires each text to occur in the saved file, every occurrence
+wholly inside the named section (from its heading to the next heading of
+the same or a higher level) and, with `fenced`, inside one fenced block's
+content there; a missing or repeated section fails it.
+`no_output_containing` fails when a text appears in any recorded tool
+result or command output, and also when the record is incomplete or an
+output cannot be read, since absence cannot be shown then; its absence
+does not prove a file was never read. `no_file_requests_matching` checks
+the paths of Claude Code's file-tool requests (`Read`, `Edit` and `Write`
+by `file_path`, `Grep` by `path`, `Glob` by `path` and `pattern`),
+refused ones too; Codex records no file-tool reads, so a case asking for
+it there is unavailable.
+
 Each declared case needs exactly one result in each harness it names. A
 failed case keeps the part from `verified`; an unavailable or erroring
 one does too, as unverified behavior, which is no claim that the build is
