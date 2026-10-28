@@ -118,7 +118,8 @@ def _cell(value: str) -> str:
     """Text from a worker, the repository or a run as a table cell it cannot end, rendered as written (#129).
 
     Each character that can start inline Markdown inside a cell gets a backslash, which CommonMark renders
-    literally: no code, emphasis, strikethrough, link, image, HTML, entity or GitHub math. The others (such as
+    literally: no code, emphasis, strikethrough, Markdown link, image, HTML, entity or GitHub math (GitHub still
+    links a bare URL, with its text unchanged). The others (such as
     `#`, `-` or `.`) act only at the start of a line, which a cell never is. A pipe then always follows an odd
     number of backslashes, which GitHub's and markdown-it's table rules both read as part of the cell.
     """
