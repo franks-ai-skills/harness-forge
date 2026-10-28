@@ -391,6 +391,10 @@
             },
             "additionalProperties": false,
             "minProperties": 1
+          },
+          "shell": {
+            "description": "The case needs a shell. Only Claude Code cases may ask; today they are not run, since its sandbox cannot be shown to keep writes to the declared paths (#113).",
+            "type": "boolean"
           }
         },
         "additionalProperties": false,
