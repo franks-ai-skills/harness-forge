@@ -75,11 +75,15 @@ def runtime_evidence(run: VerificationRun, cases: list[dict], harness: str) -> d
 
 
 def unrun_harnesses(evidence: dict) -> dict[str, list[str]]:
-    """Per part, the target harnesses with declared cases that did not run."""
-    return {part_id: [target for target, entry in targets.items()
-                      if entry["activation"]["not_run"] or entry["behavior"]["not_run"]]
-            for part_id, targets in evidence.items()
-            if any(entry["activation"]["not_run"] or entry["behavior"]["not_run"] for entry in targets.values())}
+    """Per part, the other target harnesses whose declared cases did not run because this verification ran from
+    another one. A case that did not run in this harness is a runtime result with its own reason, not listed here."""
+    found = {}
+    for part_id, targets in evidence.items():
+        other = [target for target, entry in targets.items()
+                 if not entry["ran"] and (entry["activation"]["declared"] or entry["behavior"]["declared"])]
+        if other:
+            found[part_id] = other
+    return found
 
 
 def _evidence_summary(target: str, entry: dict) -> str:

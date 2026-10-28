@@ -103,4 +103,8 @@ class RuntimeEvidenceTest(unittest.TestCase):
         self.assertEqual((codex["sources"]["c0"], codex["sources"]["c5"]), ("this attempt", "kept"))
         self.assertEqual(evidence["A"]["codex"]["behavior"]["unavailable"], ["b1"])
         self.assertEqual(evidence["A"]["claude-code"]["activation"]["declared"], [], "no Claude Code tools declared")
-        self.assertEqual(unrun_harnesses(evidence), {"A": ["codex"]}, "c4 did not run")
+        # c4 did not run in the harness that ran: a runtime result with its reason, not another harness to run.
+        self.assertEqual(unrun_harnesses(evidence), {})
+        run.targets = ["claude-code", "codex"]
+        cases.append({"id": "k1", "part_id": "A", "permitted_tools": {"claude-code": []}})
+        self.assertEqual(unrun_harnesses(runtime_evidence(run, cases, "codex")), {"A": ["claude-code"]})
