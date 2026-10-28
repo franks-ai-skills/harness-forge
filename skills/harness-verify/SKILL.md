@@ -117,7 +117,15 @@ instruction, and stop; never install or download anything yourself.
    which only Claude Code can enforce, never the skill's own files, a harness directory or an
    instruction file), `network: none`, any `dependencies` from another
    part, and what to `expect` of the saved files and the recorded
-   actions. Read [references/contract.md](references/contract.md#behavior-tests)
+   actions. Derive each assertion from an accepted requirement or the
+   confirmed goal, name them in the case's `checks` (requirement ids
+   and/or `goal`), and demand no more than they do: accept every output
+   the requirement allows (a required single line `*` may end with or
+   without a newline, so assert it with `contains`, not `equals`; this
+   accepts more content too, so it does not show the file has one line),
+   and give each case a request and fixtures from which what it asserts
+   follows (a draft names a file only when the request makes that file
+   relevant). Read [references/contract.md](references/contract.md#behavior-tests)
    before telling the user what a behavior result shows. Run `scripts/forge.py verify --decision
    <record> --root <repository> --revision <rules file> --harness <this
    harness> --evidence <workers output> --relay <relay> --slug <slug>

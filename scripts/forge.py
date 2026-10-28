@@ -949,11 +949,26 @@ def _current(decision: Decision, files, symlinks, rules, revision, overrides, ev
                         kb_version=_kb_version(), worker_evidence=evidence, cases=cases)
 
 
-def _cases(arguments: argparse.Namespace) -> list[dict]:
+def _cases(arguments: argparse.Namespace, revision=None) -> list[dict]:
     try:
-        return load_cases(Path(arguments.cases)) if arguments.cases else []
+        cases = load_cases(Path(arguments.cases)) if arguments.cases else []
     except (OSError, ValueError) as error:
         raise _InvalidInput(str(error)) from error
+    problem = _checks_problem(cases, revision)
+    if problem:
+        raise _InvalidInput(problem)
+    return cases
+
+
+def _checks_problem(cases: list[dict], revision) -> str | None:
+    """A behavior case may name in ``checks`` only its part's accepted requirements and the goal (#110)."""
+    accepted = {(entry["part_id"], entry["rule"]["id"]) for entry in (revision.rules if revision else [])}
+    for case in cases:
+        for item in case.get("checks") or []:
+            if item != "goal" and (case["part_id"], item) not in accepted:
+                return (f"case {case['id']} checks {item}, which is not an accepted requirement of part "
+                        f"{case['part_id']}")
+    return None
 
 
 def _scope(arguments: argparse.Namespace) -> int:
@@ -966,7 +981,7 @@ def _scope(arguments: argparse.Namespace) -> int:
     rules = effective_rules(_pinned_rules(), overrides, approval["confirmation"])
     files, symlinks = collect_target(root, decision)
     computed = _computed_scope(arguments, root, decision, revision, approval, overrides, files, symlinks, rules,
-                               _cases(arguments))
+                               _cases(arguments, revision))
     emit({"command": "scope", "scope": _shown_scope(computed), "label": _scope_label(computed)})
     return 0
 
@@ -1732,10 +1747,7 @@ def _verify(arguments: argparse.Namespace) -> int:
     if stale:
         raise _InvalidInput(stale)
     files, symlinks = collect_target(root, decision)
-    try:
-        cases = load_cases(Path(arguments.cases)) if arguments.cases else []
-    except (OSError, ValueError) as error:
-        raise _InvalidInput(str(error)) from error
+    cases = _cases(arguments, revision)
     # Behavior cases name their harnesses and need no activation fields; the rules below are the activation cases'.
     activation = [case for case in cases if case.get("kind") != BEHAVIOR]
     for case in activation:
@@ -1797,6 +1809,8 @@ def _verify(arguments: argparse.Namespace) -> int:
                             for item in kept_runtime]
     # Per target harness, what each built part's declared cases came to: none of another harness ran (#103).
     run.runtime_evidence = runtime_evidence(run, cases, arguments.harness)
+    # What each behavior case checks, so that the report can show it with the case's result (#110).
+    run.case_checks = {case["id"]: case.get("checks") for case in cases if case.get("kind") == BEHAVIOR}
     written = None
     try:
         rendered = render_report(run, results)

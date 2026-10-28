@@ -328,6 +328,16 @@ class CasesFileTest(unittest.TestCase):
         with self.assertRaises(ValueError):
             load_cases(self.write_cases({"cases": [self.activation()], "behavior": [{**plain, "network": "full"}]}))
 
+    def test_the_guidance_derives_each_assertion_from_what_the_case_checks(self):
+        """#110: two prompt-me cases would have rejected a compliant skill."""
+        text = " ".join((Path(__file__).resolve().parents[1] / "skills/harness-verify/SKILL.md")
+                        .read_text(encoding="utf-8").split())
+        for expected in ("Derive each assertion from an accepted requirement or the confirmed goal",
+                         "name them in the case's `checks`", "demand no more than they do",
+                         "assert it with `contains`, not `equals`", "it does not show the file has one line",
+                         "a draft names a file only when the request makes that file relevant"):
+            self.assertIn(expected, text)
+
     def test_the_example_file_is_valid_for_every_harness_it_names(self):
         cases = load_cases(Path(__file__).resolve().parents[1] / "evals" / "smoke" / "behavior-example.yaml")
         for case in cases:

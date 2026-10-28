@@ -31,6 +31,8 @@ behavior:
     checklist to .tmp/checklist.md.
   harnesses: [claude-code, codex]
   network: none
+  # What the case checks: the part's accepted requirement ids and/or its goal.
+  checks: [goal]
   writes: [.tmp/**]
   fixtures:
     bug-report.md: |

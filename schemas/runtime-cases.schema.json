@@ -151,6 +151,18 @@
           "network": {
             "const": "none"
           },
+          "checks": {
+            "description": "What the case checks: the part's accepted requirement ids and/or goal (#110).",
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 50,
+            "uniqueItems": true,
+            "items": {
+              "type": "string",
+              "pattern": "^(goal|idea\\.[a-z0-9-]+\\.[a-z0-9]+\\.[a-z0-9-]+)$",
+              "maxLength": 200
+            }
+          },
           "expect": {
             "type": "object",
             "properties": {

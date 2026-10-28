@@ -196,6 +196,11 @@
         "$ref": "urn:harness-forge:schema:worker-evidence"
       }
     },
+    "case_checks": {
+      "description": "Each behavior case's checks: requirement ids and/or goal, null when it names none (#110).",
+      "type": "object",
+      "additionalProperties": {"type": ["array", "null"], "items": {"type": "string"}}
+    },
     "runtime_evidence": {
       "description": "Per built part and target harness, the declared cases and what became of them (#103).",
       "type": "object"

@@ -242,6 +242,7 @@ class VerificationRun:
     attempt_id: str | None = None  # one verify invocation's own id (#106); run_id names its session confirmation
     changed_judgments: list[dict] = field(default_factory=list)  # verdicts that changed on unchanged inputs (#108)
     runtime_evidence: dict = field(default_factory=dict)  # per built part and target harness (#103)
+    case_checks: dict = field(default_factory=dict)  # each behavior case's checks, None when it names none (#110)
 
 
 @dataclass(frozen=True)

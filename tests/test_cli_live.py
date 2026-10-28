@@ -610,6 +610,37 @@ class LiveCommandsTest(unittest.TestCase):
         code, _, stderr = cli("verify", *arguments[:option], only_behavior, *arguments[option + 1:])
         self.assertEqual(code, 2)
 
+    def test_a_behavior_case_names_what_it_checks(self):
+        """#110: checks names the part's accepted requirements or its goal, and the report shows it."""
+        import yaml
+        cli, arguments = self.build_ready(ResearchRunner([finding()]))
+        document = yaml.safe_load((FORGE / "evals/smoke/vertical.yaml").read_text(encoding="utf-8"))
+        case = {"id": "saves-the-checklist", "part_id": "A", "mode": "implicit",
+                "prompt": "Save the checklist to .tmp/checklist.md.", "harnesses": ["claude-code"],
+                "network": "none", "writes": [".tmp/**"],
+                "expect": {"files": [{"path": ".tmp/checklist.md", "exists": True}]}}
+        option = arguments.index("--cases") + 1
+
+        def verify(*behavior, name):
+            path = cli.write(name, yaml.safe_dump({**document, "behavior": list(behavior)}))
+            return cli("verify", *arguments[:option], path, *arguments[option + 1:])
+
+        code, _, stderr = verify({**case, "checks": ["goal", "idea.repro.a.platform"]}, name="checks.yaml")
+        self.assertIn(code, (0, 1), stderr)
+        report = (self.root / ".harness/reports/repro.md").read_text(encoding="utf-8")
+        self.assertIn("| saves-the-checklist | claude-code ", report)
+        self.assertIn("| `goal`, `idea.repro.a.platform` |", report)
+        for checks, named in ((["idea.repro.a.unknown"], "idea.repro.a.unknown"),
+                              (["idea.repro.b.platform"], "idea.repro.b.platform")):
+            with self.subTest(checks=checks):
+                code, _, stderr = verify({**case, "checks": checks}, name=f"bad-{named}.yaml")
+                self.assertEqual(code, 2)
+                self.assertIn(f"checks {named}, which is not an accepted requirement of part A", stderr)
+        code, _, stderr = verify(case, name="no-checks.yaml")
+        self.assertIn(code, (0, 1), stderr)
+        self.assertIn("| names no requirement |", (self.root / ".harness/reports/repro.md").read_text(encoding="utf-8"),
+                      "a case file from before #110 still runs")
+
     def test_cases_without_tools_for_the_verified_harness_stop_before_any_worker(self):
         import yaml
         runner = ResearchRunner([finding()])
