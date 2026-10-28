@@ -196,6 +196,10 @@
         "$ref": "urn:harness-forge:schema:worker-evidence"
       }
     },
+    "runtime_evidence": {
+      "description": "Per built part and target harness, the declared cases and what became of them (#103).",
+      "type": "object"
+    },
     "changed_judgments": {
       "description": "Reviewer verdicts that changed although the part's review inputs did not (#108).",
       "type": "array",

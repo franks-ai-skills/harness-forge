@@ -146,6 +146,11 @@ instruction, and stop; never install or download anything yourself.
    drift choices; the part stays blocked until the user decides.
 6. Show each part's harness and goal result, every failing rule with its
    source, and each runtime case that did not run, with its reason. For
+   each part in `unrun_harnesses`, say that its "verified" covers only
+   the harness this verification ran from, name the target harnesses
+   whose declared cases did not run, and that verifying from such a
+   harness attempts to run them, though its environment or plugin set can
+   still leave them unavailable; Forge launches no other harness. For
    each entry in `changed_judgments`, say that the same reviewed inputs
    got another verdict than in the named earlier attempt, with both
    verdicts: a sign that the judgment varies, not a new defect and not a

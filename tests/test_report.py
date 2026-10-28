@@ -76,3 +76,31 @@ class WriteTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class RuntimeEvidenceTest(unittest.TestCase):
+    """#103: every outcome of a declared case is counted once, with its source."""
+
+    def test_each_outcome_has_its_count(self):
+        from types import SimpleNamespace
+
+        from harness_forge.report import runtime_evidence, unrun_harnesses
+        part = {"id": "A", "chosen": "skills", "outcome": "harness-only", "status": "built", "reuse": None}
+        result = lambda case_id, value, reason="r", kind="activation": SimpleNamespace(
+            part_id="A", case_id=case_id, harness="codex", result=value, reason=reason, kind=kind)
+        cases = [{"id": f"c{n}", "part_id": "A", "permitted_tools": {"codex": []}} for n in range(6)]
+        cases.append({"id": "b1", "part_id": "A", "kind": "behavior", "harnesses": ["codex"]})
+        run = SimpleNamespace(parts=[part], targets=["claude-code", "codex"], runtime_results=[
+            result("c0", "pass"), result("c1", "fail"), result("c2", "error"),
+            result("c3", "not-run", "unavailable: a plugin stayed loaded"), result("c4", "not-run", "skipped"),
+            result("b1", "unavailable", "unavailable: no shell", kind="behavior"),
+            result("c5", "pass", "r (kept from attempt a1 of run r1)")])
+        evidence = runtime_evidence(run, cases, "codex")
+        codex = evidence["A"]["codex"]["activation"]
+        self.assertEqual({name: codex[name] for name in ("passed", "failed", "error", "unavailable", "not_run")},
+                         {"passed": ["c0", "c5"], "failed": ["c1"], "error": ["c2"], "unavailable": ["c3"],
+                          "not_run": ["c4"]})
+        self.assertEqual((codex["sources"]["c0"], codex["sources"]["c5"]), ("this attempt", "kept"))
+        self.assertEqual(evidence["A"]["codex"]["behavior"]["unavailable"], ["b1"])
+        self.assertEqual(evidence["A"]["claude-code"]["activation"]["declared"], [], "no Claude Code tools declared")
+        self.assertEqual(unrun_harnesses(evidence), {"A": ["codex"]}, "c4 did not run")

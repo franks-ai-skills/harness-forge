@@ -18,6 +18,87 @@ from harness_forge.provenance import describe, verifier
 
 
 
+# Every outcome of a declared case has its own count: passed + failed + error + unavailable + not_run = declared.
+OUTCOMES = ("passed", "failed", "error", "unavailable", "not_run")
+_TARGET_NAMES = {"claude-code": "Claude Code", "codex": "Codex"}
+
+
+def _outcome(result) -> str:
+    if result.result == "pass":
+        return "passed"
+    if result.result == "fail":
+        return "failed"
+    if result.result == "error":
+        return "error"
+    if result.result == "unavailable" or (result.result == "not-run" and result.reason.startswith("unavailable")):
+        return "unavailable"
+    return "not_run"
+
+
+def runtime_evidence(run: VerificationRun, cases: list[dict], harness: str) -> dict:
+    """Each built part's declared activation and behavior cases per target harness, and what became of them (#103).
+
+    Only ``harness``, the one this verification ran from, can have results: a declared case of another target
+    harness is not run, since Forge launches no other harness. Each counted case names its source, this attempt
+    or the attempt a kept result came from.
+    """
+    from harness_forge.verify import part_kind  # verify renders reports; imported here to avoid a cycle
+
+    evidence: dict[str, dict] = {}
+    for part in run.parts:
+        if part_kind(part) not in ("build", "local-reuse"):
+            continue
+        part_id = part["id"]
+        evidence[part_id] = {}
+        for target in run.targets:
+            ran = target == harness
+            found = {r.case_id: r for r in run.runtime_results if r.part_id == part_id and r.harness == target}
+            entry = {"ran": ran, "reason": None if ran else
+                     f"verification ran from {_TARGET_NAMES.get(harness, harness)}; Forge launches no other harness"}
+            for kind in ("activation", "behavior"):
+                declared = [case for case in cases if case["part_id"] == part_id and (
+                    (kind == "behavior" and case.get("kind") == "behavior" and target in case.get("harnesses", []))
+                    or (kind == "activation" and case.get("kind") != "behavior"
+                        and target in case.get("permitted_tools", {})))]
+                counts = {"declared": [case["id"] for case in declared], **{name: [] for name in OUTCOMES},
+                          "sources": {}}
+                for case in declared:
+                    result = found.get(case["id"]) if ran else None
+                    outcome = _outcome(result) if result else "not_run"
+                    counts[outcome].append(case["id"])
+                    if result:
+                        counts["sources"][case["id"]] = ("kept" if "(kept from " in result.reason
+                                                         else "this attempt")
+                entry[kind] = counts
+            evidence[part_id][target] = entry
+    return evidence
+
+
+def unrun_harnesses(evidence: dict) -> dict[str, list[str]]:
+    """Per part, the target harnesses with declared cases that did not run."""
+    return {part_id: [target for target, entry in targets.items()
+                      if entry["activation"]["not_run"] or entry["behavior"]["not_run"]]
+            for part_id, targets in evidence.items()
+            if any(entry["activation"]["not_run"] or entry["behavior"]["not_run"] for entry in targets.values())}
+
+
+def _evidence_summary(target: str, entry: dict) -> str:
+    """One harness's evidence for a part in words: counts, or no cases declared, or not run with why."""
+    name = _TARGET_NAMES.get(target, target)
+    declared = len(entry["activation"]["declared"]) + len(entry["behavior"]["declared"])
+    if not declared:
+        return f"{name}: no cases declared"
+    if not entry["ran"]:
+        return f"{name}: not run ({declared} declared)"
+    pieces = []
+    for kind in ("activation", "behavior"):
+        counts = entry[kind]
+        if counts["declared"]:
+            shown = ", ".join(f"{len(counts[name])} {name.replace('_', ' ')}" for name in OUTCOMES if counts[name])
+            pieces.append(f"{kind} {len(counts['declared'])} declared: {shown}")
+    return f"{name}: " + "; ".join(pieces)
+
+
 def _one_line(value: str) -> str:
     """Text from a worker or a run kept on one line, so that it cannot start a heading or a code block."""
     return re.sub(r"\r\n|\r|\n", " ", value)
@@ -74,6 +155,9 @@ def report_data(run: VerificationRun, results: list[PartResult]) -> dict:
         data["part_map"]["dependencies"] = dict(run.part_dependencies)
     if run.part_dependency_roots:
         data["part_map"]["dependency_roots"] = dict(run.part_dependency_roots)
+    # Only a run that computed runtime evidence per harness records it, so earlier reports keep their exact form.
+    if run.runtime_evidence:
+        data["runtime_evidence"] = run.runtime_evidence
     # Only a run that found a changed judgment records them, so earlier reports keep their exact form.
     if run.changed_judgments:
         data["changed_judgments"] = [dict(item) for item in run.changed_judgments]
@@ -137,18 +221,27 @@ def render_report(run: VerificationRun, results: list[PartResult]) -> str:
             builder = f"Harness Forge {describe(build['forge'])}"
             outputs = ("changed since that build: " + ", ".join(build["outputs_changed"])
                        if build["outputs_changed"] else "match that build")
+        evidence = run.runtime_evidence.get(result.part_id, {})
+        # "verified" holds for the harness that ran; a target harness without runtime evidence is named (#103).
+        unrun = [_TARGET_NAMES.get(target, target) for target, entry in evidence.items() if not entry["ran"]]
+        ran = [_TARGET_NAMES.get(target, target) for target, entry in evidence.items() if entry["ran"]]
+        scope = (f" in {', '.join(ran)}; no runtime evidence for {', '.join(unrun)}"
+                 if result.harness_result == "verified" and ran and unrun else "")
         lines += [
             f"## Part {result.part_id}", "",
             f"- Harness result: {result.harness_result}" + (
                 f" with {len(run.overrides)} override{'s' if len(run.overrides) > 1 else ''} "
                 f"({', '.join(item['rule_id'] for item in run.overrides)})"
-                if run.overrides and result.harness_result == "verified" else ""),
+                if run.overrides and result.harness_result == "verified" else "") + scope,
             f"- Goal result: {result.goal_result}",
             f"- Status: {result.status}",
             f"- Outside dependencies: {', '.join(result.outside_dependencies) or 'none'}",
             f"- Recorded builder: {builder}",
             f"- Built outputs: {outputs}",
         ]
+        if evidence:
+            lines.append("- Runtime evidence: " + "; ".join(_evidence_summary(target, entry)
+                                                             for target, entry in evidence.items()))
         answers = next((part["answers"] for part in run.parts if part["id"] == result.part_id), {})
         lines.append(f"- Confirmed answers: `{json.dumps(answers, sort_keys=True)}`")
         if result.goal_verdict:
@@ -184,18 +277,42 @@ def render_report(run: VerificationRun, results: list[PartResult]) -> str:
             lines.append(f"- Part {item['part_id']}, `{item['rule_id']}`: {earlier['result']} in {where}, now "
                          f"{current['result']} ({_one_line(current['reason'])})")
         lines.append("")
+    if run.runtime_evidence:
+        lines += ["## Runtime evidence by harness", "",
+                  "Verifying from another target harness attempts to run its declared cases; its environment or "
+                  "plugin set can still leave them unavailable. Forge launches no other harness itself.", "",
+                  "| Part | Harness | Ran | Activation | Behavior | Note |", "| --- | --- | --- | --- | --- | --- |"]
+        for part_id, targets in run.runtime_evidence.items():
+            for target, entry in targets.items():
+                cells = []
+                for kind in ("activation", "behavior"):
+                    counts = entry[kind]
+                    cells.append("none declared" if not counts["declared"] else
+                                 f"{len(counts['declared'])} declared: " + ", ".join(
+                                     f"{len(counts[name])} {name.replace('_', ' ')}" for name in OUTCOMES
+                                     if counts[name]))
+                lines.append(f"| {part_id} | {_TARGET_NAMES.get(target, target)} | {'yes' if entry['ran'] else 'no'} "
+                             f"| {cells[0]} | {cells[1]} | {_one_line(entry['reason'] or '-')} |")
+        lines.append("")
+    # Declared cases of a target harness this verification did not run from, so that none is left out.
+    unrun_cases = [(part_id, target, case_id, kind, entry["reason"])
+                   for part_id, targets in run.runtime_evidence.items() for target, entry in targets.items()
+                   if not entry["ran"] for kind in ("activation", "behavior") for case_id in entry[kind]["declared"]]
     lines += ["## Runtime tests", ""]
-    if activation:
+    if activation or any(kind == "activation" for *_, kind, _ in unrun_cases):
         lines += ["| Part | Case | Harness | Result | Observed | Reason |", "| --- | --- | --- | --- | --- | --- |"]
         for item in activation:
             lines.append(f"| {item.part_id} | {item.case_id} | {item.harness} {item.harness_version} | {item.result} | "
                          f"{_one_line(item.observed_activation or '-')} | {_one_line(item.reason)} |")
+        for part_id, target, case_id, kind, reason in unrun_cases:
+            if kind == "activation":
+                lines.append(f"| {part_id} | {case_id} | {target} | not run | - | {_one_line(reason)} |")
         for harness in sorted({item.harness for item in activation if item.inventory != "observed"}):
             lines += ["", f"Inventory gap: {harness} does not report the skills, plugins and MCP servers it loaded, "
                           "so a user-level one that stayed loaded cannot be ruled out; its results are best-effort."]
     else:
         lines.append("none run")
-    if behavior:
+    if behavior or any(kind == "behavior" for *_, kind, _ in unrun_cases):
         # What a built skill did once it ran: its writes, its records and what the harness could not show.
         lines += ["", "## Behavior tests", "",
                   "| Part | Case | Harness | Result | Reason | Changed | Failed assertions |",
@@ -206,6 +323,9 @@ def render_report(run: VerificationRun, results: list[PartResult]) -> str:
                      for key in ("changes", "failed")]
             lines.append(f"| {item.part_id} | {item.case_id} | {item.harness} {item.harness_version} | {item.result} "
                          f"| {_one_line(item.reason).replace('|', chr(92) + '|')} | {cells[0]} | {cells[1]} |")
+        for part_id, target, case_id, kind, reason in unrun_cases:
+            if kind == "behavior":
+                lines.append(f"| {part_id} | {case_id} | {target} | not run | {_one_line(reason)} | - | - |")
         for harness in sorted({item.harness for item in behavior}):
             gaps = sorted({gap for item in behavior if item.harness == harness for gap in (item.details or {})
                            .get("gaps") or []})
