@@ -52,6 +52,116 @@ class RenderTest(unittest.TestCase):
         self.assertIn("Inventory gap: codex does not report the skills, plugins and MCP servers it loaded", rendered)
 
 
+class ContainmentTest(unittest.TestCase):
+    """#129: text from workers, runs and the repository stays in its cell or span and renders as written."""
+
+    HOSTILE = "a|b \\|c \\\\|d `x` **b** _e_ [l](x) <b>t</b> <http://x> &amp; &#124; ~~s~~ $m$ ![i](u) line\nnext"
+
+    def setUp(self):
+        from harness_forge.report import OUTCOMES
+        self.scenario = Scenario(skill_decision())
+        run, hostile = self.scenario.run, self.HOSTILE
+        review = passing_review(run)
+        for verdict in review["verdicts"]:
+            verdict.update(reason=hostile, citation=hostile)
+        self.results = finish_run(run, validate_review(run, review), [], self.scenario.current())
+        # A source URL may hold a pipe and other Markdown characters (rule.schema.json allows any HTTPS URL).
+        self.source = "https://example.com/a|b_c*d*`e`"
+        self.source_rule = sorted(item["rule_id"] for item in self.results[0].rule_results)[0]
+        run.rule_index[self.source_rule] = {**run.rule_index[self.source_rule], "sources": [self.source]}
+        helper = RuntimeAndInputsTest()
+        helper.scenario = self.scenario
+        run.runtime_results += [
+            helper.runtime(observed_activation=hostile, reason=hostile, harness_version=hostile),
+            helper.runtime(case_id="behave", kind="behavior", reason=hostile, harness_version="2.1.292",
+                           details={"changes": [hostile], "failed": [hostile], "requests": [], "denied": [],
+                                    "gaps": [], "case_digest": "0" * 64})]
+        counts = lambda declared: {"declared": declared, "sources": {}, **{name: [] for name in OUTCOMES}}
+        run.runtime_evidence = {"A": {"codex": {"ran": False, "reason": hostile, "activation": counts(["k1"]),
+                                                "behavior": counts(["b2"])}}}
+        run.whole_idea["hosting"]["plan"] = "``x`` ends`"
+        run.parts[0]["answers"] = {"q": "`a` ``b``"}
+        self.rendered = render_report(run, self.results)
+        self.lines = self.rendered.split("\n")
+
+    def _tables(self):
+        """Each table outside fenced blocks as its lines, header first."""
+        tables, current, fenced = [], [], False
+        for line in self.lines:
+            if line.startswith("```"):
+                fenced = not fenced
+            if not fenced and line.startswith("|"):
+                current.append(line)
+            elif current:
+                tables.append(current)
+                current = []
+        return tables + ([current] if current else [])
+
+    @staticmethod
+    def _gfm_cells(line: str) -> int:
+        """Cells by GitHub's table rule (cmark-gfm): a cell runs over backslash pairs and anything but a pipe."""
+        body, count, index = line.strip()[1:], 1, 0
+        body = body[:-1] if body.endswith("|") and not body.endswith("\\|") else body
+        while index < len(body):
+            if body[index] == "\\":
+                index += 2
+                continue
+            count += body[index] == "|"
+            index += 1
+        return count
+
+    def test_every_row_keeps_the_header_cell_count_under_github_rules(self):
+        tables = self._tables()
+        self.assertGreaterEqual(len(tables), 4, "rules, runtime evidence, runtime tests and behavior tests")
+        for table in tables:
+            for line in table:
+                self.assertEqual(self._gfm_cells(line), self._gfm_cells(table[0]), line)
+
+    def test_each_cell_renders_the_text_as_written(self):
+        import html
+
+        from markdown_it import MarkdownIt
+        parser = MarkdownIt("commonmark").enable("table")
+        original = self.HOSTILE.replace("\n", " ")
+        cells = [parser.renderer.renderInline(token.children, parser.options, {})
+                 for token in parser.parse(self.rendered) if token.type == "inline" and "line next" in token.content]
+        rendered = [html.unescape(cell) for cell in cells]
+        # Rule reasons and citations; observed activation, reason and version; behavior reason, changes and
+        # failed assertions; the runtime-evidence note; the not-run activation and behavior reasons.
+        self.assertGreaterEqual(len(rendered), 2 + 3 + 3 + 1 + 2)
+        for cell in rendered:
+            self.assertIn(cell, (original, f"claude-code {original}"))
+
+    def test_a_rule_source_renders_as_written(self):
+        import html
+
+        from markdown_it import MarkdownIt
+        parser = MarkdownIt("commonmark").enable("table")
+        row = next(line for line in self.lines if line.startswith(f"| `{self.source_rule}` |"))
+        tokens = [token for token in parser.parse(row.replace("\n", " ").join(
+            ["| a | b | c | d | e | f | g |\n| - | - | - | - | - | - | - |\n", "\n"]))]
+        cells = [html.unescape(parser.renderer.renderInline(token.children, parser.options, {}))
+                 for token in tokens if token.type == "inline"]
+        self.assertEqual(cells[-1], self.source)
+
+    def test_answers_are_one_code_span_with_their_backticks(self):
+        import html
+        import json
+
+        from markdown_it import MarkdownIt
+        parser = MarkdownIt("commonmark")
+        for prefix, value in (("- Whole-idea answers and targets: ", self.scenario.run.whole_idea),
+                              ("- Confirmed answers: ", {"q": "`a` ``b``"})):
+            line = next(item for item in self.lines if item.startswith(prefix))
+            span = parser.renderInline(line[len(prefix):].split(" (digest")[0])
+            self.assertTrue(span.startswith("<code>") and span.endswith("</code>"), span)
+            self.assertEqual(html.unescape(span[len("<code>"):-len("</code>")]), json.dumps(value, sort_keys=True))
+
+    def test_the_label_precedes_the_first_embedded_text(self):
+        label = self.rendered.index("text from review workers, runs and the repository")
+        self.assertLess(label, self.rendered.index("- Whole-idea answers and targets:"))
+
+
 class WriteTest(unittest.TestCase):
     def test_exact_path_and_escapes(self):
         with tempfile.TemporaryDirectory(prefix="forge-report-") as directory:

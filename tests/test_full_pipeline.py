@@ -117,7 +117,8 @@ class FullPipelineTest(unittest.TestCase):
         output = self.run_ok(*verify, code=1)
         self.assertEqual(output["parts"][0]["harness_result"], "not verified")
         report = (root / ".harness/reports/repro.md").read_text(encoding="utf-8")
-        self.assertIn("| `links.parts` | error | script | fail | part A1's skill names itself Broken_Name", report)
+        # The reason sits in its cell escaped (#129): `Broken\_Name` renders as Broken_Name.
+        self.assertIn("| `links.parts` | error | script | fail | part A1's skill names itself Broken\\_Name", report)
 
         # The fix: the builder repairs only the requested artifact, and a Review checks it.
         output = self.run_ok(*build, code=1)
