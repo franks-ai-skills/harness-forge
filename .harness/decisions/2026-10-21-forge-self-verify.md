@@ -678,7 +678,7 @@ research:
   survey_digest: null
   deep_digests: {}
 accepted_revision:
-  digest: a96522f01c33d2763a5710b21c2dc55e2fba34bac53f7b7cfb30e41e304ae426
+  digest: 68383f048f1341a1f2e15d39a3f3d53071bdabeef1a925922f964fbebe6fe71f
   rule_ids:
   - idea.forge-self-verify.b.no-own-pick
   - idea.forge-self-verify.b.proposed-until-confirmed

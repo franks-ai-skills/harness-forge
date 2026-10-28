@@ -3,7 +3,7 @@ briefs:
   B: 697ebb3d6c61237cebcf80e26c4f08232ad0de391aa1084d7fa9fff516038b4d
   C: d213eb08f63aee4921a32a907cc4100b810e6dc1b0ae8298d396cfe3971d66c5
   D: 953163ad5badc663ce63d192dd3d24cb5eef8d0fcb03bce570d92f36c4486573
-digest: a96522f01c33d2763a5710b21c2dc55e2fba34bac53f7b7cfb30e41e304ae426
+digest: 68383f048f1341a1f2e15d39a3f3d53071bdabeef1a925922f964fbebe6fe71f
 rules:
 - part_id: B
   rule:
@@ -336,8 +336,8 @@ rules:
     severity: error
     check: judged
     statement: The skill replaces or removes an existing file that is neither the part's last build output
-      nor the version committed in git, without the user having said to discard its edits, or without
-      naming each file it replaced or removed
+      nor the version committed in git without the user having said to discard its edits, or replaces
+      or removes any file without naming it
     applies_to:
       harnesses:
       - claude-code
