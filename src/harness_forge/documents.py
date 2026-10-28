@@ -977,14 +977,13 @@ def markdown_fence_contents(markdown: str) -> list[tuple[int, int]]:
     for token in tokens:
         if token.type != "fence" or not token.map:
             continue
-        first, last = token.map
+        # markdown-it gives the content without container markers and the block's lines, closing fence and the
+        # end of an enclosing block quote or list item included: the content lines are the first ones after the
+        # opening line, as many as the content has, whatever closed the fence.
+        first, _ = token.map
+        count = token.content.count("\n")
         start = lines[first + 1][0] if first + 1 < len(lines) else len(markdown)
-        end = len(markdown)
-        if last - 1 > first and last - 1 < len(lines):
-            closing = lines[last - 1][1].strip()
-            marker = token.markup
-            if closing and set(closing) == {marker[0]} and len(closing) >= len(marker):
-                end = lines[last - 1][0]
+        end = lines[first + 1 + count][0] if first + 1 + count < len(lines) else len(markdown)
         ranges.append((start, max(start, end)))
     return ranges
 

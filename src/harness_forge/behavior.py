@@ -399,14 +399,15 @@ def observe_claude(stdout: str) -> dict:
                     continue
                 request["answered"] = True
                 content = block.get("content")
+                # Only text Forge can read counts as evidence of what entered the session; anything else, a missing
+                # result included, leaves the absence of a text unshown (#112).
                 if isinstance(content, str):
                     outputs.append((request["tool"], content))
-                elif isinstance(content, list) and all(isinstance(item, dict) for item in content):
-                    outputs.append((request["tool"], "\n".join(str(item.get("text", "")) for item in content
-                                                               if item.get("type", "text") == "text")))
-                    if any(item.get("type", "text") != "text" for item in content):
-                        unreadable.append(request["tool"])
-                elif content is not None:
+                elif (isinstance(content, list) and content and all(
+                        isinstance(item, dict) and item.get("type", "text") == "text" and isinstance(item.get("text"), str)
+                        for item in content)):
+                    outputs.append((request["tool"], "\n".join(item["text"] for item in content)))
+                else:
                     unreadable.append(request["tool"])
                 if block.get("is_error") is True:
                     content = block.get("content")
