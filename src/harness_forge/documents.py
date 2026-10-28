@@ -965,6 +965,39 @@ def markdown_headings(markdown: str) -> list[tuple[int, int, str]]:
             for index, token in enumerate(tokens) if token.type == "heading_open" and token.level == 0]
 
 
+def markdown_fence_contents(markdown: str) -> list[tuple[int, int]]:
+    """(start, end) offsets of fenced code block content, as CommonMark parses it, at any nesting level.
+
+    A fence closes only at a line of the opening fence's character, at least as long as it; an unclosed fence
+    ends with the text or with the block quote or list item that holds it. Container markers before a content
+    line are not content, so a range never covers them.
+    """
+    tokens, _ = _parse(markdown)
+    lines = _line_offsets(markdown)
+    ranges = []
+    for token in tokens:
+        if token.type != "fence" or not token.map:
+            continue
+        # markdown-it gives the content without container markers: its lines are the first ones after the opening
+        # line, as many as the content has, whatever closed the fence. Only the content part of each line counts: a block-quote marker or a list indent before it is not content.
+        # Adjacent lines without a marker join into one range, so a text over several lines can lie inside.
+        first, _ = token.map
+        for number, content in enumerate(token.content.split("\n")[:-1]):
+            index = first + 1 + number
+            if index >= len(lines):
+                break
+            offset, source = lines[index]
+            if not source.endswith(content):
+                continue  # a line markdown-it rewrote, such as an expanded tab, is not matched at all
+            start = offset + len(source) - len(content)
+            end = lines[index + 1][0] if index + 1 < len(lines) else len(markdown)
+            if ranges and ranges[-1][1] == start:
+                ranges[-1] = (ranges[-1][0], end)
+            else:
+                ranges.append((start, end))
+    return ranges
+
+
 def markdown_links(markdown: str) -> list[str]:
     """Destinations of every link, image and reference definition, as written with escapes resolved."""
     tokens, references = _parse(markdown)

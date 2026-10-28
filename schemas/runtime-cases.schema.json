@@ -162,20 +162,32 @@
                 "items": {
                   "type": "object",
                   "properties": {
-                    "message": {"type": "string", "minLength": 1, "maxLength": 2000},
+                    "message": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 2000
+                    },
                     "files": {
                       "type": "object",
                       "minProperties": 1,
                       "maxProperties": 50,
-                      "additionalProperties": {"type": "string", "maxLength": 200000}
+                      "additionalProperties": {
+                        "type": "string",
+                        "maxLength": 200000
+                      }
                     }
                   },
-                  "required": ["message", "files"],
+                  "required": [
+                    "message",
+                    "files"
+                  ],
                   "additionalProperties": false
                 }
               }
             },
-            "required": ["commits"],
+            "required": [
+              "commits"
+            ],
             "additionalProperties": false
           },
           "links": {
@@ -185,11 +197,30 @@
             "additionalProperties": {
               "type": "object",
               "properties": {
-                "in": {"enum": ["workspace", "outside"]},
-                "path": {"type": "string", "minLength": 1, "maxLength": 300},
-                "kind": {"enum": ["file", "directory", "missing"]}
+                "in": {
+                  "enum": [
+                    "workspace",
+                    "outside"
+                  ]
+                },
+                "path": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 300
+                },
+                "kind": {
+                  "enum": [
+                    "file",
+                    "directory",
+                    "missing"
+                  ]
+                }
               },
-              "required": ["in", "path", "kind"],
+              "required": [
+                "in",
+                "path",
+                "kind"
+              ],
               "additionalProperties": false
             }
           },
@@ -253,6 +284,40 @@
                       },
                       "minItems": 1,
                       "maxItems": 50
+                    },
+                    "only_in": {
+                      "description": "Each text occurs, and only inside the named section, optionally in a fence (#112).",
+                      "type": "object",
+                      "properties": {
+                        "heading": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 300
+                        },
+                        "level": {
+                          "type": "integer",
+                          "minimum": 1,
+                          "maximum": 6
+                        },
+                        "fenced": {
+                          "type": "boolean"
+                        },
+                        "texts": {
+                          "type": "array",
+                          "minItems": 1,
+                          "maxItems": 50,
+                          "items": {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 2000
+                          }
+                        }
+                      },
+                      "required": [
+                        "heading",
+                        "texts"
+                      ],
+                      "additionalProperties": false
                     }
                   },
                   "additionalProperties": false,
@@ -288,6 +353,28 @@
                     "const": true
                   },
                   "no_commands_matching": {
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 500
+                    },
+                    "minItems": 1,
+                    "maxItems": 20
+                  },
+                  "no_output_containing": {
+                    "description": "Texts no tool result or command output in the recorded run may contain (#112).",
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 2000
+                    },
+                    "minItems": 1,
+                    "maxItems": 20
+                  },
+                  "no_file_requests_matching": {
+                    "description": "Patterns no Claude Code file-tool request's path may match, refused ones too (#112).",
                     "type": "array",
                     "items": {
                       "type": "string",
