@@ -16,6 +16,14 @@ once it supports such dependencies.
 
 ### Verification
 
+- The verification report keeps the text it embeds from review workers,
+  runs and the repository contained and says so before the first of it:
+  every table cell of such text escapes the characters that start inline
+  Markdown, so a `|` cannot end the cell and code, emphasis, links, HTML
+  and entities render as written; the answers' code spans use a backtick
+  run longer than any inside them. Before, the runtime-evidence note,
+  observed activations and the reasons of cases not run were not escaped
+  (#129).
 - harness-verify's results reference says that only a skill Forge built
   needs an observed explicit activation to be `verified`; a reused skill
   available locally is judged by its checks, review and behavior cases.
