@@ -103,6 +103,12 @@ def _evidence_summary(target: str, entry: dict) -> str:
     return f"{name}: " + "; ".join(pieces)
 
 
+def _checks(run: VerificationRun, case_id: str) -> str:
+    """What a behavior case checks, as its row shows it; a case from before #110 names nothing."""
+    checks = run.case_checks.get(case_id)
+    return ", ".join(f"`{item}`" for item in checks) if checks else "names no requirement"
+
+
 def _one_line(value: str) -> str:
     """Text from a worker or a run kept on one line, so that it cannot start a heading or a code block."""
     return re.sub(r"\r\n|\r|\n", " ", value)
@@ -159,6 +165,9 @@ def report_data(run: VerificationRun, results: list[PartResult]) -> dict:
         data["part_map"]["dependencies"] = dict(run.part_dependencies)
     if run.part_dependency_roots:
         data["part_map"]["dependency_roots"] = dict(run.part_dependency_roots)
+    # Only a run with behavior cases records what they check, so earlier reports keep their exact form.
+    if run.case_checks:
+        data["case_checks"] = dict(run.case_checks)
     # Only a run that computed runtime evidence per harness records it, so earlier reports keep their exact form.
     if run.runtime_evidence:
         data["runtime_evidence"] = run.runtime_evidence
@@ -319,17 +328,19 @@ def render_report(run: VerificationRun, results: list[PartResult]) -> str:
     if behavior or any(kind == "behavior" for *_, kind, _ in unrun_cases):
         # What a built skill did once it ran: its writes, its records and what the harness could not show.
         lines += ["", "## Behavior tests", "",
-                  "| Part | Case | Harness | Result | Reason | Changed | Failed assertions |",
-                  "| --- | --- | --- | --- | --- | --- | --- |"]
+                  "| Part | Case | Harness | Checks | Result | Reason | Changed | Failed assertions |",
+                  "| --- | --- | --- | --- | --- | --- | --- | --- |"]
         for item in behavior:
             details = item.details or {}
             cells = [_one_line("; ".join(details.get(key) or []) or "none").replace("|", "\\|")
                      for key in ("changes", "failed")]
-            lines.append(f"| {item.part_id} | {item.case_id} | {item.harness} {item.harness_version} | {item.result} "
+            lines.append(f"| {item.part_id} | {item.case_id} | {item.harness} {item.harness_version} "
+                         f"| {_checks(run, item.case_id)} | {item.result} "
                          f"| {_one_line(item.reason).replace('|', chr(92) + '|')} | {cells[0]} | {cells[1]} |")
         for part_id, target, case_id, kind, reason in unrun_cases:
             if kind == "behavior":
-                lines.append(f"| {part_id} | {case_id} | {target} | not run | {_one_line(reason)} | - | - |")
+                lines.append(f"| {part_id} | {case_id} | {target} | {_checks(run, case_id)} | not run "
+                             f"| {_one_line(reason)} | - | - |")
         for harness in sorted({item.harness for item in behavior}):
             gaps = sorted({gap for item in behavior if item.harness == harness for gap in (item.details or {})
                            .get("gaps") or []})

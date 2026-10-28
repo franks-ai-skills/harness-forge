@@ -16,6 +16,12 @@ once it supports such dependencies.
 
 ### Verification
 
+- A behavior case names what it checks in `checks`, its part's accepted
+  requirement ids and/or `goal`; `scope` and `verify` refuse any other
+  id, and the report's Behavior tests show it ("names no requirement"
+  for a case file from before). harness-verify derives each assertion
+  from what the case checks, demands no more than that, and gives each
+  case a request and fixtures from which the assertion follows (#110).
 - The report lists runtime evidence for every target harness: per built
   part, the declared activation and behavior cases and how many passed,
   failed, errored, were unavailable or did not run, a declared case of a
