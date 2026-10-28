@@ -65,6 +65,10 @@ class ContainmentTest(unittest.TestCase):
         for verdict in review["verdicts"]:
             verdict.update(reason=hostile, citation=hostile)
         self.results = finish_run(run, validate_review(run, review), [], self.scenario.current())
+        # A source URL may hold a pipe and other Markdown characters (rule.schema.json allows any HTTPS URL).
+        self.source = "https://example.com/a|b_c*d*`e`"
+        self.source_rule = sorted(item["rule_id"] for item in self.results[0].rule_results)[0]
+        run.rule_index[self.source_rule] = {**run.rule_index[self.source_rule], "sources": [self.source]}
         helper = RuntimeAndInputsTest()
         helper.scenario = self.scenario
         run.runtime_results += [
@@ -127,6 +131,18 @@ class ContainmentTest(unittest.TestCase):
         self.assertGreaterEqual(len(rendered), 2 + 3 + 3 + 1 + 2)
         for cell in rendered:
             self.assertIn(cell, (original, f"claude-code {original}"))
+
+    def test_a_rule_source_renders_as_written(self):
+        import html
+
+        from markdown_it import MarkdownIt
+        parser = MarkdownIt("commonmark").enable("table")
+        row = next(line for line in self.lines if line.startswith(f"| `{self.source_rule}` |"))
+        tokens = [token for token in parser.parse(row.replace("\n", " ").join(
+            ["| a | b | c | d | e | f | g |\n| - | - | - | - | - | - | - |\n", "\n"]))]
+        cells = [html.unescape(parser.renderer.renderInline(token.children, parser.options, {}))
+                 for token in tokens if token.type == "inline"]
+        self.assertEqual(cells[-1], self.source)
 
     def test_answers_are_one_code_span_with_their_backticks(self):
         import html

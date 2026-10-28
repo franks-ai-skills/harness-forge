@@ -290,7 +290,7 @@ def render_report(run: VerificationRun, results: list[PartResult]) -> str:
             info = run.rule_index.get(item["rule_id"], {})
             reason, citation = _cell(item.get("reason", "")), _cell(item.get("citation", "-"))
             lines.append(f"| `{item['rule_id']}` | {info.get('severity', '-')} | {item['check']} | {item['result']} | "
-                         f"{reason} | {citation} | {', '.join(info.get('sources', [])) or '-'} |")
+                         f"{reason} | {citation} | {_cell(', '.join(info.get('sources', [])) or '-')} |")
         contested = [rule_id for rule_id in sorted({r['rule_id'] for r in result.rule_results})
                      if run.rule_index.get(rule_id, {}).get("positions")]
         for rule_id in contested:
