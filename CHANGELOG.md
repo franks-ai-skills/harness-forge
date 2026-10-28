@@ -16,6 +16,16 @@ once it supports such dependencies.
 
 ### Verification
 
+- A behavior case can set up a git history and symbolic links before
+  it runs (#111). `git` makes its commits one at a time in a repository
+  built from nothing (no caller configuration, template or hook; a fixed
+  identity and time, so commit ids repeat); text fixtures stay
+  untracked. `links` creates links to a file, a directory or nothing,
+  inside the workspace or in an `outside/` directory beside it. Any
+  change outside the workspace fails the case, whatever it declares to
+  write; `.git` is never writable with a git fixture, and `.git/index`
+  is left out of the comparison (named as a gap). A Claude Code case
+  still has no shell, so it cannot run `git` itself.
 - A behavior case names what it checks in `checks`, its part's accepted
   requirement ids and/or `goal`; `scope` and `verify` refuse any other
   id, and the report's Behavior tests show it ("names no requirement"

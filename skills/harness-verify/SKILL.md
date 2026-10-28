@@ -125,7 +125,13 @@ instruction, and stop; never install or download anything yourself.
    accepts more content too, so it does not show the file has one line),
    and give each case a request and fixtures from which what it asserts
    follows (a draft names a file only when the request makes that file
-   relevant). Read [references/contract.md](references/contract.md#behavior-tests)
+   relevant). A case may also declare `git` (its commits, made one at a
+   time before the run; text fixtures stay untracked) and `links`
+   (symbolic links to a file, a directory or nothing, inside the
+   workspace or outside it); nothing the case provides may lie under
+   `.git`, and any change outside the workspace fails the case. A Claude
+   Code case still runs without a shell, so it can read those files and
+   links but not run `git`. Read [references/contract.md](references/contract.md#behavior-tests)
    before telling the user what a behavior result shows. Run `scripts/forge.py verify --decision
    <record> --root <repository> --revision <rules file> --harness <this
    harness> --evidence <workers output> --relay <relay> --slug <slug>

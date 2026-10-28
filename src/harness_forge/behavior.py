@@ -26,6 +26,7 @@ import hashlib
 import json
 import os
 import re
+import subprocess
 import tempfile
 from pathlib import Path
 from typing import Callable, Iterable, Mapping
@@ -95,12 +96,143 @@ def permits(path: str, writes: Iterable[str]) -> bool:
     return False
 
 
+# The repository a case's git fixture makes: fixed identity and time, so commit ids are the same on every run.
+FIXTURE_IDENTITY = ("Forge Fixture", "fixture@example.invalid")
+FIXTURE_TIME = "2026-01-01T00:00:00+0000"
+INDEX_GAP = "a change of .git/index, its deletion included, is not observed (a plain git status may rewrite it)"
+OUTSIDE_GAP = "a change made outside the workspace and removed again before the run ends is not seen"
+
+
+def _plain(path: str) -> bool:
+    parts = path.split("/")
+    return bool(path) and "\\" not in path and not any(part in ("", ".", "..") for part in parts) and not any(
+        ord(character) < 0x20 or ord(character) == 0x7f for character in path)
+
+
+def layout_problem(case: dict, protected: Iterable[str]) -> str | None:
+    """Why the case's fixtures, commits and links cannot be laid out safely, or None (#111).
+
+    Checked before anything is created: every path plain; no path twice across the staged files, the fixtures,
+    the commits' files, the link paths and the workspace link targets (one path in several commits is history);
+    nothing below a declared link or a file; with a git fixture, nothing the case provides under .git, and no
+    write that could reach it.
+    """
+    from harness_forge.runtime import fixture_problem
+
+    commits = (case.get("git") or {}).get("commits") or []
+    links = case.get("links") or {}
+    kinds: dict[str, str] = {}
+
+    def claim(path: str, kind: str) -> str | None:
+        folded = fold_name(path)
+        if folded in kinds and not (kind == kinds[folded] == "commit"):
+            return f"{path} is declared twice: as {kinds[folded]} and as {kind}"
+        kinds[folded] = kind
+        return None
+
+    for path in protected:
+        kinds[fold_name(path)] = "staged"
+    named = [(path, "fixture") for path in case.get("fixtures") or {}]
+    named += [(path, "commit") for commit in commits for path in commit["files"]]
+    named += [(path, "link") for path in links]
+    named += [(link["path"], "link target") for link in links.values() if link["in"] == "workspace"]
+    for path, kind in named:
+        if not _plain(path):
+            return f"{kind} {path!r} is not a plain relative path"
+        problem = fixture_problem(path, protected) if kind != "link target" or path not in protected else None
+        if problem or (kind == "link target" and fold_name(path) in {fold_name(p) for p in protected}):
+            return problem or f"link target {path} would replace a staged file"
+        if commits and fold_name(path.split("/")[0]) == ".git":
+            return f"{kind} {path} lies under .git, which a git fixture keeps to Forge"
+        problem = claim(path, kind)
+        if problem:
+            return problem
+    for link in links.values():
+        if link["in"] == "outside" and not _plain(link["path"]):
+            return f"outside link target {link['path']!r} is not a plain relative path"
+    folded_links = {fold_name(path) for path in links}
+    files = {key for key, kind in kinds.items() if kind != "link target"} | {
+        fold_name(link["path"]) for link in links.values() if link["in"] == "workspace" and link["kind"] == "file"}
+    for key in kinds:
+        parts = key.split("/")
+        for count in range(1, len(parts)):
+            above = "/".join(parts[:count])
+            if above in folded_links:
+                return f"{key} lies below the declared link {above}"
+            if above in files:
+                return f"{key} lies below {above}, which is a file"
+    if commits:
+        for entry in case.get("writes") or []:
+            scope = write_scope(entry)
+            if scope and fold_name(scope[0]).split("/")[0] == ".git":
+                return f"write {entry} would reach .git, which a git fixture keeps to Forge"
+    return None
+
+
+def _git_environment(home: Path) -> dict[str, str]:
+    """A git environment built from nothing: no caller GIT_* variable, configuration, template or hook applies."""
+    name, email = FIXTURE_IDENTITY
+    return {"PATH": os.environ.get("PATH", "/usr/bin:/bin"), "HOME": str(home), "GIT_CONFIG_GLOBAL": os.devnull,
+            "GIT_CONFIG_NOSYSTEM": "1", "GIT_AUTHOR_NAME": name, "GIT_AUTHOR_EMAIL": email,
+            "GIT_COMMITTER_NAME": name, "GIT_COMMITTER_EMAIL": email, "GIT_AUTHOR_DATE": FIXTURE_TIME,
+            "GIT_COMMITTER_DATE": FIXTURE_TIME, "LC_ALL": "C"}
+
+
+def make_history(workspace: Path, commits: list[dict], home: Path) -> str | None:
+    """The case's commits, one at a time: each one's files written, staged and committed before the next.
+
+    Returns why the history could not be made, or None. Local commands only: nothing reaches a network.
+    """
+    environment = _git_environment(home)
+    base = ["git", "-c", "core.hooksPath=" + os.devnull, "-c", "commit.gpgsign=false", "-c", "core.autocrlf=false"]
+
+    def git(*arguments: str) -> str | None:
+        try:
+            completed = subprocess.run([*base, *arguments], cwd=workspace, env=environment, capture_output=True,
+                                       text=True, timeout=60, stdin=subprocess.DEVNULL, check=False)
+        except (OSError, subprocess.SubprocessError) as error:
+            return f"git could not run: {error}"
+        return None if completed.returncode == 0 else f"git {arguments[0]} failed: {completed.stderr.strip()[:300]}"
+
+    problem = git("init", "-q", "--template=", "-b", "main")
+    if problem:
+        return problem
+    for commit in commits:
+        for path, text in commit["files"].items():
+            destination = safe_path(workspace, path)
+            destination.parent.mkdir(parents=True, exist_ok=True)
+            destination.write_text(text, encoding="utf-8")
+        problem = (git("--literal-pathspecs", "add", "--", *commit["files"])
+                   or git("commit", "-q", "--no-verify", "-m", commit["message"]))
+        if problem:
+            return problem
+    return None
+
+
+def make_links(workspace: Path, outside: Path, links: Mapping[str, dict]) -> None:
+    """Each declared link and its target: an empty file, an empty directory, or none for a dangling link."""
+    for path, link in links.items():
+        base = workspace if link["in"] == "workspace" else outside
+        target = safe_path(base, link["path"])
+        if link["kind"] == "file":
+            target.parent.mkdir(parents=True, exist_ok=True)
+            target.touch()
+        elif link["kind"] == "directory":
+            target.mkdir(parents=True, exist_ok=True)
+        location = safe_path(workspace, path)
+        location.parent.mkdir(parents=True, exist_ok=True)
+        location.symlink_to(os.path.relpath(target, location.parent))
+
+
 def case_problem(case: dict, harness: str, protected: Iterable[str]) -> str | None:
     """Why a behavior case cannot run as declared in ``harness``, or None.
 
     ``protected`` are the staged candidate and dependency paths: no declared
     write may reach them, the harness directories or an instruction file.
     """
+    problem = layout_problem(case, protected)
+    if problem:
+        return problem
     taken = {fold_name(path) for path in protected}
     for entry in case.get("writes") or []:
         scope = write_scope(entry)
@@ -385,6 +517,10 @@ def behavior_case(
                          if path in (case.get("dependencies") or [])}
     details = {"failed": [], "changes": [], "requests": [], "denied": [],
                "gaps": [*GAPS[harness], COMMON_GAP], "case_digest": case_digest(case, dependency_hashes)}
+    if case.get("git"):
+        details["gaps"].append(INDEX_GAP)
+    if case.get("links"):
+        details["gaps"].append(OUTSIDE_GAP)
 
     def done(result: str, reason: str, activation: str | None = None, completed: Completed | None = None,
              **context) -> tuple[str, str, str | None, dict]:
@@ -400,15 +536,23 @@ def behavior_case(
     if missing:
         return done("unavailable", f"unavailable: {missing}")
     with tempfile.TemporaryDirectory(prefix="forge-behavior-", dir=workspace_root) as temporary:
-        workspace = Path(temporary)
+        # The run's workspace, and beside it what a declared link may point to outside the workspace (#111).
+        workspace, outside = Path(temporary) / "workspace", Path(temporary) / "outside"
+        workspace.mkdir()
+        outside.mkdir()
         for path, data in files.items():
             destination = safe_path(workspace, path)
             destination.parent.mkdir(parents=True, exist_ok=True)
             destination.write_bytes(data)
+        if case.get("git"):
+            failed = make_history(workspace, case["git"]["commits"], Path(temporary))
+            if failed:
+                return done("unavailable", f"unavailable: the git fixture could not be made: {failed}")
         for path, text in fixtures.items():
             destination = safe_path(workspace, path)
             destination.parent.mkdir(parents=True, exist_ok=True)
             destination.write_text(text, encoding="utf-8")
+        make_links(workspace, outside, case.get("links") or {})
         if harness == "claude-code":
             wanted = links if links is not None else {f".claude/skills/{target.rsplit('/', 1)[-1]}": f"../../{target}"}
             for path, link_target in wanted.items():
@@ -425,7 +569,7 @@ def behavior_case(
             granted = tuple(str(workspace / write_scope(entry)[0]) for entry in writes)
             command = codex.command("review", str(workspace), structured=False, writes=granted)
             permitted = list(CODEX_ITEMS)
-        before = snapshot(workspace)
+        before, before_outside = snapshot(workspace), snapshot(outside)
         context = {"command": command, "cwd": str(workspace), "stdin": prompt}
         try:
             completed = runner(command, cwd=str(workspace), env=worker_environment(environ, harness), stdin=prompt,
@@ -433,8 +577,17 @@ def behavior_case(
         except OSError as error:
             return done("unavailable", "unavailable: the harness could not start", **context, error=str(error))
         after = snapshot(workspace)
-        changed = changes(before, after)
+        # A plain git status may rewrite the index; every other change below .git counts.
+        changed = [(kind, path) for kind, path in changes(before, after)
+                   if not (case.get("git") and path == ".git/index")]
         details["changes"] = [f"{kind} {path}" for kind, path in changed]
+        # Outside the workspace nothing may change, whatever the declared writes: they never reach there.
+        escaped = changes(before_outside, snapshot(outside))
+        if escaped:
+            details["failed"] = [f"changed outside the workspace through a link: {kind} {path}"
+                                 for kind, path in escaped[:50]]
+            return done("fail", f"changed outside the workspace through a link: {escaped[0][1]}",
+                        completed=completed, **context)
         observed = observe_claude(completed.stdout) if harness == "claude-code" else observe_codex(completed.stdout)
         details["requests"], details["denied"] = observed["requests"][:500], observed["denied"][:500]
         undeclared = [path for _, path in changed if not permits(path, writes)]
