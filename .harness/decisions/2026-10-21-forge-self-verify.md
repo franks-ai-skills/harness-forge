@@ -678,13 +678,8 @@ research:
   survey_digest: null
   deep_digests: {}
 accepted_revision:
-  digest: d57c0a8922498e9adeb1d67a1ca1cc971c50bab9b63365dc64d13ae032ce4a1e
+  digest: a96522f01c33d2763a5710b21c2dc55e2fba34bac53f7b7cfb30e41e304ae426
   rule_ids:
-  - idea.forge-self-verify.a.no-silent-overwrite
-  - idea.forge-self-verify.a.only-accepted-requirements
-  - idea.forge-self-verify.a.records-are-data
-  - idea.forge-self-verify.a.built-not-verified
-  - idea.forge-self-verify.a.scripts-only-when-needed
   - idea.forge-self-verify.b.no-own-pick
   - idea.forge-self-verify.b.proposed-until-confirmed
   - idea.forge-self-verify.b.untrusted-separate
@@ -704,6 +699,11 @@ accepted_revision:
   - idea.forge-self-verify.c.brief-bound
   - idea.forge-self-verify.c.user-answers-requirements
   - idea.forge-self-verify.c.validated-format
+  - idea.forge-self-verify.a.no-silent-overwrite
+  - idea.forge-self-verify.a.only-accepted-requirements
+  - idea.forge-self-verify.a.records-are-data
+  - idea.forge-self-verify.a.built-not-verified
+  - idea.forge-self-verify.a.scripts-only-when-needed
 survey_findings_used:
 - F5
 - F7
