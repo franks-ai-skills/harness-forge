@@ -16,6 +16,13 @@ once it supports such dependencies.
 
 ### Verification
 
+- The report lists runtime evidence for every target harness: per built
+  part, the declared activation and behavior cases and how many passed,
+  failed, errored, were unavailable or did not run, a declared case of a
+  harness the verification did not run from as not run with the reason,
+  and "no cases declared" apart from that. A verified part says which
+  harness its runtime evidence covers, and `verify` returns
+  `runtime_evidence` and `unrun_harnesses` (#103).
 - The report and `verify`'s output name each reviewer verdict that
   changed although the part's review inputs did not, compared with the
   report Forge recorded writing: rule, earlier and current verdict and

@@ -241,6 +241,7 @@ class VerificationRun:
     scope_parts: list[str] | None = None  # the parts judged in a Review run; None judges every part
     attempt_id: str | None = None  # one verify invocation's own id (#106); run_id names its session confirmation
     changed_judgments: list[dict] = field(default_factory=list)  # verdicts that changed on unchanged inputs (#108)
+    runtime_evidence: dict = field(default_factory=dict)  # per built part and target harness (#103)
 
 
 @dataclass(frozen=True)

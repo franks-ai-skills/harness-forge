@@ -57,7 +57,7 @@ from harness_forge.models import Confirmation, Decision, Finding, Rule  # noqa: 
 from harness_forge.overrides import (  # noqa: E402
     OverridesPending, apply_overrides, check_override, describe, effective_rules, load_overrides, write_override,
 )
-from harness_forge.report import render_report, write_report  # noqa: E402
+from harness_forge.report import render_report, runtime_evidence, unrun_harnesses, write_report  # noqa: E402
 from harness_forge.research import (  # noqa: E402
     _BLOCKING_DRIFT, UNTRUSTED_NOTE, _catalog, accept_requirements, drift_category, drift_digest, drift_state,
     finding_problem, _check_entry as _check_idea_entry,
@@ -1795,6 +1795,8 @@ def _verify(arguments: argparse.Namespace) -> int:
     run.runtime_results += [RuntimeResult(**{**item, "reason": kept_note(item["reason"], item["run_id"],
                                                                           earlier_attempt)})
                             for item in kept_runtime]
+    # Per target harness, what each built part's declared cases came to: none of another harness ran (#103).
+    run.runtime_evidence = runtime_evidence(run, cases, arguments.harness)
     written = None
     try:
         rendered = render_report(run, results)
@@ -1818,7 +1820,8 @@ def _verify(arguments: argparse.Namespace) -> int:
                    "confirmation": f"{r.part_id}:{rule['rule_id']}:{exclusion_token(run, r.part_id, rule['rule_id'])}"}
                   for r in results for rule in r.rule_results if rule["result"] == "unresolved"]
     emit({"command": "verify", "run_id": run.run_id, "attempt_id": run.attempt_id, "scope": _shown_scope(computed),
-          "changed_judgments": run.changed_judgments,
+          "changed_judgments": run.changed_judgments, "runtime_evidence": run.runtime_evidence,
+          "unrun_harnesses": unrun_harnesses(run.runtime_evidence),
           "report_record": recorded, "parts": parts, "runtime": runtime, "unresolved": unresolved,
           "goal_conflicts": conflicts,
           "drift": _drift_report(drift, decision, overrides,

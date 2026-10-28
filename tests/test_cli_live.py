@@ -1606,6 +1606,46 @@ class LiveCommandsTest(unittest.TestCase):
         code, output, stderr = cli("verify", *arguments)
         self.assertEqual(output["changed_judgments"], [], stderr)
 
+    def test_the_report_gives_runtime_evidence_for_every_target_harness(self):
+        """#103: verified from Claude Code, the Codex cases are listed as not run, and "verified" says where."""
+        runner = ResearchRunner([finding()])
+        cli, arguments = self.build_ready(runner)
+        code, output, stderr = cli("verify", *arguments)
+        self.assertEqual(code, 0, stderr)
+        claude, codex = output["runtime_evidence"]["A"]["claude-code"], output["runtime_evidence"]["A"]["codex"]
+        self.assertEqual((claude["ran"], codex["ran"]), (True, False))
+        self.assertEqual((len(claude["activation"]["declared"]), len(claude["activation"]["passed"])), (3, 3))
+        self.assertEqual(codex["activation"]["not_run"], codex["activation"]["declared"])
+        self.assertIn("verification ran from Claude Code; Forge launches no other harness", codex["reason"])
+        self.assertEqual(output["unrun_harnesses"], {"A": ["codex"]})
+        for entry in (claude, codex):
+            for kind in ("activation", "behavior"):
+                counts = entry[kind]
+                self.assertEqual(sorted(sum((counts[name] for name in ("passed", "failed", "error", "unavailable",
+                                                                       "not_run")), [])), sorted(counts["declared"]))
+        report = (self.root / ".harness/reports/repro.md").read_text(encoding="utf-8")
+        self.assertIn("- Harness result: verified in Claude Code; no runtime evidence for Codex", report)
+        self.assertIn("- Runtime evidence: Claude Code: activation 3 declared: 3 passed; Codex: not run (3 declared)",
+                      report)
+        self.assertIn("## Runtime evidence by harness", report)
+        self.assertEqual(report.count("| codex | not run | - | verification ran from Claude Code"), 3)
+        self.assertNotIn("codex", [role for role in runner.roles if role.startswith("codex")], "no other harness")
+
+    def test_a_harness_without_declared_cases_differs_from_one_not_run(self):
+        cli, arguments = self.build_ready(ResearchRunner([finding()]))
+        cases = yaml.safe_load((FORGE / "evals/smoke/vertical.yaml").read_text(encoding="utf-8"))
+        for item in cases["cases"]:
+            item["permitted_tools"].pop("codex")
+        verify = list(arguments)
+        verify[verify.index("--cases") + 1] = cli.write("claude-only.yaml", yaml.safe_dump(cases))
+        code, output, stderr = cli("verify", *verify)
+        self.assertEqual(code, 0, stderr)
+        self.assertEqual(output["runtime_evidence"]["A"]["codex"]["activation"]["declared"], [])
+        self.assertEqual(output["unrun_harnesses"], {})
+        report = (self.root / ".harness/reports/repro.md").read_text(encoding="utf-8")
+        self.assertIn("Codex: no cases declared", report)
+        self.assertIn("- Harness result: verified in Claude Code; no runtime evidence for Codex", report)
+
     def changed_cases(self, cli, name="changed-cases.yaml"):
         cases = yaml.safe_load((FORGE / "evals/smoke/vertical.yaml").read_text(encoding="utf-8"))
         for item in cases["cases"]:
