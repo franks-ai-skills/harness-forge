@@ -23,10 +23,24 @@ once it supports such dependencies.
   question: a question tool's preview or option text alone does not
   count, and the details line is never shortened or left out (#132).
 - Each summary starts with what confirming it decides and what follows:
-  for a research proposal by stage (the survey, the deep pass and
-  acceptance, or more intake), for a configuration proposal the build,
+  for a research proposal by stage (the survey, the deep pass where it
+  is due and acceptance, acceptance alone, or more intake), for a
+  configuration proposal the build,
   and for a configuration summary the verification. The question names
   what is confirmed instead of saying it is "above" (#134).
+
+### Requirement acceptance
+
+- `compare-requirements` returns, with each item's display, the question
+  to ask right after it and its options, each naming what it leads to:
+  a decision for the acceptance relay, or another step first (an edit
+  shown back with its own question, a re-check, a new deep pass, keeping
+  a removed requirement, or one at a time). The unchanged group gets a
+  question when it holds two or more; compact entries and edits carry
+  theirs. harness-research shows the display as visible reply text
+  immediately before asking the returned question, and harness-intake a
+  proposed goal's full text before asking about it: a question tool's
+  preview or option text alone does not count (#133).
 
 ## 0.5.0 (2026-10-28)
 
