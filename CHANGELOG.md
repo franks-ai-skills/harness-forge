@@ -22,6 +22,10 @@ once it supports such dependencies.
   configuration. On macOS, the system git's xcrun cache and the user's
   unreadable `.gitconfig` made every git command fail in such a case
   (#144).
+- harness-verify's contract says what `no_commands_matching` searches:
+  each recorded command's whole text, here-document bodies included. It
+  gives a tested pattern for reading a file that does not match writing
+  text that names it, and the limits of such a heuristic (#145).
 
 ## 0.5.1 (2026-10-29)
 
