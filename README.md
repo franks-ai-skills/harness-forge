@@ -372,16 +372,21 @@ subscription; with an API-key or unknown login, pass
 Claude Code session whose content may not have been shown to the user,
 for review; it is a heuristic, not a compliance check.
 
-**Temporary, development only:** with
-`HARNESS_FORGE_TEMPORARY_CODEX_ROLLOUT=1`, a Codex explicit case of a
-user-invoked skill runs without `--ephemeral`. Forge reads that run's own
-session rollout in `$CODEX_HOME/sessions` (default `~/.codex/sessions`),
-credits "instructions injected" when Codex recorded the candidate's
-exact `SKILL.md`, and deletes the file. It reads no other session file.
-This shows that the instructions reached the model, not that the
-procedure ran. It is off by default; only the 2026-10-21 Codex
-re-verification of the bug-intake reference used it, and it will be
-removed.
+**Rollout observer, a workaround tracked by
+[#18](https://github.com/franks-ai-skills/harness-forge/issues/18):**
+`codex exec --json` shows no record when Codex injects a user-invoked
+skill named with `$name`. So a Codex explicit or behavior case of a
+user-invoked skill runs without `--ephemeral`, and Forge reads that
+run's own session rollout in `$CODEX_HOME/sessions` (default
+`~/.codex/sessions`), credits "instructions injected" when Codex
+recorded the candidate's exact `SKILL.md`, and deletes the file. It
+reads no other session file; when it cannot tell which file is the
+run's (no thread id printed, or several for it), the case's reason says
+that a file from the run may remain, and the case is an error unless it
+already failed for another reason, such as a write outside its paths. The report names each result
+that rests on it. This shows that the instructions reached the model, not
+that the procedure ran. It is removed once Codex shows an injected
+skill in `codex exec --json`.
 
 ## Outside controls
 

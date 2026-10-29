@@ -68,6 +68,18 @@ one does too, as unverified behavior, which is no claim that the build is
 wrong. Results are bound to the case, its fixtures and the bytes of its
 dependencies: changing any of them means testing again.
 
+`codex exec --json` shows no record when Codex injects a user-invoked
+skill named with `$name`. For such a skill's explicit and behavior cases
+in Codex, Forge reads that run's own session file and deletes it: the
+rollout observer, a workaround tracked by FORGE #18. When it cannot
+tell which file is the run's, the case's reason says a file may remain,
+and the case is an error unless it already failed for another reason. The report names
+each result whose activation came from it; it shows that the
+instructions reached the model, not that the procedure ran. When
+neither the stream nor the session file shows the activation, the
+explicit case is not run and a behavior case is unavailable: unobserved,
+which is no claim that the build is wrong.
+
 ## Goal result, decided in this order
 
 1. `not assessed`: the configuration summary is unconfirmed, the part is blocked, the

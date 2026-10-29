@@ -372,7 +372,12 @@ class GuidanceTest(unittest.TestCase):
         intake = " ".join((FORGE / "skills/harness-intake/references/contract.md").read_text(encoding="utf-8").split())
         self.assertIn("--run-dir", intake)
         self.assertIn("outside a code block", intake)
-        self.assertIn("the summary above and the linked details", intake)
+        self.assertIn("covers that summary and its linked details", intake)
+        # #132: the summary is reply text, never only a question tool's preview, and keeps its details line.
+        self.assertIn("A question tool's preview or option text alone does not count as showing it", intake)
+        self.assertIn("never shorten it, reword it or leave out its details line", intake)
+        verify = " ".join((FORGE / "skills/harness-verify/SKILL.md").read_text(encoding="utf-8").split())
+        self.assertIn("unchanged as visible reply text, then ask its question", verify)
         for path in [*(FORGE / "skills").glob("*/SKILL.md"), *(FORGE / "skills").glob("*/references/*.md")]:
             with self.subTest(path=path.relative_to(FORGE)):
                 body = " ".join(path.read_text(encoding="utf-8").split())

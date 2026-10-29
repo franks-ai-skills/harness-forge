@@ -28,6 +28,87 @@ def relay(*decisions, part_id="A"):
     return {"run_id": "run-1", "part_id": part_id, "decisions": list(decisions)}
 
 
+def steps(item):
+    return [(option["label"], option["next"]) for option in item["options"]]
+
+
+class QuestionTest(unittest.TestCase):
+    """#133: each item comes with the question asked right after its display, and what each option leads to."""
+
+    def test_new_changed_and_single_unchanged_items(self):
+        annotated = groups(new=[PLATFORM], unchanged=[VERSION])
+        for item in (annotated["new"][0], annotated["unchanged"][0]):
+            self.assertEqual(item["question"], f"Accept, edit or reject requirement `{item['requirement']['id']}`?")
+            self.assertEqual(steps(item), [("Accept", "relay:accept"), ("Edit", "edit"), ("Reject", "relay:reject")])
+        # A group of one is asked as that requirement: no group question.
+        self.assertIsNone(annotated["group"]["question"])
+        self.assertEqual(annotated["group"]["options"], [])
+
+    def test_a_group_of_two_or_more(self):
+        group = groups(unchanged=[VERSION, {**PLATFORM, "id": "idea.repro.a.other"}])["group"]
+        self.assertEqual(group["question"],
+                         "Accept the 2 earlier requirements as one group, or go through them one at a time?")
+        self.assertEqual(steps(group), [("Accept all", "relay:accept"), ("One at a time", "one-at-a-time")])
+
+    def test_lost_sources_offer_a_recheck_only_when_it_can_find_them(self):
+        base = {name: [] for name in ("unchanged", "unsupported", "changed", "new", "removed")}
+        base["unsupported"] = [{"requirement": copy.deepcopy(PLATFORM), "findings": [],
+                                "missing_sources": ["https://a.example"], "recheckable_sources": ["https://a.example"]}]
+        base["new"] = [{"requirement": copy.deepcopy(VERSION), "findings": [], "missing_sources": ["https://b.example"],
+                        "recheckable_sources": []}]
+        annotated = annotate(base)
+        self.assertEqual(steps(annotated["unsupported"][0]),
+                         [("Re-check", "recheck"), ("Edit", "edit"), ("Reject", "relay:reject")])
+        self.assertEqual(steps(annotated["new"][0]),
+                         [("Edit", "edit"), ("Reject", "relay:reject"), ("New deep pass", "deep-pass")])
+
+    def test_removed_items_keep_or_drop_and_a_legacy_rule_proposed_again_only_drops(self):
+        annotated = groups(removed=[PLATFORM, VERSION], new=[VERSION])
+        kept, legacy = annotated["removed"]
+        self.assertEqual(steps(kept), [("Keep", "keep"), ("Drop", "relay:drop")])
+        self.assertIn("accepted before and no longer proposed", kept["question"])
+        self.assertEqual(steps(legacy), [("Drop", "relay:drop")])
+        self.assertIn("proposal is asked about separately", legacy["question"])
+
+    def test_an_edit_is_shown_back_with_its_own_question(self):
+        shown = edited({**PLATFORM, "statement": "The checklist names the operating system"})
+        self.assertEqual(shown["question"], f"Record this edit of requirement `{PLATFORM['id']}`?")
+        self.assertEqual(steps(shown), [("Record", "relay:edit"), ("Don't record", "back")])
+
+    def test_every_next_step_is_a_known_one_and_only_relay_steps_are_choices(self):
+        from harness_forge.acceptance import NEXT_STEPS, _KEYS
+        annotated = groups(new=[PLATFORM], unchanged=[VERSION, {**PLATFORM, "id": "idea.repro.a.other"}],
+                           removed=[SECRETS])
+        items = [item for name in ("new", "unchanged", "removed") for item in annotated[name]] + [annotated["group"]]
+        for item in items:
+            for option in item["options"]:
+                self.assertIn(option["next"], NEXT_STEPS)
+                if option["next"].startswith("relay:"):
+                    self.assertIn(option["next"][len("relay:"):], _KEYS)
+
+
+class GuidanceTest(unittest.TestCase):
+    """#133: the skills show the content as reply text before its question; options lead where they say."""
+
+    def body(self, relative):
+        from pathlib import Path
+        return " ".join((Path(__file__).resolve().parents[1] / relative).read_text(encoding="utf-8").split())
+
+    def test_research_asks_the_returned_question_after_the_display(self):
+        research = self.body("skills/harness-research/SKILL.md")
+        for expected in ("visible reply text immediately before asking its returned `question` with its `options`",
+                         "a question tool's preview or option text alone do not count",
+                         "Only an option whose `next` starts with `relay:` is a decision for the relay",
+                         "recording the edit only on `Record`"):
+            self.assertIn(expected, research)
+
+    def test_intake_shows_a_goal_in_full_before_asking(self):
+        intake = self.body("skills/harness-intake/SKILL.md")
+        self.assertIn("Show a proposed goal's full text that way before the question about it; a label or "
+                      "paraphrase alone does not count", intake)
+        self.assertNotIn("include it in the question and its choices", intake)
+
+
 class DisplayTest(unittest.TestCase):
     def test_every_kept_field_is_shown_and_bound(self):
         shown = groups(new=[PLATFORM])["new"][0]
@@ -178,7 +259,8 @@ class AcceptCommandTest(RecheckCase):
         proposed, (code, shown, stderr) = self.compare(*many)
         self.assertEqual((code, shown["compact"]), (0, True), stderr)
         first = shown["new"][0]
-        self.assertEqual(sorted(first), ["digest", "item_id", "rule_id"])
+        self.assertEqual(sorted(first), ["digest", "item_id", "options", "question", "rule_id"])
+        self.assertEqual(first["question"], f"Accept, edit or reject requirement `{first['rule_id']}`?")
         _, (code, whole, stderr) = self.compare(*many, extra=("--item", first["item_id"]))
         self.assertEqual(code, 0, stderr)
         self.assertEqual(whole["item"]["digest"], first["digest"])

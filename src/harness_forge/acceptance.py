@@ -24,6 +24,10 @@ UNTRUSTED_LINE = "Untrusted content from a fetched page"
 _KEYS = {"accept": {"choice", "item_ids", "displayed_digest"}, "reject": {"choice", "item_ids", "displayed_digest"},
          "drop": {"choice", "item_ids", "displayed_digest"},
          "edit": {"choice", "item_ids", "displayed_digest", "edited_digest"}}
+# What each option leads to (#133): only the relay:* ones are decisions for the acceptance relay; the others
+# mean another step first, after which the item is shown and asked again.
+NEXT_STEPS = ("relay:accept", "relay:reject", "relay:drop", "relay:edit", "edit", "one-at-a-time", "recheck",
+              "deep-pass", "keep", "back")
 _HEADINGS = {"unchanged": "Accepted before, unchanged", "unsupported": "Accepted before, a source lost its support",
              "changed": "Accepted before, changed", "new": "New", "removed": "Accepted before, no longer proposed",
              "edited": "Your edit"}
@@ -51,27 +55,64 @@ def display(group: str, rule: dict, *, differences: dict | None = None, findings
     return "\n".join(lines) + "\n"
 
 
+def _options(*pairs: tuple[str, str]) -> list[dict]:
+    return [{"label": label, "next": step} for label, step in pairs]
+
+
+_EDIT, _REJECT = ("Edit", "edit"), ("Reject", "relay:reject")
+
+
+def ask(name: str, item: dict, proposed_again: bool = False) -> tuple[str, list[dict]]:
+    """The question asked right after the item's display, and its options with what each leads to (#133)."""
+    rule_id = code(item["requirement"]["id"])
+    if name == "removed":
+        if proposed_again:
+            # An older revision that names no single part: its rule needs its own drop, as the proposal under the
+            # same id is asked about separately.
+            return (f"Drop the earlier version of requirement {rule_id}? It is proposed again, and that proposal is "
+                    "asked about separately.", _options(("Drop", "relay:drop")))
+        return (f"Keep or drop requirement {rule_id}, accepted before and no longer proposed?",
+                _options(("Keep", "keep"), ("Drop", "relay:drop")))
+    if name == "unsupported" or item.get("missing_sources"):
+        if set(item.get("missing_sources", [])) <= set(item.get("recheckable_sources", [])):
+            return (f"Re-check the lost sources of requirement {rule_id}, edit it or reject it?",
+                    _options(("Re-check", "recheck"), _EDIT, _REJECT))
+        return (f"Edit or reject requirement {rule_id}, or run a new deep pass?",
+                _options(_EDIT, _REJECT, ("New deep pass", "deep-pass")))
+    return (f"Accept, edit or reject requirement {rule_id}?", _options(("Accept", "relay:accept"), _EDIT, _REJECT))
+
+
 def _digest(shown: str, rule: dict) -> str:
     return canonical_digest({"display": shown, "rule": rule})
 
 
 def annotate(groups: dict) -> dict:
-    """Each item with its ``item_id``, ``display`` and ``digest``; the unchanged ones also as one ``group``."""
+    """Each item with its ``item_id``, ``display``, ``digest``, ``question`` and ``options``; the unchanged ones
+    also as one ``group``, with a question of its own when it holds two or more."""
     result = {key: value for key, value in groups.items() if key not in GROUPS}
+    proposed = {item["requirement"]["id"] for name in GROUPS if name != "removed" for item in groups.get(name, [])}
     for name in GROUPS:
         items = []
         for item in groups.get(name, []):
             rule = item["requirement"]
             shown = display(name, rule, differences=item.get("differences"), findings=item.get("findings", []))
-            items.append({**item, "item_id": f"{name}:{rule['id']}", "display": shown, "digest": _digest(shown, rule)})
+            question, options = ask(name, item, proposed_again=rule["id"] in proposed)
+            items.append({**item, "item_id": f"{name}:{rule['id']}", "display": shown, "digest": _digest(shown, rule),
+                          "question": question, "options": options})
         result[name] = items
     unchanged = result["unchanged"]
     if unchanged:
         shown = "\n".join([f"**{len(unchanged)} requirements accepted before, unchanged, asked about together**", ""]
                           + [item["display"] for item in unchanged])
+        # A group of one is asked as that requirement alone: its item's own question (harness-research).
+        question = (f"Accept the {len(unchanged)} earlier requirements as one group, or go through them one at a "
+                    "time?" if len(unchanged) > 1 else None)
         result["group"] = {"item_id": GROUP_ID, "rule_ids": [item["requirement"]["id"] for item in unchanged],
                            "display": shown,
-                           "digest": canonical_digest({"display": shown, "items": [i["digest"] for i in unchanged]})}
+                           "digest": canonical_digest({"display": shown, "items": [i["digest"] for i in unchanged]}),
+                           "question": question,
+                           "options": _options(("Accept all", "relay:accept"), ("One at a time", "one-at-a-time"))
+                           if question else []}
     else:
         result["group"] = None
     return result
@@ -80,15 +121,20 @@ def annotate(groups: dict) -> dict:
 def edited(rule: dict) -> dict:
     """How an edit is shown back before it is recorded, and its digest."""
     shown = display("edited", rule)
-    return {"rule_id": rule["id"], "display": shown, "digest": _digest(shown, rule)}
+    return {"rule_id": rule["id"], "display": shown, "digest": _digest(shown, rule),
+            "question": f"Record this edit of requirement {code(rule['id'])}?",
+            "options": _options(("Record", "relay:edit"), ("Don't record", "back"))}
 
 
 def compact(annotated: dict) -> dict:
-    """Ids and digests only, for an output too large to hold every item: --item gives one in full."""
-    result = {name: [{"item_id": item["item_id"], "rule_id": item["requirement"]["id"], "digest": item["digest"]}
+    """Ids, digests and questions only, for an output too large to hold every item: --item gives one in full, and
+    its display is shown before its question is asked."""
+    result = {name: [{"item_id": item["item_id"], "rule_id": item["requirement"]["id"], "digest": item["digest"],
+                      "question": item["question"], "options": item["options"]}
                      for item in annotated[name]] for name in GROUPS}
     group = annotated["group"]
-    result["group"] = {key: group[key] for key in ("item_id", "rule_ids", "digest")} if group else None
+    result["group"] = ({key: group[key] for key in ("item_id", "rule_ids", "digest", "question", "options")}
+                       if group else None)
     return result
 
 
