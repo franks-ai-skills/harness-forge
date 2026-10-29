@@ -22,9 +22,12 @@ if __name__ == "__main__":
 
     _problems = bundle.problems()
     if _problems:
+        # A too-old Python: name the installed ones that would do, never install one (#136).
+        _candidates = bundle.candidates() if any(p.startswith("Python") for p in _problems) else []
         print(json.dumps({"command": sys.argv[1] if len(sys.argv) > 1 else None, "ok": False,
                           "problems": [problem[:300] for problem in _problems[:20]], "problem_count": len(_problems),
-                          "repair": bundle.repair(_problems)}))
+                          **({"candidates": _candidates} if any(p.startswith("Python") for p in _problems) else {}),
+                          "repair": bundle.repair(_problems, _candidates)}))
         raise SystemExit(2)
 
 from dataclasses import asdict  # noqa: E402
