@@ -164,6 +164,13 @@ class RecordFirstTest(unittest.TestCase):
         with self.assertRaisesRegex(NotRecorded, "changed since Forge wrote it"):
             check(self.cli.ENVIRON, self.root, self.target)
 
+    def test_a_requested_report_written_nowhere_fails_the_command(self):
+        verified = [{"harness_result": "verified"}]
+        self.assertEqual(self.cli._verify_exit(verified, True, None), 2)
+        self.assertEqual(self.cli._verify_exit(verified, True, str(self.target)), 0)
+        self.assertEqual(self.cli._verify_exit([{"harness_result": "not verified"}], True, str(self.target)), 1)
+        self.assertEqual(self.cli._verify_exit(verified, False, None), 0)
+
     def test_a_real_edit_between_runs_still_widens_the_scope(self):
         self.write()
         self.target.write_text("# New report, edited by hand\n", encoding="utf-8")
@@ -183,6 +190,7 @@ class SandboxGuidanceTest(unittest.TestCase):
                 self.assertIn("not every one does", body)
         verify = " ".join((forge / "skills/harness-verify/SKILL.md").read_text(encoding="utf-8").split())
         self.assertIn("tell the user where this run's report is (`report`)", verify)
+        self.assertIn("When `report` is null after `--write`, the command fails", verify)
 
 
 if __name__ == "__main__":

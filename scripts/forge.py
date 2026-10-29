@@ -1876,6 +1876,14 @@ def _verify(arguments: argparse.Namespace) -> int:
           # Bounded, so that diagnostics that could not be written never crowd out the results.
           "diagnostics_problems": [problem[:300] for problem in diagnostics.problems[:5]],
           "diagnostics_problem_count": len(diagnostics.problems)})
+    return _verify_exit(parts, bool(arguments.write), written)
+
+
+def _verify_exit(parts: list[dict], requested: bool, written: str | None) -> int:
+    """2 when a requested report was written nowhere (#137), as a failed report write was before; else 1 when a
+    part is not verified, 0 otherwise."""
+    if requested and written is None:
+        return 2
     return 1 if any(part["harness_result"] == "not verified" for part in parts) else 0
 
 

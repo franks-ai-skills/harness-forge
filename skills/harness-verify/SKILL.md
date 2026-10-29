@@ -53,7 +53,9 @@ instruction, and stop; never install or download anything yourself.
   the sandbox; if that cannot be granted, stop and say what cannot run
   instead of retrying. When `report_record` says the report was not
   recorded, tell the user where this run's report is (`report`) and that
-  the repository's report was not updated.
+  the repository's report was not updated. When `report` is null after
+  `--write`, the command fails: tell the user that no report was written
+  and why, from `report_record`.
 - **Confirm the current configuration summary first,** in this session,
   as harness-intake's confirmation reference describes. Without it, every part
   stays blocked and its goal is reported as not assessed. A run without

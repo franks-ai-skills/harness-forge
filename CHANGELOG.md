@@ -23,7 +23,8 @@ once it supports such dependencies.
   as `report-<attempt id>.md`; `report_record` says which, and the new
   `report` field names the path written. A report write that fails after
   recording leaves a record that no longer matches, and the next
-  verification judges every part. harness-verify and harness-research
+  verification judges every part. A requested report written nowhere
+  makes `verify` exit with 2. harness-verify and harness-research
   say what their workers need and ask the user to approve running
   outside a session sandbox that blocks it, before the first run (#137).
 
