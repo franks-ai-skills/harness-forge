@@ -88,9 +88,11 @@ class OnePlaceTest(unittest.TestCase):
         """#151: the replacement rule lives in SKILL.md; the contract keeps only what it adds."""
         contract = " ".join((FORGE / "skills/build-skill/references/contract.md").read_text(encoding="utf-8").split())
         skill = " ".join((FORGE / "skills/build-skill/SKILL.md").read_text(encoding="utf-8").split())
-        self.assertIn("is SKILL.md's rule \"Never lose an edit\"", contract)
+        self.assertIn("is the \"Existing content\" check in [references/contract.md]", skill)
+        self.assertNotIn("output from the part's last build or matches the version committed", skill)
+        self.assertNotIn("Any other existing file stops the build", skill)
+        self.assertIn("nor the version committed in git (on disk and in the index)", contract)
         self.assertNotIn("`--replace` discards", contract)
-        self.assertIn("Never lose an edit, and ask no replacement question.", skill)
         self.assertIn("Run `--replace` only after the user says to discard the edits in the named files", skill)
 
 

@@ -811,4 +811,5 @@ class ShellCaseTest(BehaviorCase):
         self.assertIn("Write a case that needs a shell for Codex; the contract's Behavior tests say why", skill)
         self.assertNotIn("`shell: true` makes", skill)
         self.assertIn("Asking for one with `shell: true` makes the case unavailable", contract)
+        self.assertNotIn("A case that needs a shell runs in Codex", contract)
 
