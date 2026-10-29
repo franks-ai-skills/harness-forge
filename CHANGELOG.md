@@ -56,6 +56,15 @@ once it supports such dependencies.
   rollout that cannot be read or deleted is an error that claims no
   activation, and an activation seen nowhere stays unobserved (#135).
 
+### Environment
+
+- When `python3` is too old (macOS's system Python, as a Codex shell
+  finds it), the environment check names each installed `python3.14` to
+  `python3.11` on PATH that starts and is new enough, and the skills run
+  every `forge.py` command with it. Forge never installs, downloads or
+  updates Python; with none found it says what is needed and stops
+  (#136).
+
 ## 0.5.0 (2026-10-28)
 
 Still pins agent-harness-kb 0.6.0. From the owner's prompt-me test of

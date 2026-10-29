@@ -283,6 +283,49 @@ class BundleTest(unittest.TestCase):
         self.assertIn("Python 3.11 or newer", bundle.repair(found))
         self.assertIn("Reinstall or update", bundle.repair(["vendor/yaml/reader.py is missing"]))
 
+    def fake_interpreters(self, directory: Path, **outputs):
+        """Executable stand-ins on a PATH of their own: each prints its version or exits with an error."""
+        for name, (code, output) in outputs.items():
+            path = directory / name
+            path.write_text(f"#!/bin/sh\necho '{output}'\nexit {code}\n", encoding="utf-8")
+            path.chmod(0o755)
+        return str(directory)
+
+    def test_an_old_python_names_the_installed_interpreters_that_would_do(self):
+        """#136: found and named on PATH, newest first; nothing is installed or changed."""
+        with tempfile.TemporaryDirectory() as directory:
+            path = self.fake_interpreters(Path(directory), **{
+                "python3.14": (1, "broken"), "python3.13": (0, "3.13.2"), "python3.12": (0, "3.10.1"),
+                "python3.11": (0, "3.11.9")})
+            found = bundle.candidates(path=path)
+        self.assertEqual([(item["command"], item["version"]) for item in found],
+                         [("python3.13", "3.13.2"), ("python3.11", "3.11.9")])
+        repaired = bundle.repair(["Python 3.9.6 is too old; Forge needs Python 3.11 or newer"], found)
+        self.assertIn("Run every forge.py command with python3.13", repaired)
+        self.assertIn("Forge does not install or change Python", repaired)
+
+    def test_an_old_python_without_a_usable_interpreter_says_what_is_needed(self):
+        with tempfile.TemporaryDirectory() as directory:
+            found = bundle.candidates(path=self.fake_interpreters(Path(directory), **{"python3.12": (0, "x")}))
+        self.assertEqual(found, [])
+        repaired = bundle.repair(["Python 3.9.6 is too old; Forge needs Python 3.11 or newer"], found)
+        self.assertIn("Forge needs Python 3.11 or newer, and none of python3.14", repaired)
+        self.assertIn("Forge does not install or change Python", repaired)
+
+    def test_the_candidate_search_runs_under_the_oldest_python_it_must_serve(self):
+        """bundle.py runs before the version check, so it must parse under Python 3.9 syntax."""
+        import ast
+        tree = ast.parse((FORGE / "src" / "harness_forge" / "bundle.py").read_text(encoding="utf-8"),
+                         feature_version=(3, 9))
+        self.assertTrue(tree.body)
+
+    def test_every_skill_uses_a_named_interpreter_and_never_installs(self):
+        for path in sorted((FORGE / "skills").glob("*/SKILL.md")):
+            with self.subTest(path=path.parent.name):
+                body = " ".join(path.read_text(encoding="utf-8").split())
+                self.assertIn("names `candidates`, tell the user which installed interpreter it found", body)
+                self.assertIn("never install or download anything yourself", body)
+
     def test_forge_stops_on_a_damaged_bundle_without_downloading(self):
         with tempfile.TemporaryDirectory(prefix="forge-install-") as directory:
             installed = install_copy(Path(directory) / "harness-forge")

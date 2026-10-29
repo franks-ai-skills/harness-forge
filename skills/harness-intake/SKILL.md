@@ -14,9 +14,13 @@ questions and explain the result, you never pick a mechanism yourself.
 this skill's folder. Run it with `python3`; its dependencies ship with
 the plugin, so it downloads and installs nothing. **Before anything else
 in this skill,** run `python3 scripts/forge.py environment` from the
-plugin root. If it reports `"ok": false`, tell the user plainly that
-Forge cannot run here, list each problem it names with its `repair`
-instruction, and stop; never install or download anything yourself. Every
+plugin root. If it reports `"ok": false` because Python is too old and
+names `candidates`, tell the user which installed interpreter it found
+and run this and every later `forge.py` command in the session with that
+one (its `command`) instead of `python3`. Otherwise, if it reports
+`"ok": false`, tell the user plainly that Forge cannot run here, list
+each problem it names with its `repair` instruction, and stop; never
+install or download anything yourself. Every
 command prints bounded JSON.
 
 ## Rules that are easy to get wrong

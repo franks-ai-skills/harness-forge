@@ -97,7 +97,12 @@ installs nothing. Each skill first runs `python3 scripts/forge.py
 environment`, which checks the Python version and every bundled file
 against `vendor/manifest.json` with only the standard library. When
 something is missing or changed, Forge says what and stops; reinstall or
-update the plugin. The check confirms the bundle matches its manifest;
+update the plugin. When `python3` is older than 3.11, as macOS's
+`/usr/bin/python3` is and as a Codex shell often finds it, the check
+looks for `python3.14` to `python3.11` on PATH and names each one that
+starts and is new enough; the skills then run every `forge.py` command
+with it. Forge never installs or changes Python: with none found, it
+says what is needed and stops. The check confirms the bundle matches its manifest;
 it does not authenticate who published it.
 
 | Dependency | Version | Licence | What Forge uses it for |
