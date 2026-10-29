@@ -12,6 +12,21 @@ against tags named `harness-forge--v<version>` (`claude plugin tag`
 creates that format); Forge adds such a tag on the same commit only
 once it supports such dependencies.
 
+## Unreleased
+
+### Requirement acceptance
+
+- `compare-requirements` returns, with each item's display, the question
+  to ask right after it and its options, each naming what it leads to:
+  a decision for the acceptance relay, or another step first (an edit
+  shown back with its own question, a re-check, a new deep pass, keeping
+  a removed requirement, or one at a time). The unchanged group gets a
+  question when it holds two or more; compact entries and edits carry
+  theirs. harness-research shows the display as visible reply text
+  immediately before asking the returned question, and harness-intake a
+  proposed goal's full text before asking about it: a question tool's
+  preview or option text alone does not count (#133).
+
 ## 0.5.0 (2026-10-28)
 
 Still pins agent-harness-kb 0.6.0. From the owner's prompt-me test of

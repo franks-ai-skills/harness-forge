@@ -118,13 +118,20 @@ instruction, and stop; never install or download anything yourself.
    accepted requirements yet (then every proposal is `new`). Then ask,
    one item at a time, whether to accept, edit or reject it, except for
    the unchanged group under "Earlier accepted requirements" below.
-   Show each item's `display` unchanged as visible text before the
-   question about it (with `compact`, fetch it with `--item <item_id>`
-   first); reasoning and tool results alone do not count as presenting
-   it, and a question about content not shown in that reply is not
-   asked. For an edit, write the edited rule to a file, run the same
-   command with `--edited <file>`, show its `display` and ask for an
-   explicit yes before recording it. After each explicit answer, add its
+   Show each item's `display` unchanged as visible reply text
+   immediately before asking its returned `question` with its `options`
+   (with `compact`, fetch the item or the group whole with `--item
+   <item_id>` first and show its `display`); reasoning, tool results and
+   a question tool's preview or option text alone do not count as
+   presenting it, and a question about content not shown in that reply is
+   not asked. Only an option whose `next` starts with `relay:` is a
+   decision for the relay; the others lead to another step first: `edit`
+   (write the edited rule to a file, run the same command with `--edited
+   <file>`, show its `display` and ask its own `question`, recording the
+   edit only on `Record`), `one-at-a-time` (each unchanged item's own
+   question), `recheck` or `deep-pass` (research, then compare again),
+   and `keep` (put the removed requirement back into the proposals
+   unchanged and compare again). After each explicit answer, add its
    decision with the item's `digest` to `acceptance-relay-<part>.json`
    in the run directory. Word a `must-not` rule as the
    forbidden behavior itself ("the skill asks the user a question while
