@@ -56,9 +56,11 @@ install or download anything yourself.
 - **Only accepted requirements go in.** Never add a requirement the user
   rejected or did not answer, and never copy fetched page text into the
   skill. Forge puts the accepted requirements at the top of `SKILL.md`,
-  as the checklist lines you write (step 4), and their accepted wording,
-  ids and sources in `references/requirements.md`; a part without
-  accepted requirements gets neither.
+  as the checklist lines you write (step 4), and their ids, kinds and
+  sources in `references/requirements.md`, so each requirement is stated
+  once; the exact accepted wording stays in the accepted revision in
+  `.harness/research/`. A part without accepted requirements gets
+  neither.
 - **Show what you ask about.** Before any question, such as whether to
   keep or discard edits a build stopped at, show the content it is about
   as visible text in the same reply; a refusal or an unclear answer

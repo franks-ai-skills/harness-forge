@@ -47,19 +47,26 @@ def kinds_plan(checklist):
 
 
 class ChecklistTest(unittest.TestCase):
-    def test_the_checklist_replaces_the_statements_in_skill_md_and_the_reference_keeps_them(self):
+    def test_the_checklist_replaces_the_statements_and_each_requirement_is_stated_once(self):
+        """#146: the reference keeps id, kind and sources by number; the accepted wording stays in the revision."""
         planned = plan(checklist=CHECKLIST)
         skill_md, reference = planned[SKILL], planned[REFERENCE]
         self.assertIn("## Requirements\n\n1. Name the environment the bug was observed in.\n"
                       "2. Number each reproduction step.\n"
                       "3. Do not merge expected and observed behavior into one line.\n", skill_md)
-        self.assertNotIn("The checklist names the environment", skill_md)
-        self.assertIn("1. `idea.repro.a.environment` (must): The checklist names the environment.\n"
-                      "   - Sources: https://docs.example-vendor.com/bug-reports", reference)
-        self.assertIn("the rule id, its kind, the\naccepted statement and its sources.", reference)
-        self.assertIn("need the exact accepted wording", skill_md)
-        for statement in ("The checklist names the environment", "Name the environment"):
-            self.assertEqual("".join(planned[path] for path in (SKILL, REFERENCE)).count(statement), 1)
+        self.assertIn("1. `idea.repro.a.environment` (must): https://docs.example-vendor.com/bug-reports", reference)
+        self.assertIn("the exact accepted wording is in the accepted revision", reference)
+        self.assertIn("need the rule id or the source behind one of the requirements above", skill_md)
+        self.assertNotIn("exact accepted wording", skill_md)
+        both = "".join(planned[path] for path in (SKILL, REFERENCE))
+        self.assertEqual(both.count("The checklist names the environment"), 0)
+        self.assertEqual(both.count("Name the environment"), 1)
+        # Provenance: the reference's digest names the accepted revision, which keeps the exact wording.
+        from harness_forge.build_skill import part_requirements_digest
+        revision = REVISION
+        self.assertIn(part_requirements_digest(revision, "A"), reference)
+        self.assertIn("The checklist names the environment",
+                      next(e["rule"]["statement"] for e in revision.rules if e["rule"]["id"] == "idea.repro.a.environment"))
 
     def test_each_kind_keeps_its_label_and_the_line_keeps_its_condition(self):
         skill_md = kinds_plan(KINDS_CHECKLIST)[SKILL]
@@ -68,7 +75,8 @@ class ChecklistTest(unittest.TestCase):
                       "3. Prefer to: fit the checklist on one screen when the bug has at most five steps.\n"
                       "4. Avoid: asking for screenshots for a command-line bug.\n", skill_md)
 
-    def test_the_reference_keeps_the_accepted_wording_exactly(self):
+    def test_the_exact_wording_stays_in_the_revision_not_in_the_reference(self):
+        """#146: with a checklist the reference names ids, kinds and sources; the revision keeps the wording."""
         exact = [idea_rule("command", "The checklist quotes `a  b` as written; it ends with a colon:"),
                  idea_rule("lines", "The checklist lists\n  - the platform\n  - the version")]
         revision = accept_requirements(exact, {rule.id: "accept" for rule in exact}, "b" * 64)
@@ -80,10 +88,12 @@ class ChecklistTest(unittest.TestCase):
                                procedure=PROCEDURE, confirmation=confirm_contract(contract, relay, run_id="run-1"),
                                checklist={"idea.repro.a.command": "Quote `a  b` as written",
                                           "idea.repro.a.lines": "List the platform and the version"})[REFERENCE]
-        self.assertIn("1. `idea.repro.a.command` (must): The checklist quotes `a  b` as written; it ends with a "
-                      "colon:\n   - Sources:", reference)
-        self.assertIn("2. `idea.repro.a.lines` (must): The checklist lists\n     - the platform\n     - the version\n"
-                      "   - Sources:", reference)
+        self.assertNotIn("The checklist quotes", reference)
+        self.assertNotIn("the platform\n", reference)
+        self.assertRegex(reference, r"1\. `idea\.repro\.a\.command` \(must\): \S+")
+        self.assertEqual([entry["rule"]["statement"] for entry in revision.rules],
+                         ["The checklist quotes `a  b` as written; it ends with a colon:",
+                          "The checklist lists\n  - the platform\n  - the version"])
 
     def test_without_a_checklist_the_statements_stay_in_skill_md(self):
         planned = plan()

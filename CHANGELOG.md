@@ -12,6 +12,17 @@ against tags named `harness-forge--v<version>` (`claude plugin tag`
 creates that format); Forge adds such a tag on the same commit only
 once it supports such dependencies.
 
+## Unreleased
+
+### Build
+
+- With a checklist, `references/requirements.md` names each accepted
+  requirement's id, kind and sources by number, as without one, and no
+  longer repeats the accepted wording, so each requirement is stated
+  once (`skills.references.load-conditions`). The exact wording stays in
+  the accepted revision in `.harness/research/` that the reference's
+  digest names; a skill copied without the repository loses it (#146).
+
 ## 0.5.1 (2026-10-29)
 
 Still pins agent-harness-kb 0.6.0. From the owner's prompt-me test of
