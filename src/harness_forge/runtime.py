@@ -723,12 +723,17 @@ def user_invoked(harness: str, files: Mapping[str, bytes], directory: str) -> bo
     return isinstance(policy, dict) and policy.get("allow_implicit_invocation") is False
 
 
-# TEMPORARY, development only (owner, 2026-10-21): with this variable set to 1, a Codex explicit case of a
-# user-invoked skill runs without --ephemeral, and Forge reads that run's own session rollout to see whether
-# Codex injected the candidate's instructions, then deletes the file. `codex exec --json` shows no event for
-# a $name invocation (probe, codex-cli 0.162.1). Off by default; no default test or reference case needs it.
-TEMPORARY_ROLLOUT = "HARNESS_FORGE_TEMPORARY_CODEX_ROLLOUT"
+# The rollout observer, a workaround tracked by FORGE #18: `codex exec --json` shows no event for a $name
+# invocation (probes, codex-cli 0.162.1 to 0.165.0), so a Codex case of a user-invoked skill, explicit or
+# behavior, runs without --ephemeral, and Forge reads that run's own session rollout to see whether Codex
+# injected the candidate's instructions, then deletes the file. On by default (owner, 2026-10-29, #135).
+ROLLOUT_NOTE = "session rollout"
 _INJECTED_KIND = "skills.selected_skill_instructions"
+
+
+def observes_rollout(harness: str, slash: bool) -> bool:
+    """Whether the run's own session rollout is read: a Codex case that invokes a user-invoked skill by name."""
+    return harness == "codex" and slash
 
 
 def rollout_activation(rollout: str, thread_id: str, directory: str, workspaces: Iterable[Path],
@@ -755,7 +760,7 @@ def rollout_activation(rollout: str, thread_id: str, directory: str, workspaces:
             continue
         texts = [item.get("text") for item in payload.get("content") or [] if isinstance(item, dict)]
         if len(texts) == 1 and texts[0] in expected:
-            return f"instructions injected for {directory}/SKILL.md (session rollout)"
+            return f"instructions injected for {directory}/SKILL.md ({ROLLOUT_NOTE})"
     return None
 
 
@@ -869,7 +874,7 @@ def activation_case(
                 prompt = stream_input(prompt)
         else:
             command = codex.command("review", str(workspace), structured=False)
-        rollout_wanted = harness == "codex" and slash and environ.get(TEMPORARY_ROLLOUT) == "1"
+        rollout_wanted = observes_rollout(harness, slash)
         if rollout_wanted:
             command.remove("--ephemeral")
         environment = worker_environment(environ, harness)
@@ -900,8 +905,8 @@ def judge_run(harness: str, completed: Completed, files: Mapping[str, bytes], ta
     ``baseline`` holds every skill that does not compete, the other
     installed skills included. A recorded run can be judged again here,
     with its own workspace path, after the workspace is gone. ``rollout``
-    is a Codex run's session rollout and thread id, read only under
-    TEMPORARY_ROLLOUT.
+    is a Codex run's session rollout and thread id, read for a user-invoked
+    skill's case (observes_rollout).
     """
     name = target.rsplit("/", 1)[-1]
     # What the harness did before it stopped counts, also when it timed out or failed.

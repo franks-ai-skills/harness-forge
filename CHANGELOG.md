@@ -12,6 +12,19 @@ against tags named `harness-forge--v<version>` (`claude plugin tag`
 creates that format); Forge adds such a tag on the same commit only
 once it supports such dependencies.
 
+## Unreleased
+
+### Verification
+
+- The rollout observer is on by default, a workaround tracked by #18: a
+  Codex explicit or behavior case of a user-invoked skill reads that
+  run's own session rollout, because `codex exec --json` shows no record
+  of a `$name` injection, and deletes it on every path after the launch.
+  The `HARNESS_FORGE_TEMPORARY_CODEX_ROLLOUT` variable is gone. The
+  report names each result whose activation came from the rollout; a
+  rollout that cannot be read or deleted is an error that claims no
+  activation, and an activation seen nowhere stays unobserved (#135).
+
 ## 0.5.0 (2026-10-28)
 
 Still pins agent-harness-kb 0.6.0. From the owner's prompt-me test of

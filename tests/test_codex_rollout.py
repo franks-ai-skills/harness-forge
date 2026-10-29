@@ -1,4 +1,4 @@
-"""The temporary Codex rollout observer: only its own run's record of the injected instructions counts."""
+"""The Codex rollout observer (a workaround, FORGE #18): only its own run's record of the injection counts."""
 
 import json
 import tempfile
@@ -6,7 +6,7 @@ import unittest
 from pathlib import Path
 
 from harness_forge.adapters.base import Completed
-from harness_forge.runtime import TEMPORARY_ROLLOUT, UNOBSERVABLE, _take_rollout, activation_case, rollout_activation
+from harness_forge.runtime import UNOBSERVABLE, _take_rollout, activation_case, rollout_activation
 
 FIXTURE = Path(__file__).resolve().parent / "fixtures" / "codex-rollout" / "dollar-name.jsonl"
 THREAD = "01a15d7a-4e3d-7e81-a3d5-95d51a73a312"
@@ -85,35 +85,103 @@ class TakeRolloutTest(unittest.TestCase):
 class ActivationCaseTest(unittest.TestCase):
     """activation_case with a stand-in Codex that writes its rollout like the probe's."""
 
-    def run_case(self, environ: dict) -> tuple[tuple, list[str]]:
+    def run_case(self, environ: dict, *, slash: bool = True, content: bytes | None = None,
+                 write: bool = True) -> tuple[tuple, list[str]]:
         commands = []
         with tempfile.TemporaryDirectory() as home:
             def runner(command, *, cwd, env, stdin, timeout):
                 commands.append(command)
-                if "--ephemeral" not in command:
+                if "--ephemeral" not in command and write:
                     sessions = Path(env["CODEX_HOME"]) / "sessions" / "2026" / "10" / "21"
                     sessions.mkdir(parents=True, exist_ok=True)
-                    (sessions / f"rollout-2026-10-21T10-00-59-{THREAD}.jsonl").write_text(
-                        rollout(str(Path(cwd).resolve())), encoding="utf-8")
+                    (sessions / f"rollout-2026-10-21T10-00-59-{THREAD}.jsonl").write_bytes(
+                        content if content is not None else rollout(str(Path(cwd).resolve())).encode())
                 return Completed(returncode=0, stdout=STREAM, stderr="", timed_out=False)
 
             result = activation_case("codex", {f"{DIRECTORY}/SKILL.md": SKILL.encode()}, [DIRECTORY], DIRECTORY,
                                      "$probe-greet", "activates", [], {}, runner=runner,
-                                     environ={"CODEX_HOME": home, **environ}, baseline=set(), slash=True)
+                                     environ={"CODEX_HOME": home, **environ}, baseline=set(), slash=slash)
             left = list(Path(home).rglob("*.jsonl"))
         self.assertEqual(left, [], "the case's rollout is deleted")
         return result, commands[0]
 
-    def test_with_the_variable_the_injection_is_observed(self):
-        (outcome, reason, activation, _), command = self.run_case({TEMPORARY_ROLLOUT: "1"})
+    def test_by_default_the_injection_is_observed(self):
+        """#135: on by default, without a setting, for a user-invoked skill's case."""
+        (outcome, reason, activation, _), command = self.run_case({})
         self.assertNotIn("--ephemeral", command)
         self.assertEqual((outcome, activation), ("pass", f"instructions injected for {DIRECTORY}/SKILL.md "
                                                           "(session rollout)"), reason)
 
-    def test_by_default_the_run_stays_ephemeral_and_unobserved(self):
-        (outcome, reason, activation, _), command = self.run_case({})
+    def test_a_case_the_model_starts_stays_ephemeral_and_unobserved(self):
+        (outcome, reason, activation, _), command = self.run_case({}, slash=False)
         self.assertIn("--ephemeral", command)
         self.assertEqual((outcome, reason, activation), ("not-run", UNOBSERVABLE["codex"][1], None))
+
+    def test_no_rollout_leaves_the_activation_unobserved(self):
+        (outcome, reason, activation, _), _ = self.run_case({}, write=False)
+        self.assertEqual((outcome, reason, activation), ("not-run", UNOBSERVABLE["codex"][1], None))
+
+    def test_an_unreadable_rollout_is_an_error_and_still_deleted(self):
+        (outcome, reason, activation, _), _ = self.run_case({}, content=b"\xff\xfe not utf-8")
+        self.assertEqual((outcome, activation), ("error", None))
+        self.assertIn("could not be read", reason)
+
+
+class BehaviorCaseTest(unittest.TestCase):
+    """#135: a Codex behavior case of a user-invoked skill reads its own rollout like an explicit case."""
+
+    CASE = {"id": "greets", "part_id": "A", "mode": "explicit", "prompt": "$probe-greet", "harnesses": ["codex"],
+            "network": "none", "writes": [".tmp/**"], "kind": "behavior",
+            "expect": {"files": [{"path": ".tmp/greeting.md", "contains": ["PINEAPPLE"]}]}}
+
+    def run_case(self, *, slash=True, content=None, write=True, greeting="PINEAPPLE\n"):
+        from harness_forge.behavior import behavior_case
+        commands = []
+        with tempfile.TemporaryDirectory() as home:
+            def runner(command, *, cwd, env, stdin, timeout):
+                commands.append(command)
+                draft = Path(cwd) / ".tmp" / "greeting.md"
+                draft.parent.mkdir(parents=True, exist_ok=True)
+                draft.write_text(greeting, encoding="utf-8")
+                if "--ephemeral" not in command and write:
+                    sessions = Path(env["CODEX_HOME"]) / "sessions" / "2026" / "10" / "29"
+                    sessions.mkdir(parents=True, exist_ok=True)
+                    (sessions / f"rollout-2026-10-29T10-00-59-{THREAD}.jsonl").write_bytes(
+                        content if content is not None else rollout(str(Path(cwd).resolve())).encode())
+                return Completed(returncode=0, stdout=STREAM, stderr="", timed_out=False)
+
+            result = behavior_case("codex", dict(self.CASE), {f"{DIRECTORY}/SKILL.md": SKILL.encode()}, DIRECTORY,
+                                   "$probe-greet", runner=runner, environ={"CODEX_HOME": home},
+                                   version="0.165.0", baseline=set(), slash=slash)
+            left = list(Path(home).rglob("*.jsonl"))
+        self.assertEqual(left, [], "the case's rollout is deleted")
+        return result, commands[0]
+
+    def test_the_rollout_shows_the_activation_and_the_assertions_decide(self):
+        (outcome, reason, activation, _), command = self.run_case()
+        self.assertNotIn("--ephemeral", command)
+        self.assertEqual((outcome, activation), ("pass", f"instructions injected for {DIRECTORY}/SKILL.md "
+                                                          "(session rollout)"), reason)
+
+    def test_a_failed_assertion_keeps_the_rollout_activation(self):
+        (outcome, reason, activation, _), _ = self.run_case(greeting="hello\n")
+        self.assertEqual(outcome, "fail", reason)
+        self.assertIn("(session rollout)", activation)
+
+    def test_without_a_rollout_the_behavior_stays_unverified(self):
+        (outcome, reason, activation, _), _ = self.run_case(write=False)
+        self.assertEqual((outcome, activation), ("unavailable", None))
+        self.assertIn("activation was not observed", reason)
+
+    def test_an_unreadable_rollout_claims_no_activation(self):
+        (outcome, reason, activation, _), _ = self.run_case(content=b"\xff\xfe not utf-8")
+        self.assertEqual((outcome, activation), ("error", None))
+        self.assertIn("could not be read", reason)
+
+    def test_a_case_the_model_starts_stays_ephemeral(self):
+        (outcome, _, activation, _), command = self.run_case(slash=False)
+        self.assertIn("--ephemeral", command)
+        self.assertEqual((outcome, activation), ("unavailable", None))
 
 
 if __name__ == "__main__":
