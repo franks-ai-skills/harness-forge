@@ -58,8 +58,14 @@ class DecidesTest(unittest.TestCase):
         stale = [{"part_id": "A", "accepted": "stale", "deep_research": "none", "next": "run the deep pass"}]
         current = [{"part_id": "A", "accepted": "current", "deep_research": "current", "next": "nothing"}]
         self.assertEqual(self.first(record, revision, "Research proposal", stale),
-                         "Confirming fixes the goals, parts and answers research uses. Next: the deep pass and your "
-                         "acceptance of its requirements for the parts under Research to do.")
+                         "Confirming fixes the goals, parts and answers research uses. Next: the deep pass where it "
+                         "is due and your acceptance of the requirements, for the parts under Research to do.")
+        researched = [{"part_id": "A", "accepted": "stale", "deep_research": "current", "next": "accept again"}]
+        self.assertEqual(self.first(record, revision, "Research proposal", researched),
+                         "Confirming fixes the goals, parts and answers research uses. Next: your acceptance of the "
+                         "requirements, for the parts under Research to do; their deep research is current.")
+        self.assertIn("the deep pass where it is due",
+                      self.first(record, revision, "Research proposal", researched + [{**stale[0], "part_id": "B"}]))
         self.assertIn("Next: intake continues", self.first(record, revision, "Research proposal", current))
         self.assertIn("Next: the build.", self.first(record, revision, "Configuration proposal", current))
         self.assertIn("Next: harness-verify assesses the configuration",

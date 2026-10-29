@@ -34,8 +34,10 @@ TITLES = {"research": "Research proposal", "configuration": "Configuration propo
 # What confirming each summary decides and what follows, the summary's first line (#134).
 _DECIDES = {
     "survey": "Confirming fixes the idea and its goals. Next: the survey of existing solutions.",
-    "research": ("Confirming fixes the goals, parts and answers research uses. Next: the deep pass and your "
-                 "acceptance of its requirements for the parts under Research to do."),
+    "research": ("Confirming fixes the goals, parts and answers research uses. Next: the deep pass where it is "
+                 "due and your acceptance of the requirements, for the parts under Research to do."),
+    "acceptance": ("Confirming fixes the goals, parts and answers research uses. Next: your acceptance of the "
+                   "requirements, for the parts under Research to do; their deep research is current."),
     "intake": ("Confirming fixes the goals, parts and answers. Next: intake continues; building needs a "
                "configuration proposal."),
     "Configuration proposal": ("Confirming fixes what build-skill builds: each part's mechanism and accepted "
@@ -430,7 +432,11 @@ def decides(title: str, contract: Contract, research: list[dict]) -> str:
         return _DECIDES[title]
     if not contract.parts:
         return _DECIDES["survey"]
-    return _DECIDES["research" if any(item["accepted"] != "current" for item in research) else "intake"]
+    pending = [item for item in research if item["accepted"] != "current"]
+    if not pending:
+        return _DECIDES["intake"]
+    # Only the next step each part's state allows: no deep pass is promised when it is current (forge.py states).
+    return _DECIDES["acceptance" if all(item["deep_research"] == "current" for item in pending) else "research"]
 
 
 def render_summary(contract: Contract, record: dict, *, title: str, checked_overrides: list[dict], refused: list[dict],
