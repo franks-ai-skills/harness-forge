@@ -808,8 +808,10 @@ class ShellCaseTest(BehaviorCase):
         skill = " ".join((forge / "skills/harness-verify/SKILL.md").read_text(encoding="utf-8").split())
         contract = " ".join((forge / "skills/harness-verify/references/contract.md").read_text(encoding="utf-8")
                             .split())
-        self.assertIn("Write a case that needs a shell for Codex; the contract's Behavior tests say why", skill)
+        self.assertIn("Write a case that needs a shell, such as one that runs `git`, for Codex; the contract's "
+                      "Behavior tests say why.", skill)
         self.assertNotIn("`shell: true` makes", skill)
+        self.assertNotIn("runs without a shell", skill)
         self.assertIn("Asking for one with `shell: true` makes the case unavailable", contract)
         self.assertNotIn("A case that needs a shell runs in Codex", contract)
 

@@ -40,9 +40,10 @@ once it supports such dependencies.
 
 ### Skill text
 
-- build-skill's contract points to its SKILL.md's replacement rule
-  instead of restating it, and harness-verify states the Claude Code
-  shell rule only in its contract, so each fact lives in one place
+- build-skill's SKILL.md points to its contract's "Existing content"
+  check instead of restating which files a build may replace, and
+  harness-verify's SKILL.md says where a case that needs a shell runs
+  while only its contract says why, so each fact lives in one place
   (#151).
 
 ### Research

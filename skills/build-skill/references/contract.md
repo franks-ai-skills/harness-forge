@@ -19,8 +19,9 @@ Read this when Forge refuses a build or reports a conflict.
 The checklist checks are syntax only: whether a line keeps its
 requirement's meaning and strength is judged in harness-verify, against
 the accepted statement. A refused build writes nothing. An existing
-file that the "Existing content" check does not stop at is replaced, or
-removed when the plan no longer has it; a failed or inconclusive git
-check never counts as a match with the committed version. To repair a
+file that differs from the plan and that the "Existing content" check
+does not stop at is replaced, or removed when the plan no longer has
+it; a failed or inconclusive git check never counts as a match with the
+committed version. To repair a
 part after a failed verification, rebuild it, then harness-verify
 re-verifies it, judging again what Forge chooses.
