@@ -58,9 +58,10 @@ install or download anything yourself.
   skill. Forge puts the accepted requirements at the top of `SKILL.md`,
   as the checklist lines you write (step 4), and their ids, kinds and
   sources in `references/requirements.md`, so each requirement is stated
-  once; the exact accepted wording stays in the accepted revision in
-  `.harness/research/`. A part without accepted requirements gets
-  neither.
+  once. The exact accepted wording stays in the accepted revision, which
+  the reference names by its sha256: `.harness/research/` holds it until
+  a later acceptance replaces it, and then only the repository's history
+  does. A part without accepted requirements gets neither.
 - **Show what you ask about.** Before any question, such as whether to
   keep or discard edits a build stopped at, show the content it is about
   as visible text in the same reply; a refusal or an unclear answer

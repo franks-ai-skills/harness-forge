@@ -217,14 +217,16 @@ def plan_skill(
     if accepted:
         # The reference adds what the agent rarely needs, by number: the rule id, kind and sources. Each
         # requirement is stated once, in SKILL.md (skills.references.load-conditions, #146); with a checklist,
-        # the exact accepted wording stays in the accepted revision that the digest names, not in the skill.
+        # the exact accepted wording stays in the accepted revision, named by its own digest, not in the skill.
         def item(number: int, rule: dict) -> str:
             return f"{number}. `{rule['id']}` ({KIND_LABELS[rule['kind']].lower()}): {', '.join(rule['sources'])}"
         planned[f"{base}/references/requirements.md"] = _template(
             "requirements.md.tmpl", digest=part_requirements_digest(revision, part_id), part=part_id,
             # Without a checklist the text stays as before, so earlier builds do not change.
-            fields=("its kind and its\nsources; the exact accepted wording is in the accepted revision this\n"
-                    "digest names, in the repository's `.harness/research/`" if lines else "its kind and its\nsources"),
+            fields=("its kind and its\nsources. The exact accepted wording is in the accepted revision with\n"
+                    f"sha256 {revision.digest}, which Forge keeps in the repository's\n"
+                    "`.harness/research/` rules file until a later acceptance replaces it;\n"
+                    "after that only the repository's history holds it" if lines else "its kind and its\nsources"),
             items="\n".join(item(number, rule) for number, rule in enumerate(accepted, 1)))
     if user_only:
         planned[f"{base}/agents/openai.yaml"] = _template("openai.yaml.tmpl")

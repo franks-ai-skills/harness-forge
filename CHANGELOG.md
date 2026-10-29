@@ -20,8 +20,10 @@ once it supports such dependencies.
   requirement's id, kind and sources by number, as without one, and no
   longer repeats the accepted wording, so each requirement is stated
   once (`skills.references.load-conditions`). The exact wording stays in
-  the accepted revision in `.harness/research/` that the reference's
-  digest names; a skill copied without the repository loses it (#146).
+  the accepted revision, which the reference names by its sha256: in
+  `.harness/research/` until a later acceptance replaces it, then only in
+  the repository's history; a skill copied without the repository loses
+  it (#146).
 
 ## 0.5.1 (2026-10-29)
 
