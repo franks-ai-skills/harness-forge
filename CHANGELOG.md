@@ -14,8 +14,47 @@ once it supports such dependencies.
 
 ## Unreleased
 
+### Confirmation
+
+- A summary's details link shows the file's path relative to the
+  repository as its text, for the user to copy in one piece; its
+  destination stays the absolute path. The guidance says to show the
+  summary in full and unchanged as visible reply text before its
+  question: a question tool's preview or option text alone does not
+  count, and the details line is never shortened or left out (#132).
+- Each summary starts with what confirming it decides and what follows:
+  for a research proposal by stage (the survey, the deep pass where it
+  is due and acceptance, acceptance alone, or more intake), for a
+  configuration proposal the build,
+  and for a configuration summary the verification. The question names
+  what is confirmed instead of saying it is "above" (#134).
+
+### Requirement acceptance
+
+- `compare-requirements` returns, with each item's display, the question
+  to ask right after it and its options, each naming what it leads to:
+  a decision for the acceptance relay, or another step first (an edit
+  shown back with its own question, a re-check, a new deep pass, keeping
+  a removed requirement, or one at a time). The unchanged group gets a
+  question when it holds two or more; compact entries and edits carry
+  theirs. harness-research shows the display as visible reply text
+  immediately before asking the returned question, and harness-intake a
+  proposed goal's full text before asking about it: a question tool's
+  preview or option text alone does not count (#133).
+
 ### Verification
 
+- The rollout observer is on by default, a workaround tracked by #18: a
+  Codex explicit or behavior case of a user-invoked skill reads that
+  run's own session rollout, because `codex exec --json` shows no record
+  of a `$name` injection, and deletes it right after the run; when it
+  cannot tell which file is the run's, the case's reason says a file may
+  remain, and the case is an error unless it already failed for another
+  reason.
+  The `HARNESS_FORGE_TEMPORARY_CODEX_ROLLOUT` variable is gone. The
+  report names each result whose activation came from the rollout; a
+  rollout that cannot be read or deleted is an error that claims no
+  activation, and an activation seen nowhere stays unobserved (#135).
 - `verify --write` records the report before writing it. When the record
   cannot be written, as in a session sandbox, the repository's report
   and the previous record stay as they were, so the next verification's
@@ -27,6 +66,15 @@ once it supports such dependencies.
   makes `verify` exit with 2. harness-verify and harness-research
   say what their workers need and ask the user to approve running
   outside a session sandbox that blocks it, before the first run (#137).
+
+### Environment
+
+- When `python3` is too old (macOS's system Python, as a Codex shell
+  finds it), the environment check names each installed `python3.14` to
+  `python3.11` on PATH that starts and is new enough, and the skills run
+  every `forge.py` command with it. Forge never installs, downloads or
+  updates Python; with none found it says what is needed and stops
+  (#136).
 
 ## 0.5.0 (2026-10-28)
 

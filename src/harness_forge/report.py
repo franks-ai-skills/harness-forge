@@ -368,6 +368,15 @@ def render_report(run: VerificationRun, results: list[PartResult]) -> str:
             if gaps:
                 lines += ["", f"Observation gaps in {harness}: " + "; ".join(gaps) + "."]
         lines += ["", "An unavailable behavior case leaves the behavior unverified; it does not count as passed."]
+    # Results whose activation came from the run's own Codex session file (#135), named so the user can weigh them.
+    from harness_forge.runtime import ROLLOUT_NOTE
+    observed = sorted({f"{item.part_id}/{item.case_id}" for item in run.runtime_results
+                       if item.observed_activation and item.observed_activation.endswith(f"({ROLLOUT_NOTE})")})
+    if observed:
+        lines += ["", f"Activation read from the session rollout: {', '.join(observed)}. Codex records an injected "
+                      "skill only in its session file, not in `codex exec --json`; Forge's rollout observer, a "
+                      "workaround tracked by FORGE #18, read each case's own file and deleted it. It shows that the "
+                      "instructions reached the model, not that the procedure ran."]
     lines += ["", "## Checked files", "", "```"]
     lines += [f"{digest}  {_one_line(path)}" for path, digest in run.frozen_inputs["files"].items()]
     lines += [f"link  {_one_line(path)} -> {_one_line(target)}" for path, target in run.frozen_inputs["symlinks"].items()]

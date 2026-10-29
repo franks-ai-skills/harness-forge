@@ -70,7 +70,7 @@ def with_event(stream, event):
 
 
 def codex_run(read_skill=True, items=()):
-    events = [{"type": "thread.started", "thread_id": "x"}]
+    events = [{"type": "thread.started", "thread_id": "01a00000-0000-7000-8000-000000000000"}]
     if read_skill:
         events.append({"type": "item.completed", "item": {"id": "r", "type": "command_execution",
                                                           "command": f"cat {SKILL_DIR}/SKILL.md", "exit_code": 0,

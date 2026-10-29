@@ -14,6 +14,9 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
+import shutil
+import subprocess
 import sys
 from pathlib import Path
 
@@ -21,6 +24,9 @@ ROOT = Path(__file__).resolve().parents[2]
 VENDOR = ROOT / "vendor"
 MANIFEST = VENDOR / "manifest.json"
 MINIMUM_PYTHON = (3, 11)
+# Interpreters an old python3 may sit beside on PATH, newest first (#136): probed, never installed.
+CANDIDATES = ("python3.14", "python3.13", "python3.12", "python3.11")
+_PROBE = "import sys; print('%d.%d.%d' % tuple(sys.version_info[:3]))"
 # Top-level modules the bundle provides; each must come from vendor/.
 PACKAGES = ("yaml", "markdown_it", "mdurl", "fastjsonschema")
 # Written by Python or the file system, never part of the bundle.
@@ -93,9 +99,38 @@ def problems(*, check_python: bool = True, version: tuple = tuple(sys.version_in
     return found
 
 
-def repair(found: list[str]) -> str:
+def candidates(path=None, run=subprocess.run, timeout: int = 10) -> list:
+    """Each interpreter of CANDIDATES on PATH that starts and is new enough: command, path and version.
+
+    A candidate only shows that it starts and meets the version; the bundle check still runs under it. Nothing is
+    installed or changed. Written for the old Python that runs it: standard library, no newer syntax.
+    """
+    found, seen = [], set()
+    for name in CANDIDATES:
+        resolved = shutil.which(name, path=os.environ.get("PATH") if path is None else path)
+        if not resolved or os.path.realpath(resolved) in seen:
+            continue
+        seen.add(os.path.realpath(resolved))
+        try:
+            completed = run([resolved, "-I", "-c", _PROBE], capture_output=True, text=True, timeout=timeout,
+                            stdin=subprocess.DEVNULL)
+            version = tuple(int(part) for part in completed.stdout.strip().split("."))
+        except (OSError, subprocess.SubprocessError, ValueError):
+            continue
+        if completed.returncode == 0 and len(version) == 3 and version[:2] >= MINIMUM_PYTHON:
+            found.append({"command": name, "path": resolved, "version": ".".join(map(str, version))})
+    return found
+
+
+def repair(found: list, found_candidates=None) -> str:
     if any(problem.startswith("Python") for problem in found):
-        return "Run Forge with Python 3.11 or newer (python3 --version shows the version)."
+        if found_candidates:
+            first = found_candidates[0]
+            return (f"Run every forge.py command with {first['command']} ({first['path']}, Python "
+                    f"{first['version']}) instead of python3, starting again with environment. Forge does not "
+                    "install or change Python.")
+        return ("Forge needs Python 3.11 or newer, and none of " + ", ".join(CANDIDATES) + " on PATH starts as one. "
+                "Install one yourself or put it on PATH; Forge does not install or change Python.")
     return "Reinstall or update the Harness Forge plugin; Forge downloads nothing itself."
 
 

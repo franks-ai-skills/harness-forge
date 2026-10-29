@@ -47,6 +47,43 @@ def rendered(record, revision, checked=(), refused=(), research=(), title="Resea
                                 "0123456789abcdef.md", comparison=comparison, comparison_reason=reason)
 
 
+class DecidesTest(unittest.TestCase):
+    """#134: the first line says what confirming decides and what follows, by purpose and research stage."""
+
+    def first(self, record, revision, title, research=()):
+        return rendered(record, revision, title=title, research=list(research))[1].split("\n")[2]
+
+    def test_each_purpose_and_research_stage(self):
+        record, revision = decision(), accepted()
+        stale = [{"part_id": "A", "accepted": "stale", "deep_research": "none", "next": "run the deep pass"}]
+        current = [{"part_id": "A", "accepted": "current", "deep_research": "current", "next": "nothing"}]
+        self.assertEqual(self.first(record, revision, "Research proposal", stale),
+                         "Confirming fixes the goals, parts and answers research uses. Next: the deep pass where it "
+                         "is due and your acceptance of the requirements, for the parts under Research to do.")
+        researched = [{"part_id": "A", "accepted": "stale", "deep_research": "current", "next": "accept again"}]
+        self.assertEqual(self.first(record, revision, "Research proposal", researched),
+                         "Confirming fixes the goals, parts and answers research uses. Next: your acceptance of the "
+                         "requirements, for the parts under Research to do; their deep research is current.")
+        self.assertIn("the deep pass where it is due",
+                      self.first(record, revision, "Research proposal", researched + [{**stale[0], "part_id": "B"}]))
+        self.assertIn("Next: intake continues", self.first(record, revision, "Research proposal", current))
+        self.assertIn("Next: the build.", self.first(record, revision, "Configuration proposal", current))
+        self.assertIn("Next: harness-verify assesses the configuration",
+                      self.first(record, revision, "Configuration summary", current))
+        empty = decision()
+        empty.record["parts"] = []
+        self.assertEqual(self.first(empty, None, "Research proposal"),
+                         "Confirming fixes the idea and its goals. Next: the survey of existing solutions.")
+
+    def test_the_question_names_no_location(self):
+        for title in ("Research proposal", "Configuration proposal", "Configuration summary"):
+            for parts in (["A"], [f"A{n}" for n in range(40)]):
+                question = render_question(title, parts, has_parts=True)
+                self.assertNotIn("above", question)
+                self.assertTrue(question.startswith(f"Confirm the {title[0].lower() + title[1:]} and its linked "
+                                                    "details for "), question)
+
+
 class CountingTest(unittest.TestCase):
     def test_lines_words_and_characters(self):
         self.assertEqual(summary_size("## Title\n\nTwo words\n"), {"lines": 3, "words": 4, "chars": 20})
@@ -91,10 +128,10 @@ class LargeDecisionTest(unittest.TestCase):
 
     def test_a_long_part_list_falls_back_in_the_question(self):
         question = render_question("Configuration proposal", [f"A{n}" for n in range(40)])
-        self.assertEqual(question, "Confirm the configuration proposal above and its linked details for the 40 parts "
+        self.assertEqual(question, "Confirm the configuration proposal and its linked details for the 40 parts "
                                    "offered there?")
         self.assertEqual(render_question("Research proposal", []),
-                         "Confirm the research proposal above and its linked details for the idea?")
+                         "Confirm the research proposal and its linked details for the idea?")
 
 
 class ImpossibleFitTest(unittest.TestCase):
@@ -200,12 +237,27 @@ class CompareCliTest(unittest.TestCase):
         path.write_text(json.dumps(relay), encoding="utf-8")
         return path
 
+    def test_the_details_link_shows_the_repository_relative_path(self):
+        """#132: the link text is the path to copy in one piece, the destination the absolute file."""
+        import urllib.parse
+
+        from markdown_it import MarkdownIt
+        output = self.prepare(self.run_dir())
+        path = Path(output["details"]["path"])
+        last = output["summary"].rstrip("\n").split("\n")[-1]
+        tokens = MarkdownIt("commonmark").parseInline(last)[0].children
+        link = next(token for token in tokens if token.type == "link_open")
+        shown = "".join(token.content for token in tokens[tokens.index(link) + 1:] if token.type == "text")
+        self.assertEqual(shown, path.resolve().relative_to(self.root.resolve()).as_posix())
+        self.assertTrue(shown.startswith(".harness-forge/runs/"))
+        self.assertEqual(urllib.parse.unquote(link.attrs["href"]), str(path))
+
     def test_no_relay_named_says_so(self):
         output = self.prepare(self.run_dir())
         self.assertIsNone(output["compared_with"])
         self.assertIn("No earlier confirmation was named, so nothing here is compared.", output["summary"])
         self.assertEqual(output["question"],
-                         "Confirm the research proposal above and its linked details for parts A, B?")
+                         "Confirm the research proposal and its linked details for parts A, B?")
 
     def test_a_partial_confirmation_compares_only_its_parts(self):
         run = self.run_dir()
@@ -277,7 +329,7 @@ class CompareCliTest(unittest.TestCase):
         self.record.record["parts"] = []
         write_decision(self.root, self.record, slug="repro", date="2026-10-10")
         output = self.prepare(self.run_dir())
-        self.assertEqual(output["question"], "Confirm the research proposal above and its linked details for the idea?")
+        self.assertEqual(output["question"], "Confirm the research proposal and its linked details for the idea?")
         self.assertEqual(output["options"], ["Confirm", "Leave pending"])
         self.assertIn("- Offered for confirmation: the idea, which has no parts yet",
                       Path(output["details"]["path"]).read_text(encoding="utf-8"))
@@ -288,12 +340,12 @@ class CompareCliTest(unittest.TestCase):
         run = self.run_dir()
         relay = self.confirm(run, self.prepare(run), [f"A{n}" for n in range(40)])
         output = self.prepare(run, None, "--compare-with", relay)
-        status = output["summary"].split("\n")[2]
+        status = output["summary"].split("\n")[4]
         self.assertIn("and 34 more parts", status)
         self.assertRegex(output["summary"], r"Not shown here, see the details: .*\b(3[4-9]|[4-9][0-9]) parts")
         self.assertLessEqual(len(status), 200)
         self.assertTrue(fits(output["summary"], SUMMARY_LIMITS))
-        self.assertEqual(output["question"], "Confirm the research proposal above and its linked details for the 40 "
+        self.assertEqual(output["question"], "Confirm the research proposal and its linked details for the 40 "
                                              "parts offered there?")
         details = Path(output["details"]["path"]).read_text(encoding="utf-8")
         self.assertIn("- Offered for confirmation: parts " + ", ".join(f"A{n}" for n in range(40)) + "\n", details)

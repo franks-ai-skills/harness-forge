@@ -97,7 +97,12 @@ installs nothing. Each skill first runs `python3 scripts/forge.py
 environment`, which checks the Python version and every bundled file
 against `vendor/manifest.json` with only the standard library. When
 something is missing or changed, Forge says what and stops; reinstall or
-update the plugin. The check confirms the bundle matches its manifest;
+update the plugin. When `python3` is older than 3.11, as macOS's
+`/usr/bin/python3` is and as a Codex shell often finds it, the check
+looks for `python3.14` to `python3.11` on PATH and names each one that
+starts and is new enough; the skills then run every `forge.py` command
+with it. Forge never installs or changes Python: with none found, it
+says what is needed and stops. The check confirms the bundle matches its manifest;
 it does not authenticate who published it.
 
 | Dependency | Version | Licence | What Forge uses it for |
@@ -367,16 +372,21 @@ subscription; with an API-key or unknown login, pass
 Claude Code session whose content may not have been shown to the user,
 for review; it is a heuristic, not a compliance check.
 
-**Temporary, development only:** with
-`HARNESS_FORGE_TEMPORARY_CODEX_ROLLOUT=1`, a Codex explicit case of a
-user-invoked skill runs without `--ephemeral`. Forge reads that run's own
-session rollout in `$CODEX_HOME/sessions` (default `~/.codex/sessions`),
-credits "instructions injected" when Codex recorded the candidate's
-exact `SKILL.md`, and deletes the file. It reads no other session file.
-This shows that the instructions reached the model, not that the
-procedure ran. It is off by default; only the 2026-10-21 Codex
-re-verification of the bug-intake reference used it, and it will be
-removed.
+**Rollout observer, a workaround tracked by
+[#18](https://github.com/franks-ai-skills/harness-forge/issues/18):**
+`codex exec --json` shows no record when Codex injects a user-invoked
+skill named with `$name`. So a Codex explicit or behavior case of a
+user-invoked skill runs without `--ephemeral`, and Forge reads that
+run's own session rollout in `$CODEX_HOME/sessions` (default
+`~/.codex/sessions`), credits "instructions injected" when Codex
+recorded the candidate's exact `SKILL.md`, and deletes the file. It
+reads no other session file; when it cannot tell which file is the
+run's (no thread id printed, or several for it), the case's reason says
+that a file from the run may remain, and the case is an error unless it
+already failed for another reason, such as a write outside its paths. The report names each result
+that rests on it. This shows that the instructions reached the model, not
+that the procedure ran. It is removed once Codex shows an injected
+skill in `codex exec --json`.
 
 ## Outside controls
 

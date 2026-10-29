@@ -13,9 +13,13 @@ what was built, and the goal result.
 this skill's folder. Run it with `python3`; its dependencies ship with
 the plugin, so it downloads and installs nothing. **Before anything else
 in this skill,** run `python3 scripts/forge.py environment` from the
-plugin root. If it reports `"ok": false`, tell the user plainly that
-Forge cannot run here, list each problem it names with its `repair`
-instruction, and stop; never install or download anything yourself.
+plugin root. If it reports `"ok": false` because Python is too old and
+names `candidates`, tell the user which installed interpreter it found
+and run this and every later `forge.py` command in the session with that
+one (its `command`) instead of `python3`. Otherwise, if it reports
+`"ok": false`, tell the user plainly that Forge cannot run here, list
+each problem it names with its `repair` instruction, and stop; never
+install or download anything yourself.
 
 ## Rules that are easy to get wrong
 
@@ -89,8 +93,10 @@ instruction, and stop; never install or download anything yourself.
 1. Confirm the configuration summary: run `scripts/forge.py
    prepare-contract` with `--run-dir <run directory> --purpose
    verification`, plus `--compare-with` the relay of the last
-   confirmation when there is one, show its summary unchanged and ask its
-   question, as harness-intake's confirmation reference describes.
+   confirmation when there is one, show its summary in full and
+   unchanged as visible reply text, then ask its question, as
+   harness-intake's confirmation reference describes; a question tool's
+   preview alone does not count as showing it.
 2. If this is a re-verification, Forge chooses what to judge again; ask
    nothing about it. To tell the user beforehand, run `scripts/forge.py
    scope --harness <harness> --decision <record> --root <repository>

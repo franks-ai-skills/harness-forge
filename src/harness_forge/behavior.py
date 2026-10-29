@@ -637,7 +637,7 @@ def behavior_case(
     ``files`` are the part's frozen files and the case's dependencies. The
     result is pass, fail, error or unavailable.
     """
-    from harness_forge.runtime import _staging_problem, judge_run
+    from harness_forge.runtime import _staging_problem, _take_rollout, judge_run, observes_rollout, rollout_failure
 
     fixtures = dict(case.get("fixtures") or {})
     writes = list(case.get("writes") or [])
@@ -702,13 +702,25 @@ def behavior_case(
             granted = tuple(str(workspace / write_scope(entry)[0]) for entry in writes)
             command = codex.command("review", str(workspace), structured=False, writes=granted)
             permitted = list(CODEX_ITEMS)
+        # A user-invoked skill's Codex case keeps its session rollout, the only record of the injection (#135).
+        rollout_wanted = observes_rollout(harness, slash)
+        if rollout_wanted:
+            command.remove("--ephemeral")
+        environment = worker_environment(environ, harness)
         before, before_outside = snapshot(workspace), snapshot(outside)
         context = {"command": command, "cwd": str(workspace), "stdin": prompt}
         try:
-            completed = runner(command, cwd=str(workspace), env=worker_environment(environ, harness), stdin=prompt,
-                               timeout=timeout)
+            completed = runner(command, cwd=str(workspace), env=environment, stdin=prompt, timeout=timeout)
         except OSError as error:
             return done("unavailable", "unavailable: the harness could not start", **context, error=str(error))
+        # Taken, and its file deleted, before any result: every path after the launch cleans it up.
+        rollout, rollout_problem = None, None
+        if rollout_wanted:
+            thread_id, text, rollout_problem = _take_rollout(completed.stdout, environment)
+            if text is not None and rollout_problem is None:
+                rollout = (text, thread_id)
+        # Every result below keeps a rollout problem in its reason, also one decided before activation is judged.
+        also = f"; also, {rollout_problem}" if rollout_problem else ""
         after = snapshot(workspace)
         # A plain git status may rewrite the index; every other change below .git counts.
         changed = [(kind, path) for kind, path in changes(before, after)
@@ -719,24 +731,27 @@ def behavior_case(
         if escaped:
             details["failed"] = [f"changed outside the workspace through a link: {kind} {path}"
                                  for kind, path in escaped[:50]]
-            return done("fail", f"changed outside the workspace through a link: {escaped[0][1]}",
+            return done("fail", f"changed outside the workspace through a link: {escaped[0][1]}{also}",
                         completed=completed, **context)
         observed = observe_claude(completed.stdout) if harness == "claude-code" else observe_codex(completed.stdout)
         details["requests"], details["denied"] = observed["requests"][:500], observed["denied"][:500]
         undeclared = [path for _, path in changed if not permits(path, writes)]
         if undeclared:
             details["failed"] = [f"changed outside the declared writes: {path}" for path in undeclared[:50]]
-            return done("fail", f"changed outside the declared writes: {', '.join(undeclared[:5])}",
+            return done("fail", f"changed outside the declared writes: {', '.join(undeclared[:5])}{also}",
                         completed=completed, **context)
         if completed.timed_out:
-            return done("error", f"timed out after {timeout} s", completed=completed, **context)
+            return done("error", f"timed out after {timeout} s{also}", completed=completed, **context)
         if completed.returncode or not observed["complete"]:
-            return done("error", "the harness did not complete the case, so its records are incomplete",
+            return done("error", f"the harness did not complete the case, so its records are incomplete{also}",
                         completed=completed, **context)
+        if rollout_problem:
+            # The rollout could not be read or deleted: no activation is claimed from it.
+            return done("error", rollout_failure(rollout_problem, completed), completed=completed, **context)
         outcome, reason, activation, _ = judge_run(harness, completed, {p: d for p, d in files.items()
                                                                         if p.startswith(target + "/")},
                                                    target, workspace, baseline, "activates", permitted,
-                                                   slash=slash, timeout=timeout)
+                                                   slash=slash, timeout=timeout, rollout=rollout)
         if outcome == "not-run":
             return done("unavailable", f"unavailable: the candidate's activation was not observed: {reason}",
                         completed=completed, **context)
