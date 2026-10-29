@@ -803,8 +803,12 @@ class ShellCaseTest(BehaviorCase):
             validate({"cases": [{**activation[0], "shell": True}]}, "runtime-cases")
 
     def test_the_guidance_sends_a_case_that_needs_a_shell_to_codex(self):
-        text = " ".join((Path(__file__).resolve().parents[1] / "skills/harness-verify/SKILL.md")
-                        .read_text(encoding="utf-8").split())
-        self.assertIn("`shell: true` makes it unavailable", text)
-        self.assertIn("Write a case that needs a shell for Codex.", text)
+        """#151: SKILL.md says what to do, the contract why; the shell rule is stated once."""
+        forge = Path(__file__).resolve().parents[1]
+        skill = " ".join((forge / "skills/harness-verify/SKILL.md").read_text(encoding="utf-8").split())
+        contract = " ".join((forge / "skills/harness-verify/references/contract.md").read_text(encoding="utf-8")
+                            .split())
+        self.assertIn("Write a case that needs a shell for Codex; the contract's Behavior tests say why", skill)
+        self.assertNotIn("`shell: true` makes", skill)
+        self.assertIn("Asking for one with `shell: true` makes the case unavailable", contract)
 

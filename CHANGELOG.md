@@ -38,6 +38,13 @@ once it supports such dependencies.
   the repository's history if it was committed; a skill copied without
   the repository loses it (#146).
 
+### Skill text
+
+- build-skill's contract points to its SKILL.md's replacement rule
+  instead of restating it, and harness-verify states the Claude Code
+  shell rule only in its contract, so each fact lives in one place
+  (#151).
+
 ### Research
 
 - harness-research names each dropped finding by its id with Forge's

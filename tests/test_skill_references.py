@@ -83,6 +83,17 @@ class DroppedFindingsTest(unittest.TestCase):
         self.assertIn("Show only the findings `scripts/forge.py research` keeps", text)
 
 
+class OnePlaceTest(unittest.TestCase):
+    def test_build_skills_contract_points_to_the_replacement_rule(self):
+        """#151: the replacement rule lives in SKILL.md; the contract keeps only what it adds."""
+        contract = " ".join((FORGE / "skills/build-skill/references/contract.md").read_text(encoding="utf-8").split())
+        skill = " ".join((FORGE / "skills/build-skill/SKILL.md").read_text(encoding="utf-8").split())
+        self.assertIn("is SKILL.md's rule \"Never lose an edit\"", contract)
+        self.assertNotIn("`--replace` discards", contract)
+        self.assertIn("Never lose an edit, and ask no replacement question.", skill)
+        self.assertIn("Run `--replace` only after the user says to discard the edits in the named files", skill)
+
+
 class ResearchInputsTest(unittest.TestCase):
     def test_proposed_requirements_and_choices_are_accepted(self):
         (_, proposed), (_, choices), _, _ = blocks(RESEARCH)
