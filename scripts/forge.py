@@ -1759,6 +1759,9 @@ def _write_recorded(root: Path, target: Path, rendered: str, relay: Path, run) -
     matches, which a later verification takes as a changed report.
     """
     content = rendered.encode("utf-8")
+    # A target that cannot hold the report is refused before anything is recorded, as before #137.
+    if target.is_symlink() or (target.exists() and not target.is_file()):
+        raise _InvalidInput(f"the report could not be written: {target} is not a regular file")
     try:
         written_reports.record_bytes(_environ(), root, target, content)
     except written_reports.NotRecorded as error:

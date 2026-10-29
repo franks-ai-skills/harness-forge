@@ -171,6 +171,15 @@ class RecordFirstTest(unittest.TestCase):
         self.assertEqual(self.cli._verify_exit([{"harness_result": "not verified"}], True, str(self.target)), 1)
         self.assertEqual(self.cli._verify_exit(verified, False, None), 0)
 
+    def test_a_target_that_is_not_a_file_is_refused_before_recording(self):
+        _, path = written_reports._paths(self.cli.ENVIRON, self.root)
+        before = path.read_bytes()
+        self.target.unlink()
+        self.target.mkdir()
+        with self.assertRaisesRegex(self.cli._InvalidInput, "is not a regular file"):
+            self.write()
+        self.assertEqual(path.read_bytes(), before, "nothing was recorded")
+
     def test_a_real_edit_between_runs_still_widens_the_scope(self):
         self.write()
         self.target.write_text("# New report, edited by hand\n", encoding="utf-8")
