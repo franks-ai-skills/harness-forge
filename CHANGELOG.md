@@ -22,6 +22,11 @@ once it supports such dependencies.
   summary in full and unchanged as visible reply text before its
   question: a question tool's preview or option text alone does not
   count, and the details line is never shortened or left out (#132).
+- Each summary starts with what confirming it decides and what follows:
+  for a research proposal by stage (the survey, the deep pass and
+  acceptance, or more intake), for a configuration proposal the build,
+  and for a configuration summary the verification. The question names
+  what is confirmed instead of saying it is "above" (#134).
 
 ## 0.5.0 (2026-10-28)
 

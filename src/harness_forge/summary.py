@@ -31,6 +31,18 @@ _BLOCK_START = re.compile(r"([-+=])|(\d+)([.)])")
 # By the purpose of the confirmation, which the guidance names.
 TITLES = {"research": "Research proposal", "configuration": "Configuration proposal",
           "verification": "Configuration summary"}
+# What confirming each summary decides and what follows, the summary's first line (#134).
+_DECIDES = {
+    "survey": "Confirming fixes the idea and its goals. Next: the survey of existing solutions.",
+    "research": ("Confirming fixes the goals, parts and answers research uses. Next: the deep pass and your "
+                 "acceptance of its requirements for the parts under Research to do."),
+    "intake": ("Confirming fixes the goals, parts and answers. Next: intake continues; building needs a "
+               "configuration proposal."),
+    "Configuration proposal": ("Confirming fixes what build-skill builds: each part's mechanism and accepted "
+                               "requirements. Next: the build."),
+    "Configuration summary": ("Confirming fixes the inputs the verification judges. Next: harness-verify assesses "
+                              "the configuration and reports its checks and runtime evidence."),
+}
 
 
 def text(value, indent: str = "") -> str:
@@ -404,12 +416,21 @@ def render_question(title: str, part_ids: list[str], *, has_parts: bool = False)
         target = "the idea"
     else:
         target = ("part " if len(part_ids) == 1 else "parts ") + ", ".join(part_ids)
-    question = f"Confirm the {what} above and its linked details for {target}?"
+    # It names what is confirmed, never where the summary is shown (#134).
+    question = f"Confirm the {what} and its linked details for {target}?"
     if fits(question + "\n", QUESTION_LIMITS):
         return question
     # Too many to name: the details file lists exactly the parts offered for confirmation.
-    return f"Confirm the {what} above and its linked details for the {len(part_ids)} parts offered there?"
+    return f"Confirm the {what} and its linked details for the {len(part_ids)} parts offered there?"
 
+
+def decides(title: str, contract: Contract, research: list[dict]) -> str:
+    """What confirming the summary decides and what follows, by purpose and, for research, by stage (#134)."""
+    if title != TITLES["research"]:
+        return _DECIDES[title]
+    if not contract.parts:
+        return _DECIDES["survey"]
+    return _DECIDES["research" if any(item["accepted"] != "current" for item in research) else "intake"]
 
 
 def render_summary(contract: Contract, record: dict, *, title: str, checked_overrides: list[dict], refused: list[dict],
@@ -471,7 +492,7 @@ def render_summary(contract: Contract, record: dict, *, title: str, checked_over
                                                   {})]))
     items.append(_Item("worker policy", [("- Workers: best-effort, isolation not certified.", {})]))
 
-    head = [f"## {title}", "", _status(comparison, comparison_reason, nothing)]
+    head = [f"## {title}", "", decides(title, contract, research), "", _status(comparison, comparison_reason, nothing)]
     shown = (details_text or details_path).replace("\r", "\\u000d").replace("\n", "\\u000a")
     # One line whatever the path holds: a line break shows as its escape, which text() keeps visible.
     link = f"**Details:** [{text(shown)}]({link_destination(details_path)})"

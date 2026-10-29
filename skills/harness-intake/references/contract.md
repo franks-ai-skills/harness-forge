@@ -44,7 +44,8 @@ reword it or leave out its details line. A question tool's preview or
 option text alone does not count as showing it. It is at most 24 lines, 242 words and 1,428 characters, so
 that with the question and its two options it stays within 27 lines,
 265 words and 1,575 characters. It holds, in this order
-and as far as room allows: what changed since the named confirmation
+and as far as room allows: what confirming it decides and what follows,
+what changed since the named confirmation
 (weakened requirements first), goal conflicts, overrides and their
 warnings, open drift decisions, parts not offered and research still to
 do, each part's outcome and mechanism, and the link to the details file
@@ -80,9 +81,9 @@ When `question` is null, every part is refused and nothing can be
 confirmed: ask nothing, and fix each refused part as described above
 first. Otherwise ask `question` exactly as returned, as one multiple-choice question
 with exactly its two `options`, `Confirm` and `Leave pending`, and no
-option preselected. It names the summary's title and says that
-`Confirm` covers the summary above and the linked details for the parts
-it names. The user may also confirm in
+option preselected. It names the summary's title and that `Confirm`
+covers that summary and its linked details for the parts it names; it
+does not say where the summary is shown. The user may also confirm in
 their own words, naming the parts: "Confirm A and B" covers A and B only.
 
 These never confirm a part:
