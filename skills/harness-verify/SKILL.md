@@ -47,6 +47,19 @@ install or download anything yourself.
   `relay-2.json`. Forge refuses links on the way and existing files. The
   files stay after the run for the user to delete, and a saved relay
   never confirms anything in a later session.
+- **Workers need access a session sandbox may block.** `verify` starts
+  harness workers, which read and write their own session files, and
+  writes Forge's report record in its data directory
+  (`HARNESS_FORGE_HOME`, by default `~/.local/share/harness-forge`).
+  Some sessions run commands in a sandbox that blocks this, as Codex's
+  can; not every one does. In such a session, before the first `verify`,
+  tell the user what it needs and ask them to approve running it outside
+  the sandbox; if that cannot be granted, stop and say what cannot run
+  instead of retrying. When `report_record` says the report was not
+  recorded, tell the user where this run's report is (`report`) and that
+  the repository's report was not updated. When `report` is null after
+  `--write`, the command fails: tell the user that no report was written
+  and why, from `report_record`.
 - **Confirm the current configuration summary first,** in this session,
   as harness-intake's confirmation reference describes. Without it, every part
   stays blocked and its goal is reported as not assessed. A run without

@@ -388,11 +388,16 @@ def render_report(run: VerificationRun, results: list[PartResult]) -> str:
     return "\n".join(lines)
 
 
-def write_report(repository: Path, slug: str, rendered: str) -> Path:
-    """Write .harness/reports/<slug>.md inside the target repository only."""
+def report_path(repository: Path, slug: str) -> Path:
+    """.harness/reports/<slug>.md inside the target repository only."""
     if not re.fullmatch(r"[a-z0-9][a-z0-9-]*", slug):
         raise ValueError(f"invalid report slug {slug!r}")
-    path = safe_path(repository, f".harness/reports/{slug}.md")
+    return safe_path(repository, f".harness/reports/{slug}.md")
+
+
+def write_report(repository: Path, slug: str, rendered: str) -> Path:
+    """Write .harness/reports/<slug>.md inside the target repository only, as exactly these UTF-8 bytes."""
+    path = report_path(repository, slug)
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(rendered, encoding="utf-8")
+    path.write_bytes(rendered.encode("utf-8"))
     return path

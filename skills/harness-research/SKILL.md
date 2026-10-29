@@ -75,6 +75,13 @@ install or download anything yourself.
   `relay-2.json`. Forge refuses links on the way and existing files. The
   files stay after the run for the user to delete, and a saved relay
   never confirms anything in a later session.
+- **Workers need access a session sandbox may block.** `research`
+  starts harness workers, which read and write their own session files
+  and fetch pages over the network. Some sessions run commands in a
+  sandbox that blocks this, as Codex's can; not every one does. In such a
+  session, before the first `research`, tell the user what it needs and
+  ask them to approve running it outside the sandbox; if that cannot be
+  granted, stop and say what cannot run instead of retrying.
 
 ## Procedure
 

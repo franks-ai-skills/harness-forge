@@ -55,6 +55,17 @@ once it supports such dependencies.
   report names each result whose activation came from the rollout; a
   rollout that cannot be read or deleted is an error that claims no
   activation, and an activation seen nowhere stays unobserved (#135).
+- `verify --write` records the report before writing it. When the record
+  cannot be written, as in a session sandbox, the repository's report
+  and the previous record stay as they were, so the next verification's
+  scope does not widen, and this run's report goes to its run directory
+  as `report-<attempt id>.md`; `report_record` says which, and the new
+  `report` field names the path written. A report write that fails after
+  recording leaves a record that no longer matches, and the next
+  verification judges every part. A requested report written nowhere
+  makes `verify` exit with 2. harness-verify and harness-research
+  say what their workers need and ask the user to approve running
+  outside a session sandbox that blocks it, before the first run (#137).
 
 ### Environment
 
