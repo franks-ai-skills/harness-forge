@@ -723,12 +723,24 @@ def user_invoked(harness: str, files: Mapping[str, bytes], directory: str) -> bo
     return isinstance(policy, dict) and policy.get("allow_implicit_invocation") is False
 
 
-# TEMPORARY, development only (owner, 2026-10-21): with this variable set to 1, a Codex explicit case of a
-# user-invoked skill runs without --ephemeral, and Forge reads that run's own session rollout to see whether
-# Codex injected the candidate's instructions, then deletes the file. `codex exec --json` shows no event for
-# a $name invocation (probe, codex-cli 0.162.1). Off by default; no default test or reference case needs it.
-TEMPORARY_ROLLOUT = "HARNESS_FORGE_TEMPORARY_CODEX_ROLLOUT"
+# The rollout observer, a workaround tracked by FORGE #18: `codex exec --json` shows no event for a $name
+# invocation (probes, codex-cli 0.162.1 to 0.165.0), so a Codex case of a user-invoked skill, explicit or
+# behavior, runs without --ephemeral, and Forge reads that run's own session rollout to see whether Codex
+# injected the candidate's instructions, then deletes the file. On by default (owner, 2026-10-29, #135).
+ROLLOUT_NOTE = "session rollout"
 _INJECTED_KIND = "skills.selected_skill_instructions"
+
+
+def rollout_failure(problem: str, completed: Completed) -> str:
+    """A rollout problem as a case's reason, with how the run ended when that was not a success."""
+    ending = ("; the run timed out" if completed.timed_out else
+              f"; the harness exited with {completed.returncode}" if completed.returncode else "")
+    return problem + ending
+
+
+def observes_rollout(harness: str, slash: bool) -> bool:
+    """Whether the run's own session rollout is read: a Codex case that invokes a user-invoked skill by name."""
+    return harness == "codex" and slash
 
 
 def rollout_activation(rollout: str, thread_id: str, directory: str, workspaces: Iterable[Path],
@@ -755,7 +767,7 @@ def rollout_activation(rollout: str, thread_id: str, directory: str, workspaces:
             continue
         texts = [item.get("text") for item in payload.get("content") or [] if isinstance(item, dict)]
         if len(texts) == 1 and texts[0] in expected:
-            return f"instructions injected for {directory}/SKILL.md (session rollout)"
+            return f"instructions injected for {directory}/SKILL.md ({ROLLOUT_NOTE})"
     return None
 
 
@@ -764,15 +776,23 @@ def _take_rollout(stdout: str, environment: Mapping[str, str]) -> tuple[str | No
 
     The file is the one Codex wrote for this thread under the account
     location's sessions folder, named for the thread and holding its
-    session_meta; no other session file is read.
+    session_meta; no other session file is read. When the run's file
+    cannot be identified (no thread id printed, or several files for it),
+    nothing is read or deleted and the problem says that a file from this
+    run may remain (#135); no file for the thread means nothing to delete.
     """
+    home = environment.get(codex.ACCOUNT_LOCATION) or str(Path(environment.get("HOME", "~")).expanduser() / ".codex")
+    sessions = Path(home) / "sessions"
     thread_id = next((event.get("thread_id") for event in _events(stdout) if event.get("type") == "thread.started"),
                      None)
     if not isinstance(thread_id, str) or not re.fullmatch(r"[0-9a-f-]{36}", thread_id):
-        return None, None, None
-    home = environment.get(codex.ACCOUNT_LOCATION) or str(Path(environment.get("HOME", "~")).expanduser() / ".codex")
-    found = sorted((Path(home) / "sessions").glob(f"*/*/*/rollout-*-{thread_id}.jsonl"))
-    if len(found) != 1:
+        return None, None, (f"the case's session rollout could not be identified: the run printed no thread id, so a "
+                            f"session file from it may remain in {sessions}")
+    found = sorted(sessions.glob(f"*/*/*/rollout-*-{thread_id}.jsonl"))
+    if len(found) > 1:
+        return thread_id, None, (f"the case's session rollout could not be identified: {len(found)} session files in "
+                                 f"{sessions} are for thread {thread_id}; none was read or deleted")
+    if not found:
         return thread_id, None, None
     text, problem = None, None
     try:
@@ -869,7 +889,7 @@ def activation_case(
                 prompt = stream_input(prompt)
         else:
             command = codex.command("review", str(workspace), structured=False)
-        rollout_wanted = harness == "codex" and slash and environ.get(TEMPORARY_ROLLOUT) == "1"
+        rollout_wanted = observes_rollout(harness, slash)
         if rollout_wanted:
             command.remove("--ephemeral")
         environment = worker_environment(environ, harness)
@@ -884,7 +904,8 @@ def activation_case(
         if rollout_wanted:
             thread_id, text, problem = _take_rollout(completed.stdout, environment)
             if problem:
-                return done(("error", problem, None, "not observable"), completed, **context)
+                return done(("error", rollout_failure(problem, completed), None, "not observable"), completed,
+                            **context)
             if text is not None:
                 rollout = (text, thread_id)
         # Judged while the workspace and its links exist, so paths resolve where the harness found them.
@@ -900,8 +921,8 @@ def judge_run(harness: str, completed: Completed, files: Mapping[str, bytes], ta
     ``baseline`` holds every skill that does not compete, the other
     installed skills included. A recorded run can be judged again here,
     with its own workspace path, after the workspace is gone. ``rollout``
-    is a Codex run's session rollout and thread id, read only under
-    TEMPORARY_ROLLOUT.
+    is a Codex run's session rollout and thread id, read for a user-invoked
+    skill's case (observes_rollout).
     """
     name = target.rsplit("/", 1)[-1]
     # What the harness did before it stopped counts, also when it timed out or failed.

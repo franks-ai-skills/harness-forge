@@ -42,6 +42,17 @@ class RenderTest(unittest.TestCase):
         self.assertIn("No observable activation signal.", rendered)
         self.assertNotIn("none run", rendered)
 
+    def test_results_from_the_session_rollout_are_named_with_the_workaround(self):
+        """#135: the report says which results rest on the rollout observer (FORGE #18)."""
+        helper = RuntimeAndInputsTest()
+        helper.scenario = self.scenario
+        self.assertNotIn("session rollout", render_report(self.scenario.run, self.results))
+        self.scenario.run.runtime_results.append(helper.runtime(
+            harness="codex", observed_activation="instructions injected for x/SKILL.md (session rollout)"))
+        rendered = render_report(self.scenario.run, self.results)
+        self.assertIn("Activation read from the session rollout: A/explicit.", rendered)
+        self.assertIn("a workaround tracked by FORGE #18", rendered)
+
     def test_an_unobservable_inventory_is_stated_under_the_runtime_tests(self):
         helper = RuntimeAndInputsTest()
         helper.scenario = self.scenario
