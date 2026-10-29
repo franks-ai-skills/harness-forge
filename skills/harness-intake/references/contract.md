@@ -37,16 +37,19 @@ earlier confirmations beyond what the summary says.
 
 It returns a `summary`, a `question` and its `options`, and writes the
 complete details to a file in the run directory (`details.path`). Show
-the `summary` in full and unchanged as your whole reply, as Markdown
-outside a code block: add no heading, introduction, restatement or list
-of your own. It is at most 24 lines, 242 words and 1,428 characters, so
+the `summary` in full and unchanged as your whole reply text, as Markdown
+outside a code block, before you ask its `question`: add no heading,
+introduction, restatement or list of your own, and never shorten it,
+reword it or leave out its details line. A question tool's preview or
+option text alone does not count as showing it. It is at most 24 lines, 242 words and 1,428 characters, so
 that with the question and its two options it stays within 27 lines,
 265 words and 1,575 characters. It holds, in this order
 and as far as room allows: what changed since the named confirmation
 (weakened requirements first), goal conflicts, overrides and their
 warnings, open drift decisions, parts not offered and research still to
 do, each part's outcome and mechanism, and the link to the details file
-as its last line. Anything not shown is counted by kind in its "Not shown
+as its last line, whose text is the file's path relative to the
+repository, for the user to copy. Anything not shown is counted by kind in its "Not shown
 here" line and is in the details file, which holds everything confirmed
 in full: every requirement, override change and warning, condition,
 fact, fetched quote and worker configuration, for the user to open. Do

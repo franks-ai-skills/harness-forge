@@ -200,6 +200,21 @@ class CompareCliTest(unittest.TestCase):
         path.write_text(json.dumps(relay), encoding="utf-8")
         return path
 
+    def test_the_details_link_shows_the_repository_relative_path(self):
+        """#132: the link text is the path to copy in one piece, the destination the absolute file."""
+        import urllib.parse
+
+        from markdown_it import MarkdownIt
+        output = self.prepare(self.run_dir())
+        path = Path(output["details"]["path"])
+        last = output["summary"].rstrip("\n").split("\n")[-1]
+        tokens = MarkdownIt("commonmark").parseInline(last)[0].children
+        link = next(token for token in tokens if token.type == "link_open")
+        shown = "".join(token.content for token in tokens[tokens.index(link) + 1:] if token.type == "text")
+        self.assertEqual(shown, path.resolve().relative_to(self.root.resolve()).as_posix())
+        self.assertTrue(shown.startswith(".harness-forge/runs/"))
+        self.assertEqual(urllib.parse.unquote(link.attrs["href"]), str(path))
+
     def test_no_relay_named_says_so(self):
         output = self.prepare(self.run_dir())
         self.assertIsNone(output["compared_with"])
