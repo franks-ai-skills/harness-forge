@@ -376,8 +376,9 @@ run's own session rollout in `$CODEX_HOME/sessions` (default
 `~/.codex/sessions`), credits "instructions injected" when Codex
 recorded the candidate's exact `SKILL.md`, and deletes the file. It
 reads no other session file; when it cannot tell which file is the
-run's (no thread id printed, or several for it), the case is an error
-that says a file from the run may remain. The report names each result
+run's (no thread id printed, or several for it), the case's reason says
+that a file from the run may remain, and the case is an error unless it
+already failed for another reason, such as a write outside its paths. The report names each result
 that rests on it. This shows that the instructions reached the model, not
 that the procedure ran. It is removed once Codex shows an injected
 skill in `codex exec --json`.

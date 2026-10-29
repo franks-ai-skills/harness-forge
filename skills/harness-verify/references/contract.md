@@ -72,8 +72,8 @@ dependencies: changing any of them means testing again.
 skill named with `$name`. For such a skill's explicit and behavior cases
 in Codex, Forge reads that run's own session file and deletes it: the
 rollout observer, a workaround tracked by FORGE #18. When it cannot
-tell which file is the run's, the case is an error that says a file may
-remain. The report names
+tell which file is the run's, the case's reason says a file may remain,
+and the case is an error unless it already failed for another reason. The report names
 each result whose activation came from it; it shows that the
 instructions reached the model, not that the procedure ran. When
 neither the stream nor the session file shows the activation, the
