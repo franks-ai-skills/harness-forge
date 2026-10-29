@@ -78,8 +78,20 @@ class TakeRolloutTest(unittest.TestCase):
         self.assertFalse(own.exists())
 
     def test_no_thread_or_no_file_reads_nothing(self):
-        self.assertEqual(_take_rollout("not json\n", {"CODEX_HOME": str(self.home)}), (None, None, None))
+        thread, text, problem = _take_rollout("not json\n", {"CODEX_HOME": str(self.home)})
+        self.assertEqual((thread, text), (None, None))
+        self.assertIn("printed no thread id, so a session file from it may remain", problem)
         self.assertEqual(_take_rollout(STREAM, {"CODEX_HOME": str(self.home)}), (THREAD, None, None))
+
+    def test_several_files_for_the_thread_are_neither_read_nor_deleted(self):
+        for day in ("21", "22"):
+            sessions = self.home / "sessions" / "2026" / "10" / day
+            sessions.mkdir(parents=True, exist_ok=True)
+            (sessions / f"rollout-2026-10-{day}T10-00-59-{THREAD}.jsonl").write_text("{}\n", encoding="utf-8")
+        thread, text, problem = _take_rollout(STREAM, {"CODEX_HOME": str(self.home)})
+        self.assertEqual((thread, text), (THREAD, None))
+        self.assertIn("2 session files", problem)
+        self.assertEqual(len(list(self.home.rglob("*.jsonl"))), 2)
 
 
 class ActivationCaseTest(unittest.TestCase):

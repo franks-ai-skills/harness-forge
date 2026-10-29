@@ -19,7 +19,9 @@ once it supports such dependencies.
 - The rollout observer is on by default, a workaround tracked by #18: a
   Codex explicit or behavior case of a user-invoked skill reads that
   run's own session rollout, because `codex exec --json` shows no record
-  of a `$name` injection, and deletes it on every path after the launch.
+  of a `$name` injection, and deletes it right after the run; when it
+  cannot tell which file is the run's, the case is an error that says a
+  file may remain.
   The `HARNESS_FORGE_TEMPORARY_CODEX_ROLLOUT` variable is gone. The
   report names each result whose activation came from the rollout; a
   rollout that cannot be read or deleted is an error that claims no

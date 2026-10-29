@@ -375,8 +375,10 @@ user-invoked skill runs without `--ephemeral`, and Forge reads that
 run's own session rollout in `$CODEX_HOME/sessions` (default
 `~/.codex/sessions`), credits "instructions injected" when Codex
 recorded the candidate's exact `SKILL.md`, and deletes the file. It
-reads no other session file, and the report names each result that
-rests on it. This shows that the instructions reached the model, not
+reads no other session file; when it cannot tell which file is the
+run's (no thread id printed, or several for it), the case is an error
+that says a file from the run may remain. The report names each result
+that rests on it. This shows that the instructions reached the model, not
 that the procedure ran. It is removed once Codex shows an injected
 skill in `codex exec --json`.
 

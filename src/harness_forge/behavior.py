@@ -637,7 +637,7 @@ def behavior_case(
     ``files`` are the part's frozen files and the case's dependencies. The
     result is pass, fail, error or unavailable.
     """
-    from harness_forge.runtime import _staging_problem, _take_rollout, judge_run, observes_rollout
+    from harness_forge.runtime import _staging_problem, _take_rollout, judge_run, observes_rollout, rollout_failure
 
     fixtures = dict(case.get("fixtures") or {})
     writes = list(case.get("writes") or [])
@@ -745,7 +745,7 @@ def behavior_case(
                         completed=completed, **context)
         if rollout_problem:
             # The rollout could not be read or deleted: no activation is claimed from it.
-            return done("error", rollout_problem, completed=completed, **context)
+            return done("error", rollout_failure(rollout_problem, completed), completed=completed, **context)
         outcome, reason, activation, _ = judge_run(harness, completed, {p: d for p, d in files.items()
                                                                         if p.startswith(target + "/")},
                                                    target, workspace, baseline, "activates", permitted,

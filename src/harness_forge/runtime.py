@@ -731,6 +731,13 @@ ROLLOUT_NOTE = "session rollout"
 _INJECTED_KIND = "skills.selected_skill_instructions"
 
 
+def rollout_failure(problem: str, completed: Completed) -> str:
+    """A rollout problem as a case's reason, with how the run ended when that was not a success."""
+    ending = ("; the run timed out" if completed.timed_out else
+              f"; the harness exited with {completed.returncode}" if completed.returncode else "")
+    return problem + ending
+
+
 def observes_rollout(harness: str, slash: bool) -> bool:
     """Whether the run's own session rollout is read: a Codex case that invokes a user-invoked skill by name."""
     return harness == "codex" and slash
@@ -769,15 +776,23 @@ def _take_rollout(stdout: str, environment: Mapping[str, str]) -> tuple[str | No
 
     The file is the one Codex wrote for this thread under the account
     location's sessions folder, named for the thread and holding its
-    session_meta; no other session file is read.
+    session_meta; no other session file is read. When the run's file
+    cannot be identified (no thread id printed, or several files for it),
+    nothing is read or deleted and the problem says that a file from this
+    run may remain (#135); no file for the thread means nothing to delete.
     """
+    home = environment.get(codex.ACCOUNT_LOCATION) or str(Path(environment.get("HOME", "~")).expanduser() / ".codex")
+    sessions = Path(home) / "sessions"
     thread_id = next((event.get("thread_id") for event in _events(stdout) if event.get("type") == "thread.started"),
                      None)
     if not isinstance(thread_id, str) or not re.fullmatch(r"[0-9a-f-]{36}", thread_id):
-        return None, None, None
-    home = environment.get(codex.ACCOUNT_LOCATION) or str(Path(environment.get("HOME", "~")).expanduser() / ".codex")
-    found = sorted((Path(home) / "sessions").glob(f"*/*/*/rollout-*-{thread_id}.jsonl"))
-    if len(found) != 1:
+        return None, None, (f"the case's session rollout could not be identified: the run printed no thread id, so a "
+                            f"session file from it may remain in {sessions}")
+    found = sorted(sessions.glob(f"*/*/*/rollout-*-{thread_id}.jsonl"))
+    if len(found) > 1:
+        return thread_id, None, (f"the case's session rollout could not be identified: {len(found)} session files in "
+                                 f"{sessions} are for thread {thread_id}; none was read or deleted")
+    if not found:
         return thread_id, None, None
     text, problem = None, None
     try:
@@ -889,7 +904,8 @@ def activation_case(
         if rollout_wanted:
             thread_id, text, problem = _take_rollout(completed.stdout, environment)
             if problem:
-                return done(("error", problem, None, "not observable"), completed, **context)
+                return done(("error", rollout_failure(problem, completed), None, "not observable"), completed,
+                            **context)
             if text is not None:
                 rollout = (text, thread_id)
         # Judged while the workspace and its links exist, so paths resolve where the harness found them.
