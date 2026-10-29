@@ -46,27 +46,40 @@ entry also holds `differences`, each changed field with its `before` and
                 "recheckable_sources": [],
                 "findings": [{"id": "F3", "source": "https://bugzilla.mozilla.org/page.cgi?id=bug-writing.html",
                               "claim": "…", "quote": "…"}],
-                "item_id": "unchanged:idea.repro.a.environment", "display": "…", "digest": "…"}],
+                "item_id": "unchanged:idea.repro.a.environment", "display": "…", "digest": "…",
+                "question": "Accept, edit or reject requirement `idea.repro.a.environment`?",
+                "options": [{"label": "Accept", "next": "relay:accept"}, {"label": "Edit", "next": "edit"},
+                            {"label": "Reject", "next": "relay:reject"}]}],
  "unsupported": [], "new": [], "removed": [],
  "changed": [{"requirement": {"id": "idea.repro.a.no-guessing", "…": "…"}, "missing_sources": [],
               "recheckable_sources": [],
               "findings": [{"id": "F3", "…": "…"}], "differences": {"statement": {"before": "…", "after": "…"}},
-              "item_id": "changed:idea.repro.a.no-guessing", "display": "…", "digest": "…"}],
- "group": {"item_id": "group:unchanged", "rule_ids": ["idea.repro.a.environment"], "display": "…", "digest": "…"}}
+              "item_id": "changed:idea.repro.a.no-guessing", "display": "…", "digest": "…",
+              "question": "Accept, edit or reject requirement `idea.repro.a.no-guessing`?", "options": ["…"]}],
+ "group": {"item_id": "group:unchanged", "rule_ids": ["idea.repro.a.environment"], "display": "…", "digest": "…",
+           "question": null, "options": []}}
 ```
 
 Each entry also has `item_id` (`<group>:<rule id>`, so a rule of an older
 revision and a new proposal with the same id stay apart), `display`
 (the Markdown to show as it is: every field acceptance keeps, the
-differences, and each finding fenced as untrusted) and `digest`. With
+differences, and each finding fenced as untrusted), `digest`, and the
+`question` to ask right after the display with its `options`, each a
+`label` and the `next` step it leads to: `relay:accept`,
+`relay:reject`, `relay:drop` or `relay:edit` (a decision for the
+relay), or `edit`, `one-at-a-time`, `recheck`, `deep-pass`, `keep` or
+`back` (another step first, then the item is asked again). With
 unchanged entries, `group` holds the item `group:unchanged`, its
-`rule_ids`, `display` and `digest`, for one question about all of
-them; otherwise `group` is null. When everything would not fit in one
-output, `compact` is true and each entry holds only `item_id`,
-`rule_id` and `digest`: fetch each item whole with `--item <item_id>`
-(also `--item group:unchanged`). `--edited <file>`, in the shape of
-`--proposed`, returns `edited` with each edited rule's `display` and
-`digest`, to show an edit back before it is recorded.
+`rule_ids`, `display`, `digest`, and for two or more a `question` and
+`options` about all of them; a group of one has none and is asked as
+that requirement. Otherwise `group` is null. When everything would not
+fit in one output, `compact` is true and each entry holds only
+`item_id`, `rule_id`, `digest`, `question` and `options`: fetch each
+item whole with `--item <item_id>` (also `--item group:unchanged`)
+and show its display before asking. `--edited <file>`, in the shape of
+`--proposed`, returns `edited` with each edited rule's `display`,
+`digest`, `question` and `options`, to show an edit back before it is
+recorded.
 
 `accept` needs `--relay`, written after the user answered each item:
 

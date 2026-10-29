@@ -60,11 +60,13 @@ command prints bounded JSON.
   together, use them and ask only about the ones that are missing or
   unclear.
 - **Show what you ask about.** Before asking the user to confirm or
-  choose proposed content, present that content as visible text
-  immediately before the question, or include it in the question and
-  its choices. Reasoning and tool results alone do not count as
+  choose proposed content, present that content as visible reply text
+  immediately before the question. Reasoning, tool results and a
+  question tool's preview or option text alone do not count as
   presenting it. Do not refer only to an unseen table, finding ids or
-  other omitted content. This holds for goal wording and licensing
+  other omitted content. Show a proposed goal's full text that way
+  before the question about it; a label or paraphrase alone does not
+  count. This holds for goal wording and licensing
   explanations too: a question about content not shown in that reply is
   not asked, and an earlier answer does not cover content that changed
   since. Ask each inferred fact separately: before the

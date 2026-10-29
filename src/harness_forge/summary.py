@@ -31,6 +31,20 @@ _BLOCK_START = re.compile(r"([-+=])|(\d+)([.)])")
 # By the purpose of the confirmation, which the guidance names.
 TITLES = {"research": "Research proposal", "configuration": "Configuration proposal",
           "verification": "Configuration summary"}
+# What confirming each summary decides and what follows, the summary's first line (#134).
+_DECIDES = {
+    "survey": "Confirming fixes the idea and its goals. Next: the survey of existing solutions.",
+    "research": ("Confirming fixes the goals, parts and answers research uses. Next: the deep pass where it is "
+                 "due and your acceptance of the requirements, for the parts under Research to do."),
+    "acceptance": ("Confirming fixes the goals, parts and answers research uses. Next: your acceptance of the "
+                   "requirements, for the parts under Research to do; their deep research is current."),
+    "intake": ("Confirming fixes the goals, parts and answers. Next: intake continues; building needs a "
+               "configuration proposal."),
+    "Configuration proposal": ("Confirming fixes what build-skill builds: each part's mechanism and accepted "
+                               "requirements. Next: the build."),
+    "Configuration summary": ("Confirming fixes the inputs the verification judges. Next: harness-verify assesses "
+                              "the configuration and reports its checks and runtime evidence."),
+}
 
 
 def text(value, indent: str = "") -> str:
@@ -404,16 +418,31 @@ def render_question(title: str, part_ids: list[str], *, has_parts: bool = False)
         target = "the idea"
     else:
         target = ("part " if len(part_ids) == 1 else "parts ") + ", ".join(part_ids)
-    question = f"Confirm the {what} above and its linked details for {target}?"
+    # It names what is confirmed, never where the summary is shown (#134).
+    question = f"Confirm the {what} and its linked details for {target}?"
     if fits(question + "\n", QUESTION_LIMITS):
         return question
     # Too many to name: the details file lists exactly the parts offered for confirmation.
-    return f"Confirm the {what} above and its linked details for the {len(part_ids)} parts offered there?"
+    return f"Confirm the {what} and its linked details for the {len(part_ids)} parts offered there?"
+
+
+def decides(title: str, contract: Contract, research: list[dict]) -> str:
+    """What confirming the summary decides and what follows, by purpose and, for research, by stage (#134)."""
+    if title != TITLES["research"]:
+        return _DECIDES[title]
+    if not contract.parts:
+        return _DECIDES["survey"]
+    pending = [item for item in research if item["accepted"] != "current"]
+    if not pending:
+        return _DECIDES["intake"]
+    # Only the next step each part's state allows: no deep pass is promised when it is current (forge.py states).
+    return _DECIDES["acceptance" if all(item["deep_research"] == "current" for item in pending) else "research"]
 
 
 def render_summary(contract: Contract, record: dict, *, title: str, checked_overrides: list[dict], refused: list[dict],
                    research: list[dict], drift: list[dict], conditions: dict[str, str], details_path: str,
-                   drift_states: list[str], comparison: dict | None = None, comparison_reason: str | None = None) -> str:
+                   drift_states: list[str], comparison: dict | None = None, comparison_reason: str | None = None,
+                   details_text: str | None = None) -> str:
     """The summary the agent shows unchanged before the confirmation question, within SUMMARY_LIMITS.
 
     The lines go in the order the user decides on them: what changed since the named earlier confirmation, goal
@@ -421,6 +450,9 @@ def render_summary(contract: Contract, record: dict, *, title: str, checked_over
     does not fit is left out or shortened, and what that leaves out is counted by kind in the line before the
     details link. Raises SummaryTooLong when the title, the comparison status, that count and the link alone do
     not fit.
+
+    The link's text is ``details_text``, the path as the user copies it (#132): relative to the repository when
+    the file lies inside it; the absolute ``details_path`` when not given. It is never shortened.
     """
     nothing = comparison is not None and unchanged(comparison["changes"])
     items: list[_Item] = _change_items(comparison) if comparison and not nothing else []
@@ -466,9 +498,10 @@ def render_summary(contract: Contract, record: dict, *, title: str, checked_over
                                                   {})]))
     items.append(_Item("worker policy", [("- Workers: best-effort, isolation not certified.", {})]))
 
-    head = [f"## {title}", "", _status(comparison, comparison_reason, nothing)]
-    name = details_path.rsplit("/", 1)[-1]
-    link = f"**Details:** [{text(name)}]({link_destination(details_path)})"
+    head = [f"## {title}", "", decides(title, contract, research), "", _status(comparison, comparison_reason, nothing)]
+    shown = (details_text or details_path).replace("\r", "\\u000d").replace("\n", "\\u000a")
+    # One line whatever the path holds: a line break shows as its escape, which text() keeps visible.
+    link = f"**Details:** [{text(shown)}]({link_destination(details_path)})"
 
     def render(lines: list[str], omitted: dict) -> str:
         counted = [f"{count} {_SINGULAR.get(kind, kind) if count == 1 else kind}"
