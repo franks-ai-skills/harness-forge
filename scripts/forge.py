@@ -599,7 +599,8 @@ def _prepare_contract(arguments: argparse.Namespace) -> int:
         summary = render_summary(
             contract, decision.record, title=title, checked_overrides=shown["checked_overrides"], refused=refused,
             research=research, drift=shown["drift"], drift_states=shown["drift_states"],
-            conditions=shown["conditions"], details_path=str(path), comparison=comparison, comparison_reason=reason)
+            conditions=shown["conditions"], details_path=str(path), comparison=comparison, comparison_reason=reason,
+            details_text=_shown_path(path, root))
     except SummaryTooLong as error:
         raise _InvalidInput(str(error)) from error
     emit({
@@ -613,6 +614,14 @@ def _prepare_contract(arguments: argparse.Namespace) -> int:
         "research": research,
     })
     return 0
+
+
+def _shown_path(path: Path, root: Path) -> str:
+    """A path as the user copies it: relative to the repository when it lies inside it, else absolute (#132)."""
+    try:
+        return path.resolve().relative_to(root.resolve()).as_posix()
+    except ValueError:
+        return str(path)
 
 
 def _research_check(arguments: argparse.Namespace) -> int:
