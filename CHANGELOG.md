@@ -12,6 +12,17 @@ against tags named `harness-forge--v<version>` (`claude plugin tag`
 creates that format); Forge adds such a tag on the same commit only
 once it supports such dependencies.
 
+## Unreleased
+
+### Verification
+
+- A Codex behavior case's shell gets a private temporary directory
+  beside the workspace as its `TMPDIR`, writable without widening the
+  declared workspace writes, and git there reads no user or system
+  configuration. On macOS, the system git's xcrun cache and the user's
+  unreadable `.gitconfig` made every git command fail in such a case
+  (#144).
+
 ## 0.5.1 (2026-10-29)
 
 Still pins agent-harness-kb 0.6.0. From the owner's prompt-me test of

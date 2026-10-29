@@ -668,6 +668,8 @@ def behavior_case(
     with tempfile.TemporaryDirectory(prefix="forge-behavior-", dir=workspace_root) as temporary:
         # The run's workspace, and beside it what a declared link may point to outside the workspace (#111).
         workspace, outside = Path(temporary) / "workspace", Path(temporary) / "outside"
+        # A Codex case's private temporary directory, apart from both, removed with them (#144).
+        scratch = Path(temporary) / "scratch"
         workspace.mkdir()
         outside.mkdir()
         for path, data in files.items():
@@ -700,7 +702,8 @@ def behavior_case(
                 prompt = stream_input(prompt)
         else:
             granted = tuple(str(workspace / write_scope(entry)[0]) for entry in writes)
-            command = codex.command("review", str(workspace), structured=False, writes=granted)
+            scratch.mkdir()
+            command = codex.command("review", str(workspace), structured=False, writes=granted, scratch=str(scratch))
             permitted = list(CODEX_ITEMS)
         # A user-invoked skill's Codex case keeps its session rollout, the only record of the injection (#135).
         rollout_wanted = observes_rollout(harness, slash)
