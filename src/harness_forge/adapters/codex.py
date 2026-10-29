@@ -47,17 +47,27 @@ def _literal(value) -> str:
     return json.dumps(value)
 
 
-def command(role: str, workspace: str, *, structured: bool = True, writes: tuple[str, ...] = ()) -> list[str]:
+# What a behavior case's shell gets beside its scratch directory (#144): git reads no user or system
+# configuration, which the profile cannot read, and temporary files (macOS git's xcrun cache) go to the scratch.
+CASE_GIT = {"GIT_CONFIG_GLOBAL": "/dev/null", "GIT_CONFIG_NOSYSTEM": "1"}
+
+
+def command(role: str, workspace: str, *, structured: bool = True, writes: tuple[str, ...] = (),
+            scratch: str | None = None) -> list[str]:
     """The worker command; reads are limited to the workspace by the permission profile.
 
     ``structured=False`` leaves out the output schema, for a runtime case
     that runs a skill rather than a worker. ``writes`` are absolute paths
     inside the workspace that a behavior case may write: the more specific
     path's ``write`` overrides the workspace's ``read``. Without them,
-    nothing is writable.
+    nothing is writable. ``scratch``, a behavior case's private temporary
+    directory outside the workspace, is writable too and becomes the shell's
+    TMPDIR, with git kept from the user's configuration (CASE_GIT).
     """
     filesystem = {":root": "deny", ":minimal": "read", workspace: "read"}
     filesystem.update({path: "write" for path in writes})
+    if scratch:
+        filesystem[scratch] = "write"
     settings = {
         "approval_policy": "never",
         "project_doc_max_bytes": 0,
@@ -68,6 +78,8 @@ def command(role: str, workspace: str, *, structured: bool = True, writes: tuple
         f"permissions.{PROFILE}.filesystem": filesystem,
         f"permissions.{PROFILE}.network.enabled": False,
     }
+    if scratch:
+        settings["shell_environment_policy.set"] = {**CASE_GIT, "TMPDIR": scratch}
     disabled = DISABLED_FEATURES + (NO_SHELL if role != "review" else ())
     settings.update({f"features.{feature}": False for feature in disabled})
     arguments = ["codex", "--no-daemon", "exec", "--ignore-user-config", "--ignore-rules", "--skip-git-repo-check",

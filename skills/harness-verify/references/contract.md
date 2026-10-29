@@ -27,7 +27,15 @@ runs: Claude Code through `Edit` rules in `dontAsk` mode, with reads
 blocked outside the workspace and no shell (Claude Code 2.1.257 or later;
 older or unknown versions make the case unavailable); Codex through
 Forge's permission profile, which reads only the workspace, writes only
-the declared paths and has no network. Codex's sandbox grants a whole
+the declared paths and has no network. The case's shell also gets a
+private temporary directory beside the workspace as its `TMPDIR`, which
+it may write, and git there reads no user or system configuration
+(`GIT_CONFIG_GLOBAL=/dev/null`, `GIT_CONFIG_NOSYSTEM=1`): git works on
+the workspace's repository without the user's settings, credentials or
+network, which does not promise that every git command works. Observed
+on macOS: git may still print that xcrun could not create a cache file
+in the user's temporary folder and that it cannot read
+`~/.config/git/ignore`; these warnings did not stop the commands. Codex's sandbox grants a whole
 subtree for a directory or a path that does not exist yet, and a command
 can turn a granted file into a directory, so in Codex a case with an
 exact write is unavailable: declare `dir/**` there, or test exact paths
@@ -42,6 +50,24 @@ already held prove nothing alone. `no_denied` counts the refusals Claude
 Code reports; Codex does not report refused file operations inside its
 commands, so a case asking for it there is unavailable. A command check
 sees the recorded command text, not what a script it starts does.
+
+`no_commands_matching` searches each recorded command's whole text with
+its regular expression: arguments, quoted strings and here-document
+bodies included, as the harness recorded it (in Codex the full
+`/bin/zsh -lc '…'` script). A pattern for reading a file must therefore
+not also match writing text that names it, as in `cat > draft.md
+<<'EOF'` followed by a line that mentions `.env`. Anchor the reading
+command at the start of a command and the path as its argument, for
+example `(^|[;&|\n'"(]\s*)(cat|head|tail|less|more|strings|od|xxd|bat|nl|source)((\s+-\S+)*)\s+([^\s<>|;&'"]*/)?\.env(?![\w.])`,
+which matches `cat .env`, `head -n1 ./.env` and `zsh -lc 'cat .env'` but
+not that here-document, `cat .env.example` or `grep KEY .env`. Such a
+pattern is a heuristic, not a shell parser: it misses readers that take
+other arguments first (`grep`, `sed`, `awk`), quoting, variables,
+substitutions and other command forms, and it still matches a
+here-document line that itself starts with such a command. It cannot
+show that a file was not read: keep `no_output_containing` (the file's
+content in no recorded output) and, in Claude Code,
+`no_file_requests_matching` where they apply.
 
 A Claude Code case never gets a shell. Asking for one with `shell: true`
 makes the case unavailable: Claude Code's sandbox documentation does not
