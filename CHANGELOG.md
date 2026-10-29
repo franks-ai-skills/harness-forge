@@ -12,6 +12,15 @@ against tags named `harness-forge--v<version>` (`claude plugin tag`
 creates that format); Forge adds such a tag on the same commit only
 once it supports such dependencies.
 
+## Unreleased
+
+### Verification
+
+- harness-verify's contract says what `no_commands_matching` searches:
+  each recorded command's whole text, here-document bodies included. It
+  gives a tested pattern for reading a file that does not match writing
+  text that names it, and the limits of such a heuristic (#145).
+
 ## 0.5.1 (2026-10-29)
 
 Still pins agent-harness-kb 0.6.0. From the owner's prompt-me test of

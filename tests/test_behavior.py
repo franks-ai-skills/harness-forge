@@ -133,6 +133,31 @@ class RunTest(BehaviorCase):
         self.assertIn('web_search="disabled"', command)
         self.assertNotIn("--sandbox", command)
 
+    def test_the_guidance_pattern_for_reading_a_file_does_not_match_a_here_document(self):
+        """#145: the contract's example pattern, as written there, against the commands it describes."""
+        import re
+        from pathlib import Path
+        contract = (Path(__file__).resolve().parents[1] / "skills/harness-verify/references/contract.md").read_text(
+            encoding="utf-8")
+        pattern = re.search(r"for\s+example\s+`([^`]+)`,\s+which matches", contract).group(1)
+        reads = ["cat .env", "/bin/zsh -lc 'cat .env'", "/bin/zsh -lc 'head -n1 ./.env'", "x; tail -f config/.env",
+                 '/bin/zsh -lc "source ./.env && echo ok"']
+        others = ["/bin/zsh -lc \"mkdir .tmp\nprintf '%s\\n' '*' > .tmp/.gitignore\ncat > .tmp/prompt-me-db.md "
+                  "<<'EOF'\n## Intent\nRead DB_PASSWORD from .env instead.\nEOF\"", "cat .env.example",
+                  "grep KEY .env", "rg --files -g '!.env'"]
+        for command in reads:
+            self.assertIsNotNone(re.search(pattern, command), command)
+        for command in others:
+            self.assertIsNone(re.search(pattern, command), command)
+        # The runner matches the whole recorded command: the earlier, broader pattern hits the here-document.
+        from harness_forge.behavior import evaluate
+        broad = r"\b(cat|head|tail|less|more|sed|awk|strings|od|xxd|bat|nl|source)\b[^|;&]*\.env\b"
+        observed = {"commands": [others[0]], "tools": [], "denied": [], "complete": True, "outputs": [],
+                    "requests": [], "unreadable": []}
+        for check, hit in ((broad, True), (pattern, False)):
+            case = {"expect": {"actions": {"no_commands_matching": [check]}}}
+            self.assertEqual(bool(evaluate(case, "codex", Path("/w"), {}, observed)), hit, check)
+
     def test_an_undeclared_write_fails_even_when_the_assertions_hold(self):
         for harness, stream in (("claude-code", claude_writes(DRAFT)), ("codex", codex_writes(DRAFT))):
             with self.subTest(harness):
