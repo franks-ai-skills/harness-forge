@@ -75,19 +75,19 @@ install or download anything yourself.
   configuration, permissions, plugins or automation, say that the builder
   is unavailable in this release; the part stays blocked with its
   recommendation unchanged. A reused artifact is never rebuilt.
-- **Never lose an edit, and ask no replacement question.** Forge
-  replaces or removes an existing file only when it is Forge's own
-  output from the part's last build or matches the version committed in
-  git, and names each one under `replaced` and `removed` with its
+- **Never lose an edit, and ask no replacement question.** Which
+  existing files Forge may replace or remove, and which stop the build,
+  is the "Existing content" check in
+  [references/contract.md](references/contract.md). Forge names each file
+  it replaced or removed under `replaced` and `removed` with its
   `basis`. Tell the user which files those are and what `earlier` says
   about seeing their earlier version: only a `committed` file has a
-  `show` command; never say an earlier build can be restored. Any other
-  existing file stops the build before it writes anything: show each
-  stopped file's `why` and diff (for a path in `incomplete`, its whole
-  diff page by page with `--show-diff`) and tell the user `how` to keep
-  or discard the edits. Run `--replace` only after the user says to
-  discard the edits in the named files. A matching existing skill is
-  kept as it is.
+  `show` command; never say an earlier build can be restored. When the
+  build stops at a file, show each stopped file's `why` and diff (for a
+  path in `incomplete`, its whole diff page by page with `--show-diff`)
+  and tell the user `how` to keep or discard the edits. Run `--replace`
+  only after the user says to discard the edits in the named files. A
+  matching existing skill is kept as it is.
 - **Built is not verified.** A successful build sets the part to `built`;
   only harness-verify can set `verified`. Do not write the README's
   `Outside controls` or `Where the skills load` sections; harness-intake

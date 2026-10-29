@@ -69,11 +69,10 @@ show that a file was not read: keep `no_output_containing` (the file's
 content in no recorded output) and, in Claude Code,
 `no_file_requests_matching` where they apply.
 
-A Claude Code case never gets a shell. Asking for one with `shell: true`
-makes the case unavailable: Claude Code's sandbox documentation does not
+Asking for a shell with `shell: true` makes a Claude Code case
+unavailable: Claude Code's sandbox documentation does not
 establish that writes inside the working directory can be limited to the
 declared paths, so a shell there would widen the case's write boundary.
-A case that needs a shell runs in Codex.
 
 `only_in` requires each text to occur in the saved file, every occurrence
 wholly inside the named section (from its heading to the next heading of

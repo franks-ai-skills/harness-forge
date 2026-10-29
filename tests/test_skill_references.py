@@ -20,6 +20,7 @@ from harness_forge.research import accept_requirements, compare_requirements
 FORGE = Path(__file__).resolve().parents[1]
 INTAKE = FORGE / "skills" / "harness-intake" / "references" / "inputs.md"
 RESEARCH = FORGE / "skills" / "harness-research" / "references" / "inputs.md"
+RESEARCH_SKILL = FORGE / "skills" / "harness-research" / "SKILL.md"
 
 
 def blocks(path: Path) -> list[tuple[str, str]]:
@@ -70,6 +71,29 @@ class IntakeInputsTest(unittest.TestCase):
             code = forge_cli().main(["select", "--input", str(path)])
         self.assertEqual(code, 0, output.getvalue())
         self.assertIsNotNone(json.loads(output.getvalue())["question"], "partial answers name the next question")
+
+
+class DroppedFindingsTest(unittest.TestCase):
+    def test_research_names_dropped_findings_without_their_content(self):
+        """#150: a dropped finding is named by id and reason; its claim, quote and source text are never shown."""
+        text = " ".join(RESEARCH_SKILL.read_text(encoding="utf-8").split())
+        self.assertIn("Name each dropped finding by its id with Forge's reason only; never show its claim, quote or "
+                      "source text.", text)
+        self.assertNotIn("Show the dropped ones and why", text)
+        self.assertIn("Show only the findings `scripts/forge.py research` keeps", text)
+
+
+class OnePlaceTest(unittest.TestCase):
+    def test_build_skills_contract_points_to_the_replacement_rule(self):
+        """#151: the replacement rule lives in SKILL.md; the contract keeps only what it adds."""
+        contract = " ".join((FORGE / "skills/build-skill/references/contract.md").read_text(encoding="utf-8").split())
+        skill = " ".join((FORGE / "skills/build-skill/SKILL.md").read_text(encoding="utf-8").split())
+        self.assertIn("is the \"Existing content\" check in [references/contract.md]", skill)
+        self.assertNotIn("output from the part's last build or matches the version committed", skill)
+        self.assertNotIn("Any other existing file stops the build", skill)
+        self.assertIn("nor the version committed in git (on disk and in the index)", contract)
+        self.assertNotIn("`--replace` discards", contract)
+        self.assertIn("Run `--replace` only after the user says to discard the edits in the named files", skill)
 
 
 class ResearchInputsTest(unittest.TestCase):

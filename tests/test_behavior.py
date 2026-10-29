@@ -803,8 +803,18 @@ class ShellCaseTest(BehaviorCase):
             validate({"cases": [{**activation[0], "shell": True}]}, "runtime-cases")
 
     def test_the_guidance_sends_a_case_that_needs_a_shell_to_codex(self):
-        text = " ".join((Path(__file__).resolve().parents[1] / "skills/harness-verify/SKILL.md")
-                        .read_text(encoding="utf-8").split())
-        self.assertIn("`shell: true` makes it unavailable", text)
-        self.assertIn("Write a case that needs a shell for Codex.", text)
+        """#151: SKILL.md says what to do, the contract why; the shell rule is stated once."""
+        forge = Path(__file__).resolve().parents[1]
+        skill = " ".join((forge / "skills/harness-verify/SKILL.md").read_text(encoding="utf-8").split())
+        contract = " ".join((forge / "skills/harness-verify/references/contract.md").read_text(encoding="utf-8")
+                            .split())
+        self.assertIn("Write a case that needs a shell, such as one that runs `git`, for Codex; "
+                      "[references/contract.md](references/contract.md#behavior-tests) says why.", skill)
+        self.assertNotIn("`shell: true` makes", skill)
+        self.assertNotIn("runs without a shell", skill)
+        self.assertIn("Asking for a shell with `shell: true` makes a Claude Code case unavailable", contract)
+        self.assertNotIn("A case that needs a shell runs in Codex", contract)
+        # The overview's "no shell" is the one statement of the fact in the contract.
+        self.assertNotIn("never gets a shell", contract)
+        self.assertIn("and no shell (Claude Code 2.1.257 or later", contract)
 

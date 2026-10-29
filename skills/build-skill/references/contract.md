@@ -18,12 +18,10 @@ Read this when Forge refuses a build or reports a conflict.
 
 The checklist checks are syntax only: whether a line keeps its
 requirement's meaning and strength is judged in harness-verify, against
-the accepted statement. A refused build writes nothing. Forge replaces,
-or removes when the plan no longer has it, a file that is its own last
-build output or matches the committed version, and names it with its
-basis; a failed or inconclusive git check never counts as a match.
-Every other existing file stops the build with a reason and a unified
-diff; `--replace` discards the edits in exactly the named files. To
-repair a part after a failed verification, rebuild it: a hand-edited
-file stops the build until the user says to discard or keep the edit;
-then harness-verify re-verifies it, judging again what Forge chooses.
+the accepted statement. A refused build writes nothing. An existing
+file that differs from the plan and that the "Existing content" check
+does not stop at is replaced, or removed when the plan no longer has
+it; a failed or inconclusive git check never counts as a match with the
+committed version. To repair a
+part after a failed verification, rebuild it, then harness-verify
+re-verifies it, judging again what Forge chooses.

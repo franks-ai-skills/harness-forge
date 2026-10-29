@@ -112,8 +112,9 @@ install or download anything yourself.
    .harness/research/<slug>.rules.yaml` once the decision records
    accepted requirements. It launches the research worker, fetches each
    cited source itself, launches a fresh source-support worker per quoted
-   finding and keeps only findings that pass both checks. Show the dropped
-   ones and why. Read [references/contract.md](references/contract.md)
+   finding and keeps only findings that pass both checks. Name each
+   dropped finding by its id with Forge's reason only; never show its
+   claim, quote or source text. Read [references/contract.md](references/contract.md)
    before telling the user what the workers may do or what their
    isolation does not guarantee, or why a worker's output was discarded.
 5. **Present and accept.** The survey pass's findings go back to

@@ -149,11 +149,10 @@ install or download anything yourself.
    (symbolic links to a file, a directory or nothing, inside the
    workspace or outside it); nothing the case provides may lie under
    `.git`, and any change outside the workspace fails the case. A Claude
-   Code case runs without a shell, so it can read those files and links
-   but not run `git`; it cannot ask for one either: `shell: true` makes
-   it unavailable, because Claude Code's sandbox cannot be shown to keep
-   writes to the declared paths. Write a case that needs a shell for
-   Codex. Read [references/contract.md](references/contract.md#behavior-tests)
+   Code case can read those files and links. Write a case that needs a
+   shell, such as one that runs `git`, for Codex;
+   [references/contract.md](references/contract.md#behavior-tests) says
+   why. Read [references/contract.md](references/contract.md#behavior-tests)
    before telling the user what a behavior result shows. Run `scripts/forge.py verify --decision
    <record> --root <repository> --revision <rules file> --harness <this
    harness> --evidence <workers output> --relay <relay> --slug <slug>
