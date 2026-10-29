@@ -8,7 +8,7 @@ your existing login. It builds skills into the target repository, in
 `.agents/skills/<name>/`, linked from `.claude/skills/<name>` for Claude
 Code, and installs nothing at user level.
 
-Status: version 0.5.0, pinned to release 0.6.0 of its
+Status: version 0.5.1, pinned to release 0.6.0 of its
 knowledge base, [agent-harness-kb](https://github.com/franks-ai-skills/agent-harness-kb).
 Version 0.1.0 was published together with the knowledge base on
 2026-10-16; [CHANGELOG.md](CHANGELOG.md) lists the changes since.

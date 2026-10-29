@@ -1,7 +1,7 @@
 {
   "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
   "name": "harness-forge",
-  "version": "0.5.0",
+  "version": "0.5.1",
   "description": "Turns an idea for Claude Code or Codex tooling into a confirmed plan, researched requirements, a portable skill and its verification against a pinned harness knowledge base.",
   "license": "AGPL-3.0-only",
   "repository": "https://github.com/franks-ai-skills/harness-forge",
