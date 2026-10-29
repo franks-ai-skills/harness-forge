@@ -27,7 +27,15 @@ runs: Claude Code through `Edit` rules in `dontAsk` mode, with reads
 blocked outside the workspace and no shell (Claude Code 2.1.257 or later;
 older or unknown versions make the case unavailable); Codex through
 Forge's permission profile, which reads only the workspace, writes only
-the declared paths and has no network. Codex's sandbox grants a whole
+the declared paths and has no network. The case's shell also gets a
+private temporary directory beside the workspace as its `TMPDIR`, which
+it may write, and git there reads no user or system configuration
+(`GIT_CONFIG_GLOBAL=/dev/null`, `GIT_CONFIG_NOSYSTEM=1`): git works on
+the workspace's repository without the user's settings, credentials or
+network, which does not promise that every git command works. Observed
+on macOS: git may still print that xcrun could not create a cache file
+in the user's temporary folder and that it cannot read
+`~/.config/git/ignore`; these warnings did not stop the commands. Codex's sandbox grants a whole
 subtree for a directory or a path that does not exist yet, and a command
 can turn a granted file into a directory, so in Codex a case with an
 exact write is unavailable: declare `dir/**` there, or test exact paths

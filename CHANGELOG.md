@@ -16,6 +16,12 @@ once it supports such dependencies.
 
 ### Verification
 
+- A Codex behavior case's shell gets a private temporary directory
+  beside the workspace as its `TMPDIR`, writable without widening the
+  declared workspace writes, and git there reads no user or system
+  configuration. On macOS, the system git's xcrun cache and the user's
+  unreadable `.gitconfig` made every git command fail in such a case
+  (#144).
 - harness-verify's contract says what `no_commands_matching` searches:
   each recorded command's whole text, here-document bodies included. It
   gives a tested pattern for reading a file that does not match writing
