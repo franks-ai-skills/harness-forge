@@ -190,6 +190,21 @@ class BehaviorCaseTest(unittest.TestCase):
         self.assertEqual((outcome, activation), ("error", None))
         self.assertIn("could not be read", reason)
 
+    def test_an_earlier_failure_keeps_the_rollout_problem_in_its_reason(self):
+        """A write outside the declared paths fails the case before activation is judged; the problem stays."""
+        from harness_forge.behavior import behavior_case
+        with tempfile.TemporaryDirectory() as home:
+            def runner(command, *, cwd, env, stdin, timeout):
+                (Path(cwd) / "elsewhere.md").write_text("x\n", encoding="utf-8")
+                return Completed(returncode=0, stdout="not json\n", stderr="", timed_out=False)
+
+            outcome, reason, activation, _ = behavior_case(
+                "codex", dict(self.CASE), {f"{DIRECTORY}/SKILL.md": SKILL.encode()}, DIRECTORY, "$probe-greet",
+                runner=runner, environ={"CODEX_HOME": home}, version="0.165.0", baseline=set(), slash=True)
+        self.assertEqual((outcome, activation), ("fail", None))
+        self.assertIn("changed outside the declared writes: elsewhere.md", reason)
+        self.assertIn("also, the case's session rollout could not be identified", reason)
+
     def test_a_case_the_model_starts_stays_ephemeral(self):
         (outcome, _, activation, _), command = self.run_case(slash=False)
         self.assertIn("--ephemeral", command)

@@ -719,6 +719,8 @@ def behavior_case(
             thread_id, text, rollout_problem = _take_rollout(completed.stdout, environment)
             if text is not None and rollout_problem is None:
                 rollout = (text, thread_id)
+        # Every result below keeps a rollout problem in its reason, also one decided before activation is judged.
+        also = f"; also, {rollout_problem}" if rollout_problem else ""
         after = snapshot(workspace)
         # A plain git status may rewrite the index; every other change below .git counts.
         changed = [(kind, path) for kind, path in changes(before, after)
@@ -729,19 +731,19 @@ def behavior_case(
         if escaped:
             details["failed"] = [f"changed outside the workspace through a link: {kind} {path}"
                                  for kind, path in escaped[:50]]
-            return done("fail", f"changed outside the workspace through a link: {escaped[0][1]}",
+            return done("fail", f"changed outside the workspace through a link: {escaped[0][1]}{also}",
                         completed=completed, **context)
         observed = observe_claude(completed.stdout) if harness == "claude-code" else observe_codex(completed.stdout)
         details["requests"], details["denied"] = observed["requests"][:500], observed["denied"][:500]
         undeclared = [path for _, path in changed if not permits(path, writes)]
         if undeclared:
             details["failed"] = [f"changed outside the declared writes: {path}" for path in undeclared[:50]]
-            return done("fail", f"changed outside the declared writes: {', '.join(undeclared[:5])}",
+            return done("fail", f"changed outside the declared writes: {', '.join(undeclared[:5])}{also}",
                         completed=completed, **context)
         if completed.timed_out:
-            return done("error", f"timed out after {timeout} s", completed=completed, **context)
+            return done("error", f"timed out after {timeout} s{also}", completed=completed, **context)
         if completed.returncode or not observed["complete"]:
-            return done("error", "the harness did not complete the case, so its records are incomplete",
+            return done("error", f"the harness did not complete the case, so its records are incomplete{also}",
                         completed=completed, **context)
         if rollout_problem:
             # The rollout could not be read or deleted: no activation is claimed from it.
