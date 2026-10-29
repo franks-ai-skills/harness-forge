@@ -812,6 +812,9 @@ class ShellCaseTest(BehaviorCase):
                       "Behavior tests say why.", skill)
         self.assertNotIn("`shell: true` makes", skill)
         self.assertNotIn("runs without a shell", skill)
-        self.assertIn("Asking for one with `shell: true` makes the case unavailable", contract)
+        self.assertIn("Asking for a shell with `shell: true` makes a Claude Code case unavailable", contract)
         self.assertNotIn("A case that needs a shell runs in Codex", contract)
+        # The overview's "no shell" is the one statement of the fact in the contract.
+        self.assertNotIn("never gets a shell", contract)
+        self.assertIn("and no shell (Claude Code 2.1.257 or later", contract)
 
