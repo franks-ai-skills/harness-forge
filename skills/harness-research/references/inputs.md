@@ -46,13 +46,18 @@ entry also holds `differences`, each changed field with its `before` and
                 "recheckable_sources": [],
                 "findings": [{"id": "F3", "source": "https://bugzilla.mozilla.org/page.cgi?id=bug-writing.html",
                               "claim": "…", "quote": "…"}],
-                "item_id": "unchanged:idea.repro.a.environment", "display": "…", "digest": "…"}],
+                "item_id": "unchanged:idea.repro.a.environment", "display": "…", "digest": "…",
+                "question": "Accept, edit or reject requirement `idea.repro.a.environment`?",
+                "options": [{"label": "Accept", "next": "relay:accept"}, {"label": "Edit", "next": "edit"},
+                            {"label": "Reject", "next": "relay:reject"}]}],
  "unsupported": [], "new": [], "removed": [],
  "changed": [{"requirement": {"id": "idea.repro.a.no-guessing", "…": "…"}, "missing_sources": [],
               "recheckable_sources": [],
               "findings": [{"id": "F3", "…": "…"}], "differences": {"statement": {"before": "…", "after": "…"}},
-              "item_id": "changed:idea.repro.a.no-guessing", "display": "…", "digest": "…"}],
- "group": {"item_id": "group:unchanged", "rule_ids": ["idea.repro.a.environment"], "display": "…", "digest": "…"}}
+              "item_id": "changed:idea.repro.a.no-guessing", "display": "…", "digest": "…",
+              "question": "Accept, edit or reject requirement `idea.repro.a.no-guessing`?", "options": ["…"]}],
+ "group": {"item_id": "group:unchanged", "rule_ids": ["idea.repro.a.environment"], "display": "…", "digest": "…",
+           "question": null, "options": []}}
 ```
 
 Each entry also has `item_id` (`<group>:<rule id>`, so a rule of an older
