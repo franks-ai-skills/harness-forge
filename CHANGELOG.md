@@ -22,8 +22,8 @@ once it supports such dependencies.
   once (`skills.references.load-conditions`). The exact wording stays in
   the accepted revision, which the reference names by its sha256: in
   `.harness/research/` until a later acceptance replaces it, then only in
-  the repository's history; a skill copied without the repository loses
-  it (#146).
+  the repository's history if it was committed; a skill copied without
+  the repository loses it (#146).
 
 ## 0.5.1 (2026-10-29)
 

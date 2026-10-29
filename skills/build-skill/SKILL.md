@@ -61,7 +61,8 @@ install or download anything yourself.
   once. The exact accepted wording stays in the accepted revision, which
   the reference names by its sha256: `.harness/research/` holds it until
   a later acceptance replaces it, and then only the repository's history
-  does. A part without accepted requirements gets neither.
+  does, if it was committed. A part without accepted requirements gets
+  neither.
 - **Show what you ask about.** Before any question, such as whether to
   keep or discard edits a build stopped at, show the content it is about
   as visible text in the same reply; a refusal or an unclear answer

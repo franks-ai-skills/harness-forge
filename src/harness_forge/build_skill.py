@@ -226,7 +226,8 @@ def plan_skill(
             fields=("its kind and its\nsources. The exact accepted wording is in the accepted revision with\n"
                     f"sha256 {revision.digest}, which Forge keeps in the repository's\n"
                     "`.harness/research/` rules file until a later acceptance replaces it;\n"
-                    "after that only the repository's history holds it" if lines else "its kind and its\nsources"),
+                    "after that only the repository's history holds it, if it was committed" if lines
+                    else "its kind and its\nsources"),
             items="\n".join(item(number, rule) for number, rule in enumerate(accepted, 1)))
     if user_only:
         planned[f"{base}/agents/openai.yaml"] = _template("openai.yaml.tmpl")

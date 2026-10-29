@@ -66,7 +66,7 @@ class ChecklistTest(unittest.TestCase):
 
     def test_a_build_leads_to_its_exact_wording_after_a_later_acceptance(self):
         """#146: the reference names the revision's sha256; after a later acceptance replaces the rules file, the
-        committed history still holds that revision, and its digest identifies it."""
+        history holds that revision only if it was committed, as here, and its digest identifies it."""
         import subprocess
 
         from harness_forge.research import load_revision, write_revision
