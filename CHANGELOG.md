@@ -12,6 +12,21 @@ against tags named `harness-forge--v<version>` (`claude plugin tag`
 creates that format); Forge adds such a tag on the same commit only
 once it supports such dependencies.
 
+## Unreleased
+
+### Verification
+
+- `verify --write` records the report before writing it. When the record
+  cannot be written, as in a session sandbox, the repository's report
+  and the previous record stay as they were, so the next verification's
+  scope does not widen, and this run's report goes to its run directory
+  as `report-<attempt id>.md`; `report_record` says which, and the new
+  `report` field names the path written. A report write that fails after
+  recording leaves a record that no longer matches, and the next
+  verification judges every part. harness-verify and harness-research
+  say what their workers need and ask the user to approve running
+  outside a session sandbox that blocks it, before the first run (#137).
+
 ## 0.5.0 (2026-10-28)
 
 Still pins agent-harness-kb 0.6.0. From the owner's prompt-me test of

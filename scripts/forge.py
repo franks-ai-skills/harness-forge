@@ -57,7 +57,9 @@ from harness_forge.models import Confirmation, Decision, Finding, Rule  # noqa: 
 from harness_forge.overrides import (  # noqa: E402
     OverridesPending, apply_overrides, check_override, describe, effective_rules, load_overrides, write_override,
 )
-from harness_forge.report import render_report, runtime_evidence, unrun_harnesses, write_report  # noqa: E402
+from harness_forge.report import (  # noqa: E402
+    render_report, report_path, runtime_evidence, unrun_harnesses, write_report,
+)
 from harness_forge.research import (  # noqa: E402
     _BLOCKING_DRIFT, UNTRUSTED_NOTE, _catalog, accept_requirements, drift_category, drift_digest, drift_state,
     finding_problem, _check_entry as _check_idea_entry,
@@ -1736,6 +1738,43 @@ def _plugin_behavior_problem(decision: Decision, cases: list[dict]) -> str | Non
     return None
 
 
+def _write_recorded(root: Path, target: Path, rendered: str, relay: Path, run) -> tuple[str | None, str]:
+    """Record the report, then write it; (the path written, what became of the record) (#137).
+
+    Recording comes first, so that a record that cannot be written leaves the repository's report and the
+    previous record as they were, and the next verification's scope does not widen: this run's report then
+    goes to its run directory instead. A report write that fails after recording leaves a record that no longer
+    matches, which a later verification takes as a changed report.
+    """
+    content = rendered.encode("utf-8")
+    try:
+        written_reports.record_bytes(_environ(), root, target, content)
+    except written_reports.NotRecorded as error:
+        try:
+            same = target.is_file() and not target.is_symlink() and target.read_bytes() == content
+        except OSError:
+            same = False
+        kept = ("the repository's report already holds this report" if same
+                else "the repository's report was not updated")
+        try:
+            directory = runfiles.run_directory(relay.parent, root)
+            if directory.name != run.run_id:
+                raise runfiles.RunFilesError(f"{relay.parent}: not the run directory of run {run.run_id}")
+            fallback = directory / f"report-{run.attempt_id}.md"
+            runfiles.create_once(fallback, rendered)
+        except (OSError, runfiles.RunFilesError) as problem:
+            return None, f"not recorded: {error}; {kept}, and this run's report could not be written: {problem}"
+        shown = fallback.relative_to(root).as_posix()
+        return str(fallback), f"not recorded: {error}; {kept}; this run's report is at {shown}"
+    try:
+        if not (target.is_file() and not target.is_symlink() and target.read_bytes() == content):
+            write_report(root, target.stem, rendered)
+    except (OSError, ValueError) as error:
+        return None, (f"recorded, but the report could not be written: {error}; if the report does not match the "
+                      "record, the next verification judges every part")
+    return str(target), "recorded"
+
+
 def _verify(arguments: argparse.Namespace) -> int:
     """Live verification: static checks, a fresh review worker, runtime cases and the report."""
     root = Path(arguments.root).resolve()
@@ -1811,21 +1850,12 @@ def _verify(arguments: argparse.Namespace) -> int:
     run.runtime_evidence = runtime_evidence(run, cases, arguments.harness)
     # What each behavior case checks, so that the report can show it with the case's result (#110).
     run.case_checks = {case["id"]: case.get("checks") for case in cases if case.get("kind") == BEHAVIOR}
-    written = None
     try:
         rendered = render_report(run, results)
-        if arguments.write:
-            written = str(write_report(root, arguments.slug, rendered))
+        target = report_path(root, arguments.slug) if arguments.write else None
     except (OSError, ValueError) as error:
         raise _InvalidInput(f"the report could not be written: {error}") from error
-    # Recorded only once the report is written, so that a later Review may keep its results (#102).
-    recorded = None
-    if written:
-        try:
-            written_reports.record(_environ(), root, Path(written))
-            recorded = "recorded"
-        except written_reports.NotRecorded as error:
-            recorded = f"{error}; the next verification judges every part"
+    written, recorded = _write_recorded(root, target, rendered, Path(arguments.relay), run) if target else (None, None)
     parts = [{"part_id": r.part_id, "status": r.status, "harness_result": r.harness_result, "goal_result": r.goal_result}
              for r in results]
     runtime = [{"case_id": r.case_id, "result": r.result, "reason": r.reason, "inventory": r.inventory}
@@ -1841,7 +1871,7 @@ def _verify(arguments: argparse.Namespace) -> int:
           "drift": _drift_report(drift, decision, overrides,
                                  open_blocking_drift(drift, decision, overrides, affecting_rules(run, cited))),
           "judged_parts": sorted(scope) if scope is not None else sorted(every), "kept_parts": sorted(kept),
-          "worker_violations": list(run.worker_violations), "written": written,
+          "worker_violations": list(run.worker_violations), "written": written, "report": written,
           "diagnostics": str(diagnostics.directory) if diagnostics.directory else None,
           # Bounded, so that diagnostics that could not be written never crowd out the results.
           "diagnostics_problems": [problem[:300] for problem in diagnostics.problems[:5]],

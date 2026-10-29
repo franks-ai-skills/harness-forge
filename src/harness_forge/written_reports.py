@@ -13,6 +13,7 @@ Everything fails closed: a missing, unreadable or mismatching record means every
 
 from __future__ import annotations
 
+import contextlib
 import hashlib
 import json
 import os
@@ -65,10 +66,15 @@ def check(environ, root: Path, report: Path) -> None:
 
 
 def record(environ, root: Path, report: Path) -> None:
-    """Record the report Forge has just written; keeps the entries of its other report paths.
+    """Record the report file as it is now; see record_bytes."""
+    record_bytes(environ, root, report, Path(report).read_bytes())
 
-    Raises NotRecorded when the record cannot be written; the report stays, and the next verification judges
-    every part.
+
+def record_bytes(environ, root: Path, report: Path, content: bytes) -> None:
+    """Record ``content`` as the report Forge writes at ``report``; keeps the entries of its other report paths.
+
+    verify records before it writes (#137): raises NotRecorded when the record cannot be written, and the
+    previous record stays, since the new one replaces it only in one atomic step.
     """
     repository, path = _paths(environ, root)
     try:
@@ -76,11 +82,13 @@ def record(environ, root: Path, report: Path) -> None:
     except NotRecorded:
         data = {"version": VERSION, "repository": str(repository), "reports": {}}
     relative = Path(report).resolve().relative_to(repository).as_posix()
-    data["reports"][relative] = hashlib.sha256(Path(report).read_bytes()).hexdigest()
+    data["reports"][relative] = hashlib.sha256(content).hexdigest()
+    temporary = path.with_name(f".{path.name}.{os.getpid()}.tmp")
     try:
         path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
-        temporary = path.with_name(f".{path.name}.{os.getpid()}.tmp")
         temporary.write_text(json.dumps(data, indent=2, sort_keys=True) + "\n", encoding="utf-8")
         os.replace(temporary, path)
     except OSError as error:
-        raise NotRecorded(f"Forge could not record the report it wrote: {error}") from None
+        with contextlib.suppress(OSError):
+            temporary.unlink()
+        raise NotRecorded(f"Forge could not record the report: {error}") from None
