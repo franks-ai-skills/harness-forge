@@ -38,6 +38,12 @@ once it supports such dependencies.
   the repository's history if it was committed; a skill copied without
   the repository loses it (#146).
 
+### Research
+
+- harness-research names each dropped finding by its id with Forge's
+  reason only and never shows its claim, quote or source text; its step
+  had said to show the dropped ones, against its own rule (#150).
+
 ## 0.5.1 (2026-10-29)
 
 Still pins agent-harness-kb 0.6.0. From the owner's prompt-me test of
