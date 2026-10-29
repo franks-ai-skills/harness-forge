@@ -12,7 +12,21 @@ against tags named `harness-forge--v<version>` (`claude plugin tag`
 creates that format); Forge adds such a tag on the same commit only
 once it supports such dependencies.
 
-## Unreleased
+## 0.5.1 (2026-10-29)
+
+Still pins agent-harness-kb 0.6.0. From the owner's prompt-me test of
+0.5.0 in Claude Code and Codex: summaries show a details path to copy
+and say what confirming them decides, requirement acceptance returns the
+question to ask with each requirement's text, Codex verification sees a
+user-invoked skill's activation through the rollout observer, a too-old
+Python points to an installed one, and a verification blocked by a
+session sandbox leaves the report and the next scope alone. Changed
+behavior: `verify` exits with 2 when a requested report was written
+nowhere; Codex cases of user-invoked skills read their own session
+rollout by default, and the report names the results that rest on it;
+`report_record` reads differently and a `report` field names the path
+written. The development-only `HARNESS_FORGE_TEMPORARY_CODEX_ROLLOUT`
+variable is gone.
 
 ### Confirmation
 
