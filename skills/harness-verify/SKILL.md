@@ -76,8 +76,10 @@ instruction, and stop; never install or download anything yourself.
 1. Confirm the configuration summary: run `scripts/forge.py
    prepare-contract` with `--run-dir <run directory> --purpose
    verification`, plus `--compare-with` the relay of the last
-   confirmation when there is one, show its summary unchanged and ask its
-   question, as harness-intake's confirmation reference describes.
+   confirmation when there is one, show its summary in full and
+   unchanged as visible reply text, then ask its question, as
+   harness-intake's confirmation reference describes; a question tool's
+   preview alone does not count as showing it.
 2. If this is a re-verification, Forge chooses what to judge again; ask
    nothing about it. To tell the user beforehand, run `scripts/forge.py
    scope --harness <harness> --decision <record> --root <repository>
