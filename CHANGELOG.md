@@ -12,7 +12,18 @@ against tags named `harness-forge--v<version>` (`claude plugin tag`
 creates that format); Forge adds such a tag on the same commit only
 once it supports such dependencies.
 
-## Unreleased
+## 0.5.2 (2026-10-30)
+
+Still pins agent-harness-kb 0.6.0. From the owner's prompt-me rebuild
+with 0.5.1, verified in Claude Code and Codex, and from release
+self-verification run 039: git runs in a Codex behavior case on macOS,
+the case guidance says what a command pattern matches, a built skill
+states each requirement once, harness-research names dropped findings
+by id only, and Forge's own skills state two rules in one place each.
+Changed behavior: a Codex behavior case's shell gets a private writable
+`TMPDIR` and git there reads no user or system configuration; with a
+checklist, `references/requirements.md` names each requirement's id,
+kind and sources and no longer repeats the accepted wording.
 
 ### Verification
 
