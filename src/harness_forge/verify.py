@@ -23,8 +23,10 @@ from dataclasses import asdict
 from harness_forge.checks import REGISTRY
 from harness_forge.checks.links import PLUGIN_MANIFESTS
 from harness_forge.checks.runner import evaluate_applicability, run_check
-from harness_forge.contracts import confirmation_problem, effective_prerequisites, part_ids_problem
-from harness_forge.documents import canonical_digest, fold_name, validate
+from harness_forge.contracts import (
+    OUTSIDE_HEADING, REACH_HEADING, confirmation_problem, effective_prerequisites, part_ids_problem,
+)
+from harness_forge.documents import canonical_digest, fold_name, markdown_headings, markdown_section, validate
 from harness_forge.models import (
     AcceptedRevision, CheckResult, Confirmation, Decision, PartResult, ReviewResponse, Rule, RuntimeResult,
     VerificationRun,
@@ -282,6 +284,35 @@ def affecting_rules(run: VerificationRun, cited: dict[str, list[str]]) -> dict[s
             for part in run.parts}
 
 
+# The README sections Forge writes; a part that owns the README only for its hand-off is bound to these (#155).
+README_SECTIONS = (OUTSIDE_HEADING, REACH_HEADING)
+
+
+def readme_binding(data: bytes) -> dict:
+    """What binds a part that owns the README only for its outside-controls hand-off (#155).
+
+    The sections Forge writes, each from its heading to the next heading of
+    level two or higher without trailing whitespace, or null when missing: an edit elsewhere leaves the
+    binding equal, unless it changes how Markdown reads those sections. A
+    README Forge cannot read that way, or with a Forge heading twice, binds
+    as a whole file.
+    """
+    whole = {"mode": "whole-file", "sha256": hashlib.sha256(data).hexdigest()}
+    try:
+        markdown = data.decode("utf-8")
+        headings = [text for _, level, text in markdown_headings(markdown) if level == 2]
+        if any(headings.count(heading) > 1 for heading in README_SECTIONS):
+            return whole
+        sections = []
+        for heading in README_SECTIONS:
+            bounds = markdown_section(markdown, heading)
+            # Blank lines at a section's end belong to whatever follows it, such as a section the user added.
+            sections.append([heading, markdown[slice(*bounds)].rstrip() if bounds else None])
+    except (UnicodeDecodeError, ValueError):
+        return whole
+    return {"mode": "forge-sections", "sha256": canonical_digest({"mode": "forge-sections", "sections": sections})}
+
+
 def bound_inputs(
     decision: Decision, files: dict[str, bytes], rules: list[Rule], *, symlinks: dict[str, str] | None = None,
     revision: AcceptedRevision | None = None, overrides: list[dict] | tuple = (), kb_version: str = "",
@@ -290,6 +321,7 @@ def bound_inputs(
     """Digests of every input a result is bound to; a part's runtime cases and fixtures are among them."""
     return {
         "files": {path: hashlib.sha256(data).hexdigest() for path, data in sorted(files.items())},
+        "readme": readme_binding(files[README]) if README in files else None,
         "symlinks": dict(sorted((symlinks or {}).items())),
         "kb_version": kb_version,
         "rules": canonical_digest(sorted((rule.to_dict() for rule in rules), key=lambda r: r["id"])),
@@ -321,6 +353,29 @@ def _origin(reason: str, run_id: str, attempt_id: str | None) -> tuple[str, str 
     if found:
         return reason[:found.start()], found["attempt"], found["run"]
     return reason, attempt_id, run_id
+
+
+def kept_origin(entry: dict, files_now: Mapping[str, str], owned: list[str]) -> dict:
+    """Where a kept part's judged results come from: the run and attempt that judged them, and the digest each of
+    the part's files had then wherever it differs from this run's (#155).
+
+    ``entry`` is the kept entry: the earlier report's run and attempt, its
+    result for the part and its bound file digests (``files``). A result the
+    earlier report kept itself carries its own origin forward, so a chain of
+    Reviews still names the attempt and the bytes the judgment was made on.
+    """
+    earlier = entry["result"]
+    carried = earlier.get("kept_from")
+    if carried:
+        run_id, attempt_id = carried["run"], carried.get("attempt")
+        origin = {**entry.get("files", {}), **carried["files"]}
+    else:
+        judged = next((item for item in earlier["rule_results"] if item["check"] == "judged"), None)
+        reason = judged["reason"] if judged else (earlier.get("goal_verdict") or {}).get("reason", "")
+        _, attempt_id, run_id = _origin(reason, entry["run_id"], entry.get("attempt_id"))
+        origin = dict(entry.get("files", {}))
+    return {"run": run_id, "attempt": attempt_id,
+            "files": {path: origin[path] for path in owned if path in origin and origin[path] != files_now.get(path)}}
 
 
 def changed_judgments(earlier: VerificationRun, earlier_results: dict[str, dict], run: VerificationRun,
@@ -448,6 +503,10 @@ def prepare_run(
             owned += [path for path in plugin_manifests(directory) if path in files]
         if part["outside_controls"] and README in files:
             owned.append(README)
+            roots = [path.rstrip("/") for path in (part.get("reuse") or {}).get("dependencies", [])]
+            # Owned for the hand-off alone, it is bound to the sections Forge writes; owned otherwise, as a whole.
+            if not any(README == root or README.startswith(root + "/") for root in roots):
+                run.readme_handoff_only.append(part_id)
         # Bound and reviewed with the skill, but never checked as skill files.
         checked = list(owned)
         dependencies = [path for path in dependency_paths(part, files) if path not in owned]
@@ -623,10 +682,14 @@ def exclusion_token(run: VerificationRun, part_id: str, rule_id: str) -> str:
     A change to any of these inputs makes the confirmation stale.
     """
     inputs = run.frozen_inputs
+    files = {path: inputs["files"][path] for path in run.part_files.get(part_id, [])}
+    binding = inputs.get("readme")
+    if README in files and part_id in run.readme_handoff_only and binding and binding["mode"] == "forge-sections":
+        files[README] = binding["sha256"]  # bound to the sections Forge writes, as freshness is (#155)
     return canonical_digest({
         "part_id": part_id, "rule_id": rule_id, "rule": run.rule_index.get(rule_id, {}).get("digest"),
         "idea": inputs["idea"], "part": inputs["parts"].get(part_id), "revision": inputs["revision"],
-        "files": {path: inputs["files"][path] for path in run.part_files.get(part_id, [])},
+        "files": files,
     })[:16]
 
 
@@ -716,6 +779,8 @@ def finish_run(
         if entry["result"]["harness_result"] == "verified":
             kept_verified.add(part_id)
     goal_verdicts.update(kept_goals)
+    origins = {part_id: kept_origin(entry, run.frozen_inputs["files"], run.part_files.get(part_id, []))
+               for part_id, entry in (kept or {}).items() if part_id in outside}
     results = []
     for part in run.parts:
         part_id, kind = part["id"], part_kind(part)
@@ -829,5 +894,6 @@ def finish_run(
             goal_result=_goal_result(kind, status, harness, dependencies,
                                      stale=part_id in changed and harness == "not applicable"),
             outside_dependencies=dependencies, rule_results=rule_results, goal_verdict=goal,
+            kept_from=origins.get(part_id),
         ))
     return results

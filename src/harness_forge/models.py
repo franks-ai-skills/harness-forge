@@ -225,6 +225,7 @@ class VerificationRun:
     part_links: dict[str, list[str]] = field(default_factory=dict)
     part_dependencies: dict[str, list[str]] = field(default_factory=dict)  # of part_files, those outside the skill
     part_dependency_roots: dict[str, list[str]] = field(default_factory=dict)  # the declared paths they come from
+    readme_handoff_only: list[str] = field(default_factory=list)  # parts owning the README only for its hand-off (#155)
     requirement_parts: list[str] = field(default_factory=list)
     rule_index: dict[str, dict] = field(default_factory=dict)
     worker_evidence: list[dict] = field(default_factory=list)
@@ -274,6 +275,10 @@ class PartResult:
     outside_dependencies: list[str]
     rule_results: list[dict]
     goal_verdict: dict | None
+    kept_from: dict | None = None  # for a part a Review kept: the run, attempt and file digests it was judged on
 
     def to_dict(self) -> dict[str, Any]:
-        return dict(self.__dict__)
+        data = dict(self.__dict__)
+        if data["kept_from"] is None:
+            del data["kept_from"]  # a judged part's result keeps its earlier form
+        return data

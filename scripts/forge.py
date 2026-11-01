@@ -1835,7 +1835,9 @@ def _verify(arguments: argparse.Namespace) -> int:
     plan = computed["plan"]
     if plan is not None:
         scope, runtime_scope = set(plan["judged"]), set(plan["runtime_scope"])
-        kept = {part_id: {"run_id": plan["earlier_run"], "attempt_id": plan["earlier_attempt"], "result": result}
+        earlier_files = computed["earlier"][0].frozen_inputs["files"]
+        kept = {part_id: {"run_id": plan["earlier_run"], "attempt_id": plan["earlier_attempt"], "result": result,
+                          "files": earlier_files}
                 for part_id, result in plan["kept"].items()}
         kept_runtime, earlier_attempt = plan["kept_runtime"], plan["earlier_attempt"]
     label = _scope_label(computed)

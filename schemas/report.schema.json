@@ -297,6 +297,34 @@
             "pattern": "^[0-9a-f]{64}$"
           }
         },
+        "readme": {
+          "description": "What binds a part that owns the README only for its hand-off: the sections Forge writes, or the whole file (#155).",
+          "oneOf": [
+            {
+              "type": "null"
+            },
+            {
+              "type": "object",
+              "properties": {
+                "mode": {
+                  "enum": [
+                    "forge-sections",
+                    "whole-file"
+                  ]
+                },
+                "sha256": {
+                  "type": "string",
+                  "pattern": "^[0-9a-f]{64}$"
+                }
+              },
+              "required": [
+                "mode",
+                "sha256"
+              ],
+              "additionalProperties": false
+            }
+          ]
+        },
         "symlinks": {
           "type": "object",
           "additionalProperties": {
@@ -419,6 +447,13 @@
             "items": {
               "type": "string"
             }
+          }
+        },
+        "readme_handoff_only": {
+          "description": "Parts that own the README only for its hand-off and are bound to its Forge sections (#155).",
+          "type": "array",
+          "items": {
+            "type": "string"
           }
         }
       },
@@ -644,6 +679,35 @@
             {
               "type": "null"
             }
+          ]
+        },
+        "kept_from": {
+          "description": "For a part a Review kept: the run and attempt that judged it, and each of its files' digest then where it differs from this run's (#155).",
+          "type": "object",
+          "properties": {
+            "run": {
+              "type": "string",
+              "minLength": 1
+            },
+            "attempt": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "files": {
+              "type": "object",
+              "additionalProperties": {
+                "type": "string",
+                "pattern": "^[0-9a-f]{64}$"
+              }
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "run",
+            "attempt",
+            "files"
           ]
         }
       },

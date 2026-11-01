@@ -12,6 +12,7 @@ from harness_forge.documents import markdown_headings, markdown_section, validat
 from harness_forge.models import Decision, RuntimeResult, VerificationRun
 
 _GLOBAL_INPUTS = ("idea", "kb_version", "rules", "overrides", "checkers", "worker")
+README = "README.md"
 
 
 def _neighbours(decision: Decision) -> dict[str, set[str]]:
@@ -53,6 +54,12 @@ def affected_parts(run: VerificationRun, current: dict, owners: VerificationRun 
     ownership cannot hide a changed file. Without ``cases``, a part's
     runtime cases and fixtures are left out: what its file judgments rest
     on (#107). A fixture that is also a reviewed file still changes it.
+
+    A part that owns the README only for its outside-controls hand-off, in
+    the earlier run and now, is affected by a README change only when the
+    sections Forge writes changed (#155); a report from before that
+    binding, or a part that owns the README otherwise, compares the whole
+    file.
     """
     frozen = run.frozen_inputs
     parts = set(frozen["parts"]) | set(current["parts"])
@@ -69,9 +76,15 @@ def affected_parts(run: VerificationRun, current: dict, owners: VerificationRun 
                      if frozen["files"].get(path) != current["files"].get(path)}
     changed_paths |= {path for path in set(frozen["symlinks"]) | set(current["symlinks"])
                       if frozen["symlinks"].get(path) != current["symlinks"].get(path)}
+    binding = frozen.get("readme")
+    sections_equal = bool(binding) and binding["mode"] == "forge-sections" and binding == current.get("readme")
     for path in changed_paths:
         for owner in maps:
             for part_id, owned in owner.part_files.items():
+                if (path == README and sections_equal
+                        and all(part_id in other.readme_handoff_only for other in maps
+                                if README in other.part_files.get(part_id, []))):
+                    continue
                 prefix = owner.part_dirs.get(part_id)
                 roots = owner.part_dependency_roots.get(part_id, [])
                 if (path in owned or (prefix and path.startswith(prefix + "/"))
@@ -153,6 +166,7 @@ def earlier_run(report_text: str) -> tuple[VerificationRun, dict[str, dict]]:
                           part_files=part_map["files"], part_dirs=part_map["dirs"], part_links=part_map["links"],
                           part_dependencies=part_map.get("dependencies", {}),
                           part_dependency_roots=part_map.get("dependency_roots", {}),
+                          readme_handoff_only=part_map.get("readme_handoff_only", []),
                           requirement_parts=part_map["requirement_parts"], attempt_id=data.get("attempt_id"))
     # Its runtime evidence, inventory included, stays with any result a Review keeps.
     run.runtime_results = [RuntimeResult(**item) for item in data["runtime_results"]]

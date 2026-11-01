@@ -25,6 +25,21 @@ once it supports such dependencies.
   build-skill, the agent had asked both confirmations with a question
   tool and shown each summary only in command output (#154).
 
+### Verification
+
+- A part that owns the README for its outside-controls hand-off is bound
+  only to the sections Forge writes there, `Outside controls` and `Where
+  the skills load`. Editing the rest of the README, such as a sentence
+  about what was verified, no longer makes the verification stale;
+  scripts and the reviewer still check the whole file. A part that owns
+  the README in another way too stays bound to the whole file, and a
+  README Forge cannot read by section binds as a whole. A Review that
+  keeps such a part records, in the report's new `kept_from`, the run,
+  attempt and README digest its kept citations were judged on, carried
+  through repeated Reviews. The token verify prints for confirming that
+  a rule does not apply stays valid across such an edit. Reports from
+  0.5.2 and earlier compare the whole README (#155).
+
 ## 0.5.2 (2026-10-30)
 
 Still pins agent-harness-kb 0.6.0. From the owner's prompt-me rebuild
