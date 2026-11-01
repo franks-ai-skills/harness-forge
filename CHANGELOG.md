@@ -12,6 +12,19 @@ against tags named `harness-forge--v<version>` (`claude plugin tag`
 creates that format); Forge adds such a tag on the same commit only
 once it supports such dependencies.
 
+## Unreleased
+
+### Skill text
+
+- build-skill confirms the part's configuration proposal itself, in a
+  new first step, unless the user confirmed it earlier in the session:
+  it shows the summary in full as visible reply text before asking,
+  as harness-intake and harness-verify do, and writes the relay the
+  build needs. Its last step verifies by following harness-verify's
+  procedure from its confirmation on. In a session started with
+  build-skill, the agent had asked both confirmations with a question
+  tool and shown each summary only in command output (#154).
+
 ## 0.5.2 (2026-10-30)
 
 Still pins agent-harness-kb 0.6.0. From the owner's prompt-me rebuild

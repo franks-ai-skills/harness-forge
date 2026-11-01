@@ -378,6 +378,13 @@ class GuidanceTest(unittest.TestCase):
         self.assertIn("never shorten it, reword it or leave out its details line", intake)
         verify = " ".join((FORGE / "skills/harness-verify/SKILL.md").read_text(encoding="utf-8").split())
         self.assertIn("unchanged as visible reply text, then ask its question", verify)
+        # #154: a session that starts in build-skill confirms there and verifies through harness-verify's procedure.
+        build = " ".join((FORGE / "skills/build-skill/SKILL.md").read_text(encoding="utf-8").split())
+        self.assertIn("--purpose configuration", build)
+        self.assertIn("unchanged as visible reply text, then ask its question", build)
+        self.assertIn("a question tool's preview or options alone do not count as showing it", build)
+        self.assertIn("a relay from an earlier session never confirms", build)
+        self.assertIn("following harness-verify's procedure from its step 1", build)
         for path in [*(FORGE / "skills").glob("*/SKILL.md"), *(FORGE / "skills").glob("*/references/*.md")]:
             with self.subTest(path=path.relative_to(FORGE)):
                 body = " ".join(path.read_text(encoding="utf-8").split())
