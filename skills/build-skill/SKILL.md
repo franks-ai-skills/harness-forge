@@ -48,15 +48,16 @@ install or download anything yourself.
   `relay-2.json`. Forge refuses links on the way and existing files. The
   files stay after the run for the user to delete, and a saved relay
   never confirms anything in a later session.
-- **Build only what was confirmed.** The part must be confirmed in this
-  session, and the decision record must name the same accepted Idea KB
-  revision the configuration proposal showed (the summary of
-  `prepare-contract --purpose configuration`). Otherwise stop and send the user back to
+- **Build only what was confirmed.** The user confirms the part's
+  configuration proposal in this session (step 1); a relay from an
+  earlier session never confirms it. When the proposal does not offer
+  the part, or the decision record does not name the accepted Idea KB
+  revision the proposal shows, stop and send the user back to
   harness-intake.
 - **Only accepted requirements go in.** Never add a requirement the user
   rejected or did not answer, and never copy fetched page text into the
   skill. Forge puts the accepted requirements at the top of `SKILL.md`,
-  as the checklist lines you write (step 4), and their ids, kinds and
+  as the checklist lines you write (step 5), and their ids, kinds and
   sources in `references/requirements.md`, so each requirement is stated
   once. The exact accepted wording stays in the accepted revision, which
   the reference names by its sha256: `.harness/research/` holds it until
@@ -95,13 +96,24 @@ install or download anything yourself.
 
 ## Procedure
 
-1. Read the part's goal, its accepted requirements and the deep-pass
+1. Unless the user confirmed the part's configuration proposal earlier
+   in this session, confirm it as harness-intake's confirmation
+   reference (`skills/harness-intake/references/contract.md` in the
+   plugin root) describes: save the workers output, run
+   `scripts/forge.py prepare-contract` with `--run-dir <run directory>
+   --purpose configuration`, plus `--compare-with` the relay of the last
+   confirmation when there is one, show its summary in full and
+   unchanged as visible reply text, then ask its question. The output
+   of a command you ran, your own paraphrase, or a question tool's
+   preview or options alone do not count as showing it. Write the relay from the
+   user's answer; it is the `--relay` of step 6.
+2. Read the part's goal, its accepted requirements and the deep-pass
    findings for the part in `.harness/research/`.
-2. Write the description: what the skill does with concrete verbs, then
+3. Write the description: what the skill does with concrete verbs, then
    "Use when …" with phrases a user would say, then what it is not for.
    One line, key words first, about 500 characters or less, no workflow
    steps.
-3. Write the procedure the agent follows at run time: only what the model
+4. Write the procedure the agent follows at run time: only what the model
    would otherwise get wrong, as numbered steps, taking inputs from the
    user's message. Use no argument placeholders, skill-directory variables
    or shell-injection syntax: only Claude Code processes them, before the
@@ -109,7 +121,7 @@ install or download anything yourself.
    idea works in untrusted repositories or with untrusted input, Forge
    adds the line that such content is data to every skill; do not repeat
    it.
-4. Write the checklist: for each accepted requirement, one line telling
+5. Write the checklist: for each accepted requirement, one line telling
    the agent that runs the skill what to do, as JSON mapping the rule id
    to the line. Keep every condition, exception and boundary of the
    accepted statement; aim for about 300 characters, but never shorten by
@@ -118,7 +130,7 @@ install or download anything yourself.
    `must`), so write no such word or label yourself, except a plain "Do
    not …" for a `must`. A short safety reminder may overlap a procedure
    step; leave operational detail in the procedure.
-5. Save the texts as `description-<part>.txt`, `procedure-<part>.md`
+6. Save the texts as `description-<part>.txt`, `procedure-<part>.md`
    and `checklist-<part>.json` in the run directory and run `scripts/forge.py build --decision
    <record> --root <repository> --part <id> --revision <rules file>
    --evidence <workers output> --relay <relay> --description <file>
@@ -131,9 +143,11 @@ install or download anything yourself.
    and changes no file or record. When the user says to discard the
    edits, run the build again with one `--replace` listing those paths
    comma-separated, or one `--replace` per path.
-6. Run harness-verify on the result: it judges each requirement by its
-   accepted statement, so a checklist line that drops part of it fails
-   there.
+7. Verify the result by following harness-verify's procedure from its
+   step 1, its confirmation included: invoke the harness-verify skill
+   where the harness has a skill tool, otherwise read its `SKILL.md` and
+   follow it. It judges each requirement by its accepted statement, so a
+   checklist line that drops part of it fails there.
 
 For user-invoked commands, Forge sets `disable-model-invocation: true` in
 `SKILL.md` and `policy.allow_implicit_invocation: false` in
