@@ -126,7 +126,23 @@ The result is bound to the sha256 of every checked file and link, the
 Harness KB version and rules, overrides, the accepted Idea KB revision,
 each part's record, the checker versions and the worker evidence. A
 change to any of them returns the affected parts to `built`; a shared
-file such as the README affects every part that owns it.
+file affects every part that owns it.
+
+A part owns the README for its outside-controls hand-off, and there it
+is bound only to the sections Forge writes, `Outside controls` and
+`Where the skills load`: scripts and the reviewer check the whole file,
+but an edit elsewhere in it leaves the result current, so a later secret
+or wrong statement there goes unnoticed until the next verification, as
+in any other file no part owns. An edit that changes how those sections
+read, such as an unclosed code fence above them, counts as a change to
+them; a README with one of those headings twice, or that is not UTF-8,
+binds as a whole file. A part that owns the README in another way too,
+such as a declared dependency, is bound to the whole file. To say in
+the README what was verified, link the report at
+`.harness/reports/<slug>.md` in your own text: Forge neither checks nor
+updates that text, and a linked path stays true where restated results
+would not. A report from Forge 0.5.2 or earlier compares the whole
+README.
 
 ## Provenance
 
@@ -159,7 +175,10 @@ outside the scope keeps its earlier judged results and goal verdict,
 each marked "kept from attempt A of run X" (or "kept from run X" from a
 report made before attempts were recorded), with its runtime evidence
 marked the same way, and stays verified only if it was
-verified then and its scripts pass now. Runtime cases and fixtures are
+verified then and its scripts pass now. When a kept part's README
+changed outside Forge's sections since the attempt that judged it, the
+report names the digest that attempt checked, since the kept citations
+point at that file's lines. Runtime cases and fixtures are
 not shown to the reviewer: when only they changed, or a part's earlier
 runtime evidence no longer holds, a part verified last time keeps its
 judgments and its runtime cases run again, and it stays verified only if

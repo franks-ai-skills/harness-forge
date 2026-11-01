@@ -185,6 +185,9 @@ def report_data(run: VerificationRun, results: list[PartResult]) -> dict:
         data["part_map"]["dependencies"] = dict(run.part_dependencies)
     if run.part_dependency_roots:
         data["part_map"]["dependency_roots"] = dict(run.part_dependency_roots)
+    # Parts bound to the README's Forge sections only (#155); a report without them compares the whole README.
+    if run.readme_handoff_only:
+        data["part_map"]["readme_handoff_only"] = list(run.readme_handoff_only)
     # Only a run with behavior cases records what they check, so earlier reports keep their exact form.
     if run.case_checks:
         data["case_checks"] = dict(run.case_checks)
@@ -280,6 +283,14 @@ def render_report(run: VerificationRun, results: list[PartResult]) -> str:
                                                              for target, entry in evidence.items()))
         answers = next((part["answers"] for part in run.parts if part["id"] == result.part_id), {})
         lines.append(f"- Confirmed answers: {_code(json.dumps(answers, sort_keys=True))}")
+        if result.kept_from and result.kept_from["files"]:
+            # Kept citations refer to the files the judging attempt checked, not to these (#155).
+            origin = (f"attempt {result.kept_from['attempt']} of run {result.kept_from['run']}"
+                      if result.kept_from["attempt"] else f"run {result.kept_from['run']}")
+            lines.append(f"- Kept results cite these files as {origin} checked them: " + "; ".join(
+                f"{_code(path)} sha256 {digest[:12]} (this run checked "
+                f"{run.frozen_inputs['files'].get(path, 'none')[:12]})"
+                for path, digest in sorted(result.kept_from["files"].items())))
         if result.goal_verdict:
             # A reviewer's text stays on its line, so that it cannot start a heading or a code block.
             reason = _one_line(result.goal_verdict["reason"])
